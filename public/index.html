@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Teleprompter Studio · Hamed Sugimoto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Vazirmatn:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B0E12; --panel:#11161C; --line:#232C36; --signal:#57E2C4; --amber:#F0A742;
+    --paper:#F5F1E8; --paperInk:#16120A; --text:#E8EEF4; --muted:#8A97A6; --faint:#5A6573;
+    --mono:'JetBrains Mono',ui-monospace,monospace; --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif; --fa:'Vazirmatn','Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--ink);color:var(--text);font-family:var(--body)}
+  ::placeholder{color:var(--faint)}
+  .wrap{max-width:1120px;margin:0 auto;padding:26px 18px 90px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .dot{width:11px;height:11px;border-radius:50%;background:var(--amber);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(240,167,66,.5)}70%{box-shadow:0 0 0 8px rgba(240,167,66,0)}100%{box-shadow:0 0 0 0 rgba(240,167,66,0)}}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--signal);text-transform:uppercase}
+  h1{font-family:var(--disp);font-weight:700;font-size:26px;margin:2px 0 0;letter-spacing:-.5px}
+  .id{margin-left:auto;text-align:right;font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.5}
+
+  /* link bar — the new front door */
+  .linkbar{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:18px}
+  .linkrow{display:flex;gap:10px;flex-wrap:wrap}
+  .linkrow input{flex:1;min-width:180px;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:13px 14px;font-family:var(--body);font-size:14px;outline:none}
+  .platforms{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:10px}
+
+  .grid{display:grid;grid-template-columns:400px 1fr;gap:18px;align-items:start}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .lbl{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+  .lbl b{font-family:var(--mono);font-size:11px;color:var(--signal);font-weight:500}
+  .lbl span{font-family:var(--disp);font-weight:600;font-size:14px}
+  textarea,.txt{width:100%;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:var(--body);font-size:14px;line-height:1.6;resize:vertical;outline:none}
+  .field{font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  button{cursor:pointer;font-family:var(--body)}
+  .seg{flex:1;padding:10px 0;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:var(--disp);font-weight:600;font-size:13px}
+  .seg.on{border-color:var(--signal);background:rgba(87,226,196,.10);color:var(--signal)}
+  .chip{padding:7px 12px;border-radius:8px;font-size:12.5px;border:1px solid var(--line);background:transparent;color:var(--muted);font-weight:500}
+  .chip.on{border-color:var(--signal);background:rgba(87,226,196,.10);color:var(--signal)}
+  .tg{flex:1;padding:10px 0;border-radius:9px;border:1px solid var(--line);background:transparent;color:var(--faint);font-family:var(--disp);font-weight:600;font-size:14px}
+  .tg.on{background:rgba(255,255,255,.04)}
+  .tg.on.en{border-color:var(--signal);color:var(--signal)} .tg.on.fa{border-color:var(--amber);color:var(--amber)}
+  .go{width:100%;margin-top:18px;padding:14px 0;border-radius:11px;border:none;background:var(--signal);color:var(--ink);font-family:var(--disp);font-weight:700;font-size:15.5px}
+  .go[disabled]{background:var(--line);color:var(--muted);cursor:wait}
+  .pillbtn{padding:13px 18px;border-radius:10px;border:none;background:var(--signal);color:var(--ink);font-family:var(--disp);font-weight:700;font-size:14px}
+  .pillbtn[disabled]{background:var(--line);color:var(--muted);cursor:wait}
+  .err{color:#FF7A7A;font-size:13px;margin:10px 0 0}
+  .voicebtn{background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:12px;padding:0;margin-top:6px}
+
+  .out{display:flex;flex-direction:column;gap:16px}
+  .empty{border:1px dashed var(--line);border-radius:16px;padding:44px 24px;text-align:center;color:var(--muted);line-height:1.6}
+  .empty .q{font-family:var(--disp);font-size:44px;color:var(--signal);margin-bottom:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .card .top{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .tag{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink);padding:3px 8px;border-radius:5px}
+  .card .name{font-family:var(--disp);font-weight:600;font-size:16px;flex:1}
+  .secs{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .mini{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:7px;padding:5px 11px;font-family:var(--mono);font-size:11px}
+  .script{background:var(--paper);color:var(--paperInk);padding:20px 22px;font-size:18px;line-height:1.7;white-space:pre-wrap}
+  .cta{padding:10px 16px;border-top:1px solid var(--line);font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .bars{display:flex;gap:6px;justify-content:center;height:34px;align-items:flex-end}
+  .bars i{width:6px;background:var(--signal);border-radius:3px;animation:b 1s infinite ease-in-out}
+  .bars i:nth-child(2){animation-delay:.15s}.bars i:nth-child(3){animation-delay:.3s}.bars i:nth-child(4){animation-delay:.45s}
+  @keyframes b{0%,100%{height:8px;opacity:.4}50%{height:30px;opacity:1}}
+
+  /* teleprompter */
+  .prompter{position:fixed;inset:0;background:#05070A;z-index:50;display:none}
+  .prompter.show{display:block}
+  .pscroll{position:absolute;inset:0;overflow-y:auto;padding:55vh 8vw}
+  .pscroll::-webkit-scrollbar{width:0}
+  .ptext{font-weight:600;font-size:min(7vw,46px);line-height:1.5;color:#EAF7F2;white-space:pre-wrap}
+  .pline{position:absolute;top:50%;left:0;right:0;height:2px;background:var(--signal);opacity:.5;box-shadow:0 0 18px var(--signal)}
+  .pbar{position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:14px 16px;background:rgba(5,7,10,.85);border-top:1px solid var(--line);flex-wrap:wrap}
+  .pb{padding:9px 14px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:var(--mono);font-size:12.5px;font-weight:600}
+  .pb.main{border-color:var(--signal);background:var(--signal);color:var(--ink)}
+  button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+  @media(prefers-reduced-motion:reduce){.dot,.bars i{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="dot"></div>
+    <div>
+      <div class="eyebrow">On Air · Script Desk</div>
+      <h1>Teleprompter Studio</h1>
+    </div>
+    <div class="id">HAMED SUGIMOTO<br>RCIC · EN / فا</div>
+  </header>
+
+  <!-- LINK BAR -->
+  <div class="linkbar">
+    <div class="lbl"><b>00</b><span>Paste a video link</span></div>
+    <div class="linkrow">
+      <input id="url" type="url" placeholder="https://  TikTok · Instagram · YouTube link" />
+      <button id="pull" class="pillbtn">Pull transcript</button>
+    </div>
+    <div class="platforms" id="pullStatus">Pulls the audio and transcribes it automatically. Public links only.</div>
+  </div>
+
+  <div class="grid">
+    <!-- INPUT -->
+    <section class="panel">
+      <div class="lbl"><b>01</b><span>Transcript</span></div>
+      <textarea id="transcript" rows="6" placeholder="Pull it from a link above, or paste your own text here…"></textarea>
+
+      <div class="lbl" style="margin-top:18px"><b>02</b><span>Shape the cut</span></div>
+      <div class="row">
+        <button class="seg on" data-platform="short">Reel / TikTok</button>
+        <button class="seg" data-platform="long">YouTube</button>
+      </div>
+      <div class="field">Spoken length</div>
+      <div class="row" id="durs"></div>
+      <div class="field">Hook style</div>
+      <div class="row" id="hooks"></div>
+      <div class="field">Topic focus (optional)</div>
+      <input class="txt" id="topic" placeholder="e.g. Express Entry CRS score myths" />
+
+      <div class="lbl" style="margin-top:18px"><b>03</b><span>Output</span></div>
+      <div class="row">
+        <button class="tg en on" data-lang="en">● English</button>
+        <button class="tg fa on" data-lang="fa">● فارسی</button>
+      </div>
+      <button class="voicebtn" id="voiceToggle">▸ Voice profile</button>
+      <textarea id="voice" rows="4" style="display:none;margin-top:8px;font-size:13px"></textarea>
+
+      <button class="go" id="generate">Write the scripts</button>
+      <p class="err" id="error" style="display:none"></p>
+    </section>
+
+    <!-- OUTPUT -->
+    <section class="out" id="out">
+      <div class="empty" id="empty">
+        <div class="q">“”</div>
+        Paste a link, pull the transcript, and your scripts<br>land here — ready to read off the prompter.
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- TELEPROMPTER -->
+<div class="prompter" id="prompter">
+  <div class="pscroll" id="pscroll"><div class="ptext" id="ptext"></div></div>
+  <div class="pline"></div>
+  <div class="pbar">
+    <button class="pb main" id="pplay">▶ Play</button>
+    <button class="pb" id="ptop">↻ Top</button>
+    <button class="pb" id="pslow">–</button>
+    <span style="font-family:var(--mono);font-size:12px;color:var(--signal);width:48px;text-align:center" id="pspeed">1.1×</span>
+    <button class="pb" id="pfast">+</button>
+    <button class="pb" id="pclose" style="margin-left:auto">✕ Close</button>
+  </div>
+</div>
+
+<script>
+const DEFAULT_VOICE = "Warm, confident and trustworthy. Speak straight to one person. Plain language, no jargon dumps. Educational about Canadian immigration. Never promise approvals or outcomes — stay compliant with CICC advertising rules. Honest, encouraging, a little personal.";
+const HOOKS = [["question","Open with a question"],["bold","Bold statement"],["story","Mini story"],["myth","Bust a myth"]];
+const DURS = [30,45,60,90];
+
+const state = { platform:"short", duration:45, hook:"question", en:true, fa:true };
+const $ = id => document.getElementById(id);
+
+// build chips
+$("durs").innerHTML = DURS.map(d=>`<button class="chip${d===45?' on':''}" data-dur="${d}">${d}s</button>`).join("");
+$("hooks").innerHTML = HOOKS.map(([id,l],i)=>`<button class="chip${i===0?' on':''}" data-hook="${id}">${l}</button>`).join("");
+$("voice").value = DEFAULT_VOICE;
+
+document.querySelectorAll("[data-platform]").forEach(b=>b.onclick=()=>{state.platform=b.dataset.platform;document.querySelectorAll("[data-platform]").forEach(x=>x.classList.toggle("on",x===b));});
+$("durs").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{state.duration=+b.dataset.dur;$("durs").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));});
+$("hooks").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{state.hook=b.dataset.hook;$("hooks").querySelectorAll(".chip").forEach(x=>x.classList.toggle("on",x===b));});
+document.querySelectorAll("[data-lang]").forEach(b=>b.onclick=()=>{const k=b.dataset.lang;state[k]=!state[k];b.classList.toggle("on",state[k]);});
+$("voiceToggle").onclick=()=>{const v=$("voice");const open=v.style.display==="none";v.style.display=open?"block":"none";$("voiceToggle").textContent=(open?"▾":"▸")+" Voice profile";};
+
+function showError(m){const e=$("error");if(!m){e.style.display="none";return;}e.textContent=m;e.style.display="block";}
+
+// PULL TRANSCRIPT
+$("pull").onclick = async ()=>{
+  const url=$("url").value.trim();
+  showError("");
+  if(!/^https?:\/\//i.test(url)){showError("Paste a full link starting with https://");return;}
+  $("pull").disabled=true;$("pull").textContent="Pulling…";
+  $("pullStatus").textContent="Downloading audio and transcribing — this can take 20–60s…";
+  try{
+    const r=await fetch("/api/transcript",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||"Failed");
+    $("transcript").value=d.transcript;
+    $("pullStatus").textContent="Transcript ready ✓  Edit it if you like, then write the scripts.";
+  }catch(e){ $("pullStatus").textContent="Pulls the audio and transcribes it automatically. Public links only."; showError(e.message); }
+  finally{ $("pull").disabled=false;$("pull").textContent="Pull transcript"; }
+};
+
+// GENERATE SCRIPTS
+$("generate").onclick = async ()=>{
+  const transcript=$("transcript").value.trim();
+  showError("");
+  if(!transcript){showError("No transcript yet — pull one from a link or paste text.");return;}
+  if(!state.en&&!state.fa){showError("Pick at least one language.");return;}
+  $("generate").disabled=true;$("generate").textContent="Writing…";
+  $("out").innerHTML=`<div class="empty"><div class="bars"><i></i><i></i><i></i><i></i></div><p style="color:var(--signal);font-family:var(--mono);font-size:13px;margin-top:16px">Writing your scripts…</p></div>`;
+  try{
+    const r=await fetch("/api/scripts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+      transcript, platform:state.platform, duration:state.duration, hook:state.hook,
+      topic:$("topic").value, voice:$("voice").value, langs:{en:state.en,fa:state.fa}
+    })});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||"Failed");
+    renderOut(d);
+  }catch(e){ $("out").innerHTML=""; showError(e.message); }
+  finally{ $("generate").disabled=false;$("generate").textContent="Write the scripts"; }
+};
+
+function card(tag,color,name,data,rtl){
+  const dir=rtl?"rtl":"ltr"; const font=rtl?"var(--fa)":"var(--body)";
+  const div=document.createElement("div");div.className="card";
+  div.innerHTML=`
+    <div class="top">
+      <span class="tag" style="background:${color}">${tag}</span>
+      <span class="name">${name}</span>
+      <span class="secs">~${data.estReadSeconds||"?"}s</span>
+      <button class="mini copy">Copy</button>
+      <button class="mini play" style="background:${color};color:var(--ink);border-color:${color};font-weight:600">▶ Prompt</button>
+    </div>
+    <div class="script" dir="${dir}" style="font-family:${font}"></div>
+    <div class="cta" dir="${dir}">CTA · ${data.cta||""}</div>`;
+  div.querySelector(".script").textContent=data.fullScript;
+  div.querySelector(".copy").onclick=e=>{navigator.clipboard?.writeText(data.fullScript);e.target.textContent="Copied";setTimeout(()=>e.target.textContent="Copy",1400);};
+  div.querySelector(".play").onclick=()=>openPrompter(data.fullScript,rtl);
+  return div;
+}
+function renderOut(d){
+  $("out").innerHTML="";
+  if(d.en) $("out").appendChild(card("EN","var(--signal)","English",d.en,false));
+  if(d.fa) $("out").appendChild(card("فا","var(--amber)","فارسی",d.fa,true));
+  if(!d.en&&!d.fa) $("out").innerHTML=`<div class="empty">No script returned. Try again.</div>`;
+}
+
+// TELEPROMPTER
+let pPlaying=false,pSpeed=1.1,pRaf;
+function openPrompter(text,rtl){
+  const t=$("ptext");t.textContent=text;t.style.fontFamily=rtl?"var(--fa)":"var(--body)";
+  t.style.textAlign=rtl?"right":"left";$("pscroll").dir=rtl?"rtl":"ltr";
+  $("pscroll").scrollTop=0;$("prompter").classList.add("show");
+}
+function pTick(){$("pscroll").scrollTop+=pSpeed;pRaf=requestAnimationFrame(pTick);}
+$("pplay").onclick=()=>{pPlaying=!pPlaying;$("pplay").textContent=pPlaying?"❚❚ Pause":"▶ Play";if(pPlaying)pRaf=requestAnimationFrame(pTick);else cancelAnimationFrame(pRaf);};
+$("ptop").onclick=()=>$("pscroll").scrollTop=0;
+$("pslow").onclick=()=>{pSpeed=Math.max(.4,+(pSpeed-.3).toFixed(1));$("pspeed").textContent=pSpeed.toFixed(1)+"×";};
+$("pfast").onclick=()=>{pSpeed=Math.min(4,+(pSpeed+.3).toFixed(1));$("pspeed").textContent=pSpeed.toFixed(1)+"×";};
+$("pclose").onclick=()=>{$("prompter").classList.remove("show");pPlaying=false;cancelAnimationFrame(pRaf);$("pplay").textContent="▶ Play";};
+</script>
+</body>
+</html>

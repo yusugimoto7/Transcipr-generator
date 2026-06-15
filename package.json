@@ -1,0 +1,16 @@
+{
+  "name": "prompter-studio",
+  "version": "1.0.0",
+  "description": "Paste a TikTok / Instagram / YouTube link, auto-pull the transcript, and get teleprompter-ready scripts in English and Persian.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
