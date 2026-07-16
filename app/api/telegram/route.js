@@ -28,12 +28,13 @@ export async function POST(request) {
 
   const { topic, fa, en } = payload || {};
   const title = topic?.title_fa || topic?.title_en || "Sugimoto topic";
+  const sourceLine = topic?.source_url ? `\n\n🔗 ${topic.source_url}` : "";
 
   const messages = [];
-  if (fa) messages.push(`🎬 ${title}\n\n🇮🇷 سناریو فارسی:\n\n${clamp(fa)}`);
+  if (fa) messages.push(`🎬 ${title}\n\n🇮🇷 سناریو فارسی:\n\n${clamp(fa)}${sourceLine}`);
   if (en)
     messages.push(
-      `🎬 ${topic?.title_en || title}\n\n🇬🇧 English script:\n\n${clamp(en)}`
+      `🎬 ${topic?.title_en || title}\n\n🇬🇧 English script:\n\n${clamp(en)}${sourceLine}`
     );
   if (messages.length === 0) {
     return Response.json({ error: "nothing to send" }, { status: 400 });

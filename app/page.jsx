@@ -46,11 +46,11 @@ const FALLBACK = [
   { title_fa: "تغییرات جدید ورک‌پرمیت بعد از تحصیل — چی عوض شد؟", title_en: "New post-graduation work permit rules — what changed?", field: "Study", page: "CA", why_now: "تغییرات PGWP مستقیم روی بزرگ‌ترین سگمنت دانشجویی اثر می‌ذاره.", score: 80 },
 ];
 
-async function fetchTopics(exclude = []) {
+async function fetchTopics(exclude = [], force = false) {
   const res = await fetch("/api/topics", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ exclude }),
+    body: JSON.stringify({ exclude, force }),
   });
   if (!res.ok) throw new Error("API " + res.status);
   const data = await res.json();
@@ -125,7 +125,7 @@ export default function App() {
   const startX = useRef(0);
   const cardRef = useRef(null);
 
-  const loadTopics = useCallback(async () => {
+  const loadTopics = useCallback(async (force = false) => {
     setLoadingTopics(true);
     setTopicError(null);
     setUsingFallback(false);
@@ -137,7 +137,9 @@ export default function App() {
         .filter(Boolean)
         .slice(-60);
 
-      const parsed = await fetchTopics(exclude);
+      // Page-load fetches use the server cache (near-instant); the explicit
+      // "Refresh trends" button forces a live regenerate.
+      const parsed = await fetchTopics(exclude, force);
 
       // Drop anything we've already shown; if everything is a repeat, show the
       // batch anyway rather than an empty deck.
@@ -269,7 +271,7 @@ export default function App() {
           </div>
         </div>
         <button
-          onClick={loadTopics}
+          onClick={() => loadTopics(true)}
           disabled={loadingTopics}
           style={{
             background: "transparent", color: C.cream, border: `1px solid ${C.line}`,
@@ -325,7 +327,7 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <EmptyDeck onRefresh={loadTopics} />
+            <EmptyDeck onRefresh={() => loadTopics(true)} />
           )}
 
           {/* Actions */}
@@ -371,6 +373,14 @@ function Stat({ label, value, accent }) {
 
 function heat(score) {
   return Math.max(0, Math.min(100, score));
+}
+
+function sourceHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch (_) {
+    return url;
+  }
 }
 
 function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
@@ -433,6 +443,21 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
         <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, lineHeight: 1.8, color: "#43555c", textAlign: "right", unicodeBidi: "plaintext" }}>
           {topic.why_now}
         </div>
+        {topic.source_url && (
+          <a
+            href={topic.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              display: "flex", alignItems: "center", gap: 5, marginTop: 8,
+              fontSize: 11.5, color: C.slate, fontFamily: "'Space Grotesk', sans-serif",
+              textDecoration: "none", direction: "ltr",
+            }}
+          >
+            🔗 {sourceHost(topic.source_url)}
+          </a>
+        )}
         {/* heat */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
           <div style={{ flex: 1, height: 7, background: "rgba(50,81,93,0.12)", borderRadius: 99, overflow: "hidden" }}>
@@ -592,6 +617,20 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
         <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, textAlign: "right", lineHeight: 1.6, unicodeBidi: "plaintext" }}>
           {topic.title_fa}
         </div>
+        {topic.source_url && (
+          <a
+            href={topic.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "flex", alignItems: "center", gap: 5, marginTop: 8,
+              fontSize: 11.5, color: C.slate, fontFamily: "'Space Grotesk', sans-serif",
+              textDecoration: "none", direction: "ltr",
+            }}
+          >
+            🔗 Source: {sourceHost(topic.source_url)}
+          </a>
+        )}
       </div>
 
       {/* tabs */}
