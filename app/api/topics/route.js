@@ -1,12 +1,26 @@
 import { callClaude } from "../../../lib/anthropic";
-import { TOPIC_PROMPT, parseTopics } from "../../../lib/prompts";
+import { topicPrompt, parseTopics } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(request) {
   try {
-    const text = await callClaude([{ role: "user", content: TOPIC_PROMPT }], true);
+    let exclude = [];
+    try {
+      const body = await request.json();
+      if (Array.isArray(body?.exclude)) {
+        exclude = body.exclude.slice(0, 60).map((t) => String(t).slice(0, 200));
+      }
+    } catch (_) {
+      // no/invalid body — fine, just don't exclude anything
+    }
+
+    const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local date
+    const text = await callClaude(
+      [{ role: "user", content: topicPrompt(today, exclude) }],
+      true
+    );
     const parsed = parseTopics(text);
     if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
       return Response.json({ error: "parse" }, { status: 502 });

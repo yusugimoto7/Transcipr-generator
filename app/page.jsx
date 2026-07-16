@@ -46,14 +46,48 @@ const FALLBACK = [
   { title_fa: "تغییرات جدید ورک‌پرمیت بعد از تحصیل — چی عوض شد؟", title_en: "New post-graduation work permit rules — what changed?", field: "Study", page: "CA", why_now: "تغییرات PGWP مستقیم روی بزرگ‌ترین سگمنت دانشجویی اثر می‌ذاره.", score: 80 },
 ];
 
-async function fetchTopics() {
-  const res = await fetch("/api/topics", { method: "POST" });
+async function fetchTopics(exclude = []) {
+  const res = await fetch("/api/topics", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ exclude }),
+  });
   if (!res.ok) throw new Error("API " + res.status);
   const data = await res.json();
   if (!data || !Array.isArray(data.topics) || data.topics.length === 0) {
     throw new Error("parse");
   }
   return data.topics;
+}
+
+// ---- topic memory (so refreshes don't repeat the same topics) ----
+const SEEN_KEY = "sugimoto_seen_topics_v1";
+
+function topicKey(t) {
+  return (t.title_fa || t.title_en || "").trim();
+}
+
+function loadSeen() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(SEEN_KEY) || "[]");
+    return Array.isArray(raw) ? raw : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveSeen(list) {
+  if (typeof window === "undefined") return;
+  try {
+    // de-dupe by key, keep the most recent 200
+    const map = new Map();
+    for (const item of list) if (item && item.key) map.set(item.key, item);
+    localStorage.setItem(
+      SEEN_KEY,
+      JSON.stringify([...map.values()].slice(-200))
+    );
+  } catch (_) {}
 }
 
 async function fetchScript(topic, lang) {
@@ -96,8 +130,30 @@ export default function App() {
     setTopicError(null);
     setUsingFallback(false);
     try {
-      const parsed = await fetchTopics();
-      setTopics(parsed);
+      const seen = loadSeen();
+      const seenKeys = new Set(seen.map((s) => s.key));
+      const exclude = seen
+        .map((s) => s.en || s.key)
+        .filter(Boolean)
+        .slice(-60);
+
+      const parsed = await fetchTopics(exclude);
+
+      // Drop anything we've already shown; if everything is a repeat, show the
+      // batch anyway rather than an empty deck.
+      const fresh = parsed.filter((t) => !seenKeys.has(topicKey(t)));
+      const nextTopics = fresh.length ? fresh : parsed;
+
+      // Remember this batch so the next refresh doesn't repeat it.
+      saveSeen([
+        ...seen,
+        ...nextTopics.map((t) => ({
+          key: topicKey(t),
+          en: t.title_en || t.title_fa,
+        })),
+      ]);
+
+      setTopics(nextTopics);
       setIndex(0);
       setUpdatedAt(new Date());
     } catch (e) {
@@ -355,7 +411,7 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "18px 0" }}>
         <div dir="rtl" style={{
           fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, color: C.ink,
-          fontSize: 25, lineHeight: 1.55, textAlign: "right",
+          fontSize: 25, lineHeight: 1.55, textAlign: "right", unicodeBidi: "plaintext",
         }}>
           {topic.title_fa}
         </div>
@@ -374,7 +430,7 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
             چرا الان
           </span>
         </div>
-        <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, lineHeight: 1.8, color: "#43555c", textAlign: "right" }}>
+        <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, lineHeight: 1.8, color: "#43555c", textAlign: "right", unicodeBidi: "plaintext" }}>
           {topic.why_now}
         </div>
         {/* heat */}
@@ -455,9 +511,72 @@ function EmptyDeck({ onRefresh }) {
   );
 }
 
+// Render script text line-by-line with automatic per-line direction, so mixed
+// Farsi + English lines don't get visually scrambled by a single forced base
+// direction. Each line resolves its own direction from its first strong char
+// and aligns to that direction.
+function ScriptBody({ text, tab }) {
+  const font = tab === "fa" ? "'Vazirmatn', sans-serif" : "'Space Grotesk', sans-serif";
+  const lines = (text || " ").split("\n");
+  return (
+    <div style={{ fontFamily: font, fontSize: 14, lineHeight: 2, color: C.cream }}>
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          dir="auto"
+          style={{
+            textAlign: "start",
+            unicodeBidi: "plaintext",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            minHeight: "1em",
+          }}
+        >
+          {line || " "}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCopy, onBack }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
   const active = tab === "fa" ? scripts.fa : scripts.en;
+
+  // Telegram send state
+  const [tgState, setTgState] = useState("idle"); // idle | sending | sent | error
+  const [tgMsg, setTgMsg] = useState("");
+
+  const sendTelegram = async () => {
+    if (tgState === "sending") return;
+    if (!scripts.fa && !scripts.en) return;
+    setTgState("sending");
+    setTgMsg("");
+    try {
+      const res = await fetch("/api/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, fa: scripts.fa, en: scripts.en }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "failed");
+      setTgState("sent");
+      setTimeout(() => setTgState("idle"), 3000);
+    } catch (e) {
+      setTgState("error");
+      setTgMsg(String(e.message || e));
+    }
+  };
+
+  const tgLabel =
+    tgState === "sending"
+      ? "Sending…"
+      : tgState === "sent"
+      ? "Sent to Telegram ✓"
+      : tgState === "error"
+      ? "Retry Telegram"
+      : "✈ Send to Telegram";
+
   return (
     <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
       <button onClick={onBack} style={{ alignSelf: "flex-start", background: "transparent", color: "rgba(242,229,192,0.7)", border: "none", cursor: "pointer", fontSize: 13, marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
@@ -470,7 +589,7 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
           <span style={{ fontSize: 11.5, fontWeight: 600, color: C.slate, fontFamily: "'Space Grotesk', sans-serif" }}>{f.label}</span>
           <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: topic.page === "EU" ? C.slate : C.orangeDeep }}>{topic.page === "EU" ? "🇪🇺 Europe" : "🇨🇦 Canada"}</span>
         </div>
-        <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, textAlign: "right", lineHeight: 1.6 }}>
+        <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, textAlign: "right", lineHeight: 1.6, unicodeBidi: "plaintext" }}>
           {topic.title_fa}
         </div>
       </div>
@@ -497,19 +616,42 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
                 {copied === tab ? "Copied ✓" : "Copy"}
               </button>
             </div>
-            <pre style={{
-              whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0,
-              fontFamily: tab === "fa" ? "'Vazirmatn', sans-serif" : "'Space Grotesk', sans-serif",
-              direction: tab === "fa" ? "rtl" : "ltr", textAlign: tab === "fa" ? "right" : "left",
-              fontSize: 14, lineHeight: 2, color: C.cream,
-            }}>
-              {active || " "}
-            </pre>
+            <ScriptBody text={active} tab={tab} />
           </div>
         )}
       </div>
 
-      <button onClick={onBack} style={{ marginTop: 16, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", border: "none", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
+      {/* Telegram */}
+      {!loading && !error && (
+        <>
+          <button
+            onClick={sendTelegram}
+            disabled={tgState === "sending" || (!scripts.fa && !scripts.en)}
+            style={{
+              marginTop: 16,
+              background: tgState === "sent" ? C.slate : "rgba(50,81,93,0.35)",
+              color: C.cream,
+              border: `1px solid ${C.slate}`,
+              borderRadius: 12,
+              padding: "12px",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: tgState === "sending" ? "default" : "pointer",
+              opacity: tgState === "sending" ? 0.6 : 1,
+              fontFamily: "'Space Grotesk', sans-serif",
+            }}
+          >
+            {tgLabel}
+          </button>
+          {tgState === "error" && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, fontFamily: "'Space Grotesk', sans-serif", textAlign: "center" }}>
+              {tgMsg}
+            </div>
+          )}
+        </>
+      )}
+
+      <button onClick={onBack} style={{ marginTop: 12, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", border: "none", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
         Next topic →
       </button>
     </div>
