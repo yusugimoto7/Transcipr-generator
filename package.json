@@ -1,16 +1,21 @@
 {
-  "name": "prompter-studio",
+  "name": "sugimoto-topic-engine",
   "version": "1.0.0",
-  "description": "Paste a TikTok / Instagram / YouTube link, auto-pull the transcript, and get teleprompter-ready scripts in English and Persian.",
-  "type": "module",
-  "main": "server.js",
+  "description": "Sugimoto Visa — Video Topic Engine. Swipe live Canada/Europe immigration news topics and generate bilingual (Farsi + English) Reel scripts.",
+  "private": true,
   "scripts": {
-    "start": "node server.js"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.18"
   },
   "dependencies": {
-    "express": "^4.19.2"
+    "@anthropic-ai/sdk": "^0.68.0",
+    "next": "14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }

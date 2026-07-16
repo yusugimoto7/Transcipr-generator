@@ -1,17 +1,18 @@
 FROM node:20-slim
 
-# yt-dlp needs ffmpeg (audio extraction) and a Python runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg python3 ca-certificates curl \
- && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
- && chmod a+x /usr/local/bin/yt-dlp \
- && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
+
+# Install dependencies
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
+
+# Build the Next.js app
 COPY . .
+RUN npm run build
 
 ENV PORT=3000
+ENV NODE_ENV=production
 EXPOSE 3000
+
+# ANTHROPIC_API_KEY must be provided at runtime (never baked into the image)
 CMD ["npm", "start"]
