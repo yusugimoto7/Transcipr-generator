@@ -4,8 +4,10 @@ import { topicPrompt, parseTopics } from "../../../lib/prompts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Generating topics does real multi-round web search and can take several
-// minutes. Two layers make normal loads fast:
+// Generating topics does real multi-round web search — genuinely not cheap
+// (multiple search calls + a large output budget). Safeguards here exist
+// because a misconfigured pinger, a runaway automation, or someone mashing
+// "Refresh trends" can otherwise rack up real cost fast with no ceiling.
 //
 // 1. In-memory cache, stale-while-revalidate: once a batch is "fresh enough"
 //    to have gone stale (past FRESH_MS) but still under SERVE_MAX_MS old, we
@@ -13,16 +15,33 @@ export const dynamic = "force-dynamic";
 //    awaited) so the NEXT request gets new data — no visitor ever blocks on
 //    that refresh. Only a genuinely empty/too-old cache forces a request to
 //    wait on a live call.
-// 2. GET /api/topics/../health (see health/route.js) lets an external pinger
-//    keep this process warm on free hosting tiers, so the cache above
-//    actually survives between visits instead of being wiped by every
-//    spin-down/spin-up cycle.
+// 2. GET /api/health lets an external pinger keep this process warm on free
+//    hosting tiers WITHOUT touching this endpoint or spending anything —
+//    point any keep-alive cron at /api/health, never at /api/topics or "/".
+// 3. Hard cost ceilings (below): a cooldown on forced refreshes, and a
+//    rolling per-hour cap on ALL live generations (forced or automatic).
+//    These cannot be bypassed by any client — including a broken pinger.
 const FRESH_MS = 20 * 60 * 1000; // serve as-is, no refresh needed
 const SERVE_MAX_MS = 3 * 60 * 60 * 1000; // serve stale + background-refresh up to this age
+const FORCE_COOLDOWN_MS = 5 * 60 * 1000; // min time between explicit "Refresh trends" live calls
+const MAX_GENERATIONS_PER_HOUR = 8; // hard ceiling on live generations, any trigger
+const MAX_GENERATIONS_PER_DAY = 30; // second ceiling — catches a slow-burn runaway an hourly cap alone would miss over 24h
+
 let cache = { topics: null, timestamp: 0 };
 let inFlight = null; // de-dupe concurrent live generations
+let lastForceAt = 0;
+let generationTimestamps = []; // sliding window backing both caps
+
+function underHourlyCap() {
+  const hourCutoff = Date.now() - 60 * 60 * 1000;
+  const dayCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  generationTimestamps = generationTimestamps.filter((t) => t > dayCutoff);
+  const lastHour = generationTimestamps.filter((t) => t > hourCutoff).length;
+  return lastHour < MAX_GENERATIONS_PER_HOUR && generationTimestamps.length < MAX_GENERATIONS_PER_DAY;
+}
 
 async function generate(exclude) {
+  generationTimestamps.push(Date.now());
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local date
   const text = await callClaude(
     [{ role: "user", content: topicPrompt(today, exclude) }],
@@ -36,9 +55,10 @@ async function generate(exclude) {
 }
 
 // Kick off a regenerate without making the caller wait for it. Guarded by
-// `inFlight` so concurrent requests don't trigger duplicate live searches.
+// `inFlight` (and the hourly cap) so concurrent requests don't trigger
+// duplicate live searches.
 function refreshInBackground(exclude) {
-  if (inFlight) return;
+  if (inFlight || !underHourlyCap()) return;
   const task = generate(exclude)
     .then((parsed) => {
       cache = { topics: parsed, timestamp: Date.now() };
@@ -67,6 +87,20 @@ export async function POST(request) {
       // no/invalid body — fine, just use defaults
     }
 
+    // Explicit "Refresh trends" clicks still get a cooldown — otherwise
+    // mashing the button (or a broken client retry loop) has no ceiling.
+    if (force) {
+      const sinceLastForce = Date.now() - lastForceAt;
+      if (sinceLastForce < FORCE_COOLDOWN_MS && cache.topics) {
+        return Response.json({
+          topics: cache.topics,
+          cached: true,
+          throttled: true,
+          retryAfterMs: FORCE_COOLDOWN_MS - sinceLastForce,
+        });
+      }
+    }
+
     if (!force) {
       const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
 
@@ -86,8 +120,31 @@ export async function POST(request) {
         const topics = await inFlight.then(() => cache.topics);
         if (topics) return Response.json({ topics, cached: true });
       }
+
+      // Hourly cap hit: serve whatever cache exists, however old, rather
+      // than a hard failure; only error out if there's truly nothing.
+      if (!underHourlyCap()) {
+        if (cache.topics) {
+          return Response.json({ topics: cache.topics, cached: true, stale: true });
+        }
+        return Response.json(
+          { error: "rate_limited", message: "Too many live searches this hour — try again shortly." },
+          { status: 429 }
+        );
+      }
+    } else if (!underHourlyCap()) {
+      return Response.json(
+        {
+          topics: cache.topics || [],
+          cached: true,
+          throttled: true,
+          message: "Hourly live-search limit reached — showing the last known topics.",
+        },
+        { status: cache.topics ? 200 : 429 }
+      );
     }
 
+    if (force) lastForceAt = Date.now();
     const task = generate(exclude);
     if (!force) inFlight = task.finally(() => { inFlight = null; });
     const parsed = await task;
