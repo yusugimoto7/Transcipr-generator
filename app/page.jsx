@@ -303,7 +303,7 @@ export default function App() {
           {loadingTopics ? (
             <CardSkeleton />
           ) : current ? (
-            <div style={{ position: "relative", height: 500 }}>
+            <div style={{ position: "relative", height: 560 }}>
               {/* peek of next card */}
               {topics[index + 1] && (
                 <div style={{ position: "absolute", inset: 0, transform: "scale(0.94) translateY(14px)", opacity: 0.5 }}>
@@ -418,7 +418,7 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
       </div>
 
       {/* Farsi hook */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "18px 0" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: "16px 0" }}>
         <div dir="rtl" style={{
           fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, color: C.ink,
           fontSize: 25, lineHeight: 1.55, textAlign: "right", unicodeBidi: "plaintext",
