@@ -60,11 +60,28 @@ async function fetchTopics(exclude = [], force = false) {
   return data.topics;
 }
 
-// ---- topic memory (so refreshes don't repeat the same topics) ----
-const SEEN_KEY = "sugimoto_seen_topics_v1";
+// ---- topic memory (so a news article/topic is shown only ONCE, ever, on this
+// device — even across refreshes). We remember both the title and the source
+// URL, and treat a match on EITHER as "already seen", so a reworded title on
+// the same article is still caught. ----
+const SEEN_KEY = "sugimoto_seen_topics_v2";
 
 function topicKey(t) {
-  return (t.title_fa || t.title_en || "").trim();
+  return (t.title_fa || t.title_en || "").trim().toLowerCase();
+}
+
+// Normalize a source URL so trivially-different links to the same page collapse
+// (strip protocol, www, query string, hash, trailing slash).
+function urlKey(t) {
+  const u = (t.source_url || "").trim();
+  if (!u) return "";
+  try {
+    const parsed = new URL(u);
+    let s = parsed.hostname.replace(/^www\./, "") + parsed.pathname;
+    return s.replace(/\/+$/, "").toLowerCase();
+  } catch (_) {
+    return u.toLowerCase();
+  }
 }
 
 function loadSeen() {
@@ -80,14 +97,20 @@ function loadSeen() {
 function saveSeen(list) {
   if (typeof window === "undefined") return;
   try {
-    // de-dupe by key, keep the most recent 200
+    // de-dupe by key, keep the most recent 500
     const map = new Map();
     for (const item of list) if (item && item.key) map.set(item.key, item);
     localStorage.setItem(
       SEEN_KEY,
-      JSON.stringify([...map.values()].slice(-200))
+      JSON.stringify([...map.values()].slice(-500))
     );
   } catch (_) {}
+}
+
+// Has this topic (by title OR source article) been shown before?
+function isSeen(t, seenTitleSet, seenUrlSet) {
+  const uk = urlKey(t);
+  return seenTitleSet.has(topicKey(t)) || (uk && seenUrlSet.has(uk));
 }
 
 async function fetchScript(topic, lang) {
@@ -125,41 +148,83 @@ export default function App() {
   const startX = useRef(0);
   const cardRef = useRef(null);
 
+  // undo history — lets you go back to the previous topic after reject/approve
+  const historyRef = useRef([]);
+  const [canUndo, setCanUndo] = useState(false);
+
+  const resetHistory = useCallback(() => {
+    historyRef.current = [];
+    setCanUndo(false);
+  }, []);
+
+  const pushHistory = () => {
+    historyRef.current.push({ index, reviewedCount, approvedCount });
+    setCanUndo(true);
+  };
+
+  const undo = () => {
+    const prev = historyRef.current.pop();
+    if (!prev) return;
+    setExiting(null);
+    setDx(0);
+    setIndex(prev.index);
+    setReviewedCount(prev.reviewedCount);
+    setApprovedCount(prev.approvedCount);
+    setView("deck");
+    setCanUndo(historyRef.current.length > 0);
+  };
+
   const loadTopics = useCallback(async (force = false) => {
     setLoadingTopics(true);
     setTopicError(null);
     setUsingFallback(false);
     try {
       const seen = loadSeen();
-      const seenKeys = new Set(seen.map((s) => s.key));
+      const seenTitles = new Set(seen.map((s) => s.key));
+      const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
       const exclude = seen
         .map((s) => s.en || s.key)
         .filter(Boolean)
-        .slice(-60);
+        .slice(-80);
 
       // Page-load fetches use the server cache (near-instant); the explicit
       // "Refresh trends" button forces a live regenerate.
       const parsed = await fetchTopics(exclude, force);
 
-      // Drop anything we've already shown; if everything is a repeat, show the
-      // batch anyway rather than an empty deck.
-      const fresh = parsed.filter((t) => !seenKeys.has(topicKey(t)));
-      const nextTopics = fresh.length ? fresh : parsed;
+      // STRICT: drop every topic whose title OR source article was already
+      // shown. A topic/article is shown only once, ever, on this device.
+      const fresh = parsed.filter((t) => !isSeen(t, seenTitles, seenUrls));
 
-      // Remember this batch so the next refresh doesn't repeat it.
+      // Remember this batch so it never comes back.
       saveSeen([
         ...seen,
-        ...nextTopics.map((t) => ({
+        ...fresh.map((t) => ({
           key: topicKey(t),
+          url: urlKey(t),
           en: t.title_en || t.title_fa,
         })),
       ]);
 
-      setTopics(nextTopics);
+      resetHistory();
+      setTopics(fresh);
       setIndex(0);
       setUpdatedAt(new Date());
+      if (fresh.length === 0) {
+        setTopicError("همهٔ موضوعات این دور رو قبلاً دیدی. کمی بعد دوباره «Refresh trends» رو بزن تا خبرهای تازه بیاد.");
+      }
     } catch (e) {
-      setTopics(FALLBACK);
+      // Only fall back to the base deck if we have nothing shown yet; never
+      // re-show base topics that were already seen.
+      const seen = loadSeen();
+      const seenTitles = new Set(seen.map((s) => s.key));
+      const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
+      const freshFallback = FALLBACK.filter((t) => !isSeen(t, seenTitles, seenUrls));
+      saveSeen([
+        ...seen,
+        ...freshFallback.map((t) => ({ key: topicKey(t), url: urlKey(t), en: t.title_en || t.title_fa })),
+      ]);
+      resetHistory();
+      setTopics(freshFallback);
       setIndex(0);
       setUsingFallback(true);
       setUpdatedAt(new Date());
@@ -181,6 +246,7 @@ export default function App() {
 
   const doReject = () => {
     if (exiting) return;
+    pushHistory();
     setReviewedCount((n) => n + 1);
     setExiting("left");
     setTimeout(advance, 260);
@@ -188,6 +254,7 @@ export default function App() {
 
   const doApprove = async () => {
     if (exiting || !current) return;
+    pushHistory();
     setReviewedCount((n) => n + 1);
     setApprovedCount((n) => n + 1);
     const topic = current;
@@ -332,14 +399,15 @@ export default function App() {
 
           {/* Actions */}
           {!loadingTopics && current && (
-            <div style={{ display: "flex", gap: 14, marginTop: 22, justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 14, marginTop: 22, justifyContent: "center", alignItems: "center" }}>
+              <UndoBtn onClick={undo} disabled={!canUndo || !!exiting} />
               <ActionBtn kind="reject" onClick={doReject} disabled={!!exiting} />
               <ActionBtn kind="approve" onClick={doApprove} disabled={!!exiting} />
             </div>
           )}
           {!loadingTopics && current && (
             <div style={{ textAlign: "center", marginTop: 12, fontSize: 11.5, color: "rgba(242,229,192,0.4)" }}>
-              Swipe the card, or use the buttons · ← رد · تأیید →
+              Swipe the card, or use the buttons · ↶ undo · ← رد · تأیید →
             </div>
           )}
         </div>
@@ -356,6 +424,8 @@ export default function App() {
           copied={copied}
           onCopy={copy}
           onBack={() => { setView("deck"); }}
+          onUndo={undo}
+          canUndo={canUndo}
         />
       )}
     </div>
@@ -510,6 +580,25 @@ function ActionBtn({ kind, onClick, disabled }) {
   );
 }
 
+function UndoBtn({ onClick, disabled }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="Undo — go back to previous topic"
+      title="Undo (previous topic)"
+      style={{
+        width: 52, height: 52, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
+        border: `1px solid ${C.line}`, background: "rgba(242,229,192,0.04)",
+        color: C.cream, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center",
+        opacity: disabled ? 0.35 : 1, transition: "transform 0.12s",
+      }}
+    >
+      ↶
+    </button>
+  );
+}
+
 function CardSkeleton() {
   return (
     <div style={{ height: 500, background: "rgba(242,229,192,0.06)", border: `1px solid ${C.line}`, borderRadius: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
@@ -564,7 +653,7 @@ function ScriptBody({ text, tab }) {
   );
 }
 
-function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCopy, onBack }) {
+function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
   const active = tab === "fa" ? scripts.fa : scripts.en;
 
@@ -604,9 +693,16 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
 
   return (
     <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
-      <button onClick={onBack} style={{ alignSelf: "flex-start", background: "transparent", color: "rgba(242,229,192,0.7)", border: "none", cursor: "pointer", fontSize: 13, marginBottom: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
-        ← Back to deck
-      </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <button onClick={onBack} style={{ background: "transparent", color: "rgba(242,229,192,0.7)", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
+          ← Back to deck
+        </button>
+        {canUndo && (
+          <button onClick={onUndo} style={{ background: "rgba(242,229,192,0.06)", color: C.cream, border: `1px solid ${C.line}`, borderRadius: 9, padding: "6px 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>
+            ↶ Undo (previous topic)
+          </button>
+        )}
+      </div>
 
       <div style={{ background: C.cream, borderRadius: 18, padding: "16px 18px", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -623,12 +719,14 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              display: "flex", alignItems: "center", gap: 5, marginTop: 8,
-              fontSize: 11.5, color: C.slate, fontFamily: "'Space Grotesk', sans-serif",
-              textDecoration: "none", direction: "ltr",
+              display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12,
+              fontSize: 12.5, fontWeight: 600, color: "#fff",
+              fontFamily: "'Space Grotesk', sans-serif", textDecoration: "none",
+              direction: "ltr", background: C.slate, border: `1px solid ${C.slate}`,
+              borderRadius: 9, padding: "8px 12px",
             }}
           >
-            🔗 Source: {sourceHost(topic.source_url)}
+            🔗 Read the source: {sourceHost(topic.source_url)} ↗
           </a>
         )}
       </div>
