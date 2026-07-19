@@ -1,4 +1,5 @@
 import { callClaude } from "../../../lib/anthropic";
+import { openaiEnabled, openaiTopics } from "../../../lib/openai";
 import { topicPrompt, parseTopics } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -27,7 +28,7 @@ const FORCE_COOLDOWN_MS = 5 * 60 * 1000; // min time between explicit "Refresh t
 const MAX_GENERATIONS_PER_HOUR = 8; // hard ceiling on live generations, any trigger
 const MAX_GENERATIONS_PER_DAY = 30; // second ceiling — catches a slow-burn runaway an hourly cap alone would miss over 24h
 
-let cache = { topics: null, timestamp: 0 };
+let cache = { topics: null, timestamp: 0, provider: null };
 let inFlight = null; // de-dupe concurrent live generations
 let lastForceAt = 0;
 let generationTimestamps = []; // sliding window backing both caps
@@ -40,17 +41,35 @@ function underHourlyCap() {
   return lastHour < MAX_GENERATIONS_PER_HOUR && generationTimestamps.length < MAX_GENERATIONS_PER_DAY;
 }
 
+// Try OpenAI first when enabled; on ANY failure fall back to Claude so the app
+// never breaks. `cache.provider` records which one actually produced the batch
+// so you can confirm on Render whether OpenAI is really being used.
 async function generate(exclude) {
   generationTimestamps.push(Date.now());
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local date
-  const text = await callClaude(
-    [{ role: "user", content: topicPrompt(today, exclude) }],
-    true
-  );
+  const prompt = topicPrompt(today, exclude);
+
+  let text = "";
+  let provider = "anthropic";
+  if (openaiEnabled()) {
+    try {
+      text = await openaiTopics(prompt);
+      provider = "openai";
+    } catch (e) {
+      // OpenAI failed — fall back to Claude if we can, else re-throw.
+      if (!process.env.ANTHROPIC_API_KEY) throw e;
+      text = await callClaude([{ role: "user", content: prompt }], true);
+      provider = "anthropic (openai failed)";
+    }
+  } else {
+    text = await callClaude([{ role: "user", content: prompt }], true);
+  }
+
   const parsed = parseTopics(text);
   if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
     throw new Error("parse");
   }
+  cache = { topics: parsed, timestamp: Date.now(), provider };
   return parsed;
 }
 
@@ -59,10 +78,8 @@ async function generate(exclude) {
 // duplicate live searches.
 function refreshInBackground(exclude) {
   if (inFlight || !underHourlyCap()) return;
+  // generate() updates the cache itself on success.
   const task = generate(exclude)
-    .then((parsed) => {
-      cache = { topics: parsed, timestamp: Date.now() };
-    })
     .catch(() => {
       // Keep serving the old cache on a failed background refresh; the next
       // request will just retry.
@@ -145,11 +162,10 @@ export async function POST(request) {
     }
 
     if (force) lastForceAt = Date.now();
-    const task = generate(exclude);
+    const task = generate(exclude); // updates the cache (with provider) itself
     if (!force) inFlight = task.finally(() => { inFlight = null; });
     const parsed = await task;
-    cache = { topics: parsed, timestamp: Date.now() };
-    return Response.json({ topics: parsed, cached: false });
+    return Response.json({ topics: parsed, cached: false, provider: cache.provider });
   } catch (e) {
     if (String(e?.message || e) === "parse") {
       return Response.json({ error: "parse" }, { status: 502 });
