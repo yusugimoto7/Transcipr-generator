@@ -1,5 +1,6 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiTopics } from "../../../lib/openai";
+import { sheetEnabled, getSeen, appendRows, normalizeUrl } from "../../../lib/sheet";
 import { topicPrompt, parseTopics } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -44,9 +45,26 @@ function underHourlyCap() {
 // Try OpenAI first when enabled; on ANY failure fall back to Claude so the app
 // never breaks. `cache.provider` records which one actually produced the batch
 // so you can confirm on Render whether OpenAI is really being used.
-async function generate(exclude) {
+async function generate(clientExclude) {
   generationTimestamps.push(Date.now());
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local date
+
+  // If a Google Sheet is configured it is the durable, cross-device source of
+  // truth for what's been shown. Pull it up front so we can (a) tell the model
+  // to avoid those titles and (b) drop any repeat article after generation.
+  let seenUrlSet = null;
+  let sheetTitles = [];
+  if (sheetEnabled()) {
+    try {
+      const seen = await getSeen();
+      seenUrlSet = new Set(seen.urls.map(normalizeUrl).filter(Boolean));
+      sheetTitles = seen.titles || [];
+    } catch (_) {
+      seenUrlSet = null; // sheet unreachable — degrade gracefully
+    }
+  }
+
+  const exclude = [...new Set([...(clientExclude || []), ...sheetTitles])].slice(-100);
   const prompt = topicPrompt(today, exclude);
 
   let text = "";
@@ -67,10 +85,26 @@ async function generate(exclude) {
 
   const parsed = parseTopics(text);
   if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error("parse");
+    throw new Error("parse"); // model genuinely returned nothing
   }
-  cache = { topics: parsed, timestamp: Date.now(), provider };
-  return parsed;
+
+  // Server-side dedup by article + append the fresh ones to the history log.
+  // An empty result here (everything already seen) is VALID, not an error.
+  let out = parsed;
+  if (seenUrlSet) {
+    out = parsed.filter((t) => {
+      const k = normalizeUrl(t.source_url);
+      return !(k && seenUrlSet.has(k));
+    });
+    try {
+      await appendRows(out);
+    } catch (_) {
+      // Logging failed — still serve the topics; don't lose the batch.
+    }
+  }
+
+  cache = { topics: out, timestamp: Date.now(), provider };
+  return out;
 }
 
 // Kick off a regenerate without making the caller wait for it. Guarded by
