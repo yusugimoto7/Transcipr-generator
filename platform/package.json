@@ -1,0 +1,24 @@
+{
+  "name": "canada-visa-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Applicant-facing platform to prepare Canadian immigration documents and forms. Phase 1: Study Permit (single applicant).",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "next lint"
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "bcryptjs": "^2.4.3",
+    "jose": "^5.9.6",
+    "next": "14.2.35",
+    "pdf-lib": "^1.17.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}

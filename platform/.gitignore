@@ -1,0 +1,20 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next
+/out
+/build
+
+# runtime data & uploads (never commit applicant data)
+/data
+/uploads
+
+# env
+.env
+.env*.local
+
+# misc
+.DS_Store
+*.log
+npm-debug.log*
