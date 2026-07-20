@@ -3,14 +3,16 @@
 import { useState, useCallback, useRef } from 'react';
 import DocumentsPanel from '@/components/panels/DocumentsPanel';
 import IntakePanel from '@/components/panels/IntakePanel';
+import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
 import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
 
 const TABS = [
   { id: 'documents', label: '1. Documents' },
   { id: 'intake', label: '2. Intake' },
-  { id: 'review', label: '3. Review' },
-  { id: 'generate', label: '4. Generate' },
+  { id: 'sop', label: '3. Study Plan' },
+  { id: 'review', label: '4. Review' },
+  { id: 'generate', label: '5. Generate' },
 ];
 
 export default function Workspace({ initialApp, schema, initialChecklist }) {
@@ -86,6 +88,7 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
       {tab === 'intake' && (
         <IntakePanel app={app} schema={schema} onFieldChange={onFieldChange} />
       )}
+      {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
       {tab === 'review' && (
         <ReviewPanel app={app} initialChecklist={initialChecklist} patchLocal={patchLocal} />
       )}

@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { listApplications } from '@/lib/store';
 import TopBar from '@/components/TopBar';
 import DashboardClient from '@/components/DashboardClient';
+import AssistantWidget from '@/components/AssistantWidget';
 
 export const metadata = { title: 'Your applications — Canada Visa Platform' };
 
@@ -23,6 +24,7 @@ export default async function Dashboard() {
       <div className="container">
         <DashboardClient initialApps={summary} userName={user.name} />
       </div>
+      <AssistantWidget />
     </>
   );
 }

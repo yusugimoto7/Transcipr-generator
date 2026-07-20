@@ -5,6 +5,7 @@ import { getSchema } from '@/lib/schema';
 import { buildChecklist } from '@/lib/checklist';
 import TopBar from '@/components/TopBar';
 import Workspace from '@/components/Workspace';
+import AssistantWidget from '@/components/AssistantWidget';
 
 export const metadata = { title: 'Application — Canada Visa Platform' };
 
@@ -28,6 +29,7 @@ export default async function ApplicationPage({ params }) {
       <div className="container">
         <Workspace initialApp={app} schema={schema} initialChecklist={checklist} />
       </div>
+      <AssistantWidget appId={app.id} />
     </>
   );
 }

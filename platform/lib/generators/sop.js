@@ -1,14 +1,16 @@
 import { complete } from '../anthropic';
+import { answersToText } from '../sopQuestions';
 
 /**
  * Draft a Statement of Purpose / Study Plan (also usable as the Letter of
  * Explanation) for a study permit. Returns markdown-ish text.
  *
- * NOTE: This is a first draft for the applicant to personalize and verify.
- * It never fabricates facts beyond what the applicant provided.
+ * Uses the applicant's intake data plus, when present, their Study Plan builder
+ * answers (app.sopAnswers). Never fabricates facts beyond what was provided.
  */
 export async function generateSop(app) {
   const d = app.data || {};
+  const builder = answersToText(app.sopAnswers || {});
   const system = `You are an expert Canadian study permit consultant who drafts
 persuasive, honest Statements of Purpose. You write in clear, confident first-person
 English. You address the visa officer's core concerns: genuine student, adequate
@@ -47,7 +49,12 @@ Requirements:
 - Use [SQUARE BRACKET] placeholders for any missing specifics.
 - Output plain text with **bold** section headings, no preamble.
 
-${facts}`;
+${facts}
+${
+  builder
+    ? `\nThe applicant answered these Study Plan questions — weave their selections and their own words naturally into the relevant sections (do not list them verbatim):\n${builder}`
+    : ''
+}`;
 
   const text = await complete({
     system,
