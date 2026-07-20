@@ -695,6 +695,57 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
       ? "Retry Telegram"
       : "✈ Send to Telegram";
 
+  // Blog article (on-demand)
+  const [artState, setArtState] = useState("idle"); // idle | generating | ready | error
+  const [article, setArticle] = useState(null);
+  const [artMsg, setArtMsg] = useState("");
+  const [pubState, setPubState] = useState("idle"); // idle | publishing | done | error
+  const [pubMsg, setPubMsg] = useState("");
+  const [editLink, setEditLink] = useState("");
+
+  const generateArticle = async () => {
+    if (artState === "generating") return;
+    setArtState("generating");
+    setArtMsg("");
+    setPubState("idle");
+    setPubMsg("");
+    setEditLink("");
+    try {
+      const res = await fetch("/api/article", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "failed");
+      setArticle(data.article);
+      setArtState("ready");
+    } catch (e) {
+      setArtState("error");
+      setArtMsg(String(e.message || e));
+    }
+  };
+
+  const publishArticle = async () => {
+    if (!article || pubState === "publishing") return;
+    setPubState("publishing");
+    setPubMsg("");
+    try {
+      const res = await fetch("/api/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ article }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "failed");
+      setEditLink(data.edit_link || "");
+      setPubState("done");
+    } catch (e) {
+      setPubState("error");
+      setPubMsg(String(e.message || e));
+    }
+  };
+
   return (
     <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -790,6 +841,98 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
             </div>
           )}
         </>
+      )}
+
+      {/* Blog article (on-demand) */}
+      {!loading && !error && (
+        <div style={{ marginTop: 16, borderTop: `1px solid ${C.line}`, paddingTop: 16 }}>
+          {artState !== "ready" && (
+            <button
+              onClick={generateArticle}
+              disabled={artState === "generating"}
+              style={{
+                width: "100%", background: "rgba(50,81,93,0.35)", color: C.cream,
+                border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
+                fontWeight: 600, fontSize: 14, cursor: artState === "generating" ? "default" : "pointer",
+                opacity: artState === "generating" ? 0.6 : 1, fontFamily: "'Space Grotesk', sans-serif",
+              }}
+            >
+              {artState === "generating" ? "در حال نوشتن مقاله…" : artState === "error" ? "دوباره امتحان کن" : "📝 ساخت مقاله وبلاگ (Blog article)"}
+            </button>
+          )}
+          {artState === "error" && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{artMsg}</div>
+          )}
+
+          {artState === "ready" && article && (
+            <div>
+              <style>{`
+                .article-preview h2{font-size:15px;font-weight:800;margin:14px 0 6px;color:#22343b}
+                .article-preview h3{font-size:13.5px;font-weight:700;margin:10px 0 4px;color:#32515d}
+                .article-preview p{margin:0 0 8px}
+                .article-preview ul{margin:0 8px 8px 0;padding-right:18px}
+                .article-preview li{margin:0 0 4px}
+                .article-preview a{color:#d9600a;text-decoration:underline}
+                .article-preview strong{color:#22343b}
+              `}</style>
+              {/* SEO meta line */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, fontSize: 11, fontFamily: "'Space Grotesk', sans-serif", color: "rgba(242,229,192,0.6)" }}>
+                {article.focus_keyword && <span dir="rtl" style={{ background: "rgba(242,229,192,0.06)", borderRadius: 6, padding: "3px 8px", fontFamily: "'Vazirmatn', sans-serif" }}>🔑 {article.focus_keyword}</span>}
+                {!article.parse_ok && <span style={{ color: C.orange }}>⚠️ خروجی ناقص — قبل از انتشار بررسی کن</span>}
+              </div>
+
+              {/* Article preview */}
+              <div style={{ background: C.cream, borderRadius: 14, padding: "16px 18px", maxHeight: 340, overflowY: "auto" }}>
+                <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
+                  {article.title_fa}
+                </div>
+                <div
+                  dir="rtl"
+                  className="article-preview"
+                  style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, lineHeight: 1.9, color: "#2f3f45", textAlign: "right" }}
+                  dangerouslySetInnerHTML={{ __html: article.content_html }}
+                />
+              </div>
+
+              {/* Publish */}
+              {pubState !== "done" ? (
+                <button
+                  onClick={publishArticle}
+                  disabled={pubState === "publishing"}
+                  style={{
+                    width: "100%", marginTop: 12,
+                    background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`,
+                    color: "#fff", border: "none", borderRadius: 12, padding: "13px",
+                    fontWeight: 700, fontSize: 14, cursor: pubState === "publishing" ? "default" : "pointer",
+                    opacity: pubState === "publishing" ? 0.6 : 1, fontFamily: "'Space Grotesk', sans-serif",
+                  }}
+                >
+                  {pubState === "publishing" ? "در حال ساخت پیش‌نویس…" : pubState === "error" ? "دوباره امتحان کن — انتشار پیش‌نویس" : "⬆ انتشار پیش‌نویس در سایت (Publish draft)"}
+                </button>
+              ) : (
+                <a
+                  href={editLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "block", marginTop: 12, textAlign: "center",
+                    background: C.slate, color: C.cream, border: `1px solid ${C.slate}`,
+                    borderRadius: 12, padding: "13px", fontWeight: 700, fontSize: 14,
+                    textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
+                  }}
+                >
+                  ✓ پیش‌نویس ساخته شد — ویرایش در وردپرس ↗
+                </a>
+              )}
+              {pubState === "error" && (
+                <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{pubMsg}</div>
+              )}
+              <button onClick={generateArticle} disabled={artState === "generating"} style={{ width: "100%", marginTop: 8, background: "transparent", color: "rgba(242,229,192,0.6)", border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
+                ↻ بازنویسی مقاله
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       <button onClick={onBack} style={{ marginTop: 12, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", border: "none", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
