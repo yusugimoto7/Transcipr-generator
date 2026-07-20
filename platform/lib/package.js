@@ -9,6 +9,7 @@ const DOC_ORDER = [
   ['financial-summary', '03_Financial_Summary.pdf'],
   ['imm1294', '04_IMM1294_Study_Permit_DataSheet.pdf'],
   ['imm5645', '05_IMM5645_Family_Information_DataSheet.pdf'],
+  ['next-steps', '06_Missing_Documents_and_Next_Steps.pdf'],
 ];
 
 function manifest(app) {

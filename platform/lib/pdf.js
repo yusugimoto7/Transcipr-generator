@@ -112,6 +112,12 @@ export function textToBlocks(text, title) {
       blocks.push({ type: 'heading', text: b[1] });
       continue;
     }
+    // List items ("- x", "• x", "1. x") stay on their own line.
+    if (/^(\s*[-•*]\s+|\s*\d+[.)]\s+)/.test(line)) {
+      flush();
+      blocks.push({ type: 'para', text: line.replace(/\*\*/g, '') });
+      continue;
+    }
     paragraph.push(line.replace(/\*\*/g, ''));
   }
   flush();

@@ -14,6 +14,7 @@ export default function GeneratePanel({ app, patchLocal }) {
   const [selected, setSelected] = useState(DOCS.map((d) => d.key));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [note, setNote] = useState(null);
   const generated = app.generated || [];
 
   const toggle = (key) =>
@@ -34,6 +35,7 @@ export default function GeneratePanel({ app, patchLocal }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed.');
       patchLocal({ generated: data.generated });
+      setNote(data.note || null);
       const errNote = data.errors?.length
         ? ` (${data.errors.length} had issues: ${data.errors.map((e) => e.key).join(', ')})`
         : '';
@@ -90,6 +92,40 @@ export default function GeneratePanel({ app, patchLocal }) {
         </div>
         {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
       </div>
+
+      {note && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ marginBottom: 0 }}>📋 Missing documents & next steps</h2>
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/next-steps`}>
+              ↓ Download as PDF
+            </a>
+          </div>
+
+          <h3 style={{ marginTop: 14 }}>Missing documents</h3>
+          {note.missingDocuments.length === 0 ? (
+            <p className="small" style={{ color: 'var(--ok)' }}>All checklist documents provided. 🎉</p>
+          ) : (
+            <ul style={{ paddingLeft: 18 }}>
+              {note.missingDocuments.map((m, i) => <li key={i}>{m}</li>)}
+            </ul>
+          )}
+
+          {note.missingFields.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 14 }}>Intake fields still empty</h3>
+              <ul style={{ paddingLeft: 18 }}>
+                {note.missingFields.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
+            </>
+          )}
+
+          <h3 style={{ marginTop: 14 }}>Suggested next steps</h3>
+          <ol style={{ paddingLeft: 18 }}>
+            {note.nextSteps.map((s, i) => <li key={i} style={{ marginBottom: 6 }}>{s}</li>)}
+          </ol>
+        </div>
+      )}
 
       <div className="hint-box">
         <strong>About the IMM form data sheets:</strong> Official IRCC forms like IMM 1294 are

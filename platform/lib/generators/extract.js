@@ -1,5 +1,6 @@
 import { completeJson } from '../anthropic';
 import { allFields } from '../schema';
+import { CATEGORY_KEYS } from './classify';
 
 /**
  * Build a Claude field dictionary describing what we want extracted.
@@ -43,8 +44,15 @@ Rules:
 {
   "fields": { "<fieldId>": <value>, ... },       // only fields you found
   "confidence": { "<fieldId>": "high"|"medium"|"low", ... },
+  "documentCategories": { "1": "<categoryKey>", "2": "<categoryKey>", ... },
   "notes": [ "short note about anything uncertain or worth the applicant checking" ]
 }
+
+For documentCategories: classify EVERY numbered document into exactly one of:
+${CATEGORY_KEYS.join(', ')}
+(passport = passport bio page; loa = letter of acceptance/admission from the school;
+pal = provincial attestation letter; proof-of-funds = bank statements/loans/sponsor
+funds; transcripts = academic records/diplomas; language = IELTS/TOEFL/etc results.)
 
 Fields:
 ${guide}
@@ -64,6 +72,7 @@ ${JSON.stringify(existing)}`;
   return {
     fields: result.fields || {},
     confidence: result.confidence || {},
+    documentCategories: result.documentCategories || {},
     notes: Array.isArray(result.notes) ? result.notes : [],
   };
 }

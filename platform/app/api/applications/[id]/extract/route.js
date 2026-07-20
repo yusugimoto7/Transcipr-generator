@@ -40,6 +40,22 @@ export async function POST(req, { params }) {
     return error(`Extraction failed: ${e.message}`, 502);
   }
 
+  // Apply AI document classification (keyed by 1-based position in `docs`).
+  const cats = result.documentCategories || {};
+  let documents = app.documents;
+  if (Object.keys(cats).length) {
+    const updatedApp = await updateApplication(app.id, (a) => {
+      for (const [idx, key] of Object.entries(cats)) {
+        const doc = docs[Number(idx) - 1];
+        if (!doc || !key) continue;
+        const target = (a.documents || []).find((d) => d.id === doc.id);
+        if (target) target.category = key;
+      }
+      return a;
+    });
+    documents = updatedApp?.documents || documents;
+  }
+
   if (body.apply) {
     await updateApplication(app.id, (a) => {
       for (const [k, v] of Object.entries(result.fields || {})) {
@@ -50,5 +66,5 @@ export async function POST(req, { params }) {
     });
   }
 
-  return json(result);
+  return json({ ...result, documents });
 }

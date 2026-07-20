@@ -80,6 +80,33 @@ platform/
     generators/               extract, review, sop, coverdocs, forms
 ```
 
+## Deploy online
+
+The app stores accounts, applications and uploaded files on disk, so it needs a host
+with a **persistent volume** (not a serverless platform like Vercel, where the disk is
+wiped on every deploy). A `Dockerfile` is included. Recommended: **Railway** or
+**Render**.
+
+### Railway (simplest)
+
+1. Sign up at [railway.app](https://railway.app) with your GitHub account.
+2. **New Project → Deploy from GitHub repo** → pick this repo.
+3. In service **Settings → Root Directory**, set `platform` (it will detect the Dockerfile).
+4. **Variables**: add `ANTHROPIC_API_KEY` and `AUTH_SECRET` (long random string).
+5. **Volume**: attach a volume mounted at `/data` (this is where accounts + uploads live).
+6. **Settings → Networking → Generate Domain** — your platform is now live at
+   `https://<your-app>.up.railway.app`.
+
+### Render
+
+1. Sign up at [render.com](https://render.com) → **New → Web Service** → connect the repo.
+2. Root directory `platform`, runtime **Docker**.
+3. Add the same two environment variables, and attach a **Disk** mounted at `/data`.
+
+Costs roughly $5/month on either. Uploaded applicant documents are personal data —
+keep the service private until you add hardening (rate limiting, backups, HTTPS-only
+cookies are already on in production).
+
 ## Extending to new streams
 
 1. Add a schema in `lib/schema.js` (steps + fields).

@@ -1,10 +1,12 @@
 import { updateApplication } from '@/lib/store';
 import { saveUpload, deleteUpload } from '@/lib/uploads';
+import { classifyByFilename } from '@/lib/generators/classify';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
 
-// Upload one or more documents for an application.
+// Upload one or more documents for an application. Categories are guessed from
+// filenames immediately; AI refines them during the extract step.
 export async function POST(req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
@@ -17,7 +19,6 @@ export async function POST(req, { params }) {
   }
 
   const files = form.getAll('files').filter((f) => typeof f.arrayBuffer === 'function');
-  const category = form.get('category') || null;
   if (!files.length) return error('No files provided.');
 
   const saved = [];
@@ -28,7 +29,7 @@ export async function POST(req, { params }) {
         buffer,
         filename: file.name,
         mime: file.type,
-        category,
+        category: classifyByFilename(file.name),
       });
       saved.push(meta);
     }

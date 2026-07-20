@@ -1,23 +1,25 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { buildChecklist } from '@/lib/checklist';
 
-const CATEGORIES = [
-  { key: '', label: 'Uncategorized' },
-  { key: 'passport', label: 'Passport' },
-  { key: 'loa', label: 'Letter of Acceptance' },
-  { key: 'pal', label: 'Provincial Attestation Letter' },
-  { key: 'proof-of-funds', label: 'Proof of funds / bank statement' },
-  { key: 'gic', label: 'GIC certificate' },
-  { key: 'transcripts', label: 'Transcripts / diploma' },
-  { key: 'language', label: 'Language test result' },
-  { key: 'photo', label: 'Photo' },
-  { key: 'tuition-receipt', label: 'Tuition receipt' },
-  { key: 'other', label: 'Other' },
-];
+const CATEGORY_LABELS = {
+  passport: 'Passport',
+  loa: 'Letter of Acceptance',
+  pal: 'Provincial Attestation Letter',
+  'proof-of-funds': 'Proof of funds',
+  gic: 'GIC certificate',
+  photo: 'Photo',
+  transcripts: 'Transcripts / diploma',
+  language: 'Language test result',
+  sop: 'Statement of Purpose',
+  'tuition-receipt': 'Tuition receipt',
+  medical: 'Medical exam',
+  'family-info': 'Family information',
+  other: 'Other',
+};
 
 export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake }) {
-  const [category, setCategory] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [suggestions, setSuggestions] = useState(null);
@@ -25,22 +27,31 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   const fileRef = useRef(null);
   const docs = app.documents || [];
 
+  const checklist = buildChecklist(app.data || {});
+  const uploadedKeys = new Set(docs.map((d) => d.category).filter(Boolean));
+  const missing = checklist.filter((c) => !uploadedKeys.has(c.key));
+
   async function upload(e) {
     e.preventDefault();
     const files = fileRef.current?.files;
-    if (!files || !files.length) return;
+    if (!files || !files.length) {
+      setMsg({ type: 'info', text: 'Choose one or more files first.' });
+      return;
+    }
     setBusy(true);
     setMsg(null);
     const fd = new FormData();
     for (const f of files) fd.append('files', f);
-    if (category) fd.append('category', category);
     try {
       const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed.');
       patchLocal({ documents: data.documents });
       fileRef.current.value = '';
-      setMsg({ type: 'ok', text: `Uploaded ${data.added.length} file(s).` });
+      setMsg({
+        type: 'ok',
+        text: `Uploaded ${data.added.length} file(s). Click "Read with AI & pre-fill" so AI can identify each document and fill your intake.`,
+      });
     } catch (e2) {
       setMsg({ type: 'err', text: e2.message });
     } finally {
@@ -66,9 +77,10 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Extraction failed.');
+      if (data.documents) patchLocal({ documents: data.documents });
       const entries = Object.entries(data.fields || {});
       if (!entries.length) {
-        setMsg({ type: 'info', text: 'No new details could be read from the documents.' });
+        setMsg({ type: 'info', text: 'Documents identified. No new intake details were found.' });
       } else {
         setSuggestions({ fields: data.fields, confidence: data.confidence || {}, notes: data.notes || [] });
       }
@@ -89,33 +101,56 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   return (
     <>
       <div className="card">
-        <h2>Upload your documents</h2>
+        <h2>Document checklist</h2>
         <p className="muted small" style={{ marginTop: -6 }}>
-          Upload PDFs or photos (passport, letter of acceptance, bank statements, transcripts,
-          language results). Then let AI read them and pre-fill your intake.
+          These are the documents your application needs. Upload files below — the platform
+          identifies what each file is and checks it off automatically.
         </p>
+        <div style={{ marginTop: 8 }}>
+          {checklist.map((c) => {
+            const done = uploadedKeys.has(c.key);
+            return (
+              <div className="row" key={c.key}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{done ? '✅' : '⬜'} {c.label}</div>
+                  <div className="muted small">{c.hint}</div>
+                </div>
+                <span className={`chip ${done ? 'ok' : 'warn'}`}>{done ? 'Provided' : 'Missing'}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hint-box" style={{ marginTop: 14 }}>
+          {missing.length === 0
+            ? '🎉 All checklist documents are provided.'
+            : `${missing.length} document(s) still missing: ${missing.map((m) => m.label).join(', ')}.`}
+        </div>
+      </div>
 
+      <div className="card">
+        <h2>Upload files</h2>
+        <p className="muted small" style={{ marginTop: -6 }}>
+          Add as many files as you like — PDF, DOCX, JPG, PNG or WEBP. No need to say what each
+          file is; we detect it from the file itself.
+        </p>
         <form onSubmit={upload} style={{ marginTop: 12 }}>
-          <div className="grid2">
-            <div className="field">
-              <label>Document type</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (
-                  <option key={c.key} value={c.key}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
-              <label>File(s)</label>
-              <input ref={fileRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" />
-            </div>
+          <div className="field">
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
+            />
           </div>
           <button type="submit" disabled={busy}>
-            {busy ? <span className="spinner" /> : 'Upload'}
+            {busy ? <span className="spinner" /> : 'Upload files'}
           </button>
         </form>
-
-        {msg && <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
+        {msg && (
+          <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 14 }}>
+            {msg.text}
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -135,11 +170,16 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
                 <div>
                   <div style={{ fontWeight: 600 }}>{d.filename}</div>
                   <div className="muted small">
-                    {(d.category && CATEGORIES.find((c) => c.key === d.category)?.label) || 'Uncategorized'} ·{' '}
-                    {(d.size / 1024).toFixed(0)} KB
+                    {d.category
+                      ? `Detected: ${CATEGORY_LABELS[d.category] || d.category}`
+                      : 'Not identified yet — run "Read with AI"'}{' '}
+                    · {(d.size / 1024).toFixed(0)} KB
                   </div>
                 </div>
-                <button className="btn-ghost" onClick={() => removeDoc(d.id)}>Remove</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {d.category && <span className="chip ok">{CATEGORY_LABELS[d.category] || d.category}</span>}
+                  <button className="btn-ghost" onClick={() => removeDoc(d.id)}>Remove</button>
+                </div>
               </div>
             ))}
           </div>

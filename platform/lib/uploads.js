@@ -6,11 +6,14 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR
   ? path.resolve(process.env.UPLOAD_DIR)
   : path.join(process.cwd(), 'uploads');
 
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 const ALLOWED = {
   'application/pdf': 'pdf',
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  [DOCX_MIME]: 'docx',
 };
 
 const MAX_BYTES = 12 * 1024 * 1024; // 12 MB
@@ -19,10 +22,33 @@ export function isAllowedType(mime) {
   return Boolean(ALLOWED[mime]);
 }
 
+/**
+ * Extract plain text from a .docx buffer. A docx is a ZIP whose main content
+ * lives in word/document.xml — we unzip it and strip the XML down to text.
+ */
+async function docxToText(buffer) {
+  const { default: JSZip } = await import('jszip');
+  const zip = await JSZip.loadAsync(buffer);
+  const entry = zip.file('word/document.xml');
+  if (!entry) return '';
+  const xml = await entry.async('string');
+  return xml
+    .replace(/<w:tab[^>]*\/>/g, '\t')
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** Save a file for an application. Returns metadata to store on the application. */
 export async function saveUpload(appId, { buffer, filename, mime, category }) {
   if (!isAllowedType(mime)) {
-    const e = new Error('Unsupported file type. Upload PDF, JPG, PNG or WEBP.');
+    const e = new Error('Unsupported file type. Upload PDF, DOCX, JPG, PNG or WEBP.');
     e.status = 400;
     throw e;
   }
@@ -83,26 +109,35 @@ export async function deleteUpload(appId, stored) {
 
 /**
  * Build Anthropic content blocks from a set of stored documents so Claude can read them.
- * PDFs -> document blocks; images -> image blocks.
+ * PDFs -> document blocks; images -> image blocks; DOCX -> extracted text.
+ * Each document is numbered so the model can refer back to it (classification).
  */
 export async function buildDocBlocks(appId, docs) {
   const blocks = [];
-  for (const doc of docs) {
+  for (let i = 0; i < docs.length; i++) {
+    const doc = docs[i];
     const buf = await readUpload(appId, doc.stored);
-    const b64 = buf.toString('base64');
     blocks.push({
       type: 'text',
-      text: `--- Document: ${doc.filename}${doc.category ? ` (category: ${doc.category})` : ''} ---`,
+      text: `--- Document ${i + 1}: ${doc.filename} ---`,
     });
     if (doc.mime === 'application/pdf') {
       blocks.push({
         type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: b64 },
+        source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') },
       });
+    } else if (doc.mime === DOCX_MIME) {
+      let text = '';
+      try {
+        text = await docxToText(buf);
+      } catch {
+        text = '(could not read this .docx file)';
+      }
+      blocks.push({ type: 'text', text: text || '(empty document)' });
     } else {
       blocks.push({
         type: 'image',
-        source: { type: 'base64', media_type: doc.mime, data: b64 },
+        source: { type: 'base64', media_type: doc.mime, data: buf.toString('base64') },
       });
     }
   }

@@ -4,6 +4,7 @@ import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop } from '@/lib/generators/sop';
 import { generateFinancialSummary, generateCoverLetter } from '@/lib/generators/coverdocs';
 import { generateFormDataSheet } from '@/lib/generators/forms';
+import { buildNextStepsNote } from '@/lib/generators/nextsteps';
 import { buildChecklist } from '@/lib/checklist';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
@@ -16,6 +17,7 @@ const DOC_TITLES = {
   'cover-letter': 'Submission Cover Letter',
   imm1294: 'IMM 1294 — Data Sheet',
   imm5645: 'IMM 5645 — Data Sheet',
+  'next-steps': 'Missing Documents & Next Steps',
 };
 
 /**
@@ -76,6 +78,25 @@ export async function POST(req, { params }) {
     );
   }
 
+  // Always refresh the "Missing documents & next steps" note with every run.
+  const appForNote = { ...app, generated: [...(app.generated || []), ...produced] };
+  const note = buildNextStepsNote(appForNote);
+  try {
+    const noteBytes = await renderDocPdf({
+      blocks: textToBlocks(note.text, DOC_TITLES['next-steps']),
+      meta: { title: DOC_TITLES['next-steps'] },
+    });
+    produced.push(
+      await saveGenerated(app.id, {
+        key: 'next-steps',
+        filename: `${DOC_TITLES['next-steps']}.pdf`,
+        bytes: Buffer.from(noteBytes),
+      })
+    );
+  } catch (e) {
+    errors.push({ key: 'next-steps', message: e.message });
+  }
+
   const updated = await updateApplication(app.id, (a) => {
     const byKey = new Map((a.generated || []).map((g) => [g.key, g]));
     for (const g of produced) byKey.set(g.key, g);
@@ -84,5 +105,5 @@ export async function POST(req, { params }) {
     return a;
   });
 
-  return json({ generated: updated.generated, produced, errors });
+  return json({ generated: updated.generated, produced, errors, note });
 }
