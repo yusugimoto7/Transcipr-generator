@@ -83,29 +83,37 @@ platform/
 ## Deploy online
 
 The app stores accounts, applications and uploaded files on disk, so it needs a host
-with a **persistent volume** (not a serverless platform like Vercel, where the disk is
-wiped on every deploy). A `Dockerfile` is included. Recommended: **Railway** or
-**Render**.
+with a **persistent disk** (not a serverless platform like Vercel, where the disk is
+wiped on every deploy). A `Dockerfile` is included.
 
-### Railway (simplest)
+### Render (recommended)
 
-1. Sign up at [railway.app](https://railway.app) with your GitHub account.
-2. **New Project → Deploy from GitHub repo** → pick this repo.
-3. In service **Settings → Root Directory**, set `platform` (it will detect the Dockerfile).
-4. **Variables**: add `ANTHROPIC_API_KEY` and `AUTH_SECRET` (long random string).
-5. **Volume**: attach a volume mounted at `/data` (this is where accounts + uploads live).
-6. **Settings → Networking → Generate Domain** — your platform is now live at
-   `https://<your-app>.up.railway.app`.
+1. Sign up at [render.com](https://render.com) with your GitHub account.
+2. Click **New + → Web Service**, and connect the `Transcipr-generator` repository.
+3. Configure the service:
+   - **Root Directory**: `platform` (Render then auto-detects the Dockerfile; Language = Docker)
+   - **Instance Type**: **Starter** or above. ⚠️ The Free tier cannot attach a disk —
+     applicant data would be erased on every deploy/restart, so it is not usable here.
+4. **Environment variables** (Advanced or the Environment tab):
+   - `ANTHROPIC_API_KEY` = your key from console.anthropic.com
+   - `AUTH_SECRET` = a long random string (32+ chars)
+5. **Add a Disk** (Advanced → Add Disk, or the service's Disks tab after creation):
+   - Name: `visa-data` · **Mount Path: `/data`** · Size: 1 GB is plenty to start.
+   The mount path must be exactly `/data` — that is where the Dockerfile keeps
+   accounts (`/data/store`) and uploads (`/data/uploads`).
+6. Click **Create Web Service**. The first build takes a few minutes; when it shows
+   **Live**, your platform is at `https://<your-service-name>.onrender.com`.
 
-### Render
+Notes:
+- Render sets `PORT` automatically and the app picks it up — no port config needed.
+- Every `git push` to the connected branch auto-deploys; the disk (your data) persists
+  across deploys.
+- Costs ≈ $7/month (Starter) + $0.25/GB for the disk.
 
-1. Sign up at [render.com](https://render.com) → **New → Web Service** → connect the repo.
-2. Root directory `platform`, runtime **Docker**.
-3. Add the same two environment variables, and attach a **Disk** mounted at `/data`.
+(Railway or Fly.io also work the same way — Docker + a volume mounted at `/data`.)
 
-Costs roughly $5/month on either. Uploaded applicant documents are personal data —
-keep the service private until you add hardening (rate limiting, backups, HTTPS-only
-cookies are already on in production).
+Uploaded applicant documents are personal data — keep the URL private until you add
+hardening (rate limiting, backups; HTTPS-only cookies are already on in production).
 
 ## Extending to new streams
 
