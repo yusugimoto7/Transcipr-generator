@@ -25,6 +25,8 @@ and current IRCC instructions before submitting.
   - Financial Summary (proof-of-funds cover sheet)
   - Submission Cover Letter
   - IMM 1294 & IMM 5645 **data sheets** (field-by-field values to transcribe into the official validated forms)
+- **Submission package** — one-click ZIP of every generated document plus a `00_README_Submission_Guide.txt` (applicant summary, included-docs checklist, personalized IRCC document checklist, empty-field list, and last AI readiness score).
+- **Direct form fill (ready)** — `lib/generators/forms.js#fillAcroForm` fills any fillable PDF that exposes real AcroForm fields. Drop a fillable template + its field map to enable direct filling for forms that support it.
 
 ## Tech
 

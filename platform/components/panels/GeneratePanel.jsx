@@ -78,10 +78,15 @@ export default function GeneratePanel({ app, patchLocal }) {
           ))}
         </div>
 
-        <div style={{ marginTop: 16 }}>
+        <div className="btn-row" style={{ marginTop: 16 }}>
           <button onClick={generate} disabled={busy || !selected.length}>
             {busy ? <span className="spinner" /> : `Generate ${selected.length} document(s)`}
           </button>
+          {generated.length > 0 && (
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/package`}>
+              📦 Download full package (ZIP)
+            </a>
+          )}
         </div>
         {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
       </div>
