@@ -19,11 +19,20 @@ const CATEGORY_LABELS = {
   other: 'Other',
 };
 
+const ACCEPT = ['.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'];
+
+function accepted(file) {
+  const name = (file.name || '').toLowerCase();
+  return ACCEPT.some((ext) => name.endsWith(ext));
+}
+
 export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [suggestions, setSuggestions] = useState(null);
   const [extracting, setExtracting] = useState(false);
+  const [pending, setPending] = useState([]); // File[] chosen but not yet uploaded
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
   const docs = app.documents || [];
 
@@ -31,23 +40,56 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   const uploadedKeys = new Set(docs.map((d) => d.category).filter(Boolean));
   const missing = checklist.filter((c) => !uploadedKeys.has(c.key));
 
-  async function upload(e) {
+  function addFiles(fileList) {
+    const incoming = Array.from(fileList || []);
+    const ok = incoming.filter(accepted);
+    const rejected = incoming.length - ok.length;
+    setPending((prev) => {
+      // De-duplicate by name+size so the same file isn't queued twice.
+      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
+      const merged = [...prev];
+      for (const f of ok) {
+        const key = `${f.name}:${f.size}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(f);
+        }
+      }
+      return merged;
+    });
+    if (rejected > 0) {
+      setMsg({ type: 'err', text: `${rejected} file(s) skipped — only PDF, DOCX, JPG, PNG, WEBP are allowed.` });
+    } else {
+      setMsg(null);
+    }
+  }
+
+  function onDrop(e) {
     e.preventDefault();
-    const files = fileRef.current?.files;
-    if (!files || !files.length) {
-      setMsg({ type: 'info', text: 'Choose one or more files first.' });
+    setDragOver(false);
+    addFiles(e.dataTransfer?.files);
+  }
+
+  function removePending(idx) {
+    setPending((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function upload() {
+    if (!pending.length) {
+      setMsg({ type: 'info', text: 'Add one or more files first.' });
       return;
     }
     setBusy(true);
     setMsg(null);
     const fd = new FormData();
-    for (const f of files) fd.append('files', f);
+    for (const f of pending) fd.append('files', f);
     try {
       const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed.');
       patchLocal({ documents: data.documents });
-      fileRef.current.value = '';
+      setPending([]);
+      if (fileRef.current) fileRef.current.value = '';
       setMsg({
         type: 'ok',
         text: `Uploaded ${data.added.length} file(s). Click "Read with AI & pre-fill" so AI can identify each document and fill your intake.`,
@@ -133,19 +175,55 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
           Add as many files as you like — PDF, DOCX, JPG, PNG or WEBP. No need to say what each
           file is; we detect it from the file itself.
         </p>
-        <form onSubmit={upload} style={{ marginTop: 12 }}>
-          <div className="field">
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
-            />
+
+        <div
+          className={`dropzone ${dragOver ? 'over' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+          onDrop={onDrop}
+          onClick={() => fileRef.current?.click()}
+          role="button"
+          tabIndex={0}
+        >
+          <div style={{ fontSize: 30 }}>📄⬆️</div>
+          <div style={{ fontWeight: 600, marginTop: 6 }}>
+            Drag &amp; drop files here
           </div>
-          <button type="submit" disabled={busy}>
-            {busy ? <span className="spinner" /> : 'Upload files'}
-          </button>
-        </form>
+          <div className="muted small">or click to browse — you can select several at once</div>
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
+            style={{ display: 'none' }}
+            onChange={(e) => addFiles(e.target.files)}
+          />
+        </div>
+
+        {pending.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div className="muted small" style={{ marginBottom: 6 }}>
+              {pending.length} file(s) ready to upload:
+            </div>
+            {pending.map((f, i) => (
+              <div className="row" key={`${f.name}:${f.size}`} style={{ padding: '8px 0' }}>
+                <div className="small" style={{ fontWeight: 600 }}>
+                  {f.name} <span className="muted">· {(f.size / 1024).toFixed(0)} KB</span>
+                </div>
+                <button className="btn-ghost" onClick={() => removePending(i)}>Remove</button>
+              </div>
+            ))}
+            <div className="btn-row" style={{ marginTop: 12 }}>
+              <button onClick={upload} disabled={busy}>
+                {busy ? <span className="spinner" /> : `Upload ${pending.length} file(s)`}
+              </button>
+              <button className="btn-secondary" onClick={() => setPending([])} disabled={busy}>
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
         {msg && (
           <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 14 }}>
             {msg.text}

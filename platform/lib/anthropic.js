@@ -22,7 +22,6 @@ export async function complete({
   system,
   content,
   maxTokens = 4096,
-  temperature = 0.3,
   model = MODEL,
 }) {
   const anthropic = getClient();
@@ -32,10 +31,11 @@ export async function complete({
       content: typeof content === 'string' ? [{ type: 'text', text: content }] : content,
     },
   ];
+  // Note: `temperature` is intentionally omitted — the current Claude models
+  // reject it (it is deprecated), so we rely on the model default.
   const res = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
     ...(system ? { system } : {}),
     messages,
   });
