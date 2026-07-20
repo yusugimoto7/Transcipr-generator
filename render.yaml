@@ -1,0 +1,28 @@
+# Render Blueprint — deploys the Canada Visa Platform with one click.
+# In Render: New + -> Blueprint -> select this repo -> Apply.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# NOTE: this file intentionally does NOT deploy the topic-engine app at the
+# repo root; it only defines the visa platform under /platform.
+
+services:
+  - type: web
+    name: canada-visa-platform
+    runtime: docker
+    plan: starter
+    rootDir: platform
+    dockerfilePath: ./Dockerfile
+    branch: claude/canada-visa-permit-platform-1nd07u
+    autoDeploy: true
+    healthCheckPath: /api/health
+    disk:
+      name: visa-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # Enter your key from console.anthropic.com when Render prompts for it.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Render generates a strong random value automatically.
+      - key: AUTH_SECRET
+        generateValue: true

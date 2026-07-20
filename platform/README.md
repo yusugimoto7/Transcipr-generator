@@ -88,6 +88,18 @@ wiped on every deploy). A `Dockerfile` is included.
 
 ### Render (recommended)
 
+**Easiest path — Blueprint (one click).** A `render.yaml` Blueprint at the repo root
+configures everything (service, root dir, disk at `/data`, env vars) automatically:
+
+1. Sign up at [render.com](https://render.com) with your GitHub account.
+2. **New + → Blueprint** → select the `Transcipr-generator` repo.
+3. Render reads `render.yaml`; enter your `ANTHROPIC_API_KEY` when prompted
+   (`AUTH_SECRET` is generated automatically). Click **Apply**.
+4. When the service shows **Live**, you're online at `https://canada-visa-platform.onrender.com`
+   (or similar).
+
+**Manual path** (if you prefer configuring by hand):
+
 1. Sign up at [render.com](https://render.com) with your GitHub account.
 2. Click **New + → Web Service**, and connect the `Transcipr-generator` repository.
 3. Configure the service:
