@@ -42,6 +42,37 @@ function underHourlyCap() {
   return lastHour < MAX_GENERATIONS_PER_HOUR && generationTimestamps.length < MAX_GENERATIONS_PER_DAY;
 }
 
+const MAX_AGE_DAYS = 45; // drop any dated news older than this — hard recency guard
+
+// Drop duplicate topics WITHIN one batch (same article by URL, or same title).
+function dedupeBatch(list) {
+  const seenUrl = new Set();
+  const seenTitle = new Set();
+  const out = [];
+  for (const t of list) {
+    const uk = normalizeUrl(t.source_url);
+    const tk = String(t.title_fa || t.title_en || "").trim().toLowerCase();
+    if ((uk && seenUrl.has(uk)) || (tk && seenTitle.has(tk))) continue;
+    if (uk) seenUrl.add(uk);
+    if (tk) seenTitle.add(tk);
+    out.push(t);
+  }
+  return out;
+}
+
+// Enforce recency deterministically, regardless of what the model returned.
+// News topics carry a "date" (YYYY-MM-DD); if that date is older than
+// MAX_AGE_DAYS, drop it. Evergreen topics (empty/absent/unparseable date) are
+// always kept.
+function recentEnough(t, todayStr) {
+  const d = String(t.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return true; // evergreen / no date
+  const dt = Date.parse(d + "T00:00:00Z");
+  if (Number.isNaN(dt)) return true;
+  const cutoff = Date.parse(todayStr + "T00:00:00Z") - MAX_AGE_DAYS * 86400000;
+  return dt >= cutoff;
+}
+
 // Try OpenAI first when enabled; on ANY failure fall back to Claude so the app
 // never breaks. `cache.provider` records which one actually produced the batch
 // so you can confirm on Render whether OpenAI is really being used.
@@ -88,11 +119,13 @@ async function generate(clientExclude) {
     throw new Error("parse"); // model genuinely returned nothing
   }
 
-  // Server-side dedup by article + append the fresh ones to the history log.
-  // An empty result here (everything already seen) is VALID, not an error.
-  let out = parsed;
+  // 1. Drop in-batch duplicates. 2. Enforce recency (drop stale dated news).
+  let out = recencyLogged(dedupeBatch(parsed), today);
+
+  // 3. Cross-batch dedup via the sheet + append fresh ones to the history log.
+  // An empty result here (everything already seen/stale) is VALID, not an error.
   if (seenUrlSet) {
-    out = parsed.filter((t) => {
+    out = out.filter((t) => {
       const k = normalizeUrl(t.source_url);
       return !(k && seenUrlSet.has(k));
     });
@@ -105,6 +138,16 @@ async function generate(clientExclude) {
 
   cache = { topics: out, timestamp: Date.now(), provider };
   return out;
+}
+
+// Apply the recency filter and log how many were dropped (visible in Render logs).
+function recencyLogged(list, todayStr) {
+  const kept = list.filter((t) => recentEnough(t, todayStr));
+  const dropped = list.length - kept.length;
+  if (dropped > 0) {
+    console.log(`[topics] dropped ${dropped} stale topic(s) older than ${MAX_AGE_DAYS} days`);
+  }
+  return kept;
 }
 
 // Kick off a regenerate without making the caller wait for it. Guarded by

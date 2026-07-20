@@ -518,14 +518,18 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
             href={topic.source_url}
             target="_blank"
             rel="noopener noreferrer"
+            // Stop the card's drag handler from swallowing the tap so the link
+            // actually opens (in a new tab) instead of starting a swipe.
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             style={{
-              display: "flex", alignItems: "center", gap: 5, marginTop: 8,
-              fontSize: 11.5, color: C.slate, fontFamily: "'Space Grotesk', sans-serif",
-              textDecoration: "none", direction: "ltr",
+              display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10,
+              fontSize: 12, fontWeight: 600, color: C.slate,
+              fontFamily: "'Space Grotesk', sans-serif", textDecoration: "underline",
+              direction: "ltr", cursor: "pointer",
             }}
           >
-            🔗 {sourceHost(topic.source_url)}
+            🔗 {sourceHost(topic.source_url)} ↗
           </a>
         )}
         {/* heat */}
