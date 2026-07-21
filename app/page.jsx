@@ -124,6 +124,60 @@ async function fetchScript(topic, lang) {
   return data.text || "";
 }
 
+// ---- library: every generated script + article is kept here so approved
+// content can be reused later. Stored in localStorage (instant, per-device) and
+// mirrored to the Google Sheet when configured (durable, cross-device). ----
+const LIB_KEY = "sugimoto_library_v1";
+
+// De-dupe by id, keeping the newest record per id, newest-first.
+function dedupeLibrary(list) {
+  const map = new Map();
+  for (const it of list) {
+    if (!it || !it.id) continue;
+    const prev = map.get(it.id);
+    if (!prev || (it.ts || 0) >= (prev.ts || 0)) map.set(it.id, it);
+  }
+  return [...map.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+}
+
+function loadLibraryLocal() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(LIB_KEY) || "[]");
+    return dedupeLibrary(Array.isArray(raw) ? raw : []);
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveLibraryLocal(list) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LIB_KEY, JSON.stringify(dedupeLibrary(list).slice(0, 300)));
+  } catch (_) {}
+}
+
+async function fetchLibraryRemote() {
+  try {
+    const res = await fetch("/api/library", { method: "GET" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.items) ? data.items : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function pushLibraryRemote(item) {
+  try {
+    await fetch("/api/library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item }),
+    });
+  } catch (_) {}
+}
+
 export default function App() {
   const [topics, setTopics] = useState([]);
   const [index, setIndex] = useState(0);
@@ -140,6 +194,12 @@ export default function App() {
   const [scriptTab, setScriptTab] = useState("fa");
   const [copied, setCopied] = useState("");
   const [updatedAt, setUpdatedAt] = useState(null);
+
+  // library — kept scripts + articles, browsable from the 📚 menu
+  const [library, setLibrary] = useState([]);
+  const [libFilter, setLibFilter] = useState("all");
+  const [initialArticle, setInitialArticle] = useState(null);
+  const [scriptReturn, setScriptReturn] = useState("deck"); // where "Back" goes
 
   // drag state
   const [dx, setDx] = useState(0);
@@ -236,6 +296,61 @@ export default function App() {
 
   useEffect(() => { loadTopics(); }, [loadTopics]);
 
+  // Load the library: localStorage first (instant), then merge in the Sheet.
+  useEffect(() => {
+    const local = loadLibraryLocal();
+    setLibrary(local);
+    fetchLibraryRemote().then((remote) => {
+      if (remote && remote.length) {
+        const merged = dedupeLibrary([...local, ...remote]);
+        setLibrary(merged);
+        saveLibraryLocal(merged);
+      }
+    });
+  }, []);
+
+  const saveToLibrary = useCallback((item) => {
+    const withTs = { ...item, ts: Date.now() };
+    setLibrary((prev) => {
+      const merged = dedupeLibrary([...prev, withTs]);
+      saveLibraryLocal(merged);
+      return merged;
+    });
+    pushLibraryRemote(withTs);
+  }, []);
+
+  // Reopen a saved item in the script view (pulling the matching script AND
+  // article for that topic so both are available).
+  const openLibraryItem = useCallback(
+    (item) => {
+      const topicObj = {
+        title_fa: item.title_fa,
+        title_en: item.title_en,
+        field: item.field,
+        page: item.page,
+        source_url: item.source_url || "",
+        score: item.score || 0,
+        why_now: item.why_now || "",
+      };
+      const key = topicKey(topicObj);
+      const scriptItem = library.find((x) => x.type === "script" && x.id === "script:" + key);
+      const articleItem = library.find((x) => x.type === "article" && x.id === "article:" + key);
+      setScriptTopic(topicObj);
+      setScripts(
+        scriptItem
+          ? { fa: scriptItem.script_fa || "", en: scriptItem.script_en || "" }
+          : { fa: item.script_fa || "", en: item.script_en || "" }
+      );
+      setInitialArticle(articleItem ? articleItem.article : item.type === "article" ? item.article : null);
+      setScriptError(null);
+      setLoadingScript(false);
+      setScriptTab("fa");
+      setScriptReturn("library");
+      setView("script");
+    },
+    [library]
+  );
+
   const current = topics[index];
 
   const advance = () => {
@@ -261,8 +376,10 @@ export default function App() {
     setExiting("right");
     setScriptTopic(topic);
     setScripts({ fa: "", en: "" });
+    setInitialArticle(null);
     setScriptError(null);
     setScriptTab("fa");
+    setScriptReturn("deck");
     setView("script");
     setLoadingScript(true);
     setTimeout(advance, 260);
@@ -272,6 +389,21 @@ export default function App() {
         fetchScript(topic, "en"),
       ]);
       setScripts({ fa, en });
+      if (fa || en) {
+        saveToLibrary({
+          id: "script:" + topicKey(topic),
+          type: "script",
+          title_fa: topic.title_fa,
+          title_en: topic.title_en,
+          field: topic.field,
+          page: topic.page,
+          source_url: topic.source_url || "",
+          score: topic.score || 0,
+          why_now: topic.why_now || "",
+          script_fa: fa,
+          script_en: en,
+        });
+      }
     } catch (e) {
       setScriptError("نوشتن سناریو با خطا مواجه شد. برگرد و دوباره تأیید کن.");
     } finally {
@@ -337,27 +469,54 @@ export default function App() {
             بر اساس اخبار هفتهٔ اخیر مهاجرت کانادا و اروپا
           </div>
         </div>
-        <button
-          onClick={() => loadTopics(true)}
-          disabled={loadingTopics}
-          style={{
-            background: "transparent", color: C.cream, border: `1px solid ${C.line}`,
-            borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
-            cursor: loadingTopics ? "default" : "pointer", opacity: loadingTopics ? 0.5 : 1,
-            fontFamily: "'Space Grotesk', sans-serif", display: "flex", alignItems: "center", gap: 6,
-          }}
-        >
-          <span style={{ display: "inline-block", transform: loadingTopics ? "none" : "none" }}>⟳</span>
-          {loadingTopics ? "Loading…" : "Refresh trends"}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            onClick={() => setView(view === "library" ? "deck" : "library")}
+            style={{
+              background: view === "library" ? C.slate : "transparent", color: C.cream,
+              border: `1px solid ${view === "library" ? C.slate : C.line}`,
+              borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
+              cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif",
+              display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+            }}
+          >
+            📚 {library.length ? `Library (${library.length})` : "Library"}
+          </button>
+          <button
+            onClick={() => loadTopics(true)}
+            disabled={loadingTopics}
+            style={{
+              background: "transparent", color: C.cream, border: `1px solid ${C.line}`,
+              borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
+              cursor: loadingTopics ? "default" : "pointer", opacity: loadingTopics ? 0.5 : 1,
+              fontFamily: "'Space Grotesk', sans-serif", display: "flex", alignItems: "center", gap: 6,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <span>⟳</span>
+            {loadingTopics ? "Loading…" : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {/* Stat strip */}
-      <div style={{ width: "100%", maxWidth: 460, display: "flex", gap: 10, marginBottom: 16 }}>
-        <Stat label="Reviewed" value={reviewedCount} />
-        <Stat label="Approved" value={approvedCount} accent />
-        <Stat label="In deck" value={Math.max(0, topics.length - index)} />
-      </div>
+      {view !== "library" && (
+        <div style={{ width: "100%", maxWidth: 460, display: "flex", gap: 10, marginBottom: 16 }}>
+          <Stat label="Reviewed" value={reviewedCount} />
+          <Stat label="Approved" value={approvedCount} accent />
+          <Stat label="In deck" value={Math.max(0, topics.length - index)} />
+        </div>
+      )}
+
+      {view === "library" && (
+        <LibraryView
+          items={library}
+          filter={libFilter}
+          setFilter={setLibFilter}
+          onOpen={openLibraryItem}
+          onBack={() => setView("deck")}
+        />
+      )}
 
       {view === "deck" && (
         <div style={{ width: "100%", maxWidth: 460, flex: 1, display: "flex", flexDirection: "column" }}>
@@ -415,17 +574,33 @@ export default function App() {
 
       {view === "script" && scriptTopic && (
         <ScriptView
+          key={"sv:" + topicKey(scriptTopic)}
           topic={scriptTopic}
           scripts={scripts}
+          initialArticle={initialArticle}
           loading={loadingScript}
           error={scriptError}
           tab={scriptTab}
           setTab={setScriptTab}
           copied={copied}
           onCopy={copy}
-          onBack={() => { setView("deck"); }}
+          onBack={() => { setView(scriptReturn === "library" ? "library" : "deck"); }}
           onUndo={undo}
-          canUndo={canUndo}
+          canUndo={canUndo && scriptReturn !== "library"}
+          onSaveArticle={(t, art) =>
+            saveToLibrary({
+              id: "article:" + topicKey(t),
+              type: "article",
+              title_fa: t.title_fa,
+              title_en: t.title_en,
+              field: t.field,
+              page: t.page,
+              source_url: t.source_url || "",
+              score: t.score || 0,
+              why_now: t.why_now || "",
+              article: art,
+            })
+          }
         />
       )}
     </div>
@@ -657,7 +832,7 @@ function ScriptBody({ text, tab }) {
   );
 }
 
-function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo }) {
+function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, onSaveArticle }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
   const active = tab === "fa" ? scripts.fa : scripts.en;
 
@@ -695,9 +870,9 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
       ? "Retry Telegram"
       : "✈ Send to Telegram";
 
-  // Blog article (on-demand)
-  const [artState, setArtState] = useState("idle"); // idle | generating | ready | error
-  const [article, setArticle] = useState(null);
+  // Blog article (on-demand). Seeded from a saved item when opened via Library.
+  const [artState, setArtState] = useState(initialArticle ? "ready" : "idle"); // idle | generating | ready | error
+  const [article, setArticle] = useState(initialArticle || null);
   const [artMsg, setArtMsg] = useState("");
   const [pubState, setPubState] = useState("idle"); // idle | publishing | done | error
   const [pubMsg, setPubMsg] = useState("");
@@ -720,6 +895,7 @@ function ScriptView({ topic, scripts, loading, error, tab, setTab, copied, onCop
       if (!res.ok || data.error) throw new Error(data.error || "failed");
       setArticle(data.article);
       setArtState("ready");
+      onSaveArticle && onSaveArticle(topic, data.article);
     } catch (e) {
       setArtState("error");
       setArtMsg(String(e.message || e));
@@ -951,6 +1127,83 @@ function Tab({ active, onClick, label }) {
       fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif",
     }}>
       {label}
+    </button>
+  );
+}
+
+// Library — a browsable list of every saved script + article. Tapping a row
+// reopens it in the script view (with copy / Telegram / publish all reusable).
+function LibraryView({ items, filter, setFilter, onOpen, onBack }) {
+  const scripts = items.filter((i) => i.type === "script");
+  const articles = items.filter((i) => i.type === "article");
+  const filtered =
+    filter === "script" ? scripts : filter === "article" ? articles : items;
+
+  return (
+    <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <button onClick={onBack} style={{ background: "transparent", color: "rgba(242,229,192,0.7)", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
+          ← Back to deck
+        </button>
+        <span style={{ fontSize: 12.5, color: "rgba(242,229,192,0.55)", fontFamily: "'Space Grotesk', sans-serif" }}>
+          {items.length} saved
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <Tab active={filter === "all"} onClick={() => setFilter("all")} label={`همه (${items.length})`} />
+        <Tab active={filter === "script"} onClick={() => setFilter("script")} label={`سناریوها (${scripts.length})`} />
+        <Tab active={filter === "article"} onClick={() => setFilter("article")} label={`مقاله‌ها (${articles.length})`} />
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ height: 320, background: "rgba(242,229,192,0.05)", border: `1px dashed ${C.line}`, borderRadius: 18, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, textAlign: "center", padding: 24 }}>
+          <div style={{ fontSize: 30 }}>📚</div>
+          <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: "rgba(242,229,192,0.75)" }}>
+            هنوز چیزی ذخیره نشده.<br />یک موضوع رو تأیید کن تا سناریو و مقاله‌اش همیشه اینجا بمونه.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map((it) => (
+            <LibraryRow key={it.id + ":" + (it.ts || 0)} item={it} onOpen={() => onOpen(it)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LibraryRow({ item, onOpen }) {
+  const f = FIELDS[item.field] || { emoji: "•", label: item.field };
+  const isArticle = item.type === "article";
+  let dateStr = "";
+  if (item.ts) {
+    try {
+      dateStr = new Date(item.ts).toLocaleDateString("en-CA");
+    } catch (_) {}
+  }
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        textAlign: "start", background: C.cream, border: `1px solid ${C.creamEdge}`,
+        borderRadius: 14, padding: "12px 14px", cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 12, width: "100%",
+      }}
+    >
+      <span style={{ fontSize: 20, flexShrink: 0 }}>{isArticle ? "📝" : "🎬"}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span dir="rtl" style={{ display: "block", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 700, fontSize: 14, color: C.ink, lineHeight: 1.5, unicodeBidi: "plaintext", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {item.title_fa || item.title_en}
+        </span>
+        <span style={{ display: "flex", gap: 8, marginTop: 4, fontSize: 11, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif" }}>
+          <span>{f.emoji} {f.label}</span>
+          <span>· {isArticle ? "مقاله" : "سناریو"}</span>
+          {dateStr && <span>· {dateStr}</span>}
+        </span>
+      </span>
+      <span style={{ fontSize: 16, color: C.slate, flexShrink: 0 }}>↗</span>
     </button>
   );
 }

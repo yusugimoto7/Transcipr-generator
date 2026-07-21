@@ -30,6 +30,20 @@ export async function POST(request) {
     const result = await createDraft(article);
     return Response.json({ ok: true, ...result });
   } catch (e) {
-    return Response.json({ error: String(e?.message || e) }, { status: 502 });
+    const code = e?.wpCode || "";
+    const status = e?.wpStatus || 0;
+    let hint = "";
+    if (code === "rest_cannot_create" || status === 403) {
+      // Auth succeeded but the WordPress user can't create posts.
+      hint =
+        " — کاربری که برای WP_USER تنظیم کردی اجازهٔ ساخت نوشته نداره. نقش این کاربر باید Author/Editor/Administrator باشه و Application Password هم باید متعلق به همون کاربر باشه (نه یک کاربر دیگه).";
+    } else if (status === 401) {
+      hint =
+        " — نام کاربری یا Application Password اشتباهه. مقدار WP_USER باید نام‌کاربری وردپرس باشه و WP_APP_PASSWORD یک «Application Password» (نه رمز ورود معمولی).";
+    }
+    return Response.json(
+      { error: String(e?.message || e) + hint, code, status },
+      { status: 502 }
+    );
   }
 }

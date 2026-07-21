@@ -25,9 +25,23 @@
 
 const SECRET = "CHANGE-ME-to-a-long-random-string";
 const SHEET_NAME = "Seen";
+const LIBRARY_SHEET = "Library";
 
 function doGet(e) {
   if (!e || e.parameter.secret !== SECRET) return json({ error: "unauthorized" });
+
+  // Library view: return every saved script/article record.
+  if (e.parameter.type === "library") {
+    const values = getLibrarySheet().getDataRange().getValues().slice(1);
+    const items = [];
+    values.forEach(function (r) {
+      var raw = r[5];
+      if (!raw) return;
+      try { items.push(JSON.parse(raw)); } catch (_) {}
+    });
+    return json({ items: items });
+  }
+
   const values = getSheet().getDataRange().getValues().slice(1); // skip header
   return json({
     urls: values.map((r) => String(r[3] || "")).filter(Boolean),
@@ -39,6 +53,23 @@ function doPost(e) {
   var body = {};
   try { body = JSON.parse(e.postData.contents || "{}"); } catch (_) {}
   if (body.secret !== SECRET) return json({ error: "unauthorized" });
+
+  // Library save: append full script/article records (kept as JSON).
+  if (body.library) {
+    const lib = getLibrarySheet();
+    body.library.forEach(function (it) {
+      lib.appendRow([
+        new Date(),
+        it.id || "",
+        it.type || "",
+        it.title_fa || "",
+        it.title_en || "",
+        JSON.stringify(it),
+      ]);
+    });
+    return json({ ok: true, added: body.library.length });
+  }
+
   const sheet = getSheet();
   const rows = body.rows || [];
   rows.forEach(function (t) {
@@ -61,6 +92,16 @@ function getSheet() {
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
     sh.appendRow(["timestamp", "title_fa", "title_en", "source_url", "field", "page", "score"]);
+  }
+  return sh;
+}
+
+function getLibrarySheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(LIBRARY_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(LIBRARY_SHEET);
+    sh.appendRow(["timestamp", "id", "type", "title_fa", "title_en", "json"]);
   }
   return sh;
 }
