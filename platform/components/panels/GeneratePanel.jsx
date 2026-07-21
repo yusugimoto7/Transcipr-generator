@@ -4,10 +4,13 @@ import { useState } from 'react';
 
 const DOCS = [
   { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.' },
-  { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Itemized proof-of-funds (applicant + supporter).' },
+  { key: 'financial-cover-letter', label: 'Financial Cover Letter', desc: 'First-person letter: funds, source of funds, transfer method.' },
+  { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Expense + sources-of-funds + assets tables.' },
   { key: 'cover-letter', label: 'RCIC Submission Letter', desc: 'Full submission letter with case-law citations & signature.' },
   { key: 'imm1294', label: 'IMM 1294 — Study Permit data sheet', desc: 'Field-by-field values to transcribe into the official form.' },
+  { key: 'imm5257', label: 'IMM 5257 — TRV / Schedule 1 data sheet', desc: 'Temporary Resident Visa application values.' },
   { key: 'imm5645', label: 'IMM 5645 — Family Information data sheet', desc: 'Family details layout for the official form.' },
+  { key: 'imm5476', label: 'IMM 5476 — Use of a Representative data sheet', desc: 'Representative appointment (RCIC) values.' },
 ];
 
 export default function GeneratePanel({ app, patchLocal }) {

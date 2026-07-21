@@ -1,6 +1,7 @@
 import { PDFDocument } from 'pdf-lib';
 import fs from 'fs/promises';
 import { renderDocPdf } from '../pdf';
+import { getFirm } from '../firm';
 
 /**
  * Official IRCC form support.
@@ -113,9 +114,85 @@ export const IMM5645_MAP = [
   ]},
 ];
 
+/* ------- IMM 5257: Application for a Temporary Resident Visa (Schedule 1) ------- */
+
+export const IMM5257_MAP = [
+  { section: 'Personal details', rows: [
+    ['Family name', (d) => d.familyName],
+    ['Given name(s)', (d) => d.givenName],
+    ['Other names used', (d) => d.otherNames],
+    ['Sex', (d) => d.sex],
+    ['Date of birth', (d) => d.dob],
+    ['Place of birth — city', (d) => d.cityOfBirth],
+    ['Place of birth — country', (d) => d.countryOfBirth],
+    ['Citizenship', (d) => d.citizenship],
+    ['Current country of residence', (d) => d.countryOfResidence],
+    ['Status', (d) => d.residenceStatus],
+    ['Marital status', (d) => d.maritalStatus],
+    ['Native language', (d) => d.firstLanguage],
+    ['Able to communicate in English/French', (d) => d.languageTest && d.languageTest !== 'None yet' ? 'English' : ''],
+  ]},
+  { section: 'Passport', rows: [
+    ['Passport number', (d) => d.passportNumber],
+    ['Country of issue', (d) => d.passportCountry],
+    ['Issue date', (d) => d.passportIssue],
+    ['Expiry date', (d) => d.passportExpiry],
+  ]},
+  { section: 'Contact', rows: [
+    ['Mailing address', (d) => d.mailingAddress],
+    ['Telephone', (d) => d.phone],
+    ['Email', (d) => d.email],
+  ]},
+  { section: 'Purpose of visit', rows: [
+    ['Purpose', () => 'Study'],
+    ['From', (d) => d.entryDate],
+    ['To', (d) => d.programEnd],
+    ['Funds available (CAD)', (d) => d.totalFunds],
+    ['Name/address in Canada (school)', (d) => `${d.schoolName || ''}, ${d.schoolCity || ''}, ${d.schoolProvince || ''}`],
+  ]},
+  { section: 'Education / occupation', rows: [
+    ['Highest level of education', (d) => d.highestEducation],
+    ['Current occupation', (d) => d.currentOccupation],
+    ['Employer / institution', (d) => d.employer],
+  ]},
+  { section: 'Background', rows: [
+    ['Previously refused a visa/permit or removed', (d) => yesNo(d.previousRefusal)],
+    ['Refusal details', (d) => d.refusalDetails],
+  ]},
+];
+
+/* ------------------- IMM 5476: Use of a Representative ------------------- */
+
+function imm5476Map() {
+  const f = getFirm();
+  return [
+    { section: 'Section A — Applicant', rows: [
+      ['Family name', (d) => d.familyName],
+      ['Given name(s)', (d) => d.givenName],
+      ['Date of birth', (d) => d.dob],
+      ['UCI (if known)', (d) => d.uci],
+    ]},
+    { section: 'Section B — Appointment of representative', rows: [
+      ['Type of representative', () => 'Paid — Immigration consultant (RCIC)'],
+      ['Representative name', () => f.repName],
+      ['RCIC membership ID', () => f.rcicNumber],
+      ['Firm / organization', () => f.company],
+      ['Address', () => f.address],
+      ['Telephone', () => f.phone],
+      ['Email', () => f.email],
+    ]},
+    { section: 'Section D — Signature', rows: [
+      ['Applicant signature', () => '(sign on the official form)'],
+      ['Date', () => '(date on the official form)'],
+    ]},
+  ];
+}
+
 const FORMS = {
   imm1294: { title: 'IMM 1294 — Application for a Study Permit (data sheet)', map: IMM1294_MAP },
+  imm5257: { title: 'IMM 5257 — Temporary Resident Visa / Schedule 1 (data sheet)', map: IMM5257_MAP },
   imm5645: { title: 'IMM 5645 — Family Information (data sheet)', map: IMM5645_MAP },
+  imm5476: { title: 'IMM 5476 — Use of a Representative (data sheet)', get map() { return imm5476Map(); } },
 };
 
 function yesNo(v) {

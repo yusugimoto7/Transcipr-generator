@@ -2,7 +2,11 @@ import { updateApplication } from '@/lib/store';
 import { saveGenerated } from '@/lib/uploads';
 import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop } from '@/lib/generators/sop';
-import { generateFinancialSummary, generateCoverLetter } from '@/lib/generators/coverdocs';
+import {
+  generateFinancialSummary,
+  generateCoverLetter,
+  generateFinancialCoverLetter,
+} from '@/lib/generators/coverdocs';
 import { generateFormDataSheet } from '@/lib/generators/forms';
 import { buildNextStepsNote } from '@/lib/generators/nextsteps';
 import { buildChecklist } from '@/lib/checklist';
@@ -13,10 +17,13 @@ export const maxDuration = 180;
 
 const DOC_TITLES = {
   sop: 'Statement of Purpose (Study Plan)',
+  'financial-cover-letter': 'Financial Cover Letter',
   'financial-summary': 'Financial Summary Report',
   'cover-letter': 'Submission Letter',
   imm1294: 'IMM 1294 — Data Sheet',
+  imm5257: 'IMM 5257 — Data Sheet',
   imm5645: 'IMM 5645 — Data Sheet',
+  imm5476: 'IMM 5476 — Data Sheet',
   'next-steps': 'Missing Documents & Next Steps',
 };
 
@@ -37,7 +44,7 @@ export async function POST(req, { params }) {
   }
   const requested = Array.isArray(body.docs) && body.docs.length
     ? body.docs
-    : ['sop', 'financial-summary', 'cover-letter', 'imm1294', 'imm5645'];
+    : ['sop', 'financial-cover-letter', 'financial-summary', 'cover-letter', 'imm1294', 'imm5257', 'imm5645', 'imm5476'];
 
   const produced = [];
   const errors = [];
@@ -48,13 +55,16 @@ export async function POST(req, { params }) {
       if (key === 'sop') {
         const text = await generateSop(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES.sop) });
+      } else if (key === 'financial-cover-letter') {
+        const text = await generateFinancialCoverLetter(app);
+        bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'financial-summary') {
         const text = await generateFinancialSummary(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'cover-letter') {
         const text = await generateCoverLetter(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
-      } else if (key === 'imm1294' || key === 'imm5645') {
+      } else if (key === 'imm1294' || key === 'imm5257' || key === 'imm5645' || key === 'imm5476') {
         bytes = await generateFormDataSheet(key, app);
       } else {
         continue;
