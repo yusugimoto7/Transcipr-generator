@@ -14,9 +14,12 @@ const SUGGESTIONS = [
   'How do I write a strong study plan?',
 ];
 
-export default function AssistantWidget({ appId }) {
+export default function AssistantWidget({ appId, initialHistory = [] }) {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState([GREETING]);
+  const restored = initialHistory
+    .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && m.content)
+    .map((m) => ({ role: m.role, content: m.content }));
+  const [messages, setMessages] = useState(restored.length ? [GREETING, ...restored] : [GREETING]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);

@@ -1,7 +1,9 @@
 import { getClient, MODEL } from '@/lib/anthropic';
-import { getApplication } from '@/lib/store';
+import { getApplication, updateApplication } from '@/lib/store';
 import { buildChecklist } from '@/lib/checklist';
 import { json, error, requireUser } from '@/lib/api';
+
+const MAX_HISTORY = 40; // messages kept per application
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -39,9 +41,11 @@ export async function POST(req) {
 
   // Optional: ground the assistant in the applicant's current file.
   let context = '';
+  let ownedApp = null;
   if (body.appId) {
     const app = await getApplication(body.appId);
     if (app && app.userId === user.id) {
+      ownedApp = app;
       const d = app.data || {};
       const checklist = buildChecklist(d);
       const uploaded = new Set((app.documents || []).map((x) => x.category).filter(Boolean));
@@ -72,6 +76,19 @@ export async function POST(req) {
     reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
   } catch (e) {
     return error(`Assistant unavailable: ${e.message}`, 502);
+  }
+
+  // Persist the conversation on the application so it's remembered next time.
+  if (ownedApp) {
+    const lastUser = messages[messages.length - 1];
+    const now = new Date().toISOString();
+    await updateApplication(ownedApp.id, (a) => {
+      const hist = Array.isArray(a.assistantHistory) ? a.assistantHistory : [];
+      hist.push({ role: 'user', content: lastUser.content, ts: now });
+      hist.push({ role: 'assistant', content: reply, ts: now });
+      a.assistantHistory = hist.slice(-MAX_HISTORY);
+      return a;
+    });
   }
 
   return json({ reply });

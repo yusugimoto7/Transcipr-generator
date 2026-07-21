@@ -4,8 +4,8 @@ import { useState } from 'react';
 
 const DOCS = [
   { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.' },
-  { key: 'financial-summary', label: 'Financial Summary', desc: 'Proof-of-funds cover sheet.' },
-  { key: 'cover-letter', label: 'Submission Cover Letter', desc: 'Lists enclosed documents for IRCC.' },
+  { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Itemized proof-of-funds (applicant + supporter).' },
+  { key: 'cover-letter', label: 'RCIC Submission Letter', desc: 'Full submission letter with case-law citations & signature.' },
   { key: 'imm1294', label: 'IMM 1294 — Study Permit data sheet', desc: 'Field-by-field values to transcribe into the official form.' },
   { key: 'imm5645', label: 'IMM 5645 — Family Information data sheet', desc: 'Family details layout for the official form.' },
 ];

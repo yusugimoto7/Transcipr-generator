@@ -13,8 +13,8 @@ export const maxDuration = 180;
 
 const DOC_TITLES = {
   sop: 'Statement of Purpose (Study Plan)',
-  'financial-summary': 'Financial Summary',
-  'cover-letter': 'Submission Cover Letter',
+  'financial-summary': 'Financial Summary Report',
+  'cover-letter': 'Submission Letter',
   imm1294: 'IMM 1294 — Data Sheet',
   imm5645: 'IMM 5645 — Data Sheet',
   'next-steps': 'Missing Documents & Next Steps',
@@ -52,8 +52,7 @@ export async function POST(req, { params }) {
         const text = await generateFinancialSummary(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'cover-letter') {
-        const labels = buildChecklist(app.data || {}).map((c) => c.label);
-        const text = await generateCoverLetter(app, labels);
+        const text = await generateCoverLetter(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'imm1294' || key === 'imm5645') {
         bytes = await generateFormDataSheet(key, app);

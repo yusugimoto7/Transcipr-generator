@@ -34,14 +34,14 @@ placeholder in [SQUARE BRACKETS] for the applicant to complete.`;
 - Ties to home country: ${d.homeTies || ''}
 - Previous refusal: ${d.previousRefusal ? 'YES — ' + (d.refusalDetails || '') : 'No'}`;
 
-  const instruction = `Write a Statement of Purpose (Study Plan) of about 550-750 words
-addressed "To the Visa Officer,". Use these sections with bold headings:
-1. Introduction & academic background
-2. Why this program and this institution
-3. How it fits my career plan
-4. Financial capacity
-5. Ties to my home country and intent to return
-6. Closing
+  const instruction = `Write a Statement of Purpose (Study Plan) of about 600-800 words
+addressed "Dear Visa Officer,", in first person. Open with one sentence of intent and the
+applicant's name, age and citizenship. Then use these **bold** sections (house style):
+**Educational and Professional Background**
+**Reasons for studying [program] in Canada**
+**Future Goals and Strong Ties to My Home Country**
+**Financial Support Proof** — a short paragraph summarising funds/supporter.
+Close with a respectful paragraph and "Sincerely yours, <name>".
 
 Requirements:
 - First person, honest, specific, no clichés or exaggeration.

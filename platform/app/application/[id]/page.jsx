@@ -29,7 +29,7 @@ export default async function ApplicationPage({ params }) {
       <div className="container">
         <Workspace initialApp={app} schema={schema} initialChecklist={checklist} />
       </div>
-      <AssistantWidget appId={app.id} />
+      <AssistantWidget appId={app.id} initialHistory={app.assistantHistory || []} />
     </>
   );
 }
