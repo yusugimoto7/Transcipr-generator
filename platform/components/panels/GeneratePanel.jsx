@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import OfficialFormsPanel from '@/components/OfficialFormsPanel';
 
 const DOCS = [
   { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.' },
@@ -130,11 +131,13 @@ export default function GeneratePanel({ app, patchLocal }) {
         </div>
       )}
 
+      <OfficialFormsPanel />
+
       <div className="hint-box">
-        <strong>About the IMM form data sheets:</strong> Official IRCC forms like IMM 1294 are
-        Adobe dynamic (XFA) PDFs that require you to click <em>Validate</em> to produce a barcode,
-        which software cannot do reliably. The data sheets give you every value laid out by
-        section so you can transcribe into the official validated form quickly and accurately.
+        <strong>Forms &amp; data sheets:</strong> The platform pulls the latest official IRCC
+        forms from canada.ca (above). Because those forms are Adobe dynamic (XFA) PDFs that need
+        the <em>Validate</em> step, the data sheets give you every value laid out by section so
+        you can fill the official form quickly and accurately.
       </div>
     </>
   );
