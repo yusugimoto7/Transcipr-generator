@@ -1,0 +1,4 @@
+# Python dependencies for the IRCC XFA form filler (lib/forms/fill_form.py).
+# Installed into the Docker image at build time.
+pikepdf==10.10.0
+lxml==5.3.0
