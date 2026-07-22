@@ -9,13 +9,15 @@ const DOCS = [
   { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Expense + sources-of-funds + assets tables.' },
   { key: 'cover-letter', label: 'RCIC Submission Letter', desc: 'Full submission letter with case-law citations & signature.' },
   { key: 'imm1294', label: 'IMM 1294 — Study Permit data sheet', desc: 'Field-by-field values to transcribe into the official form.' },
+  { key: 'imm1294-filled', label: 'IMM 1294 — pre-filled official form (beta)', desc: 'The latest official IMM 1294, pre-filled. Open in Adobe Reader, review, and click Validate.', beta: true },
   { key: 'imm5257', label: 'IMM 5257 — TRV / Schedule 1 data sheet', desc: 'Temporary Resident Visa application values.' },
   { key: 'imm5645', label: 'IMM 5645 — Family Information data sheet', desc: 'Family details layout for the official form.' },
   { key: 'imm5476', label: 'IMM 5476 — Use of a Representative data sheet', desc: 'Representative appointment (RCIC) values.' },
 ];
 
 export default function GeneratePanel({ app, patchLocal }) {
-  const [selected, setSelected] = useState(DOCS.map((d) => d.key));
+  // Beta docs (e.g. pre-filled official form) are opt-in, not selected by default.
+  const [selected, setSelected] = useState(DOCS.filter((d) => !d.beta).map((d) => d.key));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [note, setNote] = useState(null);

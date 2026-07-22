@@ -8,6 +8,7 @@ import {
   generateFinancialCoverLetter,
 } from '@/lib/generators/coverdocs';
 import { generateFormDataSheet } from '@/lib/generators/forms';
+import { fillOfficialForm } from '@/lib/generators/xfaFill';
 import { buildNextStepsNote } from '@/lib/generators/nextsteps';
 import { buildChecklist } from '@/lib/checklist';
 import { json, error, requireOwnedApp } from '@/lib/api';
@@ -24,6 +25,7 @@ const DOC_TITLES = {
   imm5257: 'IMM 5257 — Data Sheet',
   imm5645: 'IMM 5645 — Data Sheet',
   imm5476: 'IMM 5476 — Data Sheet',
+  'imm1294-filled': 'IMM 1294 — Pre-filled Official Form',
   'next-steps': 'Missing Documents & Next Steps',
 };
 
@@ -66,6 +68,16 @@ export async function POST(req, { params }) {
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'imm1294' || key === 'imm5257' || key === 'imm5645' || key === 'imm5476') {
         bytes = await generateFormDataSheet(key, app);
+      } else if (key === 'imm1294-filled') {
+        // Pre-fill the latest official IMM 1294 (XFA). Falls back to the data
+        // sheet if python/pikepdf or the template is unavailable.
+        try {
+          const filled = await fillOfficialForm('imm1294', app);
+          bytes = filled.bytes;
+        } catch (e) {
+          errors.push({ key, message: `pre-fill unavailable (${e.message}); use the data sheet` });
+          continue;
+        }
       } else {
         continue;
       }

@@ -136,9 +136,11 @@ def main():
             table = lov_maps.get(lov, {})
             code = table.get(value.strip().lower())
             if code is None:
-                warnings.append(f"{lov}: no code for '{value}'")
-            else:
-                value = code
+                # Do NOT write a raw value into a coded field — skip and warn so
+                # the applicant fills it manually rather than getting bad data.
+                warnings.append(f"{lov}: no code for '{value}' (skipped)")
+                continue
+            value = code
         node = find_or_create(data, som)
         node.text = value
         set_count += 1

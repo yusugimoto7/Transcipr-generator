@@ -17,15 +17,21 @@ step — it is by design).
 - `fieldmaps/<form>.json` — maps our intake fields → XFA SOM paths (+ which value
   list to use for coded fields).
 
-## To activate a form
+## How templates are sourced
 
-1. Put the **blank official** `imm1294.pdf` (etc.) in `templates/`.
-2. Derive its schema:
-   `python3 -c "import pikepdf,sys; ..."` (dump leaf paths under `<xfa:data>`).
-3. Author `fieldmaps/imm1294.json` mapping intake fields → SOM paths.
-4. The Node wrapper (`lib/generators/xfaFill.js`) spawns `fill_form.py`; the
-   generate route uses it when a template exists and falls back to the data
-   sheet otherwise.
+Blank templates are **fetched live from canada.ca** by `fetchForms.js` (see
+`registry.js`) and cached under `UPLOAD_DIR/forms-cache`. There is no committed
+`templates/` folder — the platform always uses the current official version.
 
-Blank templates contain **no personal data** — always start from the official
-blank form, never from a completed client file.
+## To activate/extend a form
+
+1. Confirm the form's XFA schema against the **blank** template:
+   `GET /api/forms/<key>/schema` → returns all leaf SOM paths (no values).
+2. Add/extend `fieldmaps/<key>.js` mapping intake fields → SOM paths (+ `lov`
+   list names for coded fields like country/marital status).
+3. `lib/generators/xfaFill.js` fetches the blank, runs `fill_form.py`, returns
+   the filled PDF. The generate route offers it (e.g. `imm1294-filled`) and
+   falls back to the data sheet if python/template is unavailable.
+
+Coded fields are resolved to IRCC codes via the form's own embedded value lists;
+unmatched values are **skipped** (left for the applicant) rather than guessed.
