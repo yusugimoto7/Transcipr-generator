@@ -4,15 +4,13 @@ import { buildChecklist } from './checklist';
 import { requiredMissing } from './schema';
 
 const DOC_ORDER = [
-  ['cover-letter', '01_Submission_Letter.pdf'],
-  ['sop', '02_Statement_of_Purpose.pdf'],
-  ['financial-cover-letter', '03_Financial_Cover_Letter.pdf'],
-  ['financial-summary', '04_Financial_Summary_Report.pdf'],
-  ['imm1294', '05_IMM1294_Study_Permit_DataSheet.pdf'],
-  ['imm5257', '06_IMM5257_TRV_DataSheet.pdf'],
-  ['imm5645', '07_IMM5645_Family_Information_DataSheet.pdf'],
-  ['imm5476', '08_IMM5476_Use_of_Representative_DataSheet.pdf'],
-  ['next-steps', '09_Missing_Documents_and_Next_Steps.pdf'],
+  ['sop', '01_Statement_of_Purpose.pdf'],
+  ['financial-cover-letter', '02_Financial_Cover_Letter.pdf'],
+  ['financial-summary', '03_Financial_Summary_Report.pdf'],
+  ['imm1294', '04_IMM1294_Study_Permit_DataSheet.pdf'],
+  ['imm5257', '05_IMM5257_TRV_DataSheet.pdf'],
+  ['imm5645', '06_IMM5645_Family_Information_DataSheet.pdf'],
+  ['next-steps', '07_Missing_Documents_and_Next_Steps.pdf'],
 ];
 
 function manifest(app) {

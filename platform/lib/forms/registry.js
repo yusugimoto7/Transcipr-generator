@@ -34,14 +34,6 @@ export const IRCC_FORMS = {
     fallbackPdf:
       'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5645/01-01-2021/imm5645e.pdf',
   },
-  imm5476: {
-    code: 'IMM 5476',
-    title: 'Use of a Representative Form',
-    role: 'form',
-    page: `${PAGE}/imm5476.html`,
-    fallbackPdf:
-      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5476/01-11-2025/imm5476e.pdf',
-  },
   imm5483: {
     code: 'IMM 5483',
     title: 'Document Checklist: Study Permit',
@@ -53,7 +45,7 @@ export const IRCC_FORMS = {
 };
 
 /** The forms (not checklists) required for a study permit application. */
-export const STUDY_PERMIT_FORM_KEYS = ['imm1294', 'imm5257', 'imm5645', 'imm5476'];
+export const STUDY_PERMIT_FORM_KEYS = ['imm1294', 'imm5257', 'imm5645'];
 
 /** Parse the IRCC version date (DD-MM-YYYY) out of a form PDF URL. */
 export function versionFromUrl(url) {
