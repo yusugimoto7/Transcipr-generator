@@ -2,6 +2,7 @@ import { PDFDocument } from 'pdf-lib';
 import fs from 'fs/promises';
 import { renderDocPdf } from '../pdf';
 import { getFirm } from '../firm';
+import { composeAddress, composePhone } from '../applicant';
 
 /**
  * Official IRCC form support.
@@ -45,9 +46,9 @@ export const IMM1294_MAP = [
     ['Expiry date', (d) => d.passportExpiry],
   ]},
   { section: '3. Contact information', rows: [
-    ['Mailing address', (d) => d.mailingAddress],
-    ['Residential address', (d) => d.residentialAddress || d.mailingAddress],
-    ['Telephone', (d) => d.phone],
+    ['Mailing address', (d) => composeAddress(d)],
+    ['Residential address', (d) => composeAddress(d)],
+    ['Telephone', (d) => composePhone(d)],
     ['Email', (d) => d.email],
   ]},
   { section: '4. Details of intended study', rows: [
@@ -95,7 +96,7 @@ export const IMM5645_MAP = [
     ['Date of birth', (d) => d.dob],
     ['Country of birth', (d) => d.countryOfBirth],
     ['Marital status', (d) => d.maritalStatus],
-    ['Present address', (d) => d.residentialAddress || d.mailingAddress],
+    ['Present address', (d) => composeAddress(d)],
   ]},
   { section: "Father (complete on the official form)", rows: [
     ['Father — full name', () => ''],
@@ -139,8 +140,8 @@ export const IMM5257_MAP = [
     ['Expiry date', (d) => d.passportExpiry],
   ]},
   { section: 'Contact', rows: [
-    ['Mailing address', (d) => d.mailingAddress],
-    ['Telephone', (d) => d.phone],
+    ['Mailing address', (d) => composeAddress(d)],
+    ['Telephone', (d) => composePhone(d)],
     ['Email', (d) => d.email],
   ]},
   { section: 'Purpose of visit', rows: [

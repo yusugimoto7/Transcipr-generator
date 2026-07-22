@@ -3,6 +3,28 @@
  * real submission packages.
  */
 
+/** Compose a single-line mailing address from the structured intake fields. */
+export function composeAddress(d = {}) {
+  const parts = [
+    d.mailingPobox && `P.O. Box ${d.mailingPobox}`,
+    d.mailingUnit && `Unit ${d.mailingUnit}`,
+    [d.mailingStreetNo, d.mailingStreet].filter(Boolean).join(' '),
+    d.mailingCity,
+    d.mailingProvince,
+    d.mailingPostal,
+    d.mailingCountry,
+  ].filter((p) => p && String(p).trim());
+  return parts.join(', ');
+}
+
+/** Compose a full phone number (country code + number). */
+export function composePhone(d = {}) {
+  const cc = String(d.phoneCountryCode || '').replace(/^\+/, '').trim();
+  const num = String(d.phoneNumber || '').trim();
+  if (!num) return '';
+  return cc ? `+${cc} ${num}` : num;
+}
+
 /** Derive correct pronouns/honorific from the applicant's sex to avoid the
  *  copy-paste misgendering seen in hand-written letters. */
 export function pronouns(data = {}) {

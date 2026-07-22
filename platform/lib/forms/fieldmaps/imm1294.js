@@ -58,8 +58,21 @@ export const IMM1294_FIELD_MAP = [
   { som: 'form1/Page2/MaritalStatus/SectionA/Passport/expiryMM', from: 'passportExpiry', transform: 'month' },
   { som: 'form1/Page2/MaritalStatus/SectionA/Passport/expiryDD', from: 'passportExpiry', transform: 'day' },
 
-  // --- Contact (Page 2/3): only clean fields; structured address left to applicant ---
-  { som: 'form1/Page2/contact/AddressRow2/Country/Country', from: 'countryOfResidence', lov: 'CountryList' },
+  // --- Contact: mailing address (Page 2) ---
+  { som: 'form1/Page2/contact/AddressRow1/POBox/POBox', from: 'mailingPobox' },
+  { som: 'form1/Page2/contact/AddressRow1/Apt/AptUnit', from: 'mailingUnit' },
+  { som: 'form1/Page2/contact/AddressRow1/StreetNum/StreetNum', from: 'mailingStreetNo' },
+  { som: 'form1/Page2/contact/AddressRow1/Streetname/Streetname', from: 'mailingStreet' },
+  { som: 'form1/Page2/contact/AddressRow2/CityTow/CityTown', from: 'mailingCity' },
+  { som: 'form1/Page2/contact/AddressRow2/Country/Country', from: 'mailingCountry', lov: 'CountryList' },
+  { som: 'form1/Page2/contact/AddressRow2/ProvinceState/ProvinceState', from: 'mailingProvince' },
+  { som: 'form1/Page2/contact/AddressRow2/PostalCode/PostalCode', from: 'mailingPostal' },
+  { som: 'form1/Page2/contact/SameAsMailingIndicator', from: 'sameResidential', valueMap: { true: 'Y', false: 'N' } },
+
+  // --- Contact: phone & email (Page 3) — international number by default ---
+  { som: 'form1/Page3/PhoneNumbers/Phone/Type', from: 'phoneType', lov: 'PhoneTypeList' },
+  { som: 'form1/Page3/PhoneNumbers/Phone/NumberCountry', from: 'phoneCountryCode' },
+  { som: 'form1/Page3/PhoneNumbers/Phone/IntlNumber/IntlNumber', from: 'phoneNumber' },
   { som: 'form1/Page3/FaxEmail/Email', from: 'email' },
 
   // --- Details of intended study (Page 3) ---
