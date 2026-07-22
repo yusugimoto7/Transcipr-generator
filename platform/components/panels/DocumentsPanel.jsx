@@ -130,9 +130,32 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
       const entries = Object.entries(data.fields || {});
       if (!entries.length) {
         setMsg({ type: 'info', text: 'Documents identified. No new intake details were found.' });
-      } else {
-        setSuggestions({ fields: data.fields, confidence: data.confidence || {}, notes: data.notes || [] });
+        return;
       }
+      // Auto-apply to fields that are still empty; keep the rest as review suggestions.
+      const current = app.data || {};
+      const applied = [];
+      const conflicts = {};
+      for (const [k, v] of entries) {
+        if (v == null || v === '') continue;
+        if (!String(current[k] ?? '').trim()) {
+          onExtracted(k, v);
+          applied.push(k);
+        } else if (String(current[k]) !== String(v)) {
+          conflicts[k] = v;
+        }
+      }
+      setSuggestions(
+        Object.keys(conflicts).length
+          ? { fields: conflicts, confidence: data.confidence || {}, notes: data.notes || [], conflict: true }
+          : null
+      );
+      setMsg({
+        type: 'ok',
+        text: `Filled ${applied.length} intake field(s) from your documents.${
+          Object.keys(conflicts).length ? ` ${Object.keys(conflicts).length} differ from what you entered — review below.` : ' Check the Intake tab to confirm.'
+        }`,
+      });
     } catch (e2) {
       setMsg({ type: 'err', text: e2.message });
     } finally {
@@ -242,7 +265,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ marginBottom: 0 }}>Your files ({docs.length})</h2>
           <button className="btn-secondary" onClick={extract} disabled={extracting || !docs.length}>
-            {extracting ? <span className="spinner" /> : '✨ Read with AI & pre-fill'}
+            {extracting ? <span className="spinner" /> : '✨ Read documents & fill intake'}
           </button>
         </div>
 
@@ -273,10 +296,14 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
         {suggestions && (
           <div className="hint-box" style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong>AI found {Object.keys(suggestions.fields).length} value(s)</strong>
+              <strong>
+                {suggestions.conflict
+                  ? `${Object.keys(suggestions.fields).length} value(s) differ from what you entered`
+                  : `AI found ${Object.keys(suggestions.fields).length} value(s)`}
+              </strong>
               <div className="btn-row">
-                <button className="btn-secondary" onClick={() => setSuggestions(null)}>Dismiss</button>
-                <button onClick={applyAll}>Apply all to intake</button>
+                <button className="btn-secondary" onClick={() => setSuggestions(null)}>Keep mine</button>
+                <button onClick={applyAll}>{suggestions.conflict ? 'Use document values' : 'Apply all to intake'}</button>
               </div>
             </div>
             <div style={{ display: 'grid', gap: 4 }}>

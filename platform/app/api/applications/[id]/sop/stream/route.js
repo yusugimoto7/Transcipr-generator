@@ -1,6 +1,7 @@
 import { updateApplication } from '@/lib/store';
 import { streamText } from '@/lib/anthropic';
-import { buildSopPrompt } from '@/lib/generators/sop';
+import { buildSopPrompt, selectSopDocs } from '@/lib/generators/sop';
+import { buildDocBlocks } from '@/lib/uploads';
 import { SOP_QUESTIONS } from '@/lib/sopQuestions';
 import { error, requireOwnedApp } from '@/lib/api';
 
@@ -42,13 +43,22 @@ export async function POST(req, { params }) {
     return a;
   });
 
-  const { system, instruction } = buildSopPrompt(withAnswers);
+  // Read the applicant's relevant uploaded documents so the letter is specific.
+  let docBlocks = [];
+  try {
+    docBlocks = await buildDocBlocks(app.id, selectSopDocs(withAnswers));
+  } catch {
+    docBlocks = [];
+  }
+
+  const { system, instruction } = buildSopPrompt(withAnswers, docBlocks.length > 0);
+  const content = docBlocks.length ? [{ type: 'text', text: instruction }, ...docBlocks] : instruction;
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const chunk of streamText({ system, content: instruction, maxTokens: 3000 })) {
+        for await (const chunk of streamText({ system, content, maxTokens: 3000 })) {
           controller.enqueue(encoder.encode(chunk));
         }
       } catch (e) {

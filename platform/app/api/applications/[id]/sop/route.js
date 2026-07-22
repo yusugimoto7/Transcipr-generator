@@ -70,6 +70,7 @@ export async function POST(req, { params }) {
   try {
     const bytes = await renderDocPdf({ blocks: textToBlocks(text, TITLE), meta: { title: TITLE } });
     meta = await saveGenerated(app.id, { key: 'sop', filename: `${TITLE}.pdf`, bytes: Buffer.from(bytes) });
+    meta.text = text; // enables Word (.docx) export
   } catch (e) {
     return error(`Could not render the PDF: ${e.message}`, 500);
   }

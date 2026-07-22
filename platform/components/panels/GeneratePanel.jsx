@@ -4,10 +4,10 @@ import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
 
 const DOCS = [
-  { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.' },
-  { key: 'financial-cover-letter', label: 'Financial Cover Letter', desc: 'First-person letter: funds, source of funds, transfer method.' },
-  { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Expense + sources-of-funds + assets tables.' },
-  { key: 'cover-letter', label: 'RCIC Submission Letter', desc: 'Full submission letter with case-law citations & signature.' },
+  { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.', word: true },
+  { key: 'financial-cover-letter', label: 'Financial Cover Letter', desc: 'First-person letter: funds, source of funds, transfer method.', word: true },
+  { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Expense + sources-of-funds + assets tables.', word: true },
+  { key: 'cover-letter', label: 'RCIC Submission Letter', desc: 'Full submission letter with case-law citations & signature.', word: true },
   { key: 'imm1294', label: 'IMM 1294 — Study Permit data sheet', desc: 'Field-by-field values to transcribe into the official form.' },
   { key: 'imm1294-filled', label: 'IMM 1294 — pre-filled official form (beta)', desc: 'The latest official IMM 1294, pre-filled. Open in Adobe Reader, review, and click Validate.', beta: true },
   { key: 'imm5257', label: 'IMM 5257 — TRV / Schedule 1 data sheet', desc: 'Temporary Resident Visa application values.' },
@@ -78,9 +78,16 @@ export default function GeneratePanel({ app, patchLocal }) {
                 </span>
               </label>
               {hasGenerated(d.key) && (
-                <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/${d.key}`}>
-                  ↓ Download
-                </a>
+                <div className="btn-row" style={{ gap: 6 }}>
+                  <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/${d.key}`}>
+                    ↓ PDF
+                  </a>
+                  {d.word && (
+                    <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/${d.key}?format=docx`}>
+                      ↓ Word
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           ))}

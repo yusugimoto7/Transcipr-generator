@@ -1,7 +1,8 @@
 import { updateApplication } from '@/lib/store';
 import { saveGenerated } from '@/lib/uploads';
 import { renderDocPdf, textToBlocks } from '@/lib/pdf';
-import { generateSop } from '@/lib/generators/sop';
+import { generateSop, selectSopDocs } from '@/lib/generators/sop';
+import { buildDocBlocks } from '@/lib/uploads';
 import {
   generateFinancialSummary,
   generateCoverLetter,
@@ -54,17 +55,24 @@ export async function POST(req, { params }) {
   for (const key of requested) {
     try {
       let bytes;
+      let text = null; // captured for text docs so they can also export as .docx
       if (key === 'sop') {
-        const text = await generateSop(app);
+        let sopDocs = [];
+        try {
+          sopDocs = await buildDocBlocks(app.id, selectSopDocs(app));
+        } catch {
+          sopDocs = [];
+        }
+        text = await generateSop(app, sopDocs);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES.sop) });
       } else if (key === 'financial-cover-letter') {
-        const text = await generateFinancialCoverLetter(app);
+        text = await generateFinancialCoverLetter(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'financial-summary') {
-        const text = await generateFinancialSummary(app);
+        text = await generateFinancialSummary(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'cover-letter') {
-        const text = await generateCoverLetter(app);
+        text = await generateCoverLetter(app);
         bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
       } else if (key === 'imm1294' || key === 'imm5257' || key === 'imm5645' || key === 'imm5476') {
         bytes = await generateFormDataSheet(key, app);
@@ -86,6 +94,7 @@ export async function POST(req, { params }) {
         filename: `${DOC_TITLES[key] || key}.pdf`,
         bytes: Buffer.from(bytes),
       });
+      if (text) meta.text = text; // enables Word (.docx) export
       produced.push(meta);
     } catch (e) {
       errors.push({ key, message: e.message });
@@ -107,13 +116,13 @@ export async function POST(req, { params }) {
       blocks: textToBlocks(note.text, DOC_TITLES['next-steps']),
       meta: { title: DOC_TITLES['next-steps'] },
     });
-    produced.push(
-      await saveGenerated(app.id, {
-        key: 'next-steps',
-        filename: `${DOC_TITLES['next-steps']}.pdf`,
-        bytes: Buffer.from(noteBytes),
-      })
-    );
+    const noteMeta = await saveGenerated(app.id, {
+      key: 'next-steps',
+      filename: `${DOC_TITLES['next-steps']}.pdf`,
+      bytes: Buffer.from(noteBytes),
+    });
+    noteMeta.text = note.text;
+    produced.push(noteMeta);
   } catch (e) {
     errors.push({ key: 'next-steps', message: e.message });
   }

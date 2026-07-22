@@ -149,9 +149,10 @@ export default function SopBuilderPanel({ app, patchLocal }) {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={{ marginBottom: 0 }}>Your study plan</h2>
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`}>
-              ↓ Download PDF
-            </a>
+            <div className="btn-row" style={{ gap: 6 }}>
+              <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`}>↓ PDF</a>
+              <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop?format=docx`}>↓ Word</a>
+            </div>
           </div>
           <p className="muted small" style={{ marginTop: 6 }}>
             Edit freely so it sounds like you, then save to update the PDF. Replace anything in
