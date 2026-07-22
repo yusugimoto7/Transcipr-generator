@@ -2,13 +2,10 @@ import { complete } from '../anthropic';
 import { answersToText } from '../sopQuestions';
 
 /**
- * Draft a Statement of Purpose / Study Plan (also usable as the Letter of
- * Explanation) for a study permit. Returns markdown-ish text.
- *
- * Uses the applicant's intake data plus, when present, their Study Plan builder
- * answers (app.sopAnswers). Never fabricates facts beyond what was provided.
+ * Build the SOP system + instruction prompt. Shared by the buffered and
+ * streaming generators so both produce identical letters.
  */
-export async function generateSop(app) {
+export function buildSopPrompt(app) {
   const d = app.data || {};
   const builder = answersToText(app.sopAnswers || {});
   const system = `You are an expert Canadian study permit consultant who drafts
@@ -56,11 +53,15 @@ ${
     : ''
 }`;
 
-  const text = await complete({
-    system,
-    content: instruction,
-    maxTokens: 3000,
-    temperature: 0.5,
-  });
-  return text;
+  return { system, instruction };
+}
+
+/**
+ * Draft a Statement of Purpose / Study Plan (buffered). Uses intake data plus,
+ * when present, the applicant's Study Plan builder answers (app.sopAnswers).
+ * Never fabricates facts beyond what was provided.
+ */
+export async function generateSop(app) {
+  const { system, instruction } = buildSopPrompt(app);
+  return complete({ system, content: instruction, maxTokens: 3000 });
 }

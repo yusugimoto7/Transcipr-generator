@@ -26,17 +26,42 @@ export default function SopBuilderPanel({ app, patchLocal }) {
   async function generate() {
     setBusy(true);
     setMsg(null);
+    setText('');
     try {
-      const res = await fetch(`/api/applications/${app.id}/sop`, {
+      // Stream the draft so long generations don't time out on mobile.
+      const res = await fetch(`/api/applications/${app.id}/sop/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed.');
-      setText(data.text);
-      patchLocal({ generated: data.generated, sopAnswers: data.answers, sop: { text: data.text } });
-      setMsg({ type: 'ok', text: 'Study plan drafted below. Edit it in your own words, then save.' });
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Generation failed.');
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let acc = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setText(acc);
+      }
+      if (!acc.trim()) throw new Error('No text was generated. Please try again.');
+
+      // Persist the final text and render the PDF (fast, no AI).
+      const save = await fetch(`/api/applications/${app.id}/sop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers, editedText: acc }),
+      });
+      const data = await save.json();
+      if (save.ok) {
+        patchLocal({ generated: data.generated, sopAnswers: answers, sop: { text: acc } });
+        setMsg({ type: 'ok', text: 'Study plan drafted below. Edit it in your own words, then save.' });
+      } else {
+        setMsg({ type: 'ok', text: 'Draft ready below — edit it, then press "Save & update PDF".' });
+      }
     } catch (e) {
       setMsg({ type: 'err', text: e.message });
     } finally {

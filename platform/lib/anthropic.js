@@ -47,6 +47,30 @@ export async function complete({
 }
 
 /**
+ * Stream a Claude completion as text chunks (async generator). Keeps the HTTP
+ * connection alive for long generations so mobile browsers don't time out.
+ */
+export async function* streamText({ system, content, maxTokens = 4096, model = MODEL }) {
+  const anthropic = getClient();
+  const stream = anthropic.messages.stream({
+    model,
+    max_tokens: maxTokens,
+    ...(system ? { system } : {}),
+    messages: [
+      {
+        role: 'user',
+        content: typeof content === 'string' ? [{ type: 'text', text: content }] : content,
+      },
+    ],
+  });
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+      yield event.delta.text;
+    }
+  }
+}
+
+/**
  * Ask Claude to return JSON and parse it robustly. Throws if no JSON is found.
  */
 export async function completeJson(opts) {

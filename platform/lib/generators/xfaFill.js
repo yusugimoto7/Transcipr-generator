@@ -19,16 +19,25 @@ function transformDate(iso, part) {
   return part === 'year' ? m[1] : part === 'month' ? m[2] : m[3];
 }
 
-/** Build filler instructions from a field map + application data. */
+/** Build filler instructions from a field map + application data.
+ *  Field spec: { som, from?, const?, transform?, lov?, valueMap?, when? }
+ *   - transform: 'year'|'month'|'day' splits an ISO date
+ *   - valueMap:  translate our option label to the form's expected value/LOV text
+ *   - when(data): optional predicate to include the field
+ */
 export function buildInstructions(fieldMap, data = {}) {
   const out = [];
   for (const f of fieldMap) {
+    if (f.when && !f.when(data)) continue;
     let value;
     if (f.const !== undefined) value = f.const;
     else if (f.transform) value = transformDate(data[f.from], f.transform);
     else value = data[f.from];
     if (value === undefined || value === null || String(value).trim() === '') continue;
-    out.push({ som: f.som, value: String(value), ...(f.lov ? { lov: f.lov } : {}) });
+    value = String(value);
+    if (f.valueMap && f.valueMap[value] !== undefined) value = f.valueMap[value];
+    if (value === '') continue;
+    out.push({ som: f.som, value, ...(f.lov ? { lov: f.lov } : {}) });
   }
   return out;
 }
