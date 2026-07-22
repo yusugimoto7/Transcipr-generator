@@ -89,6 +89,7 @@ export const STUDY_PERMIT_SCHEMA = {
       fields: [
         { id: 'schoolName', label: 'School / DLI name', type: 'text', required: true },
         { id: 'dliNumber', label: 'DLI number (O-number)', type: 'text', required: true },
+        { id: 'palNumber', label: 'PAL / TAL number (if you have one)', type: 'text', note: 'From your Provincial Attestation Letter.' },
         { id: 'programName', label: 'Program / field of study', type: 'text', required: true },
         {
           id: 'levelOfStudy',

@@ -92,7 +92,9 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
       {tab === 'review' && (
         <ReviewPanel app={app} initialChecklist={initialChecklist} patchLocal={patchLocal} />
       )}
-      {tab === 'generate' && <GeneratePanel app={app} patchLocal={patchLocal} />}
+      {tab === 'generate' && (
+        <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => setTab('intake')} />
+      )}
     </>
   );
 }

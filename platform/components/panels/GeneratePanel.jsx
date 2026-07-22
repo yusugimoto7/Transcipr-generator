@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
+import { requiredMissing } from '@/lib/schema';
 
 const DOCS = [
   { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.', word: true },
@@ -15,12 +16,13 @@ const DOCS = [
   { key: 'imm5476', label: 'IMM 5476 — Use of a Representative data sheet', desc: 'Representative appointment (RCIC) values.' },
 ];
 
-export default function GeneratePanel({ app, patchLocal }) {
+export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
   // Beta docs (e.g. pre-filled official form) are opt-in, not selected by default.
   const [selected, setSelected] = useState(DOCS.filter((d) => !d.beta).map((d) => d.key));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [note, setNote] = useState(null);
+  const [missingModal, setMissingModal] = useState(null); // { fields: [labels] }
   const generated = app.generated || [];
 
   const toggle = (key) =>
@@ -28,8 +30,20 @@ export default function GeneratePanel({ app, patchLocal }) {
 
   const hasGenerated = (key) => generated.some((g) => g.key === key);
 
-  async function generate() {
+  // Fields that make the official forms complete. If missing, warn before generating.
+  const missingRequired = requiredMissing(app.data || {}).map((f) => f.label);
+
+  function generate() {
     if (!selected.length) return;
+    if (missingRequired.length) {
+      setMissingModal({ fields: missingRequired });
+      return;
+    }
+    doGenerate();
+  }
+
+  async function doGenerate() {
+    setMissingModal(null);
     setBusy(true);
     setMsg(null);
     try {
@@ -103,8 +117,34 @@ export default function GeneratePanel({ app, patchLocal }) {
             </a>
           )}
         </div>
+        {missingRequired.length > 0 && (
+          <p className="muted small" style={{ marginTop: 10 }}>
+            ⚠️ {missingRequired.length} required field(s) are still empty — forms will have gaps until you complete them.
+          </p>
+        )}
         {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
       </div>
+
+      {missingModal && (
+        <div className="modal-overlay" onClick={() => setMissingModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: 6 }}>Some required information is missing</h2>
+            <p className="muted small">
+              These fields are needed to complete your forms. You can complete them now, or generate
+              anyway and fill the gaps by hand later.
+            </p>
+            <ul style={{ paddingLeft: 18, marginTop: 10, maxHeight: 220, overflowY: 'auto' }}>
+              {missingModal.fields.map((f, i) => <li key={i}>{f}</li>)}
+            </ul>
+            <div className="btn-row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={doGenerate}>Generate anyway</button>
+              <button onClick={() => { setMissingModal(null); onGoIntake && onGoIntake(); }}>
+                Complete in Intake →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {note && (
         <div className="card">

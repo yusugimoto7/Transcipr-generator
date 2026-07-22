@@ -2,6 +2,9 @@
 
 import { useState, useRef } from 'react';
 import { buildChecklist } from '@/lib/checklist';
+import { allFields } from '@/lib/schema';
+
+const FIELD_LABELS = Object.fromEntries(allFields().map((f) => [f.id, f.label]));
 
 const CATEGORY_LABELS = {
   passport: 'Passport',
@@ -36,7 +39,7 @@ function accepted(file) {
 export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
-  const [suggestions, setSuggestions] = useState(null);
+  const [comparison, setComparison] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [pending, setPending] = useState([]); // File[] chosen but not yet uploaded
   const [dragOver, setDragOver] = useState(false);
@@ -117,7 +120,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   async function extract() {
     setExtracting(true);
     setMsg(null);
-    setSuggestions(null);
+    setComparison(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/extract`, {
         method: 'POST',
@@ -127,33 +130,39 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Extraction failed.');
       if (data.documents) patchLocal({ documents: data.documents });
-      const entries = Object.entries(data.fields || {});
+
+      const fields = data.fields || {};
+      const sources = data.sources || {};
+      const conf = data.confidence || {};
+      const entries = Object.entries(fields).filter(([, v]) => v != null && String(v).trim() !== '');
       if (!entries.length) {
-        setMsg({ type: 'info', text: 'Documents identified. No new intake details were found.' });
+        setMsg({ type: 'info', text: 'Documents identified. No intake details could be read.' });
         return;
       }
-      // Auto-apply to fields that are still empty; keep the rest as review suggestions.
+
       const current = app.data || {};
-      const applied = [];
-      const conflicts = {};
+      const rows = [];
+      let applied = 0;
       for (const [k, v] of entries) {
-        if (v == null || v === '') continue;
-        if (!String(current[k] ?? '').trim()) {
-          onExtracted(k, v);
-          applied.push(k);
-        } else if (String(current[k]) !== String(v)) {
-          conflicts[k] = v;
+        const yours = String(current[k] ?? '');
+        let status;
+        if (!yours.trim()) {
+          onExtracted(k, v); // auto-fill empty fields
+          applied++;
+          status = 'added';
+        } else if (yours === String(v)) {
+          status = 'match';
+        } else {
+          status = 'differ';
         }
+        rows.push({ id: k, label: FIELD_LABELS[k] || k, yours, doc: String(v), source: sources[k] || '', conf: conf[k] || '', status });
       }
-      setSuggestions(
-        Object.keys(conflicts).length
-          ? { fields: conflicts, confidence: data.confidence || {}, notes: data.notes || [], conflict: true }
-          : null
-      );
+      setComparison({ rows, notes: data.notes || [] });
+      const differ = rows.filter((r) => r.status === 'differ').length;
       setMsg({
         type: 'ok',
-        text: `Filled ${applied.length} intake field(s) from your documents.${
-          Object.keys(conflicts).length ? ` ${Object.keys(conflicts).length} differ from what you entered — review below.` : ' Check the Intake tab to confirm.'
+        text: `Filled ${applied} empty field(s) from your documents. See the comparison below${
+          differ ? ` — ${differ} value(s) differ from what you entered.` : '.'
         }`,
       });
     } catch (e2) {
@@ -163,11 +172,21 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
     }
   }
 
-  function applyAll() {
-    if (!suggestions) return;
-    for (const [k, v] of Object.entries(suggestions.fields)) onExtracted(k, v);
-    setSuggestions(null);
-    setMsg({ type: 'ok', text: 'Applied to your intake. Review the Intake tab to confirm.' });
+  function useDoc(row) {
+    onExtracted(row.id, row.doc);
+    setComparison((c) => ({
+      ...c,
+      rows: c.rows.map((r) => (r.id === row.id ? { ...r, yours: row.doc, status: 'match' } : r)),
+    }));
+  }
+
+  function useAllDiffering() {
+    if (!comparison) return;
+    for (const r of comparison.rows) if (r.status === 'differ') onExtracted(r.id, r.doc);
+    setComparison((c) => ({
+      ...c,
+      rows: c.rows.map((r) => (r.status === 'differ' ? { ...r, yours: r.doc, status: 'match' } : r)),
+    }));
   }
 
   return (
@@ -293,41 +312,57 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
           </div>
         )}
 
-        {suggestions && (
-          <div className="hint-box" style={{ marginTop: 16 }}>
+        {comparison && (
+          <div style={{ marginTop: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong>
-                {suggestions.conflict
-                  ? `${Object.keys(suggestions.fields).length} value(s) differ from what you entered`
-                  : `AI found ${Object.keys(suggestions.fields).length} value(s)`}
-              </strong>
-              <div className="btn-row">
-                <button className="btn-secondary" onClick={() => setSuggestions(null)}>Keep mine</button>
-                <button onClick={applyAll}>{suggestions.conflict ? 'Use document values' : 'Apply all to intake'}</button>
-              </div>
+              <h3 style={{ margin: 0 }}>You entered vs. your documents</h3>
+              {comparison.rows.some((r) => r.status === 'differ') && (
+                <button className="btn-secondary" onClick={useAllDiffering}>Use all document values</button>
+              )}
             </div>
-            <div style={{ display: 'grid', gap: 4 }}>
-              {Object.entries(suggestions.fields).map(([k, v]) => (
-                <div key={k} className="small" style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <span className="muted">{k}</span>
-                  <span style={{ fontWeight: 600, textAlign: 'right' }}>
-                    {String(v)}{' '}
-                    {suggestions.confidence[k] && (
-                      <span className={`chip ${suggestions.confidence[k] === 'high' ? 'ok' : suggestions.confidence[k] === 'low' ? 'danger' : 'warn'}`}>
-                        {suggestions.confidence[k]}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
+            <div style={{ overflowX: 'auto' }}>
+              <table className="cmp">
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>You entered</th>
+                    <th>In your documents</th>
+                    <th>Source</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comparison.rows.map((r) => (
+                    <tr key={r.id} className={r.status === 'differ' ? 'row-differ' : ''}>
+                      <td>{r.label}</td>
+                      <td className="muted">{r.yours || <span className="chip">empty</span>}</td>
+                      <td style={{ fontWeight: 600 }}>
+                        {r.doc}{' '}
+                        {r.conf && (
+                          <span className={`chip ${r.conf === 'high' ? 'ok' : r.conf === 'low' ? 'danger' : 'warn'}`}>{r.conf}</span>
+                        )}
+                      </td>
+                      <td className="muted small">{r.source || '—'}</td>
+                      <td>
+                        {r.status === 'added' && <span className="chip ok">added</span>}
+                        {r.status === 'match' && <span className="chip">✓</span>}
+                        {r.status === 'differ' && <button className="btn-ghost" onClick={() => useDoc(r)}>Use this</button>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            {suggestions.notes?.length > 0 && (
-              <ul className="muted small" style={{ marginTop: 10, paddingLeft: 18 }}>
-                {suggestions.notes.map((n, i) => <li key={i}>{n}</li>)}
-              </ul>
+            {comparison.notes?.length > 0 && (
+              <>
+                <h3 style={{ marginTop: 16 }}>Notes from your documents</h3>
+                <ul className="muted small" style={{ paddingLeft: 18 }}>
+                  {comparison.notes.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              </>
             )}
-            <p className="muted small" style={{ marginTop: 10 }}>
-              Applying fills your intake fields. Always verify against your original documents.
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Empty fields were filled automatically. Always verify against your original documents.
             </p>
           </div>
         )}

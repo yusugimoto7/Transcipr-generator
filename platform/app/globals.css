@@ -135,6 +135,22 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .dropzone.over { border-color: var(--accent); background: #e8f0fe; }
 .dropzone:focus { outline: 2px solid rgba(31,111,235,.35); }
 
+/* Comparison table */
+table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
+table.cmp th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--ink-soft); padding: 6px 10px; border-bottom: 2px solid var(--line); }
+table.cmp td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.cmp tr.row-differ { background: #fbf1dc55; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 80; background: rgba(15,23,41,.5);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal {
+  background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(16,24,40,.35);
+  padding: 22px; width: 480px; max-width: 100%; max-height: 85vh; overflow-y: auto;
+}
+
 /* Floating AI assistant */
 .assist-fab {
   position: fixed; right: 20px; bottom: 20px; z-index: 60;

@@ -44,11 +44,18 @@ Rules:
 {
   "fields": { "<fieldId>": <value>, ... },       // only fields you found
   "confidence": { "<fieldId>": "high"|"medium"|"low", ... },
+  "sources": { "<fieldId>": "<document file name>", ... },  // which file each value came from
   "documentCategories": { "1": "<categoryKey>", "2": "<categoryKey>", ... },
   "notes": [ "short note about anything uncertain or worth the applicant checking" ]
 }
 
-For documentCategories: classify EVERY numbered document into exactly one of:
+IMPORTANT — naming documents: each document is introduced by a line
+"--- Document N: <file name> ---". In "sources" and in every "notes" entry, always
+refer to a document by its <file name> (e.g. "Passport-Anahita.pdf"), NEVER by its
+number ("Document 1"). Use the exact file name shown.
+
+For documentCategories: classify EVERY numbered document (keyed by its number) into
+exactly one of:
 ${CATEGORY_KEYS.join(', ')}
 (passport = passport bio page; loa = letter of acceptance/admission from the school;
 pal = provincial attestation letter; proof-of-funds = bank statements/loans/sponsor
@@ -72,6 +79,7 @@ ${JSON.stringify(existing)}`;
   return {
     fields: result.fields || {},
     confidence: result.confidence || {},
+    sources: result.sources || {},
     documentCategories: result.documentCategories || {},
     notes: Array.isArray(result.notes) ? result.notes : [],
   };

@@ -71,14 +71,20 @@ export const IMM1294_FIELD_MAP = [
   { som: 'form1/Page3/DetailsOfStudy/PurposeRow1/DLI', from: 'dliNumber' },
   { som: 'form1/Page3/DetailsOfStudy/PurposeRow1/HowLongStudy/FromDate', from: 'programStart' },
   { som: 'form1/Page3/DetailsOfStudy/PurposeRow1/HowLongStudy/ToDate', from: 'programEnd' },
+  { som: 'form1/Page3/DetailsOfStudy/PurposeRow1/PAL/DocNum', from: 'palNumber' },
   { som: 'form1/Page3/Contacts_Row1/tuition/amount', from: 'tuitionCost' },
   { som: 'form1/Page3/Contacts_Row1/expensesPaid/Funds/Funds', from: 'totalFunds' },
+  { som: 'form1/Page3/Contacts_Row1/expensesPaid/expensesPaidBy', from: 'fundingSource', lov: 'ExpensesPaidBySPList' },
 
   // --- Education history (Page 3) ---
   { som: 'form1/Page3/Education/EducationIndicator', const: 'Y', when: (d) => has(d.lastInstitution) },
   { som: 'form1/Page3/Education/Edu_Row1/FieldOfStudy', from: 'lastFieldOfStudy' },
   { som: 'form1/Page3/Education/Edu_Row1/School', from: 'lastInstitution' },
   { som: 'form1/Page3/Education/Edu_Row1/Country/Country', from: 'lastEduCountry', lov: 'CountryList' },
+  { som: 'form1/Page3/Education/Edu_Row1/FromYear', from: 'lastEduFrom', transform: 'year' },
+  { som: 'form1/Page3/Education/Edu_Row1/FromMonth', from: 'lastEduFrom', transform: 'month' },
+  { som: 'form1/Page3/Education/Edu_Row1/ToYear', from: 'lastEduTo', transform: 'year' },
+  { som: 'form1/Page3/Education/Edu_Row1/ToMonth', from: 'lastEduTo', transform: 'month' },
 
   // --- Current occupation (Page 3) ---
   { som: 'form1/Page3/Occupation/OccupationRow1/Occupation/Occupation', from: 'currentOccupation' },

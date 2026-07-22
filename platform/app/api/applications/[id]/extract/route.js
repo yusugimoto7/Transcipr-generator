@@ -64,7 +64,7 @@ export async function POST(req, { params }) {
     })
   );
 
-  const merged = { fields: {}, confidence: {}, notes: [] };
+  const merged = { fields: {}, confidence: {}, sources: {}, notes: [] };
   const docCategoryById = {}; // docId -> category
   const failures = [];
 
@@ -82,6 +82,7 @@ export async function POST(req, { params }) {
       if (!(k in merged.fields) || newRank > curRank) {
         merged.fields[k] = v;
         if (res.confidence?.[k]) merged.confidence[k] = res.confidence[k];
+        if (res.sources?.[k]) merged.sources[k] = res.sources[k];
       }
     }
     if (Array.isArray(res.notes)) merged.notes.push(...res.notes);
