@@ -86,7 +86,7 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
         <DocumentsPanel app={app} patchLocal={patchLocal} onExtracted={onFieldChange} goIntake={() => setTab('intake')} />
       )}
       {tab === 'intake' && (
-        <IntakePanel app={app} schema={schema} onFieldChange={onFieldChange} />
+        <IntakePanel app={app} schema={schema} onFieldChange={onFieldChange} onFinish={() => setTab('review')} />
       )}
       {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
       {tab === 'review' && (

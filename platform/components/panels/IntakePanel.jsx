@@ -52,7 +52,7 @@ function Field({ field, value, onChange }) {
   );
 }
 
-export default function IntakePanel({ app, schema, onFieldChange }) {
+export default function IntakePanel({ app, schema, onFieldChange, onFinish }) {
   const [stepIdx, setStepIdx] = useState(0);
   const step = schema.steps[stepIdx];
 
@@ -99,7 +99,7 @@ export default function IntakePanel({ app, schema, onFieldChange }) {
               Next: {schema.steps[stepIdx + 1].title} →
             </button>
           ) : (
-            <span className="chip ok">End of intake — go to Review</span>
+            <button onClick={onFinish}>End of intake — go to Review →</button>
           )}
         </div>
       </div>
