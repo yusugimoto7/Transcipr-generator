@@ -52,8 +52,13 @@ async function fetchTopics(exclude = [], force = false) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ exclude, force }),
   });
-  if (!res.ok) throw new Error("API " + res.status);
-  const data = await res.json();
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    // Surface the server's real reason (e.g. an OpenAI quota / auth error) so
+    // it can be diagnosed instead of hidden behind a generic fallback.
+    const detail = data && (data.message || data.error) ? ": " + (data.message || data.error) : "";
+    throw new Error("API " + res.status + detail);
+  }
   if (!data || !Array.isArray(data.topics) || data.topics.length === 0) {
     throw new Error("parse");
   }
@@ -185,6 +190,7 @@ export default function App() {
   const [reviewedCount, setReviewedCount] = useState(0);
   const [loadingTopics, setLoadingTopics] = useState(true);
   const [topicError, setTopicError] = useState(null);
+  const [errDetail, setErrDetail] = useState("");
   const [usingFallback, setUsingFallback] = useState(false);
   const [view, setView] = useState("deck"); // deck | script
   const [scripts, setScripts] = useState({ fa: "", en: "" });
@@ -237,6 +243,7 @@ export default function App() {
   const loadTopics = useCallback(async (force = false) => {
     setLoadingTopics(true);
     setTopicError(null);
+    setErrDetail("");
     setUsingFallback(false);
     try {
       const seen = loadSeen();
@@ -289,6 +296,7 @@ export default function App() {
       setUsingFallback(true);
       setUpdatedAt(new Date());
       setTopicError("نتونستم اخبار زندهٔ این هفته رو بیارم — فعلاً از موضوعات پایه استفاده می‌کنم. دوباره امتحان کن.");
+      setErrDetail(String(e?.message || e));
     } finally {
       setLoadingTopics(false);
     }
@@ -523,6 +531,11 @@ export default function App() {
           {topicError && (
             <div style={{ background: "rgba(241,114,18,0.12)", border: `1px solid rgba(241,114,18,0.3)`, color: C.cream, borderRadius: 12, padding: "10px 12px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
               {topicError}
+              {errDetail && (
+                <div dir="ltr" style={{ marginTop: 6, fontSize: 11, color: "rgba(242,229,192,0.7)", fontFamily: "monospace", textAlign: "left", wordBreak: "break-word" }}>
+                  {errDetail}
+                </div>
+              )}
             </div>
           )}
 
