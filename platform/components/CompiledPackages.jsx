@@ -37,12 +37,15 @@ export default function CompiledPackages({ app, patchLocal }) {
       if (!res.ok) throw new Error(data.error || 'Compilation failed.');
       patchLocal({ generated: data.generated });
       const included = (data.included || []).filter((s) => s.count > 0).map((s) => s.name);
-      const dropped = data.droppedPages
-        ? ` Removed ${data.droppedPages} blank/unrelated page(s).`
-        : '';
+      const missing = (data.included || []).filter((s) => s.count === 0).map((s) => s.name);
+      const dropped = data.droppedPages ? ` Removed ${data.droppedPages} blank page(s).` : '';
       setMsg({
-        type: 'ok',
-        text: `Compiled ${included.length} section(s): ${included.join(', ')}.${dropped}`,
+        type: missing.length ? 'warn' : 'ok',
+        text:
+          `Compiled ${included.length} section(s): ${included.join(', ')}.${dropped}` +
+          (missing.length
+            ? ` ⚠️ Skipped (no matching documents): ${missing.join(', ')} — set each file's type on the Documents tab, then re-compile.`
+            : ''),
       });
     } catch (e) {
       setMsg({ type: 'err', text: e.message });
@@ -61,7 +64,7 @@ export default function CompiledPackages({ app, patchLocal }) {
       </p>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '10px 0 2px' }}>
         <input type="checkbox" style={{ width: 16 }} checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} />
-        <span className="small">Remove blank &amp; unrelated pages automatically (AI — a bit slower)</span>
+        <span className="small">Remove blank pages automatically</span>
       </label>
       <div style={{ marginTop: 10 }}>
         {PKGS.map((p) => (
@@ -81,7 +84,11 @@ export default function CompiledPackages({ app, patchLocal }) {
           </div>
         ))}
       </div>
-      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
+      {msg && (
+        <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'warn' ? 'info' : 'ok'}`} style={{ marginTop: 14 }}>
+          {msg.text}
+        </div>
+      )}
     </div>
   );
 }

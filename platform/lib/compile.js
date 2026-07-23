@@ -44,17 +44,24 @@ async function addContent(doc, font, item) {
   if (mime === 'application/pdf') {
     try {
       const src = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
-      // Optionally include only selected pages (blank/unrelated pages removed).
+      // Optionally include only selected pages (blank pages removed).
       let pages = src.getPages();
       if (Array.isArray(keepPages) && keepPages.length) {
         pages = keepPages
           .filter((n) => n >= 1 && n <= pages.length)
           .map((n) => src.getPage(n - 1));
       }
+      // Embed using each page's CropBox (what viewers actually display) —
+      // scanner apps often set a CropBox offset from the MediaBox, and using
+      // the wrong box renders content off-page / blank-looking.
+      const boxes = pages.map((p) => {
+        const cb = p.getCropBox();
+        return { left: cb.x, bottom: cb.y, right: cb.x + cb.width, top: cb.y + cb.height };
+      });
       // Normalize EVERY source page onto a uniform Letter page (same width),
       // scaling its content to fit and centering it, so the compiled document
       // has consistent page dimensions regardless of the scan sizes.
-      const embedded = await doc.embedPages(pages);
+      const embedded = await doc.embedPages(pages, boxes);
       for (const ep of embedded) {
         const page = doc.addPage([PAGE_W, PAGE_H]);
         const scale = Math.min(PAGE_W / ep.width, PAGE_H / ep.height);

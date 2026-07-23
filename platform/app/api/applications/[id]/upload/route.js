@@ -44,6 +44,26 @@ export async function POST(req, { params }) {
   return json({ documents: updated.documents, added: saved }, 201);
 }
 
+// Change a document's category manually. Body: { docId, category }
+export async function PATCH(req, { params }) {
+  const { app, error: err } = await requireOwnedApp(params.id);
+  if (err) return err;
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return error('Invalid request body.');
+  }
+  const { docId, category } = body;
+  if (!docId) return error('docId is required.');
+  const updated = await updateApplication(app.id, (a) => {
+    const doc = (a.documents || []).find((d) => d.id === docId);
+    if (doc) doc.category = category || null;
+    return a;
+  });
+  return json({ documents: updated.documents });
+}
+
 // Remove a document by id.
 export async function DELETE(req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);

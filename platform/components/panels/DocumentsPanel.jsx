@@ -121,6 +121,16 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
     if (res.ok) patchLocal({ documents: data.documents });
   }
 
+  async function setCategory(docId, category) {
+    const res = await fetch(`/api/applications/${app.id}/upload`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docId, category }),
+    });
+    const data = await res.json();
+    if (res.ok) patchLocal({ documents: data.documents });
+  }
+
   async function extract() {
     setExtracting(true);
     setMsg(null);
@@ -308,7 +318,16 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {d.category && <span className="chip ok">{CATEGORY_LABELS[d.category] || d.category}</span>}
+                  <select
+                    value={d.category || ''}
+                    onChange={(e) => setCategory(d.id, e.target.value)}
+                    style={{ width: 190, padding: '6px 8px', fontSize: 12.5 }}
+                  >
+                    <option value="">— set type —</option>
+                    {Object.entries(CATEGORY_LABELS).map(([k, label]) => (
+                      <option key={k} value={k}>{label}</option>
+                    ))}
+                  </select>
                   <button className="btn-ghost" onClick={() => removeDoc(d.id)}>Remove</button>
                 </div>
               </div>

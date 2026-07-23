@@ -2,10 +2,10 @@ import { complete } from '../anthropic';
 import { answersToText } from '../sopQuestions';
 
 /** Uploaded document categories most useful for drafting the SOP. */
-const SOP_DOC_CATEGORIES = ['loa', 'transcripts', 'job-offer', 'language', 'passport', 'sop'];
+const SOP_DOC_CATEGORIES = ['cv', 'loa', 'transcripts', 'certificates', 'job-offer', 'language', 'sop'];
 
 /** Choose the uploaded documents to feed into the SOP (relevant ones, capped). */
-export function selectSopDocs(app, max = 6) {
+export function selectSopDocs(app, max = 8) {
   const docs = app.documents || [];
   const relevant = docs.filter((d) => SOP_DOC_CATEGORIES.includes(d.category));
   const chosen = (relevant.length ? relevant : docs).slice(0, max);
@@ -43,24 +43,37 @@ placeholder in [SQUARE BRACKETS] for the applicant to complete.`;
 - Ties to home country: ${d.homeTies || ''}
 - Previous refusal: ${d.previousRefusal ? 'YES — ' + (d.refusalDetails || '') : 'No'}`;
 
-  const instruction = `Write a Statement of Purpose (Study Plan) of about 600-800 words
-addressed "Dear Visa Officer,", in first person. Open with one sentence of intent plus the
-applicant's name, age and citizenship. Then use these **bold** sections (house style used by
-this firm):
-**Educational and Professional Background**
-**Reasons for studying [program] in Canada**
-**Future Goals and Strong Ties to My Home Country**
-**Financial Support Proof** — a short paragraph summarising funds/supporter.
-Close with a respectful paragraph and "Sincerely yours, <name>".
+  const instruction = `Write an EXTENSIVE Statement of Purpose (Study Plan) of about
+1,100-1,500 words (a full 3-4 page letter), addressed "Dear Visa Officer,", in first
+person. Open with a paragraph stating intent plus the applicant's name, age and
+citizenship. Then use these **bold** sections (the firm's house style):
+
+**Educational and Professional Background** — a detailed narrative: schooling and
+grades/achievements, each job with employer, role, dates and what they did/learned,
+plus courses, certificates, competitions and language proficiency.
+**Reasons for studying [program] in Canada** — multiple paragraphs covering: why this
+field; why suitable programs are not available or practical in the home country; why
+Canada; why THIS institution and program specifically (name actual courses, co-op or
+program features when known); and how it connects to a job offer, promotion or concrete
+opportunity awaiting the applicant.
+**Future Goals and Strong Ties to My Home Country** — short-term career plan after
+graduation, long-term ambition (e.g. a business or leadership goal), and the ties that
+guarantee return: family members at home, property/assets, job or business waiting,
+community roots.
+**Financial Support Proof** — itemize the funds: applicant's bank balance, supporter and
+their assets (accounts, property, vehicle), tuition already paid, and if from a sanctioned
+country note that funds transfer via licensed exchange offices.
+Close with a paragraph committing to respect Canada's laws and leave at the end of the
+authorized stay, then "Sincerely yours, <name>".
 
 Requirements:
 - First person, honest, specific, confident — no clichés or exaggeration.
-- Be concrete: name actual courses, employers, roles, dates, achievements, the program,
-  institution, tuition and funds. Pull these from the intake facts AND from the applicant's
-  uploaded documents below (CV, letter of acceptance, transcripts, job offer).
-- Minimise placeholders: only use a [SQUARE BRACKET] when a specific fact is genuinely
-  absent from BOTH the intake facts and the documents. Prefer real details every time.
-- If previous refusal is YES, add a short honest paragraph addressing it.
+- Be concrete everywhere: real courses, employers, roles, dates, achievements, program,
+  institution, tuition and funds — pulled from the intake facts AND the uploaded
+  documents (CV, letter of acceptance, transcripts, job offer).
+- Minimise placeholders: only use a [SQUARE BRACKET] when a fact is genuinely absent
+  from BOTH the intake and the documents.
+- If previous refusal is YES, add an honest paragraph addressing it directly.
 - Output plain text with **bold** section headings, no preamble.
 
 ${facts}
@@ -87,5 +100,5 @@ export async function generateSop(app, docBlocks = []) {
   const content = docBlocks.length
     ? [{ type: 'text', text: instruction }, ...docBlocks]
     : instruction;
-  return complete({ system, content, maxTokens: 3000 });
+  return complete({ system, content, maxTokens: 5000 });
 }

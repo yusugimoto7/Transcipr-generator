@@ -4,18 +4,8 @@ import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop, selectSopDocs } from '@/lib/generators/sop';
 import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
 import { compilePackage, PACKAGES } from '@/lib/compile';
-import { selectRelevantPages } from '@/lib/generators/pagefilter';
-import { PDFDocument } from 'pdf-lib';
+import { detectBlankPages } from '@/lib/generators/blankdetect';
 import { json, error, requireOwnedApp } from '@/lib/api';
-
-async function pdfPageCount(bytes) {
-  try {
-    const d = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
-    return d.getPageCount();
-  } catch {
-    return 0;
-  }
-}
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -111,10 +101,13 @@ export async function POST(req, { params }) {
           const bytes = await readUpload(app.id, d.stored);
           let keepPages = null;
           if (cleanPages && d.mime === 'application/pdf') {
-            const count = await pdfPageCount(bytes);
-            const { keep, dropped } = await selectRelevantPages(bytes, d.mime, sec.name, count);
-            keepPages = keep;
-            if (dropped?.length) droppedTotal += dropped.length;
+            // Deterministic: rasterize each page and measure ink coverage.
+            const { pages, blank } = await detectBlankPages(bytes);
+            if (pages > 0 && blank.length > 0 && blank.length < pages) {
+              const blankSet = new Set(blank);
+              keepPages = Array.from({ length: pages }, (_, i) => i + 1).filter((n) => !blankSet.has(n));
+              droppedTotal += blank.length;
+            }
           }
           items.push({ bytes, mime: d.mime, filename: d.filename, keepPages });
         } catch {
