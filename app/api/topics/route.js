@@ -25,9 +25,13 @@ export const dynamic = "force-dynamic";
 //    These cannot be bypassed by any client — including a broken pinger.
 const FRESH_MS = 20 * 60 * 1000; // serve as-is, no refresh needed
 const SERVE_MAX_MS = 3 * 60 * 60 * 1000; // serve stale + background-refresh up to this age
-const FORCE_COOLDOWN_MS = 5 * 60 * 1000; // min time between explicit "Refresh trends" live calls
-const MAX_GENERATIONS_PER_HOUR = 8; // hard ceiling on live generations, any trigger
-const MAX_GENERATIONS_PER_DAY = 30; // second ceiling — catches a slow-burn runaway an hourly cap alone would miss over 24h
+// Cost guardrails. These were tight when generation ran on (expensive) Claude
+// web-search. On OpenAI's cheap search model a generation costs ~$0.02, so the
+// limits exist only to stop a runaway loop — they're loose enough that pressing
+// "Refresh" always returns fresh topics for a real person.
+const FORCE_COOLDOWN_MS = 12 * 1000; // just a double-tap guard on "Refresh"
+const MAX_GENERATIONS_PER_HOUR = 60; // hard ceiling on live generations, any trigger
+const MAX_GENERATIONS_PER_DAY = 300; // second ceiling — catches a slow-burn runaway an hourly cap alone would miss over 24h
 
 let cache = { topics: null, timestamp: 0, provider: null };
 let inFlight = null; // de-dupe concurrent live generations
