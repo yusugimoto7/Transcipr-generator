@@ -36,14 +36,15 @@ const FIELDS = {
   Europe: { emoji: "🇪🇺", label: "Europe" },
 };
 
-// Fallback deck (used only if the live fetch fails) — drawn from the competitor research.
+// Fallback deck (used only if the live fetch fails) — evergreen how-to topics
+// with official source links. Deliberately NO Express Entry (brand excludes it).
 const FALLBACK = [
-  { title_fa: "ورک‌پرمیت ایرانیان داره تموم می‌شه؟ سه راه قانونی موندن", title_en: "Iranians' work permit ending — 3 legal ways to stay", field: "Work Permit", page: "CA", why_now: "پرتکرارترین موضوع بازار در همه‌ی پیج‌های برتر فارسی — تقاضای دائمی و اضطراب بالا.", score: 95 },
-  { title_fa: "از دو بار ریجکتی تا اقامت دائم — یک پروندهٔ واقعی", title_en: "From 2 refusals to PR — a real case story", field: "Court", page: "CA", why_now: "ترکیب اثبات + ترس؛ روی چند پیج برتر همزمان می‌ترکه.", score: 90 },
-  { title_fa: "کدوم شغل‌ها توی BC PNP بیشترین شانس رو دارن؟", title_en: "Which jobs get the best odds in BC PNP?", field: "PNP", page: "CA", why_now: "شما در BC هستید و این فضا برای مخاطب فارسی نیمه‌خالیه.", score: 88 },
-  { title_fa: "قرعه‌کشی جدید اکسپرس‌انتری — شما واجد شرایطید؟", title_en: "New Express Entry draw — are you eligible?", field: "Express Entry", page: "CA", why_now: "دراوها هر چند هفته و بلافاصله بعدش موج جست‌وجو راه می‌افته.", score: 85 },
-  { title_fa: "کارت فرصت آلمان: سه اشتباهی که پرونده‌تون رو رد می‌کنه", title_en: "Germany Opportunity Card: 3 mistakes that get you rejected", field: "Europe", page: "EU", why_now: "لِین اروپا برای مخاطب فارسی تقریباً بی‌رقیبه — سهم شماست.", score: 82 },
-  { title_fa: "تغییرات جدید ورک‌پرمیت بعد از تحصیل — چی عوض شد؟", title_en: "New post-graduation work permit rules — what changed?", field: "Study", page: "CA", why_now: "تغییرات PGWP مستقیم روی بزرگ‌ترین سگمنت دانشجویی اثر می‌ذاره.", score: 80 },
+  { title_fa: "ورک‌پرمیت ایرانیان داره تموم می‌شه؟ سه راه قانونی موندن", title_en: "Iranians' work permit ending — 3 legal ways to stay", field: "Work Permit", page: "CA", why_now: "پرتکرارترین موضوع بازار در همه‌ی پیج‌های برتر فارسی — تقاضای دائمی و اضطراب بالا.", source_url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada/permit.html", score: 95 },
+  { title_fa: "از دو بار ریجکتی تا اقامت دائم — یک پروندهٔ واقعی", title_en: "From 2 refusals to PR — a real case story", field: "Court", page: "CA", why_now: "ترکیب اثبات + ترس؛ روی چند پیج برتر همزمان می‌ترکه.", source_url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/application/account.html", score: 90 },
+  { title_fa: "کدوم شغل‌ها توی BC PNP بیشترین شانس رو دارن؟", title_en: "Which jobs get the best odds in BC PNP?", field: "PNP", page: "CA", why_now: "شما در BC هستید و این فضا برای مخاطب فارسی نیمه‌خالیه.", source_url: "https://www.welcomebc.ca/immigrate-to-b-c/b-c-provincial-nominee-program", score: 88 },
+  { title_fa: "بعد از انقضای PGWP چطور قانونی در کانادا بمونیم؟", title_en: "How to legally stay in Canada after your PGWP expires", field: "Study", page: "CA", why_now: "بزرگ‌ترین دغدغهٔ دانشجوهای بین‌المللی؛ همیشه پرجست‌وجو و پراضطراب.", source_url: "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada/work/after-graduation.html", score: 85 },
+  { title_fa: "کارت فرصت آلمان: سه اشتباهی که پرونده‌تون رو رد می‌کنه", title_en: "Germany Opportunity Card: 3 mistakes that get you rejected", field: "Europe", page: "EU", why_now: "لِین اروپا برای مخاطب فارسی تقریباً بی‌رقیبه — سهم شماست.", source_url: "https://www.make-it-in-germany.com/en/visa-residence/types/opportunity-card", score: 82 },
+  { title_fa: "تغییرات جدید ورک‌پرمیت بعد از تحصیل — چی عوض شد؟", title_en: "New post-graduation work permit rules — what changed?", field: "Study", page: "CA", why_now: "تغییرات PGWP مستقیم روی بزرگ‌ترین سگمنت دانشجویی اثر می‌ذاره.", source_url: "https://www.canada.ca/en/immigration-refugees-citizenship/news.html", score: 80 },
 ];
 
 async function fetchTopics(exclude = [], force = false) {

@@ -44,6 +44,17 @@ function underHourlyCap() {
 
 const MAX_AGE_DAYS = 45; // drop any dated news older than this — hard recency guard
 
+// Belt-and-suspenders: drop any Express Entry topic even if the model ignored
+// the prompt's exclusion (the brand already covers EE draws elsewhere).
+function isExpressEntry(t) {
+  const field = String(t.field || "").toLowerCase();
+  if (field.includes("express")) return true;
+  const hay = (
+    String(t.title_fa || "") + " " + String(t.title_en || "") + " " + String(t.why_now || "")
+  ).toLowerCase();
+  return /express\s*entry|\bcrs\b|اکسپرس\s*انتری|اکسپرس‌انتری/.test(hay);
+}
+
 // Drop duplicate topics WITHIN one batch (same article by URL, or same title).
 function dedupeBatch(list) {
   const seenUrl = new Set();
@@ -119,8 +130,13 @@ async function generate(clientExclude) {
     throw new Error("parse"); // model genuinely returned nothing
   }
 
-  // 1. Drop in-batch duplicates. 2. Enforce recency (drop stale dated news).
-  let out = recencyLogged(dedupeBatch(parsed), today);
+  // 0. Drop Express Entry (brand excludes it). 1. Drop in-batch duplicates.
+  // 2. Enforce recency (drop stale dated news).
+  const noEE = parsed.filter((t) => !isExpressEntry(t));
+  if (parsed.length - noEE.length > 0) {
+    console.log(`[topics] dropped ${parsed.length - noEE.length} Express Entry topic(s)`);
+  }
+  let out = recencyLogged(dedupeBatch(noEE), today);
 
   // 3. Cross-batch dedup via the sheet + append fresh ones to the history log.
   // An empty result here (everything already seen/stale) is VALID, not an error.
