@@ -40,14 +40,21 @@ function wrapText(page, font, text, x, y, size, maxWidth, color) {
 }
 
 async function addContent(doc, font, item) {
-  const { bytes, mime, filename } = item;
+  const { bytes, mime, filename, keepPages } = item;
   if (mime === 'application/pdf') {
     try {
       const src = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
+      // Optionally include only selected pages (blank/unrelated pages removed).
+      let pages = src.getPages();
+      if (Array.isArray(keepPages) && keepPages.length) {
+        pages = keepPages
+          .filter((n) => n >= 1 && n <= pages.length)
+          .map((n) => src.getPage(n - 1));
+      }
       // Normalize EVERY source page onto a uniform Letter page (same width),
       // scaling its content to fit and centering it, so the compiled document
       // has consistent page dimensions regardless of the scan sizes.
-      const embedded = await doc.embedPages(src.getPages());
+      const embedded = await doc.embedPages(pages);
       for (const ep of embedded) {
         const page = doc.addPage([PAGE_W, PAGE_H]);
         const scale = Math.min(PAGE_W / ep.width, PAGE_H / ep.height);

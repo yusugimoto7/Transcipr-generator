@@ -4,7 +4,18 @@ import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop, selectSopDocs } from '@/lib/generators/sop';
 import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
 import { compilePackage, PACKAGES } from '@/lib/compile';
+import { selectRelevantPages } from '@/lib/generators/pagefilter';
+import { PDFDocument } from 'pdf-lib';
 import { json, error, requireOwnedApp } from '@/lib/api';
+
+async function pdfPageCount(bytes) {
+  try {
+    const d = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
+    return d.getPageCount();
+  } catch {
+    return 0;
+  }
+}
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -66,6 +77,7 @@ export async function POST(req, { params }) {
   }
   const def = PACKAGES[body.pkg];
   if (!def) return error('Unknown package.', 404);
+  const cleanPages = body.cleanPages !== false; // default: remove blank/unrelated pages
 
   // Ensure the generated sub-documents this package needs exist.
   const neededGen = [...new Set(def.sections.filter((s) => s.generatedKey).map((s) => s.generatedKey))];
@@ -79,6 +91,7 @@ export async function POST(req, { params }) {
 
   // Resolve each section's content items.
   const sections = [];
+  let droppedTotal = 0;
   for (const sec of def.sections) {
     const items = [];
     if (sec.generatedKey) {
@@ -96,7 +109,14 @@ export async function POST(req, { params }) {
       for (const d of docs) {
         try {
           const bytes = await readUpload(app.id, d.stored);
-          items.push({ bytes, mime: d.mime, filename: d.filename });
+          let keepPages = null;
+          if (cleanPages && d.mime === 'application/pdf') {
+            const count = await pdfPageCount(bytes);
+            const { keep, dropped } = await selectRelevantPages(bytes, d.mime, sec.name, count);
+            keepPages = keep;
+            if (dropped?.length) droppedTotal += dropped.length;
+          }
+          items.push({ bytes, mime: d.mime, filename: d.filename, keepPages });
         } catch {
           /* skip */
         }
@@ -129,6 +149,7 @@ export async function POST(req, { params }) {
   return json({
     generated: updated.generated,
     key,
+    droppedPages: droppedTotal,
     included: sections.map((s) => ({ name: s.name, count: s.items.length })),
   });
 }

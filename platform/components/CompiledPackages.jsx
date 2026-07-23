@@ -20,6 +20,7 @@ const PKGS = [
 export default function CompiledPackages({ app, patchLocal }) {
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [cleanPages, setCleanPages] = useState(true);
   const generated = app.generated || [];
   const has = (key) => generated.some((g) => g.key === key);
 
@@ -30,15 +31,18 @@ export default function CompiledPackages({ app, patchLocal }) {
       const res = await fetch(`/api/applications/${app.id}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pkg }),
+        body: JSON.stringify({ pkg, cleanPages }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Compilation failed.');
       patchLocal({ generated: data.generated });
       const included = (data.included || []).filter((s) => s.count > 0).map((s) => s.name);
+      const dropped = data.droppedPages
+        ? ` Removed ${data.droppedPages} blank/unrelated page(s).`
+        : '';
       setMsg({
         type: 'ok',
-        text: `Compiled ${included.length} section(s): ${included.join(', ')}.`,
+        text: `Compiled ${included.length} section(s): ${included.join(', ')}.${dropped}`,
       });
     } catch (e) {
       setMsg({ type: 'err', text: e.message });
@@ -55,6 +59,10 @@ export default function CompiledPackages({ app, patchLocal }) {
         Contents — in the same order and section names as a submission-ready package. Upload the
         supporting documents first (Documents tab) so each section has content.
       </p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '10px 0 2px' }}>
+        <input type="checkbox" style={{ width: 16 }} checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} />
+        <span className="small">Remove blank &amp; unrelated pages automatically (AI — a bit slower)</span>
+      </label>
       <div style={{ marginTop: 10 }}>
         {PKGS.map((p) => (
           <div className="row" key={p.pkg}>
