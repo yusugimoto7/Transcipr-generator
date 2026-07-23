@@ -1,0 +1,690 @@
+{
+  "name": "Unified Draw Notifier (EE + OINP + BC PNP)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1600,
+        320
+      ],
+      "id": "trg-schedule",
+      "name": "Every 15 min"
+    },
+    {
+      "parameters": {
+        "url": "https://script.google.com/macros/s/AKfycbw1PZkjKloQc2ghagiP0bVTuWI26VQMnNDuUUQhEupXMLNrHx3mZVbGTvTDtOcovdLKng/exec",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1360,
+        80
+      ],
+      "id": "http-ee",
+      "name": "Fetch Express Entry",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://script.google.com/macros/s/AKfycbxeZy2Je_c5Xjurda1eobhGnheu1lKrfyevnSvWCG7b7I2quDBbTYBqyphG-0ZXc-nS/exec?source=bcpnp",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1360,
+        320
+      ],
+      "id": "http-bcpnp",
+      "name": "Fetch BC PNP",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://script.google.com/macros/s/AKfycbxeZy2Je_c5Xjurda1eobhGnheu1lKrfyevnSvWCG7b7I2quDBbTYBqyphG-0ZXc-nS/exec?source=oinp",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1360,
+        560
+      ],
+      "id": "http-oinp",
+      "name": "Fetch OINP",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node: \"Build EE Items\"\n// Normalises the latest Express Entry round into the shared item shape.\n// Dedup is handled downstream by the posted_draws data table.\nconst src = $input.all();\nconst round = src.length ? (src[0].json.rounds || [])[0] : null;\nif (!round) return [];\n\nconst currentDrawNumber = String(round.drawNumber);\n\nconst drawNameRaw = round.drawName || round.drawText || 'نامشخص';\nconst drawName = drawNameRaw.replace(/,?\\s*\\d{4}-version\\s*\\d+/i, '').trim();\nconst drawDate = round.drawDateFull || round.drawDate || 'نامشخص';\nconst drawSize = round.drawSize || round.drawSizeText || 'نامشخص';\nconst drawCRS  = round.drawCRS  || round.drawCutOff || round.drawCutoff || round.crs || 'نامشخص';\n\nconst categoryMap = [\n  { en: 'provincial nominee program',                    fa: 'برنامه نامزدی استانی' },\n  { en: 'canadian experience class',                     fa: 'کلاس سابقه کار کانادایی' },\n  { en: 'french-language proficiency',                   fa: 'تسلط به زبان فرانسوی' },\n  { en: 'french language proficiency',                   fa: 'تسلط به زبان فرانسوی' },\n  { en: 'healthcare and social services',                fa: 'مشاغل بهداشت و خدمات اجتماعی' },\n  { en: 'healthcare occupations',                        fa: 'مشاغل بهداشت و درمان' },\n  { en: 'science, technology, engineering and math',     fa: 'مشاغل علوم، فناوری، مهندسی و ریاضی (STEM)' },\n  { en: 'stem occupations',                              fa: 'مشاغل STEM' },\n  { en: 'trade occupations',                             fa: 'مشاغل فنی و حرفه‌ای' },\n  { en: 'trades occupations',                            fa: 'مشاغل فنی و حرفه‌ای' },\n  { en: 'education occupations',                         fa: 'مشاغل آموزشی' },\n  { en: 'transport occupations',                         fa: 'مشاغل حمل و نقل' },\n  { en: 'agriculture and agri-food',                     fa: 'مشاغل کشاورزی و صنایع غذایی' },\n  { en: 'physicians with canadian work experience',      fa: 'پزشکان با سابقه کار کانادایی' },\n  { en: 'senior managers with canadian work experience', fa: 'مدیران ارشد با سابقه کار کانادایی' },\n  { en: 'researchers with canadian work experience',     fa: 'پژوهشگران با سابقه کار کانادایی' },\n  { en: 'skilled military recruits',                     fa: 'سربازان متخصص استخدام شده' },\n  { en: 'federal skilled worker',                        fa: 'برنامه فدرال نیروی کار متخصص' },\n  { en: 'federal skilled trades',                        fa: 'برنامه فدرال مشاغل فنی' },\n  { en: 'general',                                       fa: 'دراو عمومی' },\n  { en: 'no program specified',                          fa: 'بدون برنامه مشخص' }\n];\nfunction getPersianCategory(englishName) {\n  if (!englishName) return 'دسته‌بندی نامشخص';\n  const lower = String(englishName).toLowerCase();\n  for (const entry of categoryMap) {\n    if (lower.includes(entry.en)) return entry.fa;\n  }\n  return englishName;\n}\nconst drawNameFa = getPersianCategory(drawName);\n\nconst link = 'https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/rounds-invitations.html';\nconst site = 'www.sugimotovisa.com';\n\nconst telegramText = `📢 <b>نتیجه جدیدترین دراو اکسپرس انتری</b>\n<b>اقامت دائم کانادا (PR)</b> 🇨🇦\n\n🗓 <b>تاریخ برگزاری:</b> <code>${drawDate}</code>\n🎯 <b>دسته‌بندی انتخاب:</b> <b>${drawNameFa}</b>\n\n📊 <b>آمار این دوره:</b>\n🔹 تعداد دعوت‌نامه صادر شده: <b>${drawSize}</b> نفر\n🔹 حداقل امتیاز قبولی (CRS): <b>${drawCRS}</b> امتیاز\n\n🔗 <a href=\"${link}\">مشاهده جزئیات در سایت رسمی اداره مهاجرت</a>\n\n🌐 ${site}`;\n\nconst xPostText = `📢 دراو جدید اکسپرس انتری 🇨🇦\n🗓 ${drawDate}\n🎯 ${drawNameFa}\n🔹 دعوت‌نامه: ${drawSize} نفر\n🔹 حداقل CRS: ${drawCRS}\n${link}`;\n\nconst linkedinText = `📢 نتیجه جدیدترین دراو اکسپرس انتری — اقامت دائم کانادا (PR) 🇨🇦\n\n🗓 تاریخ برگزاری: ${drawDate}\n🎯 دسته‌بندی انتخاب: ${drawNameFa}\n🔹 تعداد دعوت‌نامه صادر شده: ${drawSize} نفر\n🔹 حداقل امتیاز قبولی (CRS): ${drawCRS}\n\n🔗 جزئیات در سایت رسمی اداره مهاجرت:\n${link}\n\n🌐 ${site}\n#ExpressEntry #مهاجرت_کانادا #اقامت_کانادا #سوگیموتو_ویزا`;\n\nconst igCaption = `نتیجه جدیدترین دراو اکسپرس انتری 🇨🇦\\n\\nتاریخ برگزاری: ${drawDate}\\nدسته‌بندی انتخاب: ${drawNameFa}\\nتعداد دعوت‌نامه: ${drawSize} نفر\\nحداقل امتیاز CRS: ${drawCRS}\\n\\nبرای مشاوره: ${site}\\n\\n#اکسپرس_انتری #مهاجرت_کانادا #اقامت_کانادا #سوگیموتو_ویزا #PR #ExpressEntry`;\n\nreturn [{\n  json: {\n    program: 'express-entry',\n    dedup_key: currentDrawNumber,\n    final_post_text: telegramText,\n    x_post_text: xPostText,\n    linkedin_text: linkedinText,\n    ig_caption: igCaption,\n    skipInstagram: false,\n    // shared story-card fields\n    headingLine1: 'آخرین Draw',\n    headingLine2: 'اکسپرس انتری',\n    headingLine3: 'اقامت دائم کانادا PR',\n    statLeftValue: String(drawSize),\n    statLeftLabel: 'تعداد دعوتنامه',\n    statRightValue: String(drawCRS),\n    statRightLabel: 'نمره آخرین نفر قبولی',\n    categoryFa: drawNameFa,\n    categoryEn: drawName,\n    dateText: String(drawDate),\n    // data-table meta\n    dt_name: drawName,\n    dt_crs: String(drawCRS),\n    dt_size: String(drawSize)\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        80
+      ],
+      "id": "code-ee",
+      "name": "Build EE Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node: \"Build BC PNP Items\"\n// Emits 0-2 normalised items (Skills and/or Entrepreneur) from the GAS router.\n// No staticData dedup — the posted_draws data table handles it downstream.\nfunction esc(s) {\n  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\nfunction htmlToPlain(h) {\n  return String(h)\n    .replace(/<a[^>]*href=\"([^\"]*)\"[^>]*>([\\s\\S]*?)<\\/a>/g, '$2: $1')\n    .replace(/<[^>]+>/g, '')\n    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');\n}\nfunction lowScore(streams) {\n  let m = null;\n  (streams || []).forEach(function (s) {\n    const n = parseInt(String(s.minScore).replace(/[^0-9]/g, ''), 10);\n    if (!isNaN(n) && (m === null || n < m)) m = n;\n  });\n  return m === null ? '—' : String(m);\n}\nfunction sumItas(streams) {\n  let t = 0;\n  (streams || []).forEach(function (s) {\n    const n = parseInt(String(s.itas).replace(/[^0-9]/g, ''), 10);\n    if (!isNaN(n)) t += n;\n  });\n  return t;\n}\n\nconst src = $input.all();\nconst data = src.length ? src[0].json : null;\nif (!data || data.error) return [];\n\nconst link = data.sourceUrl;\nconst site = 'www.sugimotovisa.com';\nconst outputs = [];\n\n// ===== BC PNP — Skills Immigration =====\nconst skills = data.skillsImmigration;\nif (skills && skills.latestDate) {\n  let streamsBlock = '';\n  (skills.streams || []).forEach(function (s) {\n    const score = s.minScore === 'N/A' ? '—' : esc(s.minScore);\n    streamsBlock += '\\n🔹 <b>' + esc(s.name) + '</b>\\n   • حداقل امتیاز: <b>' + score + '</b>\\n   • تعداد دعوت‌نامه: <b>' + esc(s.itas) + '</b> نفر\\n';\n  });\n  const telegram = '📢 <b>نتیجه جدیدترین دراو بی‌سی پی‌ان‌پی</b>\\n<b>برنامه نیروی متخصص بریتیش کلمبیا (BC PNP - Skills)</b> 🇨🇦\\n\\n🗓 <b>تاریخ برگزاری:</b> <code>' + esc(skills.latestDate) + '</code>\\n\\n📊 <b>خلاصه این دوره:</b>\\n🔸 مجموع دعوت‌نامه‌ها: <b>' + esc(skills.totalItas) + '</b> نفر\\n' + streamsBlock + '\\n🔗 <a href=\"' + link + '\">مشاهده جزئیات در سایت رسمی WelcomeBC</a>\\n\\n🌐 ' + site;\n  const low = lowScore(skills.streams);\n  const total = String(skills.totalItas || '—');\n  outputs.push({\n    json: {\n      program: 'bcpnp-skills',\n      dedup_key: 'bcpnp-skills::' + skills.latestDate,\n      final_post_text: telegram,\n      x_post_text: '📢 دراو جدید BC PNP (Skills) 🇨🇦\\n🗓 ' + skills.latestDate + '\\n🔸 مجموع دعوت‌نامه: ' + total + '\\n🔹 حداقل امتیاز: ' + low + '\\n' + link,\n      linkedin_text: htmlToPlain(telegram) + '\\n#BCPNP #مهاجرت_کانادا #بریتیش_کلمبیا #سوگیموتو_ویزا',\n      ig_caption: 'نتیجه جدیدترین دراو BC PNP (Skills) 🇨🇦\\n\\nتاریخ برگزاری: ' + skills.latestDate + '\\nمجموع دعوت‌نامه: ' + total + ' نفر\\nحداقل امتیاز: ' + low + '\\n\\nبرای مشاوره: ' + site + '\\n\\n#BCPNP #بریتیش_کلمبیا #مهاجرت_کانادا #سوگیموتو_ویزا',\n      skipInstagram: false,\n      headingLine1: 'آخرین Draw',\n      headingLine2: 'بریتیش کلمبیا',\n      headingLine3: 'BC PNP - Skills',\n      statLeftValue: total,\n      statLeftLabel: 'مجموع دعوتنامه',\n      statRightValue: low,\n      statRightLabel: 'حداقل امتیاز',\n      categoryFa: 'برنامه نیروی متخصص',\n      categoryEn: 'Skills Immigration',\n      dateText: String(skills.latestDate),\n      dt_name: 'BC PNP Skills',\n      dt_crs: low,\n      dt_size: total\n    }\n  });\n}\n\n// ===== BC PNP — Entrepreneur Immigration =====\nconst ent = data.entrepreneurImmigration;\nif (ent && ent.latestDate) {\n  let streamsBlock = '';\n  (ent.streams || []).forEach(function (s) {\n    streamsBlock += '\\n🔹 <b>' + esc(s.name) + '</b>\\n   • حداقل امتیاز: <b>' + esc(s.minScore) + '</b>\\n   • تعداد دعوت‌نامه: <b>' + esc(s.itas) + '</b> نفر\\n';\n  });\n  const telegram = '📢 <b>نتیجه جدیدترین دراو کارآفرینی بی‌سی</b>\\n<b>برنامه کارآفرینی بریتیش کلمبیا (BC PNP - Entrepreneur)</b> 🇨🇦\\n\\n🗓 <b>تاریخ برگزاری:</b> <code>' + esc(ent.latestDate) + '</code>\\n' + streamsBlock + '\\n🔗 <a href=\"' + link + '\">مشاهده جزئیات در سایت رسمی WelcomeBC</a>\\n\\n🌐 ' + site;\n  const low = lowScore(ent.streams);\n  const total = sumItas(ent.streams);\n  const totalStr = total > 0 ? String(total) : '—';\n  outputs.push({\n    json: {\n      program: 'bcpnp-entrepreneur',\n      dedup_key: 'bcpnp-entrepreneur::' + ent.latestDate,\n      final_post_text: telegram,\n      x_post_text: '📢 دراو جدید کارآفرینی BC PNP 🇨🇦\\n🗓 ' + ent.latestDate + '\\n🔸 مجموع دعوت‌نامه: ' + totalStr + '\\n🔹 حداقل امتیاز: ' + low + '\\n' + link,\n      linkedin_text: htmlToPlain(telegram) + '\\n#BCPNP #Entrepreneur #مهاجرت_کانادا #سوگیموتو_ویزا',\n      ig_caption: 'نتیجه جدیدترین دراو کارآفرینی BC PNP 🇨🇦\\n\\nتاریخ برگزاری: ' + ent.latestDate + '\\nمجموع دعوت‌نامه: ' + totalStr + ' نفر\\nحداقل امتیاز: ' + low + '\\n\\nبرای مشاوره: ' + site + '\\n\\n#BCPNP #Entrepreneur #بریتیش_کلمبیا #سوگیموتو_ویزا',\n      skipInstagram: false,\n      headingLine1: 'آخرین Draw',\n      headingLine2: 'بریتیش کلمبیا',\n      headingLine3: 'BC PNP - Entrepreneur',\n      statLeftValue: totalStr,\n      statLeftLabel: 'مجموع دعوتنامه',\n      statRightValue: low,\n      statRightLabel: 'حداقل امتیاز',\n      categoryFa: 'برنامه کارآفرینی',\n      categoryEn: 'Entrepreneur Immigration',\n      dateText: String(ent.latestDate),\n      dt_name: 'BC PNP Entrepreneur',\n      dt_crs: low,\n      dt_size: totalStr\n    }\n  });\n}\n\nreturn outputs;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        320
+      ],
+      "id": "code-bcpnp",
+      "name": "Build BC PNP Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node: \"Build OINP Items\"\n// Emits 0-2 normalised items (draw summary and/or program update) from the GAS router.\nfunction esc(s) {\n  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\nfunction htmlToPlain(h) {\n  return String(h)\n    .replace(/<a[^>]*href=\"([^\"]*)\"[^>]*>([\\s\\S]*?)<\\/a>/g, '$2: $1')\n    .replace(/<[^>]+>/g, '')\n    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');\n}\n\nconst src = $input.all();\nconst data = src.length ? src[0].json : null;\nif (!data || data.error || !data.latestDate || !data.items || data.items.length === 0) return [];\n\nconst link = data.sourceUrl;\nconst site = 'www.sugimotovisa.com';\nconst outputs = [];\nconst draws = data.items.filter(function (i) { return i.type === 'draw'; });\nconst updates = data.items.filter(function (i) { return i.type === 'update'; });\n\n// ===== OINP — Draw summary =====\nif (draws.length > 0) {\n  let drawsBlock = '';\n  let totalItas = 0;\n  draws.forEach(function (d) {\n    const itaLine = d.itas ? '   • تعداد دعوت‌نامه: <b>' + esc(d.itas) + '</b> نفر\\n' : '';\n    drawsBlock += '\\n🔹 <b>' + esc(d.title) + '</b>\\n' + itaLine;\n    if (d.itas) { const n = parseInt(d.itas, 10); if (!isNaN(n)) totalItas += n; }\n  });\n  const totalLine = totalItas > 0 ? '🔸 مجموع دعوت‌نامه‌ها: <b>' + totalItas + '</b> نفر\\n' : '';\n  const telegram = '📢 <b>نتیجه جدیدترین دراو انتاریو (OINP)</b>\\n<b>برنامه مهاجرت استانی انتاریو</b> 🇨🇦\\n\\n🗓 <b>تاریخ برگزاری:</b> <code>' + esc(data.latestDate) + '</code>\\n\\n📊 <b>خلاصه این دوره:</b>\\n' + totalLine + drawsBlock + '\\n🔗 <a href=\"' + link + '\">مشاهده جزئیات در سایت رسمی انتاریو</a>\\n\\n🌐 ' + site;\n  const totalStr = totalItas > 0 ? String(totalItas) : '—';\n  const firstTitle = String(draws[0].title || 'OINP').substring(0, 40);\n  outputs.push({\n    json: {\n      program: 'oinp-draw',\n      dedup_key: 'oinp-draw::' + data.latestDate + '::' + firstTitle,\n      final_post_text: telegram,\n      x_post_text: '📢 دراو جدید انتاریو (OINP) 🇨🇦\\n🗓 ' + data.latestDate + '\\n🔸 مجموع دعوت‌نامه: ' + totalStr + '\\n' + link,\n      linkedin_text: htmlToPlain(telegram) + '\\n#OINP #Ontario #مهاجرت_کانادا #سوگیموتو_ویزا',\n      ig_caption: 'نتیجه جدیدترین دراو انتاریو (OINP) 🇨🇦\\n\\nتاریخ برگزاری: ' + data.latestDate + '\\nمجموع دعوت‌نامه: ' + totalStr + ' نفر\\n\\nبرای مشاوره: ' + site + '\\n\\n#OINP #انتاریو #مهاجرت_کانادا #سوگیموتو_ویزا',\n      skipInstagram: false,\n      headingLine1: 'آخرین Draw',\n      headingLine2: 'انتاریو OINP',\n      headingLine3: 'مهاجرت استانی',\n      statLeftValue: totalStr,\n      statLeftLabel: 'تعداد دعوتنامه',\n      statRightValue: '—',\n      statRightLabel: 'حداقل امتیاز',\n      categoryFa: 'مهاجرت استانی انتاریو',\n      categoryEn: firstTitle,\n      dateText: String(data.latestDate),\n      dt_name: 'OINP Draw',\n      dt_crs: '',\n      dt_size: totalStr\n    }\n  });\n}\n\n// ===== OINP — Program update / announcement (no story image) =====\nif (updates.length > 0) {\n  let updatesBlock = '';\n  updates.forEach(function (u) {\n    const summaryRaw = (u.summary && u.summary.length > 300) ? u.summary.substring(0, 300) + '...' : (u.summary || '');\n    updatesBlock += '\\n🔸 <b>' + esc(u.title) + '</b>\\n' + esc(summaryRaw) + '\\n';\n  });\n  const telegram = '📣 <b>اطلاعیه مهم برنامه OINP انتاریو</b>\\n<b>تغییرات و به‌روزرسانی‌های جدید</b> 🇨🇦\\n\\n🗓 <b>تاریخ اطلاعیه:</b> <code>' + esc(data.latestDate) + '</code>\\n' + updatesBlock + '\\n⚠️ <i>این اطلاعیه شامل تغییرات مهم برنامه است، لطفاً برای جزئیات کامل به سایت رسمی مراجعه کنید.</i>\\n\\n🔗 <a href=\"' + link + '\">مطالعه متن کامل در سایت رسمی انتاریو</a>\\n\\n🌐 ' + site;\n  const firstTitle = String(updates[0].title || 'OINP Update').substring(0, 40);\n  outputs.push({\n    json: {\n      program: 'oinp-update',\n      dedup_key: 'oinp-update::' + data.latestDate + '::' + firstTitle,\n      final_post_text: telegram,\n      x_post_text: '📣 اطلاعیه جدید برنامه OINP انتاریو 🇨🇦\\n🗓 ' + data.latestDate + '\\n' + firstTitle + '\\n' + link,\n      linkedin_text: htmlToPlain(telegram) + '\\n#OINP #Ontario #مهاجرت_کانادا #سوگیموتو_ویزا',\n      ig_caption: '',\n      skipInstagram: true,\n      headingLine1: '',\n      headingLine2: '',\n      headingLine3: '',\n      statLeftValue: '',\n      statLeftLabel: '',\n      statRightValue: '',\n      statRightLabel: '',\n      categoryFa: '',\n      categoryEn: '',\n      dateText: String(data.latestDate),\n      dt_name: 'OINP Update',\n      dt_crs: '',\n      dt_size: ''\n    }\n  });\n}\n\nreturn outputs;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        560
+      ],
+      "id": "code-oinp",
+      "name": "Build OINP Items"
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -880,
+        320
+      ],
+      "id": "merge-all",
+      "name": "Merge All Programs"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node: \"Build Story Card\"\n// Runs per merged item. Generates the Instagram-story SVG from the shared\n// normalised fields, then passes every field through unchanged so downstream\n// nodes have a single node to reference. Logo is embedded once here.\n// Paste your logo's base64 PNG here (the same value used in the Express Entry\n// flow's \"Build Message\" node, constant LOGO_B64). If left as the placeholder,\n// the card falls back to a text wordmark so it still renders.\nconst LOGO_B64 = '__PASTE_LOGO_B64_HERE__';\nconst HAS_LOGO = LOGO_B64.indexOf('PASTE_LOGO_B64') === -1;\n\nfunction fitSize(val) {\n  const len = String(val == null ? '' : val).length;\n  if (len <= 3) return 220;\n  if (len === 4) return 180;\n  if (len === 5) return 150;\n  return 130;\n}\n\nfunction buildSvg(j) {\n  const rightFont = fitSize(j.statRightValue);\n  const leftFont = fitSize(j.statLeftValue);\n  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  return `<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"1080\" height=\"1920\" viewBox=\"0 0 1080 1920\">\n  <defs>\n    <style>\n      @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800;900&amp;family=Inter:wght@700;800;900&amp;display=swap');\n      .farsi { font-family: 'Vazirmatn', 'Tahoma', sans-serif; direction: rtl; }\n      .english { font-family: 'Inter', 'Arial', sans-serif; }\n    </style>\n    <filter id=\"cardShadow\" x=\"-10%\" y=\"-5%\" width=\"120%\" height=\"115%\">\n      <feDropShadow dx=\"0\" dy=\"20\" stdDeviation=\"40\" flood-color=\"#000000\" flood-opacity=\"0.08\"/>\n    </filter>\n  </defs>\n  <rect width=\"1080\" height=\"1920\" fill=\"#FFFFFF\"/>\n  <rect x=\"40\" y=\"40\" width=\"1000\" height=\"1840\" rx=\"50\" ry=\"50\" fill=\"#FFFFFF\" filter=\"url(#cardShadow)\" stroke=\"#F3F4F6\" stroke-width=\"1\"/>\n  <g opacity=\"0.45\">\n    <rect x=\"120\" y=\"1150\" width=\"110\" height=\"100\" fill=\"#FCA5A5\"/>\n    <rect x=\"260\" y=\"1080\" width=\"110\" height=\"170\" fill=\"#FED7AA\"/>\n    <rect x=\"400\" y=\"980\"  width=\"110\" height=\"270\" fill=\"#FEF3C7\"/>\n    <rect x=\"540\" y=\"880\"  width=\"110\" height=\"370\" fill=\"#BAE6FD\"/>\n    <rect x=\"680\" y=\"780\"  width=\"110\" height=\"470\" fill=\"#C7D2FE\"/>\n    <rect x=\"820\" y=\"680\"  width=\"110\" height=\"570\" fill=\"#E9D5FF\"/>\n  </g>\n  <g opacity=\"0.55\">\n    <circle cx=\"175\" cy=\"1090\" r=\"32\" fill=\"#F87171\"/>\n    <path d=\"M 130 1150 Q 130 1100 175 1100 Q 220 1100 220 1150 Z\" fill=\"#F87171\"/>\n    <circle cx=\"315\" cy=\"1020\" r=\"32\" fill=\"#FB923C\"/>\n    <path d=\"M 270 1080 Q 270 1030 315 1030 Q 360 1030 360 1080 Z\" fill=\"#FB923C\"/>\n    <circle cx=\"455\" cy=\"920\" r=\"32\" fill=\"#FBBF24\"/>\n    <path d=\"M 410 980 Q 410 930 455 930 Q 500 930 500 980 Z\" fill=\"#FBBF24\"/>\n    <circle cx=\"595\" cy=\"820\" r=\"32\" fill=\"#38BDF8\"/>\n    <path d=\"M 550 880 Q 550 830 595 830 Q 640 830 640 880 Z\" fill=\"#38BDF8\"/>\n    <circle cx=\"735\" cy=\"720\" r=\"32\" fill=\"#818CF8\"/>\n    <path d=\"M 690 780 Q 690 730 735 730 Q 780 730 780 780 Z\" fill=\"#818CF8\"/>\n    <circle cx=\"875\" cy=\"620\" r=\"32\" fill=\"#C084FC\"/>\n    <path d=\"M 830 680 Q 830 630 875 630 Q 920 630 920 680 L 905 680 Q 900 695 875 695 Q 850 695 845 680 Z\" fill=\"#C084FC\"/>\n  </g>\n  <text x=\"540\" y=\"300\" text-anchor=\"middle\" class=\"farsi\" font-size=\"80\" font-weight=\"900\" fill=\"#2C3E50\">${esc(j.headingLine1)}</text>\n  <text x=\"540\" y=\"395\" text-anchor=\"middle\" class=\"farsi\" font-size=\"80\" font-weight=\"900\" fill=\"#2C3E50\">${esc(j.headingLine2)}</text>\n  <text x=\"540\" y=\"490\" text-anchor=\"middle\" class=\"farsi\" font-size=\"80\" font-weight=\"900\" fill=\"#2C3E50\">${esc(j.headingLine3)}</text>\n  <line x1=\"220\" y1=\"555\" x2=\"860\" y2=\"555\" stroke=\"#E5E7EB\" stroke-width=\"3\"/>\n  <text x=\"780\" y=\"800\" text-anchor=\"middle\" class=\"english\" font-size=\"${rightFont}\" font-weight=\"900\" fill=\"#2C3E50\" letter-spacing=\"-8\">${esc(j.statRightValue)}</text>\n  <text x=\"780\" y=\"880\" text-anchor=\"middle\" class=\"farsi\" font-size=\"38\" font-weight=\"700\" fill=\"#545454\">${esc(j.statRightLabel)}</text>\n  <line x1=\"540\" y1=\"660\" x2=\"540\" y2=\"890\" stroke=\"#E5E7EB\" stroke-width=\"3\"/>\n  <text x=\"300\" y=\"800\" text-anchor=\"middle\" class=\"english\" font-size=\"${leftFont}\" font-weight=\"900\" fill=\"#2C3E50\" letter-spacing=\"-8\">${esc(j.statLeftValue)}</text>\n  <text x=\"300\" y=\"880\" text-anchor=\"middle\" class=\"farsi\" font-size=\"38\" font-weight=\"700\" fill=\"#545454\">${esc(j.statLeftLabel)}</text>\n  <text x=\"540\" y=\"1380\" text-anchor=\"middle\" class=\"farsi\" font-size=\"46\" font-weight=\"700\" fill=\"#2C3E50\">${esc(j.categoryFa)}</text>\n  <text x=\"540\" y=\"1450\" text-anchor=\"middle\" class=\"english\" font-size=\"46\" font-weight=\"700\" fill=\"#2C3E50\">${esc(j.categoryEn)}</text>\n  <text x=\"540\" y=\"1560\" text-anchor=\"middle\" class=\"english\" font-size=\"42\" font-weight=\"700\" fill=\"#2C3E50\">${esc(j.dateText)}</text>\n  ${HAS_LOGO\n    ? `<image x=\"290\" y=\"1730\" width=\"500\" height=\"85\" xlink:href=\"data:image/png;base64,${LOGO_B64}\" preserveAspectRatio=\"xMidYMid meet\"/>`\n    : `<text x=\"540\" y=\"1790\" text-anchor=\"middle\" class=\"english\" font-size=\"46\" font-weight=\"900\" fill=\"#2C3E50\">SUGIMOTO VISA</text>`}\n</svg>`;\n}\n\nreturn $input.all().map(function (it) {\n  const j = it.json;\n  return { json: Object.assign({}, j, { svg: j.skipInstagram ? '' : buildSvg(j) }) };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        320
+      ],
+      "id": "code-story",
+      "name": "Build Story Card"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "CkCfML6nrTQJN7Aw",
+          "mode": "list",
+          "cachedResultName": "posted_draws",
+          "cachedResultUrl": "/projects/L4LTA9nUncOoPxVP/datatables/CkCfML6nrTQJN7Aw"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "draw_number",
+              "keyValue": "={{ $json.dedup_key }}"
+            }
+          ]
+        },
+        "limit": 1
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -400,
+        320
+      ],
+      "id": "dt-check",
+      "name": "Check if posted",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cond-empty",
+              "leftValue": "={{ $json.draw_number }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        320
+      ],
+      "id": "if-new",
+      "name": "Is New?"
+    },
+    {
+      "parameters": {
+        "chatId": "-1001345603472",
+        "text": "={{ $('Build Story Card').item.json.final_post_text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        140,
+        40
+      ],
+      "id": "tg-post",
+      "name": "Post to Telegram Channel",
+      "webhookId": "unified-post-channel",
+      "credentials": {
+        "telegramApi": {
+          "id": "tBkaYSTkkyWvaNl9",
+          "name": "Telegram Notifier bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "={{ $('Build Story Card').item.json.x_post_text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [
+        140,
+        200
+      ],
+      "id": "x-post",
+      "name": "Post to X",
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "ULB2NMsT0Nkec4Ra",
+          "name": "X account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "communityManagement",
+        "postAs": "organization",
+        "organization": "90406990",
+        "text": "={{ $('Build Story Card').item.json.linkedin_text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.linkedIn",
+      "typeVersion": 1,
+      "position": [
+        140,
+        360
+      ],
+      "id": "li-post",
+      "name": "Post to LinkedIn",
+      "credentials": {
+        "linkedInCommunityManagementOAuth2Api": {
+          "id": "wlBq9tA2F8OMqx8H",
+          "name": "Sugimoto Master App"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "CkCfML6nrTQJN7Aw",
+          "mode": "list",
+          "cachedResultName": "posted_draws",
+          "cachedResultUrl": "/projects/L4LTA9nUncOoPxVP/datatables/CkCfML6nrTQJN7Aw"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "draw_number": "={{ $('Build Story Card').item.json.dedup_key }}",
+            "posted_at": "={{ $now.toISO() }}",
+            "draw_name": "={{ $('Build Story Card').item.json.dt_name }}",
+            "draw_crs": "={{ $('Build Story Card').item.json.dt_crs }}",
+            "draw_size": "={{ $('Build Story Card').item.json.dt_size }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "draw_number",
+              "displayName": "draw_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "posted_at",
+              "displayName": "posted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "draw_name",
+              "displayName": "draw_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "draw_crs",
+              "displayName": "draw_crs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "draw_size",
+              "displayName": "draw_size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        420,
+        40
+      ],
+      "id": "dt-insert",
+      "name": "Mark as posted"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node: \"Prepare Image\" — runs once per item.\n// Skips program updates (no story image); otherwise base64-encodes the SVG for\n// the HCTI render step. References Build Story Card via paired item.\nconst j = $('Build Story Card').item.json;\nif (j.skipInstagram || !j.svg) return [];\nconst svgBase64 = Buffer.from(j.svg).toString('base64');\nreturn [{\n  json: Object.assign({}, j, {\n    svgBase64: svgBase64,\n    dataUri: 'data:image/svg+xml;base64,' + svgBase64\n  })\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        560
+      ],
+      "id": "code-prepimg",
+      "name": "Prepare Image",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://hcti.io/v1/image",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"html\": \"<div id='wrap'>{{ $json.svg.replace(/\\\"/g, '\\\\\"').replace(/\\n/g, '') }}</div>\",\n  \"css\": \"body,html{margin:0;padding:0}#wrap{width:1080px;height:1920px}svg{width:100%;height:100%;display:block}\",\n  \"viewport_width\": 1080,\n  \"viewport_height\": 1920,\n  \"device_scale\": 1\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        380,
+        560
+      ],
+      "id": "http-render",
+      "name": "Render SVG to PNG",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "QzkGK4407SS7p6Q2",
+          "name": "Unnamed credential 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/26846240431664402/media",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_url\": \"{{ $json.url }}\",\n  \"media_type\": \"STORIES\",\n  \"access_token\": \"IGAAMJ0hz98q5BZAFl4MnR1ellSREdRVkExV3JZAUkJNTjhrRFZAJRFZAmLVpIUXJFZAnc0WGNVcWZA6c3YyZA0M1eEdzWFNiUWw0a05FandFUXdIdFBDYWM3UEtYT3NLSjQ2cGtCbnJDWS16cmFocG9uWjJLUEZAkRUFFNTJmV0dxRXNvMAZDZD\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        620,
+        560
+      ],
+      "id": "http-igcontainer",
+      "name": "Create IG Story Container"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        820,
+        560
+      ],
+      "id": "wait-ig",
+      "name": "Wait",
+      "webhookId": "unified-ig-wait"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/26846240431664402/media_publish",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"creation_id\": \"{{ $('Create IG Story Container').item.json.id }}\",\n  \"access_token\": \"IGAAMJ0hz98q5BZAFl4MnR1ellSREdRVkExV3JZAUkJNTjhrRFZAJRFZAmLVpIUXJFZAnc0WGNVcWZA6c3YyZA0M1eEdzWFNiUWw0a05FandFUXdIdFBDYWM3UEtYT3NLSjQ2cGtCbnJDWS16cmFocG9uWjJLUEZAkRUFFNTJmV0dxRXNvMAZDZD\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1020,
+        560
+      ],
+      "id": "http-igpublish",
+      "name": "Publish IG Story"
+    },
+    {
+      "parameters": {
+        "content": "## Unified Draw Notifier (EE + OINP + BC PNP)\n\nRuns every 15 min. Fetches all three programs, normalises them, dedups against the `posted_draws` data table, then auto-posts to Telegram, X, LinkedIn, and Instagram (story image).\n\n**Before enabling:** paste your logo base64 into the `LOGO_B64` constant in **Build Story Card**, and DEACTIVATE the old EE and BC PNP/OINP flows to avoid double posting.",
+        "height": 260,
+        "width": 460,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1600,
+        -40
+      ],
+      "id": "sticky-doc",
+      "name": "About"
+    }
+  ],
+  "connections": {
+    "Every 15 min": {
+      "main": [
+        [
+          {
+            "node": "Fetch Express Entry",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch BC PNP",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch OINP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Express Entry": {
+      "main": [
+        [
+          {
+            "node": "Build EE Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch BC PNP": {
+      "main": [
+        [
+          {
+            "node": "Build BC PNP Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OINP": {
+      "main": [
+        [
+          {
+            "node": "Build OINP Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build EE Items": {
+      "main": [
+        [
+          {
+            "node": "Merge All Programs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build BC PNP Items": {
+      "main": [
+        [
+          {
+            "node": "Merge All Programs",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build OINP Items": {
+      "main": [
+        [
+          {
+            "node": "Merge All Programs",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge All Programs": {
+      "main": [
+        [
+          {
+            "node": "Build Story Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Story Card": {
+      "main": [
+        [
+          {
+            "node": "Check if posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if posted": {
+      "main": [
+        [
+          {
+            "node": "Is New?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New?": {
+      "main": [
+        [
+          {
+            "node": "Post to Telegram Channel",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post to X",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Telegram Channel": {
+      "main": [
+        [
+          {
+            "node": "Mark as posted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Image": {
+      "main": [
+        [
+          {
+            "node": "Render SVG to PNG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render SVG to PNG": {
+      "main": [
+        [
+          {
+            "node": "Create IG Story Container",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create IG Story Container": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Publish IG Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "31ed0674f1ed845475d221b96825475281c82d13bb39ee736e0f814d52e165b9"
+  }
+}
