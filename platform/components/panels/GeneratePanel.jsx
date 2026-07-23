@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
+import CompiledPackages from '@/components/CompiledPackages';
 import { requiredMissing } from '@/lib/schema';
 
 const DOCS = [
@@ -177,6 +178,8 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
           </ol>
         </div>
       )}
+
+      <CompiledPackages app={app} patchLocal={patchLocal} />
 
       <OfficialFormsPanel />
 

@@ -15,7 +15,11 @@ const RULES = [
   ['affidavit-support', /affidavit|support[ _-]?letter|sponsor/i],
   ['source-of-funds', /source[ _-]?of[ _-]?funds|bill[ _-]?of[ _-]?sale|title[ _-]?deed|property|sale[ _-]?deed/i],
   ['proof-of-funds', /bank|statement|fund|balance|saving|loan/i],
-  ['transcripts', /transcript|diploma|degree|certificat|marksheet|ریزنمرات/i],
+  ['cv', /\b(cv|resume|curriculum[ _-]?vitae)\b/i],
+  ['national-id', /birth[ _-]?certificate|national[ _-]?id|identity[ _-]?card|شناسنامه|کارت[ _-]?ملی/i],
+  ['title-deeds', /title[ _-]?deed|deed|sanad|سند/i],
+  ['transcripts', /transcript|diploma|degree|marksheet|ریزنمرات/i],
+  ['certificates', /certificate|certification|award|patent/i],
   ['language', /ielts|toefl|pte|celpip|duolingo|tef|tcf|language/i],
   ['job-offer', /job[ _-]?offer|employ|leave[ _-]?of[ _-]?absence|work[ _-]?experience/i],
   ['police-clearance', /police|clearance|character[ _-]?certificate|criminal/i],
@@ -44,10 +48,14 @@ export const CATEGORY_KEYS = [
   'proof-of-funds',
   'source-of-funds',
   'affidavit-support',
+  'title-deeds',
   'gic',
   'deposit',
   'photo',
   'transcripts',
+  'certificates',
+  'cv',
+  'national-id',
   'language',
   'sop',
   'job-offer',
