@@ -44,8 +44,17 @@ async function addContent(doc, font, item) {
   if (mime === 'application/pdf') {
     try {
       const src = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
-      const pages = await doc.copyPages(src, src.getPageIndices());
-      pages.forEach((p) => doc.addPage(p));
+      // Normalize EVERY source page onto a uniform Letter page (same width),
+      // scaling its content to fit and centering it, so the compiled document
+      // has consistent page dimensions regardless of the scan sizes.
+      const embedded = await doc.embedPages(src.getPages());
+      for (const ep of embedded) {
+        const page = doc.addPage([PAGE_W, PAGE_H]);
+        const scale = Math.min(PAGE_W / ep.width, PAGE_H / ep.height);
+        const w = ep.width * scale;
+        const h = ep.height * scale;
+        page.drawPage(ep, { x: (PAGE_W - w) / 2, y: (PAGE_H - h) / 2, width: w, height: h });
+      }
       return;
     } catch {
       await addNotePage(doc, font, `"${filename}" could not be embedded automatically; include it manually.`);
