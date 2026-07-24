@@ -372,6 +372,39 @@
     },
     {
       "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "7 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1600,
+        900
+      ],
+      "id": "trg-schedule-wp",
+      "name": "Hourly (WordPress)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code node: \"Update WordPress Page\" (runOnceForAllItems)\n// Ported from the Canada Draws spec (Layer 2). Fetches the unified endpoint\n// (Express Entry + 9 provinces), fingerprints the DATA ONLY, and rewrites the\n// WordPress page only when the draw data actually changed.\n//\n// >>> FILL THESE THREE IN (one time) <<<\nconst APPS_SCRIPT_URL = '__PASTE_UNIFIED_ENDPOINT_EXEC_URL__';               // unified Apps Script /exec URL (rounds + pnpDraws)\nconst WP_BASE  = '__PASTE_WP_PAGE_REST_URL__';                              // e.g. https://your-site/wp-json/wp/v2/pages/123\nconst WP_AUTH  = '__PASTE_WP_BASIC_AUTH__';                                 // 'Basic ' + base64('user:application-password')\nconst EE_LIMIT = 15;\n\nif (APPS_SCRIPT_URL.indexOf('PASTE_') !== -1 || WP_BASE.indexOf('PASTE_') !== -1 || WP_AUTH.indexOf('PASTE_') !== -1) {\n  return [{ json: { updated: false, reason: 'not configured — fill APPS_SCRIPT_URL / WP_BASE / WP_AUTH in this node' } }];\n}\n\n// Persian (Farsi) digit conversion — presentation requirement\nconst faDigits = '۰۱۲۳۴۵۶۷۸۹';\nconst faN = (s) => String(s == null ? '' : s).replace(/[0-9]/g, (d) => faDigits[+d]);\n\n// djb2 hash, base36 — any stable hash is fine\nfunction hash(str) { let h = 5381; for (let i = 0; i < str.length; i++) { h = ((h << 5) + h) ^ str.charCodeAt(i); } return (h >>> 0).toString(36); }\nfunction esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\n\n// Province code -> [Farsi display name, accent colour]\nconst PROV_META = {\n  ON: ['انتاریو (OINP)', '#0f766e'], BC: ['بریتیش کلمبیا (BC PNP)', '#1d4ed8'],\n  AB: ['آلبرتا (AAIP)', '#c2410c'], SK: ['ساسکاچوان (SINP)', '#15803d'],\n  MB: ['مانیتوبا (MPNP)', '#6d28d9'], NS: ['نوا اسکوشیا (NSNP)', '#0e7490'],\n  NB: ['نیوبرانزویک (NBPNP)', '#b91c1c'], PE: ['جزیره پرنس ادوارد (PEI)', '#be185d'],\n  NL: ['نیوفاندلند (NLPNP)', '#4338ca']\n};\n\n// ---- 1. fetch normalized data (use n8n helper, not global fetch) ----\nconst gs = await this.helpers.httpRequest({ method: 'GET', url: APPS_SCRIPT_URL, json: true });\nconst rounds = (gs.rounds || []).slice(0, EE_LIMIT);\nconst pnp = gs.pnpDraws || {};\n\n// ---- 2. fingerprint DATA ONLY (timestamps excluded) ----\nconst sig = [];\nsig.push('EE:' + rounds.map((r) => [r.drawNumber, r.drawDateFull, r.drawName, r.drawSize, r.drawCRS].join('~')).join('|'));\nfor (const c of Object.keys(PROV_META)) {\n  const p = pnp[c] || {}; const rows = p.draws || [];\n  sig.push('P-' + c + ':' + (p.stale ? 'S' : 'F') + ':' + rows.slice(0, 8).map((r) => [r.date, r.invitations, r.score, r.stream].join('~')).join('|'));\n}\nconst fingerprint = hash(sig.join('||'));\n\n// ---- 3. read current page + stored fingerprint (?context=edit -> content.raw) ----\nconst page = await this.helpers.httpRequest({ method: 'GET', url: WP_BASE + '?context=edit', headers: { Authorization: WP_AUTH }, json: true });\nconst cur = (page.content && page.content.raw) || '';\nconst fpM = cur.match(/draws-fingerprint:([a-z0-9]+)/i);\n\n// ---- 4. unchanged? exit without writing ----\nif (fpM && fpM[1] === fingerprint) {\n  return [{ json: { updated: false, reason: 'no new draws — page left untouched', fingerprint } }];\n}\n\n// ---- 5. Express Entry as one unified table ----\nconst eeRows = rounds.map((r) =>\n  `<tr><td>#${faN(r.drawNumber)}</td><td>${faN(r.drawDateFull)}</td><td class=\"dw-type\">${esc(r.drawName)}</td><td>${faN(r.drawSize)}</td><td class=\"dw-crs\">${faN(r.drawCRS)}</td></tr>`\n).join('\\n');\nconst eeTable = `<div class=\"dw-panel\">\n  <table class=\"dw-table dw-table--ee\">\n    <thead><tr><th>شماره</th><th>تاریخ</th><th>نوع قرعه‌کشی</th><th>تعداد دعوت‌نامه</th><th>حداقل امتیاز CRS</th></tr></thead>\n    <tbody>\n${eeRows}\n    </tbody>\n  </table>\n</div>`;\n\n// ---- 6. one card per province ----\nfunction pnpCard(code) {\n  const [fa, accent] = PROV_META[code];\n  const prov = pnp[code] || {};\n  const draws = prov.draws || [];\n  const url = prov.url || '#';\n  const stale = prov.stale !== false;\n\n  if (!draws.length) {\n    return `<div class=\"dw-cat dw-pnp\" style=\"--accent:${accent}\">\n  <div class=\"dw-cat__head\"><h3 class=\"dw-cat__title\">${fa}</h3><span class=\"dw-latest-badge dw-pending\">در انتظار داده</span></div>\n  <div class=\"dw-pnp-empty\">در حال حاضر داده تأییدشده‌ای موجود نیست. <a href=\"${url}\" target=\"_blank\" rel=\"nofollow noopener\">بررسی در سایت رسمی ↗</a></div>\n</div>`;\n  }\n  const latest = draws[0];\n  const rows = draws.slice(0, 8).map((r) =>\n    `<tr><td>${faN(r.date || '—')}</td><td class=\"dw-type\">${esc(r.stream || '—')}</td><td>${faN(r.invitations || '—')}</td><td class=\"dw-crs\">${faN(r.score || '—')}</td></tr>`\n  ).join('');\n  const badge = stale\n    ? '<span class=\"dw-latest-badge\" style=\"background:#fef3c7;color:#b45309\">نیازمند بررسی</span>'\n    : '<span class=\"dw-latest-badge\" style=\"background:#dcfce7;color:#15803d\">به‌روز</span>';\n  const note = stale\n    ? `<div class=\"dw-stale-note\">⚠️ ممکن است این داده به‌روز نباشد. <a href=\"${url}\" target=\"_blank\" rel=\"nofollow noopener\">تأیید در سایت رسمی ↗</a></div>` : '';\n\n  return `<div class=\"dw-cat dw-pnp\" style=\"--accent:${accent}\">\n  <div class=\"dw-cat__head\"><h3 class=\"dw-cat__title\">${fa}</h3>${badge}</div>\n  <div class=\"dw-highlight\">\n    <div class=\"dw-hl-item\"><span class=\"dw-hl-label\">آخرین قرعه‌کشی</span><span class=\"dw-hl-val\">${faN(latest.date || '—')}</span></div>\n    <div class=\"dw-hl-item\"><span class=\"dw-hl-label\">دعوت‌نامه</span><span class=\"dw-hl-val\">${faN(latest.invitations || '—')}</span></div>\n    <div class=\"dw-hl-item\"><span class=\"dw-hl-label\">حداقل امتیاز</span><span class=\"dw-hl-val dw-hl-crs\">${faN(latest.score || '—')}</span></div>\n  </div>\n  <table class=\"dw-table\">\n    <thead><tr><th>تاریخ</th><th>استریم</th><th>دعوت</th><th>امتیاز</th></tr></thead>\n    <tbody>${rows}</tbody>\n  </table>\n  ${note}\n</div>`;\n}\nconst pnpCards = Object.keys(PROV_META).map(pnpCard).join('\\n');\n\n// Human-facing timestamp = ACTUAL RUN TIME (not newest draw date)\nconst runStamp = new Date().toLocaleString('en-CA', {\n  timeZone: 'America/Vancouver', month: 'long', day: 'numeric', year: 'numeric',\n  hour: 'numeric', minute: '2-digit'\n}) + ' (PT)';\n\nconst CSS = `<style>\n.dw-wrap{font-family:'Vazirmatn',Tahoma,sans-serif;direction:rtl;max-width:1080px;margin:0 auto}\n.dw-wrap *{box-sizing:border-box}\n.dw-hero{background:linear-gradient(135deg,#0f172a,#1e293b);color:#fff;border-radius:24px;padding:40px 24px;text-align:center;margin-bottom:16px}\n.dw-hero h2{font-size:30px;font-weight:800;margin:0 0 12px;color:#fff}\n.dw-hero p{color:#cbd5e1;font-size:16px;line-height:1.9;max-width:640px;margin:0 auto}\n.dw-updated{display:inline-block;margin-top:16px;background:rgba(59,130,246,.2);color:#93c5fd;border:1px solid rgba(59,130,246,.4);padding:6px 16px;border-radius:9999px;font-size:14px;font-weight:600}\n.dw-section-title{font-size:24px;font-weight:800;color:#0f172a;margin:32px 0 16px;padding-right:14px;border-right:5px solid #2563eb}\n.dw-section-title.pnp{border-right-color:#0f766e}\n.dw-panel{background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.07);padding:8px;overflow-x:auto}\n.dw-grid{display:grid;grid-template-columns:1fr;gap:20px}\n@media(min-width:768px){.dw-grid{grid-template-columns:1fr 1fr}}\n.dw-cat{background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.07);padding:20px;border-top:4px solid var(--accent,#2563eb)}\n.dw-cat__head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px}\n.dw-cat__title{font-size:18px;font-weight:700;color:#1e293b;margin:0}\n.dw-latest-badge{font-size:12px;font-weight:700;padding:4px 12px;border-radius:9999px;white-space:nowrap}\n.dw-pending{background:#f1f5f9;color:#94a3b8}\n.dw-highlight{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;background:#f8fafc;border-radius:14px;padding:14px;margin-bottom:14px}\n.dw-hl-item{display:flex;flex-direction:column;gap:2px}\n.dw-hl-label{font-size:12px;color:#64748b}\n.dw-hl-val{font-size:16px;font-weight:700;color:#0f172a}\n.dw-hl-crs{color:var(--accent,#2563eb);font-size:20px}\n.dw-table{width:100%;border-collapse:collapse;font-size:13px}\n.dw-table th{background:#f1f5f9;color:#475569;font-weight:700;padding:10px 8px;text-align:center;white-space:nowrap}\n.dw-table td{padding:10px 8px;text-align:center;border-bottom:1px solid #f1f5f9;color:#334155}\n.dw-table tr:last-child td{border-bottom:none}\n.dw-table--ee td.dw-type{text-align:right;font-size:12px;color:#475569;max-width:280px}\n.dw-table--ee tbody tr:first-child{background:#eff6ff;font-weight:700}\n.dw-crs{font-weight:800;color:#2563eb}\n.dw-pnp-empty{color:#94a3b8;font-size:14px;text-align:center;padding:24px 8px;background:#f8fafc;border-radius:12px;border:1px dashed #e2e8f0}\n.dw-stale-note{margin-top:10px;font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 10px;line-height:1.7}\n.dw-stale-note a{color:#b45309;font-weight:700}\n.dw-note{background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:14px 18px;color:#92400e;font-size:14px;line-height:1.9;margin-top:24px}\n</style>`;\n\nconst html = `<!-- wp:html -->\n<!-- draws-fingerprint:${fingerprint} -->\n${CSS}\n<div class=\"dw-wrap\">\n<div class=\"dw-hero\">\n<h2>آخرین قرعه‌کشی‌های مهاجرت به کانادا</h2>\n<p>جدیدترین نتایج قرعه‌کشی‌های اکسپرس انتری (Express Entry) و برنامه‌های نامزدی استانی (PNP) کانادا.</p>\n<span class=\"dw-updated\">آخرین به‌روزرسانی: ${runStamp}</span>\n</div>\n\n<h2 class=\"dw-section-title\">🍁 اکسپرس انتری (Express Entry)</h2>\n${eeTable}\n\n<h2 class=\"dw-section-title pnp\">🏛️ برنامه‌های نامزدی استانی (PNP)</h2>\n<div class=\"dw-grid\">\n${pnpCards}\n</div>\n\n<div class=\"dw-note\">📌 داده‌های اکسپرس انتری از منبع رسمی IRCC و داده‌های استانی از سایت‌های رسمی هر استان به‌صورت خودکار دریافت می‌شوند. برای تصمیم‌گیری نهایی، همیشه منبع رسمی را بررسی کنید.</div>\n</div>\n<!-- /wp:html -->`;\n\n// ---- 7. single write ----\nconst result = await this.helpers.httpRequest({\n  method: 'POST', url: WP_BASE,\n  headers: { Authorization: WP_AUTH, 'Content-Type': 'application/json' },\n  body: { content: html }, json: true\n});\n\nreturn [{ json: {\n  updated: true, reason: 'new draw data', pageId: result.id, runStamp, fingerprint,\n  eeRows: rounds.length,\n  latestEE: rounds[0] ? rounds[0].drawDateFull : null,\n  bcLatest: (pnp.BC && pnp.BC.draws && pnp.BC.draws[0]) ? pnp.BC.draws[0].date : null,\n  bcStale: pnp.BC ? pnp.BC.stale : null\n} }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1360,
+        900
+      ],
+      "id": "code-wp",
+      "name": "Update WordPress Page"
+    },
+    {
+      "parameters": {
         "jsCode": "// Code node: \"Prepare Image\" — runs once per item.\n// Skips program updates (no story image); otherwise base64-encodes the SVG for\n// the HCTI render step. References Build Story Card via paired item.\nconst j = $('Build Story Card').item.json;\nif (j.skipInstagram || !j.svg) return [];\nconst svgBase64 = Buffer.from(j.svg).toString('base64');\nreturn [{\n  json: Object.assign({}, j, {\n    svgBase64: svgBase64,\n    dataUri: 'data:image/svg+xml;base64,' + svgBase64\n  })\n}];\n"
       },
       "type": "n8n-nodes-base.code",
@@ -462,9 +495,9 @@
     },
     {
       "parameters": {
-        "content": "## Unified Draw Notifier (EE + OINP + BC PNP)\n\nRuns every 15 min. Fetches all three programs, normalises them, dedups against the `posted_draws` data table, then auto-posts to Telegram, X, LinkedIn, and Instagram (story image).\n\n**Before enabling:** paste your logo base64 into the `LOGO_B64` constant in **Build Story Card**, and DEACTIVATE the old EE and BC PNP/OINP flows to avoid double posting.",
-        "height": 260,
-        "width": 460,
+        "content": "## Unified Draw System\n\n**Social branch** (every 15 min): fetches EE + OINP + BC PNP, dedups via `posted_draws`, auto-posts to Telegram, X, LinkedIn, Instagram.\n\n**WordPress branch** (hourly, bottom): fetches the unified endpoint (EE + 9 provinces), fingerprint-gated — only rewrites the page when draw data changed.\n\n**Before enabling:** (1) paste logo into `LOGO_B64` in **Build Story Card**; (2) fill the 3 constants in **Update WordPress Page**; (3) deactivate the old EE / BC PNP-OINP / WordPress flows to avoid duplicates.",
+        "height": 300,
+        "width": 470,
         "color": 4
       },
       "type": "n8n-nodes-base.stickyNote",
@@ -673,6 +706,17 @@
         [
           {
             "node": "Publish IG Story",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly (WordPress)": {
+      "main": [
+        [
+          {
+            "node": "Update WordPress Page",
             "type": "main",
             "index": 0
           }

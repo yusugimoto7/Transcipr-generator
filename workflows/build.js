@@ -11,6 +11,7 @@ const jsBuildBCPNP = read('buildBCPNP.js');
 const jsBuildOINP = read('buildOINP.js');
 const jsBuildStory = read('buildStory.js');
 const jsPrepareImage = read('prepareImage.js');
+const jsUpdateWordPress = read('updateWordPress.js');
 
 // Shared constants pulled from the two existing flows.
 const EE_URL = 'https://script.google.com/macros/s/AKfycbw1PZkjKloQc2ghagiP0bVTuWI26VQMnNDuUUQhEupXMLNrHx3mZVbGTvTDtOcovdLKng/exec';
@@ -106,6 +107,14 @@ push({
   type: 'n8n-nodes-base.dataTable', typeVersion: 1.1, position: [420, 40], id: 'dt-insert', name: 'Mark as posted'
 });
 
+// ---- WordPress auto-updating page (independent hourly trigger, fingerprint-gated) ----
+push({
+  parameters: { rule: { interval: [{ field: 'cronExpression', expression: '7 * * * *' }] } },
+  type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.3,
+  position: [-1600, 900], id: 'trg-schedule-wp', name: 'Hourly (WordPress)'
+});
+push({ parameters: { jsCode: jsUpdateWordPress }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1360, 900], id: 'code-wp', name: 'Update WordPress Page' });
+
 // ---- Instagram story chain ----
 push({ parameters: { jsCode: jsPrepareImage }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [140, 560], id: 'code-prepimg', name: 'Prepare Image', executeOnce: false });
 push({
@@ -131,7 +140,7 @@ push({
 
 // ---- Sticky note ----
 nodes.push({
-  parameters: { content: '## Unified Draw Notifier (EE + OINP + BC PNP)\n\nRuns every 15 min. Fetches all three programs, normalises them, dedups against the `posted_draws` data table, then auto-posts to Telegram, X, LinkedIn, and Instagram (story image).\n\n**Before enabling:** paste your logo base64 into the `LOGO_B64` constant in **Build Story Card**, and DEACTIVATE the old EE and BC PNP/OINP flows to avoid double posting.', height: 260, width: 460, color: 4 },
+  parameters: { content: '## Unified Draw System\n\n**Social branch** (every 15 min): fetches EE + OINP + BC PNP, dedups via `posted_draws`, auto-posts to Telegram, X, LinkedIn, Instagram.\n\n**WordPress branch** (hourly, bottom): fetches the unified endpoint (EE + 9 provinces), fingerprint-gated — only rewrites the page when draw data changed.\n\n**Before enabling:** (1) paste logo into `LOGO_B64` in **Build Story Card**; (2) fill the 3 constants in **Update WordPress Page**; (3) deactivate the old EE / BC PNP-OINP / WordPress flows to avoid duplicates.', height: 300, width: 470, color: 4 },
   type: 'n8n-nodes-base.stickyNote', typeVersion: 1, position: [-1600, -40], id: 'sticky-doc', name: 'About'
 });
 
@@ -158,7 +167,9 @@ const links = [
   conn('Prepare Image', 'Render SVG to PNG'),
   conn('Render SVG to PNG', 'Create IG Story Container'),
   conn('Create IG Story Container', 'Wait'),
-  conn('Wait', 'Publish IG Story')
+  conn('Wait', 'Publish IG Story'),
+  // WordPress page branch (independent trigger)
+  conn('Hourly (WordPress)', 'Update WordPress Page')
 ];
 
 const connections = {};

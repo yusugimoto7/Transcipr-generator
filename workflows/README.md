@@ -1,9 +1,13 @@
-# Unified Draw Notifier (Express Entry + OINP + BC PNP)
+# Unified Draw System (social notifier + auto-updating WordPress page)
 
-A single n8n workflow that auto-posts **every** Express Entry, OINP, and BC PNP
-draw to **Telegram, X (Twitter), LinkedIn, and Instagram** (story image) — no
-manual approval. It merges the behaviour of the two original flows (the EE
-auto-poster and the BC PNP/OINP draft notifier) into one.
+One n8n workflow with **two independent branches** off their own schedules:
+
+1. **Social notifier** (every 15 min) — auto-posts **every** Express Entry,
+   OINP, and BC PNP draw to **Telegram, X, LinkedIn, and Instagram** (story
+   image), deduped so nothing posts twice. Merges the two original flows.
+2. **WordPress page** (hourly at `:07`) — rebuilds a Persian page showing
+   Express Entry + **all 9 provinces**, but only writes when the draw data
+   actually changed (fingerprint-gated). Ported from the Canada Draws spec.
 
 ## Files
 
@@ -16,6 +20,7 @@ auto-poster and the BC PNP/OINP draft notifier) into one.
 | `src/buildOINP.js` | Normalises OINP draws + program updates. |
 | `src/buildStory.js` | Builds the Instagram story SVG (shared card). **Paste your logo here.** |
 | `src/prepareImage.js` | Base64-encodes the SVG for the HCTI render step; skips update posts. |
+| `src/updateWordPress.js` | WordPress branch: fetch unified endpoint, fingerprint, rewrite page only on change. **Fill 3 constants.** |
 
 ## Flow
 
@@ -49,7 +54,29 @@ Every 15 min ─┬─ Fetch Express Entry ─ Build EE Items ───┐
    Auth on **Render SVG to PNG**.
 3. **Refresh the Instagram token** in `Create IG Story Container` /
    `Publish IG Story` if the long-lived token has rotated.
-4. **Deactivate the two old flows** (the EE auto-poster and the BC PNP/OINP
-   draft notifier) so draws aren't posted twice.
+4. **Fill the WordPress branch**: open the **Update WordPress Page** node and
+   set the three constants at the top:
+   - `APPS_SCRIPT_URL` — the unified Apps Script `/exec` URL (the one that
+     returns `rounds` + `pnpDraws` for all 9 provinces).
+   - `WP_BASE` — `https://your-site/wp-json/wp/v2/pages/<PAGE_ID>`.
+   - `WP_AUTH` — `Basic ` + base64(`user:application-password`). The WP user
+     needs the `unfiltered_html` capability so the `<style>` block survives.
+   Until filled, this branch no-ops safely (returns "not configured").
+5. **Deactivate the old flows** (EE auto-poster, BC PNP/OINP draft notifier,
+   and the standalone Canada-Draws WordPress workflow) so nothing runs twice.
 
 Then activate the workflow.
+
+## WordPress branch notes (from the spec)
+
+- **Fingerprint excludes timestamps** — only draw data is hashed, so idle runs
+  don't rewrite the page. The hash lives in an HTML comment on the page itself
+  (no database needed).
+- **Staleness safeguard preserved** — a province with no fresh data (>60 days,
+  empty, or unparseable) renders an amber "needs review" badge + official-source
+  link instead of a bare number. Do not remove this; it's a liability guard for
+  a regulated (RCIC) publisher.
+- **Two triggers, one endpoint** — the WordPress branch runs hourly (not every
+  15 min) because the unified endpoint scrapes ~10 government pages per call;
+  sub-15-min polling risks IP blocking. Draws happen every 1–2 weeks, so hourly
+  is plenty.
