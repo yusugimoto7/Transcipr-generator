@@ -647,6 +647,21 @@ function sourceHost(url) {
   }
 }
 
+// Format a news topic's "YYYY-MM-DD" publication date as e.g. "Jul 22, 2026".
+// Returns "" for evergreen topics (no/empty/invalid date).
+function formatNewsDate(d) {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return "";
+  try {
+    return new Date(d + "T00:00:00").toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch (_) {
+    return d;
+  }
+}
+
 function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
   const isEU = topic.page === "EU";
@@ -708,23 +723,30 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
           {topic.why_now}
         </div>
         {topic.source_url && (
-          <a
-            href={topic.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            // Stop the card's drag handler from swallowing the tap so the link
-            // actually opens (in a new tab) instead of starting a swipe.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, marginTop: 10,
-              fontSize: 12, fontWeight: 600, color: C.slate,
-              fontFamily: "'Space Grotesk', sans-serif", textDecoration: "underline",
-              direction: "ltr", cursor: "pointer",
-            }}
-          >
-            🔗 {sourceHost(topic.source_url)} ↗
-          </a>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+            <a
+              href={topic.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              // Stop the card's drag handler from swallowing the tap so the link
+              // actually opens (in a new tab) instead of starting a swipe.
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 12, fontWeight: 600, color: C.slate,
+                fontFamily: "'Space Grotesk', sans-serif", textDecoration: "underline",
+                direction: "ltr", cursor: "pointer",
+              }}
+            >
+              🔗 {sourceHost(topic.source_url)} ↗
+            </a>
+            {formatNewsDate(topic.date) && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", direction: "ltr" }}>
+                📅 {formatNewsDate(topic.date)}
+              </span>
+            )}
+          </div>
         )}
         {/* heat */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
@@ -964,20 +986,27 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
           {topic.title_fa}
         </div>
         {topic.source_url && (
-          <a
-            href={topic.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12,
-              fontSize: 12.5, fontWeight: 600, color: "#fff",
-              fontFamily: "'Space Grotesk', sans-serif", textDecoration: "none",
-              direction: "ltr", background: C.slate, border: `1px solid ${C.slate}`,
-              borderRadius: 9, padding: "8px 12px",
-            }}
-          >
-            🔗 Read the source: {sourceHost(topic.source_url)} ↗
-          </a>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <a
+              href={topic.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                fontSize: 12.5, fontWeight: 600, color: "#fff",
+                fontFamily: "'Space Grotesk', sans-serif", textDecoration: "none",
+                direction: "ltr", background: C.slate, border: `1px solid ${C.slate}`,
+                borderRadius: 9, padding: "8px 12px",
+              }}
+            >
+              🔗 Read the source: {sourceHost(topic.source_url)} ↗
+            </a>
+            {formatNewsDate(topic.date) && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "rgba(242,229,192,0.65)", fontFamily: "'Space Grotesk', sans-serif", direction: "ltr" }}>
+                📅 {formatNewsDate(topic.date)}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
