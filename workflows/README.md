@@ -20,7 +20,7 @@ One n8n workflow with **two independent branches** off their own schedules:
 | `src/buildEE.js` | Normalises the latest Express Entry round. |
 | `src/buildBCPNP.js` | Normalises BC PNP Skills + Entrepreneur draws. |
 | `src/buildOINP.js` | Normalises OINP draws + program updates. |
-| `src/buildAlberta.js` | Parses the Alberta AAIP draw table (fetched from alberta.ca) — newest 3 draws. |
+| `src/buildAlberta.js` | Parses the Alberta AAIP draw table (fetched from alberta.ca) — one weekly digest post. |
 | `src/buildStory.js` | Builds the Instagram story SVG (shared card). **Paste your logo here.** |
 | `src/prepareImage.js` | Base64-encodes the SVG for the HCTI render step; skips update posts. |
 | `src/updateWordPress.js` | WordPress branch: fetch unified endpoint, fingerprint, rewrite page only on change. **Fill 3 constants.** |
@@ -44,11 +44,12 @@ Every 15 min ─┬─ Fetch Express Entry ─ Build EE Items ───┐
   (which skip Instagram) still get recorded.
 - **Alberta**: fetched directly from `alberta.ca/aaip-processing-information`
   (a clean HTML draw table) and parsed in `Build Alberta Items` — no Apps Script
-  needed. It emits the newest **3** draws each run as candidates; dedup posts
-  only the genuinely new ones, so the **first activation posts up to 3 Alberta
-  draws once**, then one per new draw after that. Alberta draws happen several
-  times a week across streams (Opportunity, Express Entry pathways, Health Care,
-  Rural Renewal, Tourism) — expect more Alberta posts than the other programs.
+  needed. Because Alberta runs several draws a week across many streams, it posts
+  **one weekly digest** rather than one post per draw: each week it summarises the
+  most recently completed week (Mon–Sun) into a single post listing every draw,
+  deduped by week (`alberta-week::<Monday>`). The Instagram card shows that week's
+  totals (draw count + total invitations; "Less than 10" values are listed per-draw
+  but excluded from the sum).
 - **Instagram**: OINP program *updates* have no numbers, so they skip the story
   image and post to Telegram/X/LinkedIn only. Draws with numbers get the story
   card re-labelled per program (min score + ITAs, etc.).
