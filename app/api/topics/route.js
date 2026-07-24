@@ -1,6 +1,6 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiTopics, openaiRewrite } from "../../../lib/openai";
-import { sheetEnabled, getSeen, appendRows, normalizeUrl } from "../../../lib/sheet";
+import { sheetEnabled, getSeen, normalizeUrl } from "../../../lib/sheet";
 import { fetchNews } from "../../../lib/news";
 import {
   topicPrompt,
@@ -140,15 +140,10 @@ async function generate(clientExclude) {
   const out = finalize(list, today, seenUrlSet);
   if (!out.length) throw new Error("parse"); // nothing usable at all
 
-  // Log only real news (evergreens may recur) to the durable history.
-  if (seenUrlSet) {
-    const toLog = out.filter((t) => !t.evergreen);
-    if (toLog.length) {
-      try {
-        await appendRows(toLog);
-      } catch (_) {}
-    }
-  }
+  // NOTE: topics are NOT logged to the durable Sheet here. A suggested topic is
+  // only recorded once the user actually acts on it — an APPROVED topic is sent
+  // to /api/seen by the client. This way topics you never reached stay
+  // available next run, and the Sheet holds only what you approved.
 
   cache = { topics: out, timestamp: Date.now(), provider };
   return out;

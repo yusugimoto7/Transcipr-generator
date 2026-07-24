@@ -121,6 +121,38 @@ function isSeen(t, seenTitleSet, seenUrlSet) {
   return seenTitleSet.has(topicKey(t)) || (uk && seenUrlSet.has(uk));
 }
 
+// Mark a topic as seen ON THIS DEVICE — called when the user acts on a card
+// (approve OR reject), never at load time. Topics the user never reaches stay
+// unseen and can appear again. Evergreen cards are never burned.
+function markSeenLocal(topic) {
+  if (!topic || topic.evergreen) return;
+  const seen = loadSeen();
+  seen.push({ key: topicKey(topic), url: urlKey(topic), en: topic.title_en || topic.title_fa });
+  saveSeen(seen);
+}
+
+// Reverse a local "seen" mark (used by Undo) so the card can be acted on again.
+function unmarkSeenLocal(topic) {
+  if (!topic || topic.evergreen) return;
+  const k = topicKey(topic);
+  const u = urlKey(topic);
+  const seen = loadSeen().filter((s) => s.key !== k && (!u || s.url !== u));
+  saveSeen(seen);
+}
+
+// Record an APPROVED topic to the durable cross-device history (Google Sheet).
+// Only approved topics are logged there — fire-and-forget.
+async function recordApprovedRemote(topic) {
+  if (!topic || topic.evergreen) return;
+  try {
+    await fetch("/api/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic }),
+    });
+  } catch (_) {}
+}
+
 async function fetchScript(topic, lang) {
   const res = await fetch("/api/script", {
     method: "POST",
@@ -234,6 +266,9 @@ export default function App() {
   const undo = () => {
     const prev = historyRef.current.pop();
     if (!prev) return;
+    // The card that was acted on is the one at the restored index — un-mark it
+    // locally so it's available again.
+    unmarkSeenLocal(topics[prev.index]);
     setExiting(null);
     setDx(0);
     setIndex(prev.index);
@@ -261,22 +296,11 @@ export default function App() {
       // "Refresh trends" button forces a live regenerate.
       const parsed = await fetchTopics(exclude, force);
 
-      // STRICT: drop every topic whose title OR source article was already
-      // shown. A topic/article is shown only once, ever, on this device.
+      // Drop topics already ACTED ON (approved/rejected) on this device or
+      // approved on any device. Topics are NOT marked seen just for appearing —
+      // only when the user swipes them (see markSeenLocal), so anything left in
+      // the deck stays available next run.
       const fresh = parsed.filter((t) => !isSeen(t, seenTitles, seenUrls));
-
-      // Remember this batch so it never comes back — but NOT evergreen cards,
-      // which are meant to recur.
-      saveSeen([
-        ...seen,
-        ...fresh
-          .filter((t) => !t.evergreen)
-          .map((t) => ({
-            key: topicKey(t),
-            url: urlKey(t),
-            en: t.title_en || t.title_fa,
-          })),
-      ]);
 
       resetHistory();
       setTopics(fresh);
@@ -292,10 +316,6 @@ export default function App() {
       const seenTitles = new Set(seen.map((s) => s.key));
       const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
       const freshFallback = FALLBACK.filter((t) => !isSeen(t, seenTitles, seenUrls));
-      saveSeen([
-        ...seen,
-        ...freshFallback.map((t) => ({ key: topicKey(t), url: urlKey(t), en: t.title_en || t.title_fa })),
-      ]);
       resetHistory();
       setTopics(freshFallback);
       setIndex(0);
@@ -376,6 +396,10 @@ export default function App() {
   const doReject = () => {
     if (exiting) return;
     pushHistory();
+    // Seen on this device only (so it won't reappear here), but NOT written to
+    // the durable Sheet — rejects aren't content, and other devices may still
+    // see it.
+    markSeenLocal(current);
     setReviewedCount((n) => n + 1);
     setExiting("left");
     setTimeout(advance, 260);
@@ -387,6 +411,10 @@ export default function App() {
     setReviewedCount((n) => n + 1);
     setApprovedCount((n) => n + 1);
     const topic = current;
+    // Approved: remember it on this device AND in the durable cross-device
+    // history (never repeat it — it's content you're making).
+    markSeenLocal(topic);
+    recordApprovedRemote(topic);
     setExiting("right");
     setScriptTopic(topic);
     setScripts({ fa: "", en: "" });
