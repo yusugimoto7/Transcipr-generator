@@ -120,6 +120,37 @@
     },
     {
       "parameters": {
+        "url": "https://www.ontario.ca/page/ontario-immigrant-nominee-program-oinp-invitations-apply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (DrawsBot)"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1360,
+        1000
+      ],
+      "id": "http-oinp-ent",
+      "name": "Fetch OINP Entrepreneur",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
         "jsCode": "// Code node: \"Build EE Items\"\n// Normalises the latest Express Entry round into the shared item shape.\n// Dedup is handled downstream by the posted_draws data table.\nconst src = $input.all();\nconst round = src.length ? (src[0].json.rounds || [])[0] : null;\nif (!round) return [];\n\nconst currentDrawNumber = String(round.drawNumber);\n\nconst drawNameRaw = round.drawName || round.drawText || 'نامشخص';\nconst drawName = drawNameRaw.replace(/,?\\s*\\d{4}-version\\s*\\d+/i, '').trim();\nconst drawDate = round.drawDateFull || round.drawDate || 'نامشخص';\nconst drawSize = round.drawSize || round.drawSizeText || 'نامشخص';\nconst drawCRS  = round.drawCRS  || round.drawCutOff || round.drawCutoff || round.crs || 'نامشخص';\n\nconst categoryMap = [\n  { en: 'provincial nominee program',                    fa: 'برنامه نامزدی استانی' },\n  { en: 'canadian experience class',                     fa: 'کلاس سابقه کار کانادایی' },\n  { en: 'french-language proficiency',                   fa: 'تسلط به زبان فرانسوی' },\n  { en: 'french language proficiency',                   fa: 'تسلط به زبان فرانسوی' },\n  { en: 'healthcare and social services',                fa: 'مشاغل بهداشت و خدمات اجتماعی' },\n  { en: 'healthcare occupations',                        fa: 'مشاغل بهداشت و درمان' },\n  { en: 'science, technology, engineering and math',     fa: 'مشاغل علوم، فناوری، مهندسی و ریاضی (STEM)' },\n  { en: 'stem occupations',                              fa: 'مشاغل STEM' },\n  { en: 'trade occupations',                             fa: 'مشاغل فنی و حرفه‌ای' },\n  { en: 'trades occupations',                            fa: 'مشاغل فنی و حرفه‌ای' },\n  { en: 'education occupations',                         fa: 'مشاغل آموزشی' },\n  { en: 'transport occupations',                         fa: 'مشاغل حمل و نقل' },\n  { en: 'agriculture and agri-food',                     fa: 'مشاغل کشاورزی و صنایع غذایی' },\n  { en: 'physicians with canadian work experience',      fa: 'پزشکان با سابقه کار کانادایی' },\n  { en: 'senior managers with canadian work experience', fa: 'مدیران ارشد با سابقه کار کانادایی' },\n  { en: 'researchers with canadian work experience',     fa: 'پژوهشگران با سابقه کار کانادایی' },\n  { en: 'skilled military recruits',                     fa: 'سربازان متخصص استخدام شده' },\n  { en: 'federal skilled worker',                        fa: 'برنامه فدرال نیروی کار متخصص' },\n  { en: 'federal skilled trades',                        fa: 'برنامه فدرال مشاغل فنی' },\n  { en: 'general',                                       fa: 'دراو عمومی' },\n  { en: 'no program specified',                          fa: 'بدون برنامه مشخص' }\n];\nfunction getPersianCategory(englishName) {\n  if (!englishName) return 'دسته‌بندی نامشخص';\n  const lower = String(englishName).toLowerCase();\n  for (const entry of categoryMap) {\n    if (lower.includes(entry.en)) return entry.fa;\n  }\n  return englishName;\n}\nconst drawNameFa = getPersianCategory(drawName);\n\nconst link = 'https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/rounds-invitations.html';\nconst site = 'www.sugimotovisa.com';\n\nconst telegramText = `📢 <b>نتیجه جدیدترین دراو اکسپرس انتری</b>\n<b>اقامت دائم کانادا (PR)</b> 🇨🇦\n\n🗓 <b>تاریخ برگزاری:</b> <code>${drawDate}</code>\n🎯 <b>دسته‌بندی انتخاب:</b> <b>${drawNameFa}</b>\n\n📊 <b>آمار این دوره:</b>\n🔹 تعداد دعوت‌نامه صادر شده: <b>${drawSize}</b> نفر\n🔹 حداقل امتیاز قبولی (CRS): <b>${drawCRS}</b> امتیاز\n\n🔗 <a href=\"${link}\">مشاهده جزئیات در سایت رسمی اداره مهاجرت</a>\n\n🌐 ${site}`;\n\nconst xPostText = `📢 دراو جدید اکسپرس انتری 🇨🇦\n🗓 ${drawDate}\n🎯 ${drawNameFa}\n🔹 دعوت‌نامه: ${drawSize} نفر\n🔹 حداقل CRS: ${drawCRS}\n${link}`;\n\nconst linkedinText = `📢 نتیجه جدیدترین دراو اکسپرس انتری — اقامت دائم کانادا (PR) 🇨🇦\n\n🗓 تاریخ برگزاری: ${drawDate}\n🎯 دسته‌بندی انتخاب: ${drawNameFa}\n🔹 تعداد دعوت‌نامه صادر شده: ${drawSize} نفر\n🔹 حداقل امتیاز قبولی (CRS): ${drawCRS}\n\n🔗 جزئیات در سایت رسمی اداره مهاجرت:\n${link}\n\n🌐 ${site}\n#ExpressEntry #مهاجرت_کانادا #اقامت_کانادا #سوگیموتو_ویزا`;\n\nconst igCaption = `نتیجه جدیدترین دراو اکسپرس انتری 🇨🇦\\n\\nتاریخ برگزاری: ${drawDate}\\nدسته‌بندی انتخاب: ${drawNameFa}\\nتعداد دعوت‌نامه: ${drawSize} نفر\\nحداقل امتیاز CRS: ${drawCRS}\\n\\nبرای مشاوره: ${site}\\n\\n#اکسپرس_انتری #مهاجرت_کانادا #اقامت_کانادا #سوگیموتو_ویزا #PR #ExpressEntry`;\n\nreturn [{\n  json: {\n    program: 'express-entry',\n    dedup_key: currentDrawNumber,\n    final_post_text: telegramText,\n    x_post_text: xPostText,\n    linkedin_text: linkedinText,\n    ig_caption: igCaption,\n    skipInstagram: false,\n    // shared story-card fields\n    headingLine1: 'آخرین Draw',\n    headingLine2: 'اکسپرس انتری',\n    headingLine3: 'اقامت دائم کانادا PR',\n    statLeftValue: String(drawSize),\n    statLeftLabel: 'تعداد دعوتنامه',\n    statRightValue: String(drawCRS),\n    statRightLabel: 'نمره آخرین نفر قبولی',\n    categoryFa: drawNameFa,\n    categoryEn: drawName,\n    dateText: String(drawDate),\n    // data-table meta\n    dt_name: drawName,\n    dt_crs: String(drawCRS),\n    dt_size: String(drawSize)\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
@@ -172,8 +203,21 @@
     },
     {
       "parameters": {
+        "jsCode": "// Code node: \"Build OINP Entrepreneur Items\"\n// Parses the OINP \"Entrepreneur stream\" invitation tables (fetched from\n// ontario.ca as text) and posts the latest entrepreneur draw — but ONLY if it\n// is recent (<= STALE_DAYS). OINP's Entrepreneur stream has not drawn since\n// Sept 2023, so this stays silent until Ontario resumes entrepreneur draws,\n// then auto-posts. Dedup by draw date via the posted_draws table.\nconst STALE_DAYS = 90;\n\nfunction esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction stripTags(h) {\n  return String(h).replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\\s+/g, ' ').trim();\n}\nfunction toISO(s) {\n  const t = Date.parse(s);\n  if (isNaN(t)) return '';\n  const d = new Date(t);\n  const m = ('0' + (d.getMonth() + 1)).slice(-2);\n  const day = ('0' + d.getDate()).slice(-2);\n  return d.getFullYear() + '-' + m + '-' + day;\n}\n\nconst src = $input.all();\nconst first = src.length ? src[0].json : null;\nconst html = first ? (first.data || first.body || (typeof first === 'string' ? first : '')) : '';\nif (!html) return [];\n\n// Only tables that sit under an \"Entrepreneur stream\" <h3> — scoped so worker\n// draws are never picked up.\nconst dateRe = /^[A-Z][a-z]+ \\d{1,2},\\s*20\\d{2}$/;\nconst draws = [];\nconst chunks = html.split(/<h3[^>]*>/i);\nchunks.forEach(function (chunk) {\n  if (!/^\\s*Entrepreneur stream\\s*<\\/h3>/i.test(chunk)) return;\n  const tm = chunk.match(/<table[\\s\\S]*?<\\/table>/i);\n  if (!tm) return;\n  const trRe = /<tr[^>]*>([\\s\\S]*?)<\\/tr>/gi;\n  let tr;\n  while ((tr = trRe.exec(tm[0])) !== null) {\n    const cells = [];\n    const tdRe = /<td[^>]*>([\\s\\S]*?)<\\/td>/gi;\n    let td;\n    while ((td = tdRe.exec(tr[1])) !== null) cells.push(stripTags(td[1]));\n    if (cells.length < 3) continue;\n    if (!dateRe.test(cells[0])) continue;\n    draws.push({ date: cells[0], dateISO: toISO(cells[0]), invitations: cells[1], score: cells[2] });\n  }\n});\nif (!draws.length) return [];\n\ndraws.sort(function (a, b) { return (b.dateISO || '').localeCompare(a.dateISO || ''); });\nconst latest = draws[0];\n\n// Staleness guard: don't post old/dormant draws.\nconst t = Date.parse(latest.dateISO);\nif (isNaN(t) || (Date.now() - t) / 86400000 > STALE_DAYS) return [];\n\nconst link = 'https://www.ontario.ca/page/ontario-immigrant-nominee-program-oinp-invitations-apply';\nconst site = 'www.sugimotovisa.com';\nconst scoreMatch = String(latest.score).match(/\\d+/);\nconst minScore = scoreMatch ? scoreMatch[0] : String(latest.score);\n\nconst telegram = '📢 <b>نتیجه جدیدترین دراو کارآفرینی انتاریو (OINP)</b>\\n<b>برنامه کارآفرینی انتاریو (Entrepreneur Stream)</b> 🇨🇦\\n\\n🗓 <b>تاریخ برگزاری:</b> <code>' + esc(latest.date) + '</code>\\n\\n📊 <b>آمار این دوره:</b>\\n🔹 تعداد دعوت‌نامه: <b>' + esc(latest.invitations) + '</b>\\n🔹 محدوده امتیاز: <b>' + esc(latest.score) + '</b>\\n\\n🔗 <a href=\"' + link + '\">مشاهده جزئیات در سایت رسمی انتاریو</a>\\n\\n🌐 ' + site;\n\nreturn [{\n  json: {\n    program: 'oinp-entrepreneur',\n    dedup_key: 'oinp-entrepreneur::' + latest.dateISO,\n    final_post_text: telegram,\n    x_post_text: '📢 دراو جدید کارآفرینی انتاریو (OINP) 🇨🇦\\n🗓 ' + latest.date + '\\n🔹 دعوت‌نامه: ' + latest.invitations + '\\n🔹 محدوده امتیاز: ' + latest.score + '\\n' + link,\n    linkedin_text: 'نتیجه جدیدترین دراو کارآفرینی انتاریو (OINP) — برنامه کارآفرینی انتاریو 🇨🇦\\n\\n🗓 تاریخ: ' + latest.date + '\\n🔹 تعداد دعوت‌نامه: ' + latest.invitations + '\\n🔹 محدوده امتیاز: ' + latest.score + '\\n\\n🔗 ' + link + '\\n🌐 ' + site + '\\n#OINP #Entrepreneur #Ontario #مهاجرت_کانادا #سوگیموتو_ویزا',\n    ig_caption: 'نتیجه جدیدترین دراو کارآفرینی انتاریو (OINP) 🇨🇦\\n\\nتاریخ: ' + latest.date + '\\nتعداد دعوت‌نامه: ' + latest.invitations + '\\nمحدوده امتیاز: ' + latest.score + '\\n\\nبرای مشاوره: ' + site + '\\n\\n#OINP #Entrepreneur #انتاریو #مهاجرت_کانادا #سوگیموتو_ویزا',\n    skipInstagram: false,\n    headingLine1: 'آخرین Draw',\n    headingLine2: 'انتاریو OINP',\n    headingLine3: 'کارآفرینی',\n    statLeftValue: String(latest.invitations),\n    statLeftLabel: 'تعداد دعوتنامه',\n    statRightValue: String(minScore),\n    statRightLabel: 'حداقل امتیاز',\n    categoryFa: 'برنامه کارآفرینی انتاریو',\n    categoryEn: 'OINP Entrepreneur Stream',\n    dateText: String(latest.date),\n    dt_name: 'OINP Entrepreneur',\n    dt_crs: String(latest.score),\n    dt_size: String(latest.invitations)\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        1000
+      ],
+      "id": "code-oinp-ent",
+      "name": "Build OINP Entrepreneur Items"
+    },
+    {
+      "parameters": {
         "mode": "append",
-        "numberInputs": 4
+        "numberInputs": 5
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -577,6 +621,11 @@
             "node": "Fetch Alberta",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Fetch OINP Entrepreneur",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -625,6 +674,17 @@
         ]
       ]
     },
+    "Fetch OINP Entrepreneur": {
+      "main": [
+        [
+          {
+            "node": "Build OINP Entrepreneur Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Build EE Items": {
       "main": [
         [
@@ -665,6 +725,17 @@
             "node": "Merge All Programs",
             "type": "main",
             "index": 3
+          }
+        ]
+      ]
+    },
+    "Build OINP Entrepreneur Items": {
+      "main": [
+        [
+          {
+            "node": "Merge All Programs",
+            "type": "main",
+            "index": 4
           }
         ]
       ]

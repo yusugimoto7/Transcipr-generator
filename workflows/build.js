@@ -13,6 +13,7 @@ const jsBuildStory = read('buildStory.js');
 const jsPrepareImage = read('prepareImage.js');
 const jsUpdateWordPress = read('updateWordPress.js');
 const jsBuildAlberta = read('buildAlberta.js');
+const jsBuildOINPEnt = read('buildOINPEnt.js');
 
 // Shared constants pulled from the two existing flows.
 const EE_URL = 'https://script.google.com/macros/s/AKfycbw1PZkjKloQc2ghagiP0bVTuWI26VQMnNDuUUQhEupXMLNrHx3mZVbGTvTDtOcovdLKng/exec';
@@ -53,15 +54,26 @@ push({
   },
   type: 'n8n-nodes-base.httpRequest', typeVersion: 4.4, position: [-1360, 780], id: 'http-alberta', name: 'Fetch Alberta', alwaysOutputData: true
 });
+// OINP Entrepreneur stream — scraped directly from ontario.ca (dormant since Sep 2023; staleness-gated).
+push({
+  parameters: {
+    url: 'https://www.ontario.ca/page/ontario-immigrant-nominee-program-oinp-invitations-apply',
+    sendHeaders: true,
+    headerParameters: { parameters: [{ name: 'User-Agent', value: 'Mozilla/5.0 (DrawsBot)' }] },
+    options: { response: { response: { responseFormat: 'text' } }, timeout: 25000 }
+  },
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.4, position: [-1360, 1000], id: 'http-oinp-ent', name: 'Fetch OINP Entrepreneur', alwaysOutputData: true
+});
 
 // ---- Build (normalise) ----
 push({ parameters: { jsCode: jsBuildEE }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 80], id: 'code-ee', name: 'Build EE Items' });
 push({ parameters: { jsCode: jsBuildBCPNP }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 320], id: 'code-bcpnp', name: 'Build BC PNP Items' });
 push({ parameters: { jsCode: jsBuildOINP }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 560], id: 'code-oinp', name: 'Build OINP Items' });
 push({ parameters: { jsCode: jsBuildAlberta }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 780], id: 'code-alberta', name: 'Build Alberta Items' });
+push({ parameters: { jsCode: jsBuildOINPEnt }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 1000], id: 'code-oinp-ent', name: 'Build OINP Entrepreneur Items' });
 
-// ---- Merge (4 inputs, append) ----
-push({ parameters: { mode: 'append', numberInputs: 4 }, type: 'n8n-nodes-base.merge', typeVersion: 3.2, position: [-880, 320], id: 'merge-all', name: 'Merge All Programs' });
+// ---- Merge (5 inputs, append) ----
+push({ parameters: { mode: 'append', numberInputs: 5 }, type: 'n8n-nodes-base.merge', typeVersion: 3.2, position: [-880, 320], id: 'merge-all', name: 'Merge All Programs' });
 
 // ---- Build story card (svg + passthrough) ----
 push({ parameters: { jsCode: jsBuildStory }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-640, 320], id: 'code-story', name: 'Build Story Card' });
@@ -162,14 +174,17 @@ const links = [
   conn('Every 15 min', 'Fetch BC PNP'),
   conn('Every 15 min', 'Fetch OINP'),
   conn('Every 15 min', 'Fetch Alberta'),
+  conn('Every 15 min', 'Fetch OINP Entrepreneur'),
   conn('Fetch Express Entry', 'Build EE Items'),
   conn('Fetch BC PNP', 'Build BC PNP Items'),
   conn('Fetch OINP', 'Build OINP Items'),
   conn('Fetch Alberta', 'Build Alberta Items'),
+  conn('Fetch OINP Entrepreneur', 'Build OINP Entrepreneur Items'),
   conn('Build EE Items', 'Merge All Programs', 0),
   conn('Build BC PNP Items', 'Merge All Programs', 1),
   conn('Build OINP Items', 'Merge All Programs', 2),
   conn('Build Alberta Items', 'Merge All Programs', 3),
+  conn('Build OINP Entrepreneur Items', 'Merge All Programs', 4),
   conn('Merge All Programs', 'Build Story Card'),
   conn('Build Story Card', 'Check if posted'),
   conn('Check if posted', 'Is New?'),

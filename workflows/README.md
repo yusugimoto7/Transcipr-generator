@@ -21,6 +21,7 @@ One n8n workflow with **two independent branches** off their own schedules:
 | `src/buildBCPNP.js` | Normalises BC PNP Skills + Entrepreneur draws. |
 | `src/buildOINP.js` | Normalises OINP draws + program updates. |
 | `src/buildAlberta.js` | Parses the Alberta AAIP draw table (fetched from alberta.ca) — one weekly digest post. |
+| `src/buildOINPEnt.js` | Parses the OINP **Entrepreneur** stream table (from ontario.ca), staleness-gated. |
 | `src/buildStory.js` | Builds the Instagram story SVG (shared card). **Paste your logo here.** |
 | `src/prepareImage.js` | Base64-encodes the SVG for the HCTI render step; skips update posts. |
 | `src/updateWordPress.js` | WordPress branch: fetch unified endpoint, fingerprint, rewrite page only on change. **Fill 3 constants.** |
@@ -50,6 +51,15 @@ Every 15 min ─┬─ Fetch Express Entry ─ Build EE Items ───┐
   deduped by week (`alberta-week::<Monday>`). The Instagram card shows that week's
   totals (draw count + total invitations; "Less than 10" values are listed per-draw
   but excluded from the sum).
+- **Entrepreneur / business streams** (three provinces):
+  - **BC** — active; already posted via `Build BC PNP Items` (`bcpnp-entrepreneur`).
+  - **Ontario** — the OINP Entrepreneur stream is wired (`Build OINP Entrepreneur
+    Items`) but **dormant since Sep 2023**, so it's staleness-gated (only posts a
+    draw newer than 90 days). It stays silent until Ontario resumes entrepreneur
+    draws, then auto-posts — no stale/old draws.
+  - **Alberta** — AAIP does **not** publish entrepreneur/business draws (those
+    streams are EOI selection / evaluated on receipt, with no scored draw table),
+    so there is nothing to post. Not wired.
 - **Instagram**: OINP program *updates* have no numbers, so they skip the story
   image and post to Telegram/X/LinkedIn only. Draws with numbers get the story
   card re-labelled per program (min score + ITAs, etc.).
