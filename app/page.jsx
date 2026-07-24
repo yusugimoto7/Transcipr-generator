@@ -113,8 +113,10 @@ function saveSeen(list) {
   } catch (_) {}
 }
 
-// Has this topic (by title OR source article) been shown before?
+// Has this topic (by title OR source article) been shown before? Evergreen
+// how-to cards are exempt — they're allowed to recur to keep the deck full.
 function isSeen(t, seenTitleSet, seenUrlSet) {
+  if (t.evergreen) return false;
   const uk = urlKey(t);
   return seenTitleSet.has(topicKey(t)) || (uk && seenUrlSet.has(uk));
 }
@@ -263,14 +265,17 @@ export default function App() {
       // shown. A topic/article is shown only once, ever, on this device.
       const fresh = parsed.filter((t) => !isSeen(t, seenTitles, seenUrls));
 
-      // Remember this batch so it never comes back.
+      // Remember this batch so it never comes back — but NOT evergreen cards,
+      // which are meant to recur.
       saveSeen([
         ...seen,
-        ...fresh.map((t) => ({
-          key: topicKey(t),
-          url: urlKey(t),
-          en: t.title_en || t.title_fa,
-        })),
+        ...fresh
+          .filter((t) => !t.evergreen)
+          .map((t) => ({
+            key: topicKey(t),
+            url: urlKey(t),
+            en: t.title_en || t.title_fa,
+          })),
       ]);
 
       resetHistory();

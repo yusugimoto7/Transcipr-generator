@@ -1,7 +1,13 @@
 import { callClaude } from "../../../lib/anthropic";
-import { openaiEnabled, openaiTopics } from "../../../lib/openai";
+import { openaiEnabled, openaiTopics, openaiRewrite } from "../../../lib/openai";
 import { sheetEnabled, getSeen, appendRows, normalizeUrl } from "../../../lib/sheet";
-import { topicPrompt, parseTopics } from "../../../lib/prompts";
+import { fetchNews } from "../../../lib/news";
+import {
+  topicPrompt,
+  topicsFromNewsPrompt,
+  parseTopics,
+  EVERGREEN_TOPICS,
+} from "../../../lib/prompts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,16 +94,15 @@ function recentEnough(t, todayStr) {
   return dt >= cutoff;
 }
 
-// Try OpenAI first when enabled; on ANY failure fall back to Claude so the app
-// never breaks. `cache.provider` records which one actually produced the batch
-// so you can confirm on Render whether OpenAI is really being used.
+// Primary source: real RSS/Atom immigration feeds (grounded, dated, deduped).
+// Fallback: the old LLM web-search path. `cache.provider` records which ran.
 async function generate(clientExclude) {
   generationTimestamps.push(Date.now());
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local date
+  const nowMs = Date.now();
 
   // If a Google Sheet is configured it is the durable, cross-device source of
-  // truth for what's been shown. Pull it up front so we can (a) tell the model
-  // to avoid those titles and (b) drop any repeat article after generation.
+  // truth for what's been shown. Pull it up front so we can avoid repeats.
   let seenUrlSet = null;
   let sheetTitles = [];
   if (sheetEnabled()) {
@@ -109,10 +114,112 @@ async function generate(clientExclude) {
       seenUrlSet = null; // sheet unreachable — degrade gracefully
     }
   }
-
   const exclude = [...new Set([...(clientExclude || []), ...sheetTitles])].slice(-100);
-  const prompt = topicPrompt(today, exclude);
 
+  // 1. Try the real news feeds first.
+  let list = [];
+  let provider = "feeds";
+  try {
+    const news = await collectFeedTopics({ today, nowMs, exclude, seenUrlSet });
+    if (news.length) {
+      list = [...news, ...pickEvergreens(seenUrlSet, exclude, 3)];
+      provider = openaiEnabled() ? "feeds+openai" : "feeds+anthropic";
+    }
+  } catch (e) {
+    console.log("[topics] feed path failed:", String(e?.message || e));
+    list = [];
+  }
+
+  // 2. Fallback to the LLM web-search path if the feeds produced nothing.
+  if (!list.length) {
+    const r = await collectSearchTopics(exclude, today);
+    list = r.list;
+    provider = r.provider;
+  }
+
+  const out = finalize(list, today, seenUrlSet);
+  if (!out.length) throw new Error("parse"); // nothing usable at all
+
+  // Log only real news (evergreens may recur) to the durable history.
+  if (seenUrlSet) {
+    const toLog = out.filter((t) => !t.evergreen);
+    if (toLog.length) {
+      try {
+        await appendRows(toLog);
+      } catch (_) {}
+    }
+  }
+
+  cache = { topics: out, timestamp: Date.now(), provider };
+  return out;
+}
+
+// Fetch real articles, then have a cheap model turn the relevant ones into
+// Farsi hooks. Real source_url + published date are re-attached server-side
+// from the article the model referenced by id (the model never invents them).
+async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
+  const { items, feedStatus } = await fetchNews({ maxAgeDays: 12, limit: 30, nowMs });
+  const okFeeds = feedStatus.filter((f) => f.ok).map((f) => f.name);
+  console.log(`[topics] feeds ok: ${okFeeds.join(", ") || "none"}; ${items.length} recent items`);
+  if (!items.length) return [];
+
+  // Skip articles already used (by URL) before spending a model call.
+  const fresh = seenUrlSet
+    ? items.filter((it) => {
+        const k = normalizeUrl(it.source_url);
+        return !(k && seenUrlSet.has(k));
+      })
+    : items;
+  const pool = fresh.slice(0, 20); // cap tokens
+  if (!pool.length) return [];
+
+  const prompt = topicsFromNewsPrompt(pool, today, exclude);
+  let text = "";
+  if (openaiEnabled()) {
+    try {
+      text = await openaiRewrite(prompt);
+    } catch (e) {
+      if (!process.env.ANTHROPIC_API_KEY) throw e;
+      text = await callClaude([{ role: "user", content: prompt }], false, 3000);
+    }
+  } else {
+    text = await callClaude([{ role: "user", content: prompt }], false, 3000);
+  }
+
+  const parsed = parseTopics(text) || [];
+  const topics = [];
+  for (const p of parsed) {
+    const idx = Number(p.id);
+    const src = Number.isInteger(idx) ? pool[idx] : null;
+    if (!src || !p.title_fa) continue;
+    const field = p.field || "Policy";
+    topics.push({
+      title_fa: p.title_fa,
+      title_en: p.title_en || "",
+      field,
+      page: p.page || (String(field).toLowerCase() === "europe" ? "EU" : "CA"),
+      why_now: p.why_now || "",
+      date: src.published ? src.published.slice(0, 10) : "",
+      source_url: src.source_url,
+      source_name: src.source_name,
+      score: Number(p.score) || 75,
+    });
+  }
+  topics.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return topics.slice(0, 7);
+}
+
+// Pick evergreen how-to cards to round out the deck. Flagged so they can recur
+// (they are never logged to the durable history) and rotated each generation.
+function pickEvergreens(seenUrlSet, exclude, n) {
+  const shuffled = [...EVERGREEN_TOPICS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n).map((t) => ({ ...t, date: "", evergreen: true }));
+}
+
+// Old path: ask an LLM (OpenAI search model, else Claude web search) to both
+// find and write the topics. Kept as an automatic fallback.
+async function collectSearchTopics(exclude, today) {
+  const prompt = topicPrompt(today, exclude);
   let text = "";
   let provider = "anthropic";
   if (openaiEnabled()) {
@@ -120,7 +227,6 @@ async function generate(clientExclude) {
       text = await openaiTopics(prompt);
       provider = "openai";
     } catch (e) {
-      // OpenAI failed — fall back to Claude if we can, else re-throw.
       if (!process.env.ANTHROPIC_API_KEY) throw e;
       text = await callClaude([{ role: "user", content: prompt }], true);
       provider = "anthropic (openai failed)";
@@ -128,35 +234,25 @@ async function generate(clientExclude) {
   } else {
     text = await callClaude([{ role: "user", content: prompt }], true);
   }
-
   const parsed = parseTopics(text);
-  if (!parsed || !Array.isArray(parsed) || parsed.length === 0) {
-    throw new Error("parse"); // model genuinely returned nothing
-  }
+  return { list: Array.isArray(parsed) ? parsed : [], provider };
+}
 
-  // 0. Drop Express Entry (brand excludes it). 1. Drop in-batch duplicates.
-  // 2. Enforce recency (drop stale dated news).
-  const noEE = parsed.filter((t) => !isExpressEntry(t));
-  if (parsed.length - noEE.length > 0) {
-    console.log(`[topics] dropped ${parsed.length - noEE.length} Express Entry topic(s)`);
+// Shared post-processing for either source: drop Express Entry, drop in-batch
+// duplicates, enforce recency, and drop cross-batch repeats (news only).
+function finalize(list, today, seenUrlSet) {
+  const noEE = list.filter((t) => !isExpressEntry(t));
+  if (list.length - noEE.length > 0) {
+    console.log(`[topics] dropped ${list.length - noEE.length} Express Entry topic(s)`);
   }
   let out = recencyLogged(dedupeBatch(noEE), today);
-
-  // 3. Cross-batch dedup via the sheet + append fresh ones to the history log.
-  // An empty result here (everything already seen/stale) is VALID, not an error.
   if (seenUrlSet) {
     out = out.filter((t) => {
+      if (t.evergreen) return true; // evergreens may recur
       const k = normalizeUrl(t.source_url);
       return !(k && seenUrlSet.has(k));
     });
-    try {
-      await appendRows(out);
-    } catch (_) {
-      // Logging failed — still serve the topics; don't lose the batch.
-    }
   }
-
-  cache = { topics: out, timestamp: Date.now(), provider };
   return out;
 }
 
