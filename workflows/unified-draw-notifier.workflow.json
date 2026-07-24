@@ -89,6 +89,37 @@
     },
     {
       "parameters": {
+        "url": "https://www.alberta.ca/aaip-processing-information",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (DrawsBot)"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1360,
+        780
+      ],
+      "id": "http-alberta",
+      "name": "Fetch Alberta",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
         "jsCode": "// Code node: \"Build EE Items\"\n// Normalises the latest Express Entry round into the shared item shape.\n// Dedup is handled downstream by the posted_draws data table.\nconst src = $input.all();\nconst round = src.length ? (src[0].json.rounds || [])[0] : null;\nif (!round) return [];\n\nconst currentDrawNumber = String(round.drawNumber);\n\nconst drawNameRaw = round.drawName || round.drawText || 'نامشخص';\nconst drawName = drawNameRaw.replace(/,?\\s*\\d{4}-version\\s*\\d+/i, '').trim();\nconst drawDate = round.drawDateFull || round.drawDate || 'نامشخص';\nconst drawSize = round.drawSize || round.drawSizeText || 'نامشخص';\nconst drawCRS  = round.drawCRS  || round.drawCutOff || round.drawCutoff || round.crs || 'نامشخص';\n\nconst categoryMap = [\n  { en: 'provincial nominee program',                    fa: 'برنامه نامزدی استانی' },\n  { en: 'canadian experience class',                     fa: 'کلاس سابقه کار کانادایی' },\n  { en: 'french-language proficiency',                   fa: 'تسلط به زبان فرانسوی' },\n  { en: 'french language proficiency',                   fa: 'تسلط به زبان فرانسوی' },\n  { en: 'healthcare and social services',                fa: 'مشاغل بهداشت و خدمات اجتماعی' },\n  { en: 'healthcare occupations',                        fa: 'مشاغل بهداشت و درمان' },\n  { en: 'science, technology, engineering and math',     fa: 'مشاغل علوم، فناوری، مهندسی و ریاضی (STEM)' },\n  { en: 'stem occupations',                              fa: 'مشاغل STEM' },\n  { en: 'trade occupations',                             fa: 'مشاغل فنی و حرفه‌ای' },\n  { en: 'trades occupations',                            fa: 'مشاغل فنی و حرفه‌ای' },\n  { en: 'education occupations',                         fa: 'مشاغل آموزشی' },\n  { en: 'transport occupations',                         fa: 'مشاغل حمل و نقل' },\n  { en: 'agriculture and agri-food',                     fa: 'مشاغل کشاورزی و صنایع غذایی' },\n  { en: 'physicians with canadian work experience',      fa: 'پزشکان با سابقه کار کانادایی' },\n  { en: 'senior managers with canadian work experience', fa: 'مدیران ارشد با سابقه کار کانادایی' },\n  { en: 'researchers with canadian work experience',     fa: 'پژوهشگران با سابقه کار کانادایی' },\n  { en: 'skilled military recruits',                     fa: 'سربازان متخصص استخدام شده' },\n  { en: 'federal skilled worker',                        fa: 'برنامه فدرال نیروی کار متخصص' },\n  { en: 'federal skilled trades',                        fa: 'برنامه فدرال مشاغل فنی' },\n  { en: 'general',                                       fa: 'دراو عمومی' },\n  { en: 'no program specified',                          fa: 'بدون برنامه مشخص' }\n];\nfunction getPersianCategory(englishName) {\n  if (!englishName) return 'دسته‌بندی نامشخص';\n  const lower = String(englishName).toLowerCase();\n  for (const entry of categoryMap) {\n    if (lower.includes(entry.en)) return entry.fa;\n  }\n  return englishName;\n}\nconst drawNameFa = getPersianCategory(drawName);\n\nconst link = 'https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/rounds-invitations.html';\nconst site = 'www.sugimotovisa.com';\n\nconst telegramText = `📢 <b>نتیجه جدیدترین دراو اکسپرس انتری</b>\n<b>اقامت دائم کانادا (PR)</b> 🇨🇦\n\n🗓 <b>تاریخ برگزاری:</b> <code>${drawDate}</code>\n🎯 <b>دسته‌بندی انتخاب:</b> <b>${drawNameFa}</b>\n\n📊 <b>آمار این دوره:</b>\n🔹 تعداد دعوت‌نامه صادر شده: <b>${drawSize}</b> نفر\n🔹 حداقل امتیاز قبولی (CRS): <b>${drawCRS}</b> امتیاز\n\n🔗 <a href=\"${link}\">مشاهده جزئیات در سایت رسمی اداره مهاجرت</a>\n\n🌐 ${site}`;\n\nconst xPostText = `📢 دراو جدید اکسپرس انتری 🇨🇦\n🗓 ${drawDate}\n🎯 ${drawNameFa}\n🔹 دعوت‌نامه: ${drawSize} نفر\n🔹 حداقل CRS: ${drawCRS}\n${link}`;\n\nconst linkedinText = `📢 نتیجه جدیدترین دراو اکسپرس انتری — اقامت دائم کانادا (PR) 🇨🇦\n\n🗓 تاریخ برگزاری: ${drawDate}\n🎯 دسته‌بندی انتخاب: ${drawNameFa}\n🔹 تعداد دعوت‌نامه صادر شده: ${drawSize} نفر\n🔹 حداقل امتیاز قبولی (CRS): ${drawCRS}\n\n🔗 جزئیات در سایت رسمی اداره مهاجرت:\n${link}\n\n🌐 ${site}\n#ExpressEntry #مهاجرت_کانادا #اقامت_کانادا #سوگیموتو_ویزا`;\n\nconst igCaption = `نتیجه جدیدترین دراو اکسپرس انتری 🇨🇦\\n\\nتاریخ برگزاری: ${drawDate}\\nدسته‌بندی انتخاب: ${drawNameFa}\\nتعداد دعوت‌نامه: ${drawSize} نفر\\nحداقل امتیاز CRS: ${drawCRS}\\n\\nبرای مشاوره: ${site}\\n\\n#اکسپرس_انتری #مهاجرت_کانادا #اقامت_کانادا #سوگیموتو_ویزا #PR #ExpressEntry`;\n\nreturn [{\n  json: {\n    program: 'express-entry',\n    dedup_key: currentDrawNumber,\n    final_post_text: telegramText,\n    x_post_text: xPostText,\n    linkedin_text: linkedinText,\n    ig_caption: igCaption,\n    skipInstagram: false,\n    // shared story-card fields\n    headingLine1: 'آخرین Draw',\n    headingLine2: 'اکسپرس انتری',\n    headingLine3: 'اقامت دائم کانادا PR',\n    statLeftValue: String(drawSize),\n    statLeftLabel: 'تعداد دعوتنامه',\n    statRightValue: String(drawCRS),\n    statRightLabel: 'نمره آخرین نفر قبولی',\n    categoryFa: drawNameFa,\n    categoryEn: drawName,\n    dateText: String(drawDate),\n    // data-table meta\n    dt_name: drawName,\n    dt_crs: String(drawCRS),\n    dt_size: String(drawSize)\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
@@ -128,8 +159,21 @@
     },
     {
       "parameters": {
+        "jsCode": "// Code node: \"Build Alberta Items\"\n// Parses the Alberta AAIP \"Draw information\" HTML table (fetched directly from\n// alberta.ca as text) and emits the newest draws as normalised items. Dedup is\n// handled by the posted_draws data table, so we emit the top few candidates and\n// let the table decide which are actually new.\nfunction esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }\nfunction stripTags(h) {\n  return String(h)\n    .replace(/<[^>]+>/g, '')\n    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')\n    .replace(/&#8211;|&ndash;/g, '–').replace(/&#39;|&rsquo;/g, \"'\")\n    .replace(/\\s+/g, ' ').trim();\n}\nfunction toISO(s) {\n  const t = Date.parse(s);\n  if (isNaN(t)) return '';\n  const d = new Date(t);\n  const m = ('0' + (d.getMonth() + 1)).slice(-2);\n  const day = ('0' + d.getDate()).slice(-2);\n  return d.getFullYear() + '-' + m + '-' + day;\n}\n\nconst src = $input.all();\nconst first = src.length ? src[0].json : null;\n// httpRequest (responseFormat: text) puts the body in `data`; fall back to body/string.\nconst html = first ? (first.data || first.body || (typeof first === 'string' ? first : '')) : '';\nif (!html) return [];\n\n// Isolate rows whose first cell is a date — that uniquely identifies the draw table.\nconst dateRe = /^[A-Z][a-z]+ \\d{1,2},\\s*20\\d{2}$/;\nconst draws = [];\nconst trRe = /<tr[^>]*>([\\s\\S]*?)<\\/tr>/gi;\nlet tr;\nwhile ((tr = trRe.exec(html)) !== null) {\n  const cells = [];\n  const tdRe = /<td[^>]*>([\\s\\S]*?)<\\/td>/gi;\n  let td;\n  while ((td = tdRe.exec(tr[1])) !== null) cells.push(stripTags(td[1]));\n  if (cells.length !== 4) continue;\n  const date = cells[0];\n  if (!dateRe.test(date)) continue;\n  draws.push({ date: date, dateISO: toISO(date), stream: cells[1], score: cells[2], invitations: cells[3] });\n}\nif (!draws.length) return [];\n\nconst link = 'https://www.alberta.ca/aaip-processing-information';\nconst site = 'www.sugimotovisa.com';\nconst CANDIDATES = 3; // newest N; dedup keeps only the genuinely new ones\n\nreturn draws.slice(0, CANDIDATES).map(function (d) {\n  const streamShort = String(d.stream).substring(0, 50);\n  const invCard = String(d.invitations).replace(/less than 10/i, '<10');\n  const telegram = '📢 <b>نتیجه جدیدترین دراو آلبرتا (AAIP)</b>\\n<b>برنامه مهاجرت استانی آلبرتا</b> 🇨🇦\\n\\n🗓 <b>تاریخ برگزاری:</b> <code>' + esc(d.date) + '</code>\\n🎯 <b>دسته‌بندی:</b> <b>' + esc(d.stream) + '</b>\\n\\n📊 <b>آمار این دوره:</b>\\n🔹 تعداد دعوت‌نامه: <b>' + esc(d.invitations) + '</b>\\n🔹 حداقل امتیاز: <b>' + esc(d.score) + '</b>\\n\\n🔗 <a href=\"' + link + '\">مشاهده جزئیات در سایت رسمی آلبرتا</a>\\n\\n🌐 ' + site;\n  return {\n    json: {\n      program: 'alberta-aaip',\n      dedup_key: 'alberta::' + (d.dateISO || d.date) + '::' + streamShort,\n      final_post_text: telegram,\n      x_post_text: '📢 دراو جدید آلبرتا (AAIP) 🇨🇦\\n🗓 ' + d.date + '\\n🎯 ' + d.stream + '\\n🔹 دعوت‌نامه: ' + d.invitations + '\\n🔹 حداقل امتیاز: ' + d.score + '\\n' + link,\n      linkedin_text: 'نتیجه جدیدترین دراو آلبرتا (AAIP) — برنامه مهاجرت استانی آلبرتا 🇨🇦\\n\\n🗓 تاریخ: ' + d.date + '\\n🎯 دسته‌بندی: ' + d.stream + '\\n🔹 تعداد دعوت‌نامه: ' + d.invitations + '\\n🔹 حداقل امتیاز: ' + d.score + '\\n\\n🔗 ' + link + '\\n🌐 ' + site + '\\n#AAIP #Alberta #مهاجرت_کانادا #سوگیموتو_ویزا',\n      ig_caption: 'نتیجه جدیدترین دراو آلبرتا (AAIP) 🇨🇦\\n\\nتاریخ: ' + d.date + '\\nدسته‌بندی: ' + d.stream + '\\nتعداد دعوت‌نامه: ' + d.invitations + '\\nحداقل امتیاز: ' + d.score + '\\n\\nبرای مشاوره: ' + site + '\\n\\n#AAIP #آلبرتا #مهاجرت_کانادا #سوگیموتو_ویزا',\n      skipInstagram: false,\n      headingLine1: 'آخرین Draw',\n      headingLine2: 'آلبرتا AAIP',\n      headingLine3: 'مهاجرت استانی',\n      statLeftValue: invCard,\n      statLeftLabel: 'تعداد دعوتنامه',\n      statRightValue: String(d.score),\n      statRightLabel: 'حداقل امتیاز',\n      categoryFa: 'برنامه مهاجرت آلبرتا',\n      categoryEn: String(d.stream).substring(0, 42),\n      dateText: String(d.date),\n      dt_name: 'Alberta AAIP',\n      dt_crs: String(d.score),\n      dt_size: String(d.invitations)\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        780
+      ],
+      "id": "code-alberta",
+      "name": "Build Alberta Items"
+    },
+    {
+      "parameters": {
         "mode": "append",
-        "numberInputs": 3
+        "numberInputs": 4
       },
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
@@ -495,9 +539,9 @@
     },
     {
       "parameters": {
-        "content": "## Unified Draw System\n\n**Social branch** (every 15 min): fetches EE + OINP + BC PNP, dedups via `posted_draws`, auto-posts to Telegram, X, LinkedIn, Instagram.\n\n**WordPress branch** (hourly, bottom): fetches the unified endpoint (EE + 9 provinces), fingerprint-gated — only rewrites the page when draw data changed.\n\n**Before enabling:** (1) paste logo into `LOGO_B64` in **Build Story Card**; (2) fill the 3 constants in **Update WordPress Page**; (3) deactivate the old EE / BC PNP-OINP / WordPress flows to avoid duplicates.",
-        "height": 300,
-        "width": 470,
+        "content": "## Unified Draw System\n\n**Social branch** (every 15 min): fetches EE + OINP + BC PNP + Alberta AAIP, dedups via `posted_draws`, auto-posts to Telegram, X, LinkedIn, Instagram. Alberta is scraped directly from alberta.ca (no Apps Script needed).\n\n**WordPress branch** (hourly, bottom): fetches the unified endpoint (EE + 9 provinces), fingerprint-gated — only rewrites the page when draw data changed.\n\n**Before enabling:** (1) paste logo into `LOGO_B64` in **Build Story Card**; (2) fill the 3 constants in **Update WordPress Page**; (3) deactivate the old EE / BC PNP-OINP / WordPress flows to avoid duplicates.",
+        "height": 320,
+        "width": 480,
         "color": 4
       },
       "type": "n8n-nodes-base.stickyNote",
@@ -526,6 +570,11 @@
           },
           {
             "node": "Fetch OINP",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Alberta",
             "type": "main",
             "index": 0
           }
@@ -565,6 +614,17 @@
         ]
       ]
     },
+    "Fetch Alberta": {
+      "main": [
+        [
+          {
+            "node": "Build Alberta Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Build EE Items": {
       "main": [
         [
@@ -594,6 +654,17 @@
             "node": "Merge All Programs",
             "type": "main",
             "index": 2
+          }
+        ]
+      ]
+    },
+    "Build Alberta Items": {
+      "main": [
+        [
+          {
+            "node": "Merge All Programs",
+            "type": "main",
+            "index": 3
           }
         ]
       ]

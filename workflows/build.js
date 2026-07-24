@@ -12,6 +12,7 @@ const jsBuildOINP = read('buildOINP.js');
 const jsBuildStory = read('buildStory.js');
 const jsPrepareImage = read('prepareImage.js');
 const jsUpdateWordPress = read('updateWordPress.js');
+const jsBuildAlberta = read('buildAlberta.js');
 
 // Shared constants pulled from the two existing flows.
 const EE_URL = 'https://script.google.com/macros/s/AKfycbw1PZkjKloQc2ghagiP0bVTuWI26VQMnNDuUUQhEupXMLNrHx3mZVbGTvTDtOcovdLKng/exec';
@@ -42,14 +43,25 @@ push({
 push({ parameters: { url: EE_URL, options: httpJsonOpts }, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.4, position: [-1360, 80], id: 'http-ee', name: 'Fetch Express Entry', alwaysOutputData: true });
 push({ parameters: { url: ROUTER + '?source=bcpnp', options: httpJsonOpts }, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.4, position: [-1360, 320], id: 'http-bcpnp', name: 'Fetch BC PNP', alwaysOutputData: true });
 push({ parameters: { url: ROUTER + '?source=oinp', options: httpJsonOpts }, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.4, position: [-1360, 560], id: 'http-oinp', name: 'Fetch OINP', alwaysOutputData: true });
+// Alberta AAIP fetched directly from alberta.ca as HTML text (no Apps Script needed).
+push({
+  parameters: {
+    url: 'https://www.alberta.ca/aaip-processing-information',
+    sendHeaders: true,
+    headerParameters: { parameters: [{ name: 'User-Agent', value: 'Mozilla/5.0 (DrawsBot)' }] },
+    options: { response: { response: { responseFormat: 'text' } }, timeout: 20000 }
+  },
+  type: 'n8n-nodes-base.httpRequest', typeVersion: 4.4, position: [-1360, 780], id: 'http-alberta', name: 'Fetch Alberta', alwaysOutputData: true
+});
 
 // ---- Build (normalise) ----
 push({ parameters: { jsCode: jsBuildEE }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 80], id: 'code-ee', name: 'Build EE Items' });
 push({ parameters: { jsCode: jsBuildBCPNP }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 320], id: 'code-bcpnp', name: 'Build BC PNP Items' });
 push({ parameters: { jsCode: jsBuildOINP }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 560], id: 'code-oinp', name: 'Build OINP Items' });
+push({ parameters: { jsCode: jsBuildAlberta }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-1120, 780], id: 'code-alberta', name: 'Build Alberta Items' });
 
-// ---- Merge (3 inputs, append) ----
-push({ parameters: { mode: 'append', numberInputs: 3 }, type: 'n8n-nodes-base.merge', typeVersion: 3.2, position: [-880, 320], id: 'merge-all', name: 'Merge All Programs' });
+// ---- Merge (4 inputs, append) ----
+push({ parameters: { mode: 'append', numberInputs: 4 }, type: 'n8n-nodes-base.merge', typeVersion: 3.2, position: [-880, 320], id: 'merge-all', name: 'Merge All Programs' });
 
 // ---- Build story card (svg + passthrough) ----
 push({ parameters: { jsCode: jsBuildStory }, type: 'n8n-nodes-base.code', typeVersion: 2, position: [-640, 320], id: 'code-story', name: 'Build Story Card' });
@@ -140,7 +152,7 @@ push({
 
 // ---- Sticky note ----
 nodes.push({
-  parameters: { content: '## Unified Draw System\n\n**Social branch** (every 15 min): fetches EE + OINP + BC PNP, dedups via `posted_draws`, auto-posts to Telegram, X, LinkedIn, Instagram.\n\n**WordPress branch** (hourly, bottom): fetches the unified endpoint (EE + 9 provinces), fingerprint-gated — only rewrites the page when draw data changed.\n\n**Before enabling:** (1) paste logo into `LOGO_B64` in **Build Story Card**; (2) fill the 3 constants in **Update WordPress Page**; (3) deactivate the old EE / BC PNP-OINP / WordPress flows to avoid duplicates.', height: 300, width: 470, color: 4 },
+  parameters: { content: '## Unified Draw System\n\n**Social branch** (every 15 min): fetches EE + OINP + BC PNP + Alberta AAIP, dedups via `posted_draws`, auto-posts to Telegram, X, LinkedIn, Instagram. Alberta is scraped directly from alberta.ca (no Apps Script needed).\n\n**WordPress branch** (hourly, bottom): fetches the unified endpoint (EE + 9 provinces), fingerprint-gated — only rewrites the page when draw data changed.\n\n**Before enabling:** (1) paste logo into `LOGO_B64` in **Build Story Card**; (2) fill the 3 constants in **Update WordPress Page**; (3) deactivate the old EE / BC PNP-OINP / WordPress flows to avoid duplicates.', height: 320, width: 480, color: 4 },
   type: 'n8n-nodes-base.stickyNote', typeVersion: 1, position: [-1600, -40], id: 'sticky-doc', name: 'About'
 });
 
@@ -149,12 +161,15 @@ const links = [
   conn('Every 15 min', 'Fetch Express Entry'),
   conn('Every 15 min', 'Fetch BC PNP'),
   conn('Every 15 min', 'Fetch OINP'),
+  conn('Every 15 min', 'Fetch Alberta'),
   conn('Fetch Express Entry', 'Build EE Items'),
   conn('Fetch BC PNP', 'Build BC PNP Items'),
   conn('Fetch OINP', 'Build OINP Items'),
+  conn('Fetch Alberta', 'Build Alberta Items'),
   conn('Build EE Items', 'Merge All Programs', 0),
   conn('Build BC PNP Items', 'Merge All Programs', 1),
   conn('Build OINP Items', 'Merge All Programs', 2),
+  conn('Build Alberta Items', 'Merge All Programs', 3),
   conn('Merge All Programs', 'Build Story Card'),
   conn('Build Story Card', 'Check if posted'),
   conn('Check if posted', 'Is New?'),

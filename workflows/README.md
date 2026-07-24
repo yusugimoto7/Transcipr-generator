@@ -3,8 +3,10 @@
 One n8n workflow with **two independent branches** off their own schedules:
 
 1. **Social notifier** (every 15 min) — auto-posts **every** Express Entry,
-   OINP, and BC PNP draw to **Telegram, X, LinkedIn, and Instagram** (story
-   image), deduped so nothing posts twice. Merges the two original flows.
+   OINP, BC PNP, and **Alberta (AAIP)** draw to **Telegram, X, LinkedIn, and
+   Instagram** (story image), deduped so nothing posts twice. Merges the two
+   original flows. Alberta is scraped **directly from alberta.ca** — no Apps
+   Script to deploy.
 2. **WordPress page** (hourly at `:07`) — rebuilds a Persian page showing
    Express Entry + **all 9 provinces**, but only writes when the draw data
    actually changed (fingerprint-gated). Ported from the Canada Draws spec.
@@ -18,6 +20,7 @@ One n8n workflow with **two independent branches** off their own schedules:
 | `src/buildEE.js` | Normalises the latest Express Entry round. |
 | `src/buildBCPNP.js` | Normalises BC PNP Skills + Entrepreneur draws. |
 | `src/buildOINP.js` | Normalises OINP draws + program updates. |
+| `src/buildAlberta.js` | Parses the Alberta AAIP draw table (fetched from alberta.ca) — newest 3 draws. |
 | `src/buildStory.js` | Builds the Instagram story SVG (shared card). **Paste your logo here.** |
 | `src/prepareImage.js` | Base64-encodes the SVG for the HCTI render step; skips update posts. |
 | `src/updateWordPress.js` | WordPress branch: fetch unified endpoint, fingerprint, rewrite page only on change. **Fill 3 constants.** |
@@ -39,6 +42,13 @@ Every 15 min ─┬─ Fetch Express Entry ─ Build EE Items ───┐
   table's `draw_number` column (EE uses the numeric draw number, so existing EE
   rows keep working). `Mark as posted` hangs off the Telegram post so updates
   (which skip Instagram) still get recorded.
+- **Alberta**: fetched directly from `alberta.ca/aaip-processing-information`
+  (a clean HTML draw table) and parsed in `Build Alberta Items` — no Apps Script
+  needed. It emits the newest **3** draws each run as candidates; dedup posts
+  only the genuinely new ones, so the **first activation posts up to 3 Alberta
+  draws once**, then one per new draw after that. Alberta draws happen several
+  times a week across streams (Opportunity, Express Entry pathways, Health Care,
+  Rural Renewal, Tourism) — expect more Alberta posts than the other programs.
 - **Instagram**: OINP program *updates* have no numbers, so they skip the story
   image and post to Telegram/X/LinkedIn only. Draws with numbers get the story
   card re-labelled per program (min score + ITAs, etc.).
