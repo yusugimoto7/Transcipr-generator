@@ -43,6 +43,38 @@ function doGet(e) {
     return json({ items: items });
   }
 
+  // Government-page proxy for the draw auto-poster. Some hosts cannot reach
+  // canada.ca / alberta.ca / ontario.ca directly, but Apps Script can. This
+  // returns the page verbatim as plain text, so the app's parsers work
+  // unchanged — just point DRAWS_ALBERTA_URL / DRAWS_OINP_ENT_URL / DRAWS_EE_URL
+  // at this endpoint, e.g.
+  //   https://script.google.com/.../exec?secret=YOURSECRET&proxy=alberta
+  if (e.parameter.proxy) {
+    var targets = {
+      alberta: "https://www.alberta.ca/aaip-processing-information",
+      oinp_ent:
+        "https://www.ontario.ca/page/ontario-immigrant-nominee-program-oinp-invitations-apply",
+      ee: "https://www.canada.ca/content/dam/ircc/documents/json/ee_rounds_123_en.json",
+    };
+    var target = targets[e.parameter.proxy];
+    if (!target) return json({ error: "unknown proxy target" });
+    try {
+      var resp = UrlFetchApp.fetch(target, {
+        muteHttpExceptions: true,
+        followRedirects: true,
+        headers: { "User-Agent": "Mozilla/5.0 (DrawsBot)" },
+      });
+      if (resp.getResponseCode() >= 400) {
+        return json({ error: "HTTP " + resp.getResponseCode() });
+      }
+      return ContentService.createTextOutput(resp.getContentText()).setMimeType(
+        ContentService.MimeType.TEXT
+      );
+    } catch (err) {
+      return json({ error: String(err) });
+    }
+  }
+
   // Draw dedup memory: return every dedup key already posted.
   if (e.parameter.type === "posted_draws") {
     const rows = getPostedDrawsSheet().getDataRange().getValues().slice(1);

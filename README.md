@@ -96,11 +96,16 @@ stale number.
 ### Endpoints
 | Route | Purpose |
 |---|---|
+| `GET /api/draws/status?key=…` | **start here** — setup checklist: what's configured, what's missing, next step |
 | `GET/POST /api/draws/run?key=…` | one full cycle (this is what cron calls) |
 | `…&dry=1` | collect and report, send nothing |
 | `…&only=alberta,express-entry` | restrict to specific sources |
 | `…&wp=0` | skip the WordPress page this run |
 | `GET /api/draws/preview?key=…` | show exactly what *would* post, send nothing |
+
+`/api/draws/status` never reveals secret values — only whether each one is set —
+and tells you the exact next variable to configure, so you don't have to work
+through this README line by line.
 
 ### Setup
 1. **Set the env vars** from `.env.example` (the `CANADA DRAWS AUTO-POSTER`
@@ -125,11 +130,14 @@ stale number.
 ### Notes
 - **Token expiry** is the one thing that needs occasional attention: X's OAuth
   1.0a credentials do not expire, but **LinkedIn (~60 days)** and **Instagram**
-  tokens do. When one lapses, that channel starts returning an error in the run
-  report while the others keep posting.
-- **Egress**: Alberta and OINP-Entrepreneur are fetched straight from the
-  government sites. If your host blocks those, proxy them through your Apps
-  Script and set `DRAWS_ALBERTA_URL` / `DRAWS_OINP_ENT_URL`.
+  tokens do. When one lapses, that channel returns an error in the run report
+  while the others keep posting — and if `DRAWS_ALERT_CHAT_ID` is set you get a
+  Telegram ping instead of finding out from silence.
+- **Egress**: Express Entry, Alberta and OINP-Entrepreneur are fetched straight
+  from the government sites. If your host blocks those (403/timeout in
+  `sourceErrors`), the Apps Script has a built-in proxy — point
+  `DRAWS_ALBERTA_URL` / `DRAWS_OINP_ENT_URL` / `DRAWS_EE_URL` at
+  `<your /exec>?secret=…&proxy=alberta|oinp_ent|ee`. No code change needed.
 - Every source is isolated — one broken parser or unreachable page never stops
   the other programs; failures appear in `sourceErrors` in the run report.
 
