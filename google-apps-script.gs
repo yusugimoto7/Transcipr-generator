@@ -26,6 +26,7 @@
 const SECRET = "CHANGE-ME-to-a-long-random-string";
 const SHEET_NAME = "Seen";
 const LIBRARY_SHEET = "Library";
+const POSTED_DRAWS_SHEET = "PostedDraws";
 
 function doGet(e) {
   if (!e || e.parameter.secret !== SECRET) return json({ error: "unauthorized" });
@@ -40,6 +41,14 @@ function doGet(e) {
       try { items.push(JSON.parse(raw)); } catch (_) {}
     });
     return json({ items: items });
+  }
+
+  // Draw dedup memory: return every dedup key already posted.
+  if (e.parameter.type === "posted_draws") {
+    const rows = getPostedDrawsSheet().getDataRange().getValues().slice(1);
+    return json({
+      keys: rows.map(function (r) { return String(r[1] || ""); }).filter(Boolean),
+    });
   }
 
   const values = getSheet().getDataRange().getValues().slice(1); // skip header
@@ -68,6 +77,23 @@ function doPost(e) {
       ]);
     });
     return json({ ok: true, added: body.library.length });
+  }
+
+  // Draw dedup memory: append the keys of draws that were just posted.
+  if (body.posted_draws) {
+    const sh = getPostedDrawsSheet();
+    body.posted_draws.forEach(function (d) {
+      sh.appendRow([
+        new Date(),
+        d.key || "",
+        d.program || "",
+        d.name || "",
+        d.crs || "",
+        d.size || "",
+        d.channels || "",
+      ]);
+    });
+    return json({ ok: true, added: body.posted_draws.length });
   }
 
   const sheet = getSheet();
@@ -102,6 +128,24 @@ function getLibrarySheet() {
   if (!sh) {
     sh = ss.insertSheet(LIBRARY_SHEET);
     sh.appendRow(["timestamp", "id", "type", "title_fa", "title_en", "json"]);
+  }
+  return sh;
+}
+
+function getPostedDrawsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(POSTED_DRAWS_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(POSTED_DRAWS_SHEET);
+    sh.appendRow([
+      "timestamp",
+      "key",
+      "program",
+      "draw_name",
+      "draw_crs",
+      "draw_size",
+      "channels",
+    ]);
   }
   return sh;
 }
