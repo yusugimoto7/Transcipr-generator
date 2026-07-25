@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Immigration Leads Dashboard</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --ring: rgba(11,11,11,0.10);
+    --s1: #2a78d6;  /* blue — primary / Canada */
+    --s2: #eb6834;  /* orange — Europe */
+    --s3: #1baf7a;  /* aqua — third slot */
+    --seq-250: #86b6ef;
+    --seq-300: #6da7ec;
+    --seq-350: #5598e7;
+    --seq-400: #3987e5;
+    --seq-450: #2a78d6;
+    --seq-500: #256abf;
+    --seq-550: #1c5cab;
+    --seq-600: #184f95;
+    --none-fill: #c9c8c0; /* "(no answer)" — recessive, not a series */
+    --good: #006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --ring: rgba(255,255,255,0.10);
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --none-fill: #4a4a46;
+      --good: #0ca30c;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --ring: rgba(255,255,255,0.10);
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --none-fill: #4a4a46;
+    --good: #0ca30c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Vazirmatn", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header h1 { font-size: 22px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--ink-2); font-size: 13px; margin: 0; }
+  header .sub a { color: inherit; }
+
+  /* ---------- filter row ---------- */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
+    margin: 20px 0 18px; padding: 12px 14px;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+  }
+  .fgroup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .fgroup .flabel { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .chip {
+    border: 1px solid var(--grid); background: transparent; color: var(--ink-2);
+    border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--baseline); color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--page); font-weight: 600; }
+  .chip:focus-visible, .tbl-btn:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+  .fcount { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .fcount strong { color: var(--ink); font-weight: 650; }
+
+  /* ---------- KPI row ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 14px 16px 12px;
+  }
+  .kpi .klabel { font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
+  .kpi .kvalue { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.1; }
+  .kpi .knote { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  /* ---------- cards grid ---------- */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+    padding: 16px 18px 14px; min-width: 0;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .chead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+  .card h2 { font-size: 14.5px; font-weight: 650; margin: 0; }
+  .card .csub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .tbl-btn {
+    margin-left: auto; border: none; background: none; color: var(--muted);
+    font: inherit; font-size: 12px; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+  }
+  .tbl-btn:hover { color: var(--ink); }
+
+  /* ---------- horizontal bars ---------- */
+  .hbars { display: flex; flex-direction: column; gap: 9px; }
+  .hrow { display: grid; grid-template-columns: 168px 1fr; gap: 10px; align-items: center; }
+  @media (max-width: 480px) { .hrow { grid-template-columns: 120px 1fr; } }
+  .hlabel { font-size: 12.5px; color: var(--ink-2); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .htrack { position: relative; height: 20px; display: flex; align-items: center; }
+  .hbar { height: 18px; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .hval { font-size: 12px; color: var(--ink-2); margin-left: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .hval .pc { color: var(--muted); }
+  .hgroup-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 10px 0 2px; }
+  .hgroup-title:first-child { margin-top: 0; }
+
+  /* ---------- columns ---------- */
+  .cols { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding-top: 16px; border-bottom: 1px solid var(--baseline); }
+  .colslot { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; min-width: 0; }
+  .colbar { width: 100%; max-width: 24px; border-radius: 4px 4px 0 0; min-height: 2px; }
+  .coltop { position: absolute; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  .colx { display: flex; gap: 6px; margin-top: 6px; }
+  .colx .xlab { flex: 1 1 0; text-align: center; font-size: 11px; color: var(--muted); overflow: hidden; white-space: nowrap; min-width: 0; }
+  .colgroups { display: flex; gap: 6px; margin-top: 4px; }
+  .colgroups .glab { text-align: center; font-size: 11px; color: var(--ink-2); font-weight: 600; border-top: 1px solid var(--grid); padding-top: 4px; }
+  .daygap { flex: 0 0 14px; }
+
+  /* ---------- stacked bars ---------- */
+  .stacks { display: flex; flex-direction: column; gap: 12px; }
+  .stackrow .srlabel { font-size: 12.5px; color: var(--ink-2); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .srlabel .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stackbar { display: flex; gap: 2px; height: 20px; }
+  .seg { min-width: 3px; }
+  .seg:first-child { border-radius: 4px 0 0 4px; }
+  .seg:last-child { border-radius: 0 4px 4px 0; }
+  .seg .seglab { font-size: 11px; font-weight: 600; color: #fff; padding: 1.5px 7px; white-space: nowrap; }
+  .legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+  .lg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+  .lg .sw { width: 11px; height: 11px; border-radius: 3px; }
+
+  /* ---------- tables ---------- */
+  table.dt { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+  .dt th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+  .dt td { padding: 5px 8px; border-bottom: 1px solid var(--grid); color: var(--ink-2); }
+  .dt td:first-child { color: var(--ink); }
+  .dt td.num, .dt th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .dt tr:last-child td { border-bottom: none; }
+  .fa { color: var(--muted); font-size: 11.5px; }
+
+  /* ---------- tooltip ---------- */
+  #tip {
+    position: fixed; z-index: 50; pointer-events: none; display: none;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.14); padding: 8px 11px; max-width: 280px;
+  }
+  #tip .tv { font-weight: 650; font-size: 14px; }
+  #tip .tl { color: var(--ink-2); font-size: 12px; }
+  #tip .tfa { color: var(--muted); font-size: 11.5px; direction: rtl; text-align: right; }
+
+  .hbar, .colbar, .seg { cursor: default; }
+  .hbar:hover, .colbar:hover, .seg:hover { filter: brightness(1.12); }
+
+  footer { margin-top: 26px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+  footer ul { margin: 6px 0 0; padding-left: 18px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .hbar, .colbar { transition: width .25s ease, height .25s ease; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Immigration Leads Dashboard</h1>
+    <p class="sub">243 unique leads from the assessment-form sheet · cohorts: 1–3 Mar 2025, 1–4 Jul 2025, 9–19 Jul 2026 · snapshot 25 Jul 2026</p>
+  </header>
+
+  <div class="filters" role="group" aria-label="Filters">
+    <div class="fgroup" id="f-cohort">
+      <span class="flabel">Cohort</span>
+      <button class="chip" data-v="all" aria-pressed="true">All</button>
+      <button class="chip" data-v="mar2025" aria-pressed="false">Mar 2025</button>
+      <button class="chip" data-v="jul2025" aria-pressed="false">Jul 2025</button>
+      <button class="chip" data-v="jul2026" aria-pressed="false">Jul 2026</button>
+    </div>
+    <div class="fgroup" id="f-dest">
+      <span class="flabel">Destination</span>
+      <button class="chip" data-v="all" aria-pressed="true">All</button>
+      <button class="chip" data-v="کانادا" aria-pressed="false">Canada</button>
+      <button class="chip" data-v="اروپا" aria-pressed="false">Europe</button>
+    </div>
+    <div class="fcount" id="fcount"></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div class="card wide" id="card-daily"></div>
+    <div class="card" id="card-dest"></div>
+    <div class="card" id="card-score"></div>
+    <div class="card" id="card-method"></div>
+    <div class="card" id="card-channel"></div>
+    <div class="card" id="card-source"></div>
+    <div class="card" id="card-medium"></div>
+    <div class="card" id="card-edu"></div>
+    <div class="card" id="card-lang"></div>
+    <div class="card" id="card-budget"></div>
+    <div class="card" id="card-age"></div>
+    <div class="card wide" id="card-campaign"></div>
+  </div>
+
+  <footer>
+    <strong>Notes on the data</strong>
+    <ul>
+      <li>Built from the three lead tabs of the Google Sheet; one duplicated sample row was removed, giving 243 unique leads (82 Mar 2025, 81 Jul 2025, 80 Jul 2026).</li>
+      <li>Names, emails and phone numbers are deliberately not embedded in this file, so it is safe to share.</li>
+      <li>The sheet's email-log tab shows 41 leads were emailed on 11 Jul 2026; 171 of 243 leads (70%) are flagged as added to Odoo.</li>
+      <li>"(no answer)" bars count leads that left that form question blank — they stay in the totals so shares don't overstate.</li>
+    </ul>
+  </footer>
+</div>
+
+<div id="tip" role="status"></div>
+
+<script>
+const DATA = [{"c":"jul2026","d":"2025-03-01","a":42,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"story_highlight","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-09","a":43,"de":"کانادا","m":"ویزای توریستی","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"2","od":true},{"c":"jul2026","d":"2026-07-09","a":43,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"site","s":"sms","md":"sms","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-09","a":42,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"کارشناسی","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_eu","md":"comment_directam","cp":"","lt":"4","od":true},{"c":"jul2026","d":"2026-07-09","a":29,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"2","od":true},{"c":"jul2026","d":"2026-07-10","a":27,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-10","a":30,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"2","od":false},{"c":"jul2026","d":"2026-07-10","a":50,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-10","a":30,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-10","a":30,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"کارشناسی","em":"خیر","b":"بین 40 تا 100 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"4","od":true},{"c":"jul2026","d":"2026-07-10","a":30,"de":"اروپا","m":"سرمایه‌گذاری (ثبت شرکت، تمکن مالی)","e":"کارشناسی","em":"خیر","b":"بیشتر از 100 هزار یورو","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"5","od":false},{"c":"jul2026","d":"2026-07-11","a":29,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"بله","b":"کمتر از 10 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-11","a":23,"de":"کانادا","m":"برنامه پناهندگی و بشردوستانه","e":"دیپلم","em":"خیر","b":"کمتر از 10 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"whatsapp","md":"","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-11","a":34,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"first-touch","lt":"2","od":true},{"c":"jul2026","d":"2026-07-11","a":27,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"کمتر از 10 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-11","a":38,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram","md":"story","cp":"permanent","lt":"2","od":false},{"c":"jul2026","d":"2026-07-11","a":47,"de":"کانادا","m":"سایر روش‌ها","e":"کمتر از دیپلم","em":"بله","b":"کمتر از 10 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"whatsapp","md":"","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-12","a":41,"de":"اروپا","m":"سایر روش‌ها","e":"کمتر از دیپلم","em":"بله","b":"کمتر از 10 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-12","a":47,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"دکتری","em":"خیر","b":"بین 40 تا 100 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"site","s":"newsletter","md":"email","cp":"","lt":"4","od":false},{"c":"jul2026","d":"2026-07-12","a":27,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"بین 20 تا 40 هزار دلار کانادا","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-12","a":25,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از 10 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"article","cp":"","lt":"1","od":false},{"c":"jul2026","d":"2026-07-12","a":35,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2026","d":"2026-07-12","a":35,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"بین 10 تا 20 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"first-touch","lt":"2","od":false},{"c":"jul2026","d":"2026-07-13","a":53,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_eu","md":"reels","cp":"french-study","lt":"0","od":true},{"c":"jul2026","d":"2026-07-13","a":30,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"بیشتر از 100 هزار یورو","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"5","od":false},{"c":"jul2026","d":"2026-07-13","a":40,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"دکتری","em":"خیر","b":"بیشتر از 100 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"یوتیوب","s":"instagram_ca","md":"story","cp":"","lt":"5","od":true},{"c":"jul2026","d":"2026-07-13","a":34,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 20 تا 40 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"site","s":"instagram_ca","md":"bio","cp":"","lt":"3","od":false},{"c":"jul2026","d":"2026-07-14","a":31,"de":"کانادا","m":"اکسپرس انتری","e":"دیپلم","em":"خیر","b":"بین 20 تا 40 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"first-touch","lt":"3","od":true},{"c":"jul2026","d":"2026-07-14","a":32,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-14","a":23,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"0","od":true},{"c":"jul2026","d":"2026-07-14","a":33,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"comment_directam","cp":"general","lt":"3","od":true},{"c":"jul2026","d":"2026-07-14","a":42,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"کارشناسی","em":"بله","b":"بیشتر از 100 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"comment_directam","cp":"general","lt":"5","od":true},{"c":"jul2026","d":"2026-07-14","a":34,"de":"کانادا","m":"ویزای تحصیلی","e":"دکتری","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"0","od":true},{"c":"jul2026","d":"2026-07-14","a":38,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"0","od":true},{"c":"jul2026","d":"2026-07-15","a":39,"de":"کانادا","m":"اسپانسرشیپ (همسر-فرزند-والدین)","e":"","em":"","b":"کمتر از 10 هزار دلار کانادا","l":"","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-15","a":42,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"comment_directam","cp":"general","lt":"2","od":true},{"c":"jul2026","d":"2026-07-15","a":54,"de":"کانادا","m":"ثبت شرکت (ICT - IMP)","e":"دیپلم","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"site","s":"instagram_ca","md":"bio","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-15","a":45,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"site","s":"instagram_ca","md":"bio","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-15","a":46,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"کمتر از 10 هزار یورو","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-15","a":37,"de":"کانادا","m":"ویزای تحصیلی","e":"دکتری","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-15","a":45,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"بین 20 تا 40 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"none","md":"","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-15","a":20,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از 10 هزار یورو","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"none","md":"","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-15","a":40,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"بین 20 تا 40 هزار یورو","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"none","md":"","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-15","a":36,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"خیر","b":"بین 10 تا 20 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"سایر شبکه های اجتماعی","s":"none","md":"","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-15","a":50,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"0","od":true},{"c":"jul2026","d":"2026-07-15","a":35,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"story","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-15","a":38,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"0","od":true},{"c":"jul2026","d":"2026-07-16","a":36,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"بین 10 تا 20 هزار یورو","l":"عالی (آیلتس ۷ به بالا)","ch":"site","s":"none","md":"","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-16","a":36,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"instagram_ca","md":"comment_directam","cp":"general","lt":"3","od":true},{"c":"jul2026","d":"2026-07-16","a":45,"de":"کانادا","m":"برنامه پناهندگی و بشردوستانه","e":"کارشناسی ارشد","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-16","a":23,"de":"کانادا","m":"برنامه پناهندگی و بشردوستانه","e":"دیپلم","em":"خیر","b":"کمتر از 10 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"site","s":"whatsapp","md":"","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-16","a":34,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"خیر","b":"بین 20 تا 40 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"bio","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-16","a":26,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"whatsapp","md":"","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-16","a":39,"de":"کانادا","m":"اکسپرس انتری","e":"کاردانی","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-16","a":23,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"بین 40 تا 100 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"4","od":true},{"c":"jul2026","d":"2026-07-16","a":18,"de":"اروپا","m":"سایر روش‌ها","e":"کمتر از دیپلم","em":"بله","b":"کمتر از 10 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"comment_directam","cp":"general","lt":"1","od":true},{"c":"jul2026","d":"2026-07-16","a":25,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار یورو","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"سایر شبکه های اجتماعی","s":"telegram_ad","md":"post","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-17","a":70,"de":"کانادا","m":"برنامه پناهندگی و بشردوستانه","e":"کاردانی","em":"خیر","b":"کمتر از 10 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"whatsapp","md":"","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-17","a":23,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از 10 هزار یورو","l":"زبان فرانسوی (A1 - A2)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-17","a":30,"de":"کانادا","m":"برنامه پناهندگی و بشردوستانه","e":"کاردانی","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"site","s":"site","md":"button","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-17","a":34,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار یورو","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-17","a":40,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از 10 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-17","a":32,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-17","a":21,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"بین 20 تا 40 هزار یورو","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":18,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"کاردانی","em":"بله","b":"کمتر از 10 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"bio","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-18","a":52,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":17,"de":"کانادا","m":"ویزای تحصیلی","e":"کمتر از دیپلم","em":"خیر","b":"بین 20 تا 40 هزار دلار کانادا","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":15,"de":"کانادا","m":"ویزای تحصیلی","e":"کمتر از دیپلم","em":"خیر","b":"بین 20 تا 40 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"bio","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":45,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از 100 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"direct","cp":"first-touch","lt":"5","od":true},{"c":"jul2026","d":"2026-07-18","a":46,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 20 تا 40 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_eu","md":"comment_directam","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":31,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"بین 10 تا 20 هزار یورو","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"site","s":"instagram_eu","md":"bio","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-18","a":27,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"بین 20 تا 40 هزار یورو","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"instagram_eu","md":"bio","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":22,"de":"کانادا","m":"اکسپرس انتری","e":"دیپلم","em":"خیر","b":"بین 20 تا 40 هزار دلار کانادا","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"direct","cp":"first-touch","lt":"3","od":true},{"c":"jul2026","d":"2026-07-18","a":17,"de":"کانادا","m":"ویزای تحصیلی","e":"کمتر از دیپلم","em":"خیر","b":"بین 40 تا 100 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"site","s":"instagram_ca","md":"comment_directam","cp":"general","lt":"4","od":true},{"c":"jul2026","d":"2026-07-19","a":27,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"کمتر از 10 هزار دلار کانادا","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"story","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-19","a":31,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-19","a":26,"de":"کانادا","m":"سرمایه‌گذاری و کارآفرینی","e":"دیپلم","em":"بله","b":"بین 10 تا 20 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2026","d":"2026-07-19","a":23,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"بین 20 تا 40 هزار دلار کانادا","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"site","s":"instagram_ca","md":"story","cp":"","lt":"3","od":true},{"c":"jul2026","d":"2026-07-19","a":39,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از 10 هزار یورو","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"jul2026","d":"2026-07-19","a":32,"de":"کانادا","m":"اسپانسرشیپ (همسر-فرزند-والدین)","e":"","em":"","b":"کمتر از 10 هزار دلار کانادا","l":"","ch":"سایر شبکه های اجتماعی","s":"whatsapp","md":"","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":37,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"call-tehran","md":"phone","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":36,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"call-tehran","md":"phone","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":52,"de":"کانادا","m":"ویزای توریستی","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":37,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"call-vancouver","md":"openphone","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":35,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"referral","md":"ref_code","cp":"referral","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":40,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":30,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"call-tehran","md":"phone","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":24,"de":"کانادا","m":"ویزای تحصیلی","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"یوتیوب","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":38,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"site","md":"none","cp":"","lt":"4","od":true},{"c":"mar2025","d":"2025-03-01","a":23,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":44,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":47,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"none","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":52,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"site","md":"none","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":30,"de":"کانادا","m":"ویزای استارتاپ","e":"دیپلم","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":45,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"یوتیوب","s":"youtube_ca","md":"post","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":34,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_eu","md":"bio","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":18,"de":"کانادا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"زبان آلمانی (A1 - A2)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":34,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"یوتیوب","s":"referral","md":"ref_code","cp":"referral","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":42,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":43,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کاردانی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":26,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ca","md":"bio","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":28,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":25,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":30,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":42,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":26,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":38,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی ارشد","em":"","b":"چهار تا شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"3","od":true},{"c":"mar2025","d":"2025-03-01","a":42,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"none","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":29,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"پسادکتری (Postdoc)","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"سایر شبکه های اجتماعی","s":"whatsapp","md":"text","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-01","a":37,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"site","md":"none","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":34,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی ارشد","em":"","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-01","a":26,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"4","od":true},{"c":"mar2025","d":"2025-03-01","a":38,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی ارشد","em":"","b":"بیشتر از شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"4","od":true},{"c":"mar2025","d":"2025-03-02","a":19,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ca","md":"story_highlight","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":33,"de":"کانادا","m":"سایر روش‌ها","e":"پسادکتری (Postdoc)","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":50,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":33,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی ارشد","em":"","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":32,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":25,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":35,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"site","md":"none","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":22,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کاردانی","em":"خیر","b":"بیشتر از شش میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"","s":"site","md":"none","cp":"","lt":"4","od":true},{"c":"mar2025","d":"2025-03-02","a":30,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"referral","md":"ref_code","cp":"referral","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"whatsapp","md":"text","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":34,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی ارشد","em":"","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"","s":"site","md":"banner","cp":"ca-suv-feb-25","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":21,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"story_highlight","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram","md":"story","cp":"permanent","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":32,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"4","od":true},{"c":"mar2025","d":"2025-03-02","a":34,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ad","md":"story","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":41,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":32,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":42,"de":"کانادا","m":"سایر روش‌ها","e":"دکتری","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"4","od":true},{"c":"mar2025","d":"2025-03-02","a":18,"de":"کانادا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":23,"de":"کانادا","m":"ویزای توریستی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":22,"de":"کانادا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":44,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"4","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"telegram_ad","md":"post","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":23,"de":"کانادا","m":"ویزای تحصیلی","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":42,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"direct","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"referral","md":"ref_code","cp":"referral","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":35,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"site","md":"none","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":28,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":37,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":26,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"site","md":"none","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":44,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی","em":"","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"site","md":"none","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-02","a":22,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-02","a":36,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دکتری","em":"","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"telegram_ad","md":"post","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":26,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"google","md":"cpc","cp":"22059697114","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":35,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دیپلم","em":"","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ca","md":"comment_directam","cp":"ca-suv-feb-25","lt":"2","od":true},{"c":"mar2025","d":"2025-03-03","a":26,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-03","a":37,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کارشناسی ارشد","em":"","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"","s":"telegram_ad","md":"post","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":33,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"کاردانی","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"telegram_ad","md":"post","cp":"ca-suv-feb-25","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":36,"de":"اروپا","m":"سرمایه‌گذاری (ثبت شرکت، تمکن مالی)","e":"کارشناسی","em":"خیر","b":"بیشتر از شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"4","od":true},{"c":"mar2025","d":"2025-03-03","a":46,"de":"کانادا","m":"سایر روش‌ها","e":"کاردانی","em":"بله","b":"چهار تا شش میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"3","od":true},{"c":"mar2025","d":"2025-03-03","a":28,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"کارشناسی ارشد","em":"بله","b":"چهار تا شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"site-comment","cp":"Consultation_form","lt":"3","od":true},{"c":"mar2025","d":"2025-03-03","a":44,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":28,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دیپلم","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"site","md":"none","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":57,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"mar2025","d":"2025-03-03","a":41,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"mar2025","d":"2025-03-03","a":42,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"2","od":true},{"c":"mar2025","d":"2025-03-03","a":43,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"google","md":"cpc","cp":"sem-ca-dec-24-General-paid","lt":"1","od":true},{"c":"jul2025","d":"2025-07-01","a":23,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-01","a":27,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":44,"de":"کانادا","m":"ویزای توریستی","e":"کاردانی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-01","a":30,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"story_highlight","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-01","a":33,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"article","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":27,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-01","a":37,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":51,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":34,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-01","a":18,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-01","a":38,"de":"کانادا","m":"ویزای توریستی","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-01","a":54,"de":"کانادا","m":"ویزای توریستی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":27,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"story_highlight","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":28,"de":"اروپا","m":"ویزای تحصیلی","e":"دکتری","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-01","a":19,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":30,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":30,"de":"کانادا","m":"سایر روش‌ها","e":"کاردانی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-01","a":29,"de":"اروپا","m":"سرمایه‌گذاری (ثبت شرکت، تمکن مالی)","e":"کارشناسی","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_eu","md":"bio","cp":"","lt":"4","od":false},{"c":"jul2025","d":"2025-07-01","a":25,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-01","a":44,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"4","od":false},{"c":"jul2025","d":"2025-07-01","a":38,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"زبان آلمانی (A1 - A2)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-01","a":35,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"چهار تا شش میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"3","od":false},{"c":"jul2025","d":"2025-07-01","a":23,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_eu","md":"bio","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":32,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_eu","md":"story-highlight","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-01","a":44,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"direct","cp":"","lt":"4","od":true},{"c":"jul2025","d":"2025-07-01","a":30,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-02","a":37,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"چهار تا شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"3","od":false},{"c":"jul2025","d":"2025-07-02","a":31,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":28,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":31,"de":"اروپا","m":"سایر روش‌ها","e":"کاردانی","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"4","od":false},{"c":"jul2025","d":"2025-07-02","a":22,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دیپلم","em":"","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"","s":"instagram_ca","md":"bio","cp":"ca-suv-may-25","lt":"2","od":false},{"c":"jul2025","d":"2025-07-02","a":18,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":35,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"کاردانی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-02","a":22,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-02","a":34,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دیپلم","em":"","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ca","md":"bio","cp":"ca-suv-may-25","lt":"2","od":false},{"c":"jul2025","d":"2025-07-02","a":28,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دیپلم","em":"","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"instagram_ca","md":"bio","cp":"ca-suv-may-25","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":26,"de":"کانادا","m":"ویزای توریستی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":19,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_eu","md":"bio","cp":"","lt":"","od":false},{"c":"jul2025","d":"2025-07-02","a":32,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-02","a":36,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"4","od":false},{"c":"jul2025","d":"2025-07-02","a":38,"de":"کانادا","m":"اکسپرس انتری","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-02","a":30,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"instagram_eu","md":"bio","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-02","a":25,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":43,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":35,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی ارشد","em":"بله","b":"بیشتر از شش میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"whatsapp","md":"text","cp":"","lt":"4","od":false},{"c":"jul2025","d":"2025-07-02","a":48,"de":"اروپا","m":"سایر روش‌ها","e":"پسادکتری (Postdoc)","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-02","a":35,"de":"اروپا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-02","a":52,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"دکتری","em":"بله","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":33,"de":"کانادا","m":"ویزای استارتاپ کانادا","e":"دیپلم","em":"","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"","s":"instagram_ca","md":"bio","cp":"ca-suv-may-25","lt":"1","od":false},{"c":"jul2025","d":"2025-07-02","a":47,"de":"کانادا","m":"سایر روش‌ها","e":"دکتری","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"call-vancouver","md":"openphone","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-02","a":36,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"call-vancouver","md":"openphone","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-03","a":41,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-03","a":28,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"call-vancouver","md":"openphone","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-03","a":41,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"اینستاگرام","s":"instagram_ca","md":"story_highlight","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-03","a":29,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"دوستان و آشنایان","s":"call-vancouver","md":"openphone","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-03","a":21,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-03","a":19,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"","s":"site","md":"button","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-03","a":35,"de":"اروپا","m":"سایر روش‌ها","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-03","a":18,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"دیپلم","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"دوستان و آشنایان","s":"whatsapp","md":"text","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-03","a":25,"de":"اروپا","m":"ویزای استارتاپ اروپا","e":"کاردانی","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-03","a":18,"de":"اروپا","m":"ویزای تحصیلی","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-03","a":28,"de":"کانادا","m":"سایر روش‌ها","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"instagram_ca","md":"story","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-03","a":25,"de":"کانادا","m":"ویزای تحصیلی","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-03","a":26,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"عالی (آیلتس ۷ به بالا)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-03","a":37,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"comment","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-03","a":47,"de":"کانادا","m":"سایر روش‌ها","e":"دکتری","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"call-vancouver","md":"openphone","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-03","a":36,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-03","a":38,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"دوستان و آشنایان","s":"call-vancouver","md":"openphone","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-03","a":26,"de":"کانادا","m":"ویزای استارتاپ","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"call-vancouver","md":"openphone","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-03","a":42,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"story","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-03","a":26,"de":"کانادا","m":"ویزای استارتاپ","e":"دیپلم","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"دوستان و آشنایان","s":"call-vancouver","md":"openphone","cp":"","lt":"1","od":true},{"c":"jul2025","d":"2025-07-03","a":32,"de":"کانادا","m":"ویزای توریستی","e":"کارشناسی ارشد","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"story","cp":"","lt":"2","od":true},{"c":"jul2025","d":"2025-07-03","a":51,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی ارشد","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-04","a":40,"de":"کانادا","m":"اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)","e":"کارشناسی","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"call-vancouver","md":"openphone","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-04","a":58,"de":"کانادا","m":"ثبت شرکت (سرمایه گذاری - ICT - IMP)","e":"کارشناسی","em":"خیر","b":"دو تا چهار میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-04","a":49,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"comment","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-04","a":18,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"خیر","b":"کمتر از دو میلیارد تومان","l":"ضعیف (آیلتس ۴ به پایین)","ch":"اینستاگرام","s":"instagram_ca","md":"direct","cp":"","lt":"1","od":false},{"c":"jul2025","d":"2025-07-04","a":29,"de":"کانادا","m":"ویزای تحصیلی","e":"کارشناسی","em":"بله","b":"چهار تا شش میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"اینستاگرام","s":"whatsapp","md":"text","cp":"","lt":"3","od":false},{"c":"jul2025","d":"2025-07-04","a":33,"de":"اروپا","m":"ویزای تحصیلی","e":"کارشناسی ارشد","em":"بله","b":"دو تا چهار میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"banner-side","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-04","a":26,"de":"کانادا","m":"سایر روش‌ها","e":"دیپلم","em":"بله","b":"دو تا چهار میلیارد تومان","l":"خوب (آیلتس ۶ تا ۶.۵)","ch":"جستجو در گوگل / سایت","s":"site","md":"button","cp":"","lt":"2","od":false},{"c":"jul2025","d":"2025-07-04","a":38,"de":"کانادا","m":"ویزای استارتاپ","e":"کارشناسی ارشد","em":"بله","b":"کمتر از دو میلیارد تومان","l":"متوسط (آیلتس ۴.۵ تا ۵.۵)","ch":"اینستاگرام","s":"instagram_ca","md":"comment","cp":"","lt":"1","od":false}];
+
+/* ---------- translations (Persian → English) ---------- */
+const T = {
+  dest: { 'کانادا': 'Canada', 'اروپا': 'Europe' },
+  method: {
+    'سایر روش‌ها': 'Other methods',
+    'ویزای تحصیلی': 'Study visa',
+    'اقامت از داخل کانادا (ویژه کسانی که داخل کانادا هستند)': 'Inland Canada residency',
+    'ویزای استارتاپ کانادا': 'Start-up visa (Canada)',
+    'اکسپرس انتری': 'Express Entry',
+    'ویزای استارتاپ': 'Start-up visa',
+    'ویزای استارتاپ اروپا': 'Start-up visa (Europe)',
+    'ویزای توریستی': 'Tourist visa',
+    'سرمایه‌گذاری و کارآفرینی': 'Investment & entrepreneurship',
+    'برنامه پناهندگی و بشردوستانه': 'Humanitarian / refugee program',
+    'سرمایه‌گذاری (ثبت شرکت، تمکن مالی)': 'Investment (company / funds)',
+    'اسپانسرشیپ (همسر-فرزند-والدین)': 'Family sponsorship',
+    'ثبت شرکت (ICT - IMP)': 'Company registration (ICT/IMP)',
+    'ثبت شرکت (سرمایه گذاری - ICT - IMP)': 'Company registration (ICT/IMP)'
+  },
+  edu: {
+    'کمتر از دیپلم': 'Below diploma', 'دیپلم': 'Diploma', 'کاردانی': 'Associate',
+    'کارشناسی': "Bachelor's", 'کارشناسی ارشد': "Master's", 'دکتری': 'PhD',
+    'پسادکتری (Postdoc)': 'Postdoc'
+  },
+  lang: {
+    'ضعیف (آیلتس ۴ به پایین)': 'Weak (IELTS ≤4)',
+    'متوسط (آیلتس ۴.۵ تا ۵.۵)': 'Intermediate (4.5–5.5)',
+    'خوب (آیلتس ۶ تا ۶.۵)': 'Good (6–6.5)',
+    'عالی (آیلتس ۷ به بالا)': 'Excellent (7+)',
+    'زبان آلمانی (A1 - A2)': 'German A1–A2',
+    'زبان فرانسوی (A1 - A2)': 'French A1–A2'
+  },
+  budget: {
+    'کمتر از دو میلیارد تومان': '< 2B toman',
+    'دو تا چهار میلیارد تومان': '2–4B toman',
+    'چهار تا شش میلیارد تومان': '4–6B toman',
+    'بیشتر از شش میلیارد تومان': '> 6B toman',
+    'کمتر از 10 هزار دلار کانادا': '< 10k CAD',
+    'بین 10 تا 20 هزار دلار کانادا': '10–20k CAD',
+    'بین 20 تا 40 هزار دلار کانادا': '20–40k CAD',
+    'بین 40 تا 100 هزار دلار کانادا': '40–100k CAD',
+    'بیشتر از 100 هزار دلار کانادا': '> 100k CAD',
+    'کمتر از 10 هزار یورو': '< 10k EUR',
+    'بین 10 تا 20 هزار یورو': '10–20k EUR',
+    'بین 20 تا 40 هزار یورو': '20–40k EUR',
+    'بیشتر از 100 هزار یورو': '> 100k EUR'
+  },
+  channel: {
+    'اینستاگرام': 'Instagram',
+    'جستجو در گوگل / سایت': 'Google search / website',
+    'دوستان و آشنایان': 'Friends & family',
+    'site': 'Website',
+    'یوتیوب': 'YouTube',
+    'سایر شبکه های اجتماعی': 'Other social media'
+  }
+};
+const COHORTS = { mar2025: 'Mar 2025', jul2025: 'Jul 2025', jul2026: 'Jul 2026' };
+const NONE = '(no answer)';
+
+/* ---------- state & filtering ---------- */
+const state = { cohort: 'all', dest: 'all' };
+function filtered() {
+  return DATA.filter(r =>
+    (state.cohort === 'all' || r.c === state.cohort) &&
+    (state.dest === 'all' || r.de === state.dest));
+}
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+function count(rows, key, translate) {
+  const m = new Map();
+  for (const r of rows) {
+    const raw = (r[key] || '').trim();
+    const k = raw || NONE;
+    if (!m.has(k)) m.set(k, { raw, n: 0 });
+    m.get(k).n++;
+  }
+  const out = [];
+  for (const [k, v] of m) {
+    out.push({ key: k, raw: v.raw, n: v.n,
+      label: k === NONE ? NONE : (translate && translate[k]) || k });
+  }
+  return out;
+}
+const pct = (n, t) => t ? Math.round(100 * n / t) + '%' : '0%';
+
+/* ---------- tooltip ---------- */
+const tip = $('#tip');
+function showTip(evt, value, label, fa) {
+  tip.replaceChildren();
+  tip.appendChild(el('div', 'tv', value));
+  tip.appendChild(el('div', 'tl', label));
+  if (fa && fa !== label) tip.appendChild(el('div', 'tfa', fa));
+  tip.style.display = 'block';
+  moveTip(evt);
+}
+function moveTip(evt) {
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = evt.clientX + 14, y = evt.clientY + 14;
+  if (x + w > innerWidth - 8) x = evt.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = evt.clientY - h - 14;
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() { tip.style.display = 'none'; }
+function bindTip(node, getArgs) {
+  node.tabIndex = 0;
+  node.addEventListener('pointerenter', e => showTip(e, ...getArgs()));
+  node.addEventListener('pointermove', moveTip);
+  node.addEventListener('pointerleave', hideTip);
+  node.addEventListener('focus', () => {
+    const r = node.getBoundingClientRect();
+    showTip({ clientX: r.right, clientY: r.top }, ...getArgs());
+  });
+  node.addEventListener('blur', hideTip);
+}
+
+/* ---------- generic card scaffold ---------- */
+function card(id, title, sub) {
+  const c = $(id);
+  c.replaceChildren();
+  const head = el('div', 'chead');
+  head.appendChild(el('h2', null, title));
+  const btn = el('button', 'tbl-btn', 'Table');
+  btn.setAttribute('aria-pressed', 'false');
+  head.appendChild(btn);
+  c.appendChild(head);
+  c.appendChild(el('p', 'csub', sub));
+  const chart = el('div'); const table = el('div'); table.hidden = true;
+  c.appendChild(chart); c.appendChild(table);
+  btn.addEventListener('click', () => {
+    const show = table.hidden;
+    table.hidden = !show; chart.hidden = show;
+    btn.textContent = show ? 'Chart' : 'Table';
+    btn.setAttribute('aria-pressed', String(show));
+  });
+  return { chart, table };
+}
+function dataTable(rows, total, cols) {
+  const t = el('table', 'dt');
+  const tr = el('tr');
+  (cols || ['Category', 'Leads', 'Share']).forEach((h, i) => {
+    const th = el('th', i ? 'num' : null, h); tr.appendChild(th);
+  });
+  t.appendChild(tr);
+  for (const r of rows) {
+    const row = el('tr');
+    const td = el('td', null, r.label);
+    if (r.raw && r.raw !== r.label) {
+      const fa = el('div', 'fa', r.raw); fa.dir = 'rtl'; td.appendChild(fa);
+    }
+    row.appendChild(td);
+    row.appendChild(el('td', 'num', String(r.n)));
+    row.appendChild(el('td', 'num', pct(r.n, total)));
+    t.appendChild(row);
+  }
+  return t;
+}
+
+/* ---------- horizontal bar chart ---------- */
+function hbarChart(mount, items, total, opts = {}) {
+  const box = el('div', 'hbars');
+  const max = Math.max(...items.filter(i => typeof i.n === 'number').map(i => i.n), 1);
+  for (const it of items) {
+    if (it.group !== undefined) { box.appendChild(el('div', 'hgroup-title', it.group)); continue; }
+    const row = el('div', 'hrow');
+    const lab = el('div', 'hlabel', it.label);
+    lab.title = it.label;
+    row.appendChild(lab);
+    const track = el('div', 'htrack');
+    const bar = el('div', 'hbar');
+    bar.style.width = (100 * it.n / max) + '%';
+    bar.style.background = it.key === NONE ? 'var(--none-fill)' : (it.color || (opts.color || 'var(--s1)'));
+    bindTip(bar, () => [`${it.n} leads (${pct(it.n, total)})`, it.label, it.raw]);
+    track.appendChild(bar);
+    const val = el('span', 'hval');
+    val.appendChild(document.createTextNode(it.n + ' '));
+    val.appendChild(el('span', 'pc', pct(it.n, total)));
+    track.appendChild(val);
+    row.appendChild(track);
+    box.appendChild(row);
+  }
+  mount.appendChild(box);
+}
+
+/* ---------- column chart ---------- */
+function colChart(mount, items, opts = {}) {
+  const wrap = el('div');
+  const cols = el('div', 'cols');
+  const xrow = el('div', 'colx');
+  const real = items.filter(i => typeof i.n === 'number');
+  const max = Math.max(...real.map(i => i.n), 1);
+  const maxIdx = items.indexOf(real.reduce((b, it) => it.n > b.n ? it : b, real[0]));
+  items.forEach((it, i) => {
+    if (it.gap) {
+      cols.appendChild(el('div', 'daygap'));
+      const g = el('div', 'daygap'); xrow.appendChild(g);
+      return;
+    }
+    const slot = el('div', 'colslot');
+    const h = Math.max(1.5, 100 * it.n / max);
+    if (i === maxIdx || it.labelled) {
+      const top = el('div', 'coltop', String(it.n));
+      top.style.bottom = `calc(${h}% + 3px)`;
+      slot.appendChild(top);
+    }
+    const bar = el('div', 'colbar');
+    bar.style.height = h + '%';
+    bar.style.background = it.color || 'var(--s1)';
+    bindTip(bar, () => [`${it.n} leads`, it.tip || it.label, it.raw]);
+    slot.appendChild(bar);
+    cols.appendChild(slot);
+    const xl = el('div', 'xlab', it.label); xl.title = it.tip || it.label;
+    xrow.appendChild(xl);
+  });
+  wrap.appendChild(cols); wrap.appendChild(xrow);
+  mount.appendChild(wrap);
+  return wrap;
+}
+
+/* ---------- KPI row ---------- */
+function renderKpis(rows) {
+  const k = $('#kpis'); k.replaceChildren();
+  const total = rows.length;
+  const ages = rows.filter(r => r.a);
+  const avgAge = ages.length ? (ages.reduce((s, r) => s + r.a, 0) / ages.length).toFixed(1) : '—';
+  const canada = rows.filter(r => r.de === 'کانادا').length;
+  const empAns = rows.filter(r => r.em === 'بله' || r.em === 'خیر');
+  const emp = empAns.filter(r => r.em === 'بله').length;
+  const odoo = rows.filter(r => r.od).length;
+  const items = [
+    ['Leads', String(total), state.cohort === 'all' ? 'across 3 cohorts' : COHORTS[state.cohort]],
+    ['Average age', avgAge, ages.length + ' with age given'],
+    ['Choosing Canada', pct(canada, total), canada + ' leads · rest Europe'],
+    ['Employed', pct(emp, empAns.length || 1), emp + ' of ' + empAns.length + ' who answered'],
+    ['Added to Odoo', pct(odoo, total), odoo + ' synced to CRM'],
+  ];
+  for (const [label, value, note] of items) {
+    const t = el('div', 'kpi');
+    t.appendChild(el('div', 'klabel', label));
+    t.appendChild(el('div', 'kvalue', value));
+    t.appendChild(el('div', 'knote', note));
+    k.appendChild(t);
+  }
+}
+
+/* ---------- individual cards ---------- */
+function renderDaily(rows) {
+  const { chart, table } = card('#card-daily', 'Leads per day',
+    'Form submissions by date — the three capture windows are shown side by side');
+  const byDate = new Map();
+  for (const r of rows) if (r.d) byDate.set(r.d, (byDate.get(r.d) || 0) + 1);
+  const dates = [...byDate.keys()].sort();
+  const items = []; const trows = [];
+  let prevCohort = null;
+  const cohortOf = d => d.startsWith('2025-03') ? 'mar2025' : d.startsWith('2025-07') ? 'jul2025' : 'jul2026';
+  for (const d of dates) {
+    const co = cohortOf(d);
+    if (prevCohort && co !== prevCohort) items.push({ gap: true });
+    prevCohort = co;
+    const n = byDate.get(d);
+    const day = d.slice(8);
+    const nice = new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    items.push({ n, label: day, tip: nice, color: 'var(--s1)' });
+    trows.push({ label: nice, n });
+  }
+  if (!items.length) { chart.appendChild(el('p', 'csub', 'No dated leads in this slice.')); return; }
+  colChart(chart, items);
+  const cap = el('p', 'csub');
+  cap.style.marginTop = '8px';
+  cap.textContent = state.cohort === 'all'
+    ? 'Groups left to right: 1–3 Mar 2025 · 1–4 Jul 2025 · 9–19 Jul 2026. Day numbers on the axis; hover for exact dates.'
+    : 'Hover a column for the exact date.';
+  chart.appendChild(cap);
+  table.appendChild(dataTable(trows, rows.length, ['Date', 'Leads', 'Share']));
+}
+
+function renderDest(rows) {
+  const { chart, table } = card('#card-dest', 'Destination mix by cohort',
+    'Share of leads choosing Canada vs Europe in each capture window');
+  const box = el('div', 'stacks');
+  const trows = [];
+  const cohorts = state.cohort === 'all' ? Object.keys(COHORTS) : [state.cohort];
+  for (const co of cohorts) {
+    const sub = rows.filter(r => r.c === co);
+    if (!sub.length) continue;
+    const ca = sub.filter(r => r.de === 'کانادا').length;
+    const eu = sub.length - ca;
+    const row = el('div', 'stackrow');
+    const lab = el('div', 'srlabel');
+    lab.appendChild(el('span', null, COHORTS[co]));
+    lab.appendChild(el('span', 'n', sub.length + ' leads'));
+    row.appendChild(lab);
+    const bar = el('div', 'stackbar');
+    for (const [n, name, color, fa] of [[ca, 'Canada', 'var(--s1)', 'کانادا'], [eu, 'Europe', 'var(--s2)', 'اروپا']]) {
+      if (!n) continue;
+      const seg = el('div', 'seg');
+      seg.style.flex = n + ' 0 0'; seg.style.background = color;
+      seg.style.display = 'flex'; seg.style.alignItems = 'center'; seg.style.overflow = 'visible';
+      if (n / sub.length > 0.16) seg.appendChild(el('span', 'seglab', pct(n, sub.length)));
+      bindTip(seg, () => [`${n} leads (${pct(n, sub.length)})`, `${name} — ${COHORTS[co]}`, fa]);
+      bar.appendChild(seg);
+      trows.push({ label: `${COHORTS[co]} — ${name}`, n, raw: fa });
+    }
+    row.appendChild(bar);
+    box.appendChild(row);
+  }
+  chart.appendChild(box);
+  const lg = el('div', 'legend');
+  for (const [name, c] of [['Canada', 'var(--s1)'], ['Europe', 'var(--s2)']]) {
+    const item = el('span', 'lg');
+    const sw = el('span', 'sw'); sw.style.background = c;
+    item.appendChild(sw); item.appendChild(el('span', null, name));
+    lg.appendChild(item);
+  }
+  chart.appendChild(lg);
+  table.appendChild(dataTable(trows, rows.length, ['Cohort — destination', 'Leads', 'Share of all']));
+}
+
+function renderScore(rows) {
+  const { chart, table } = card('#card-score', 'Lead score (Lead_Type)',
+    'Distribution of the sheet’s 0–5 lead scoring — higher is better qualified');
+  const items = [];
+  for (let s = 0; s <= 5; s++) {
+    const n = rows.filter(r => r.lt === String(s)).length;
+    items.push({ n, label: String(s), tip: 'Score ' + s, labelled: true });
+  }
+  colChart(chart, items);
+  table.appendChild(dataTable(items.map(i => ({ label: 'Score ' + i.label, n: i.n })), rows.length, ['Score', 'Leads', 'Share']));
+}
+
+function simpleHbarCard(id, title, sub, rows, key, dict, topN) {
+  const { chart, table } = card(id, title, sub);
+  let items = count(rows, key, dict).sort((a, b) => b.n - a.n);
+  // keep "(no answer)" pinned to the bottom
+  const blank = items.find(i => i.key === NONE);
+  items = items.filter(i => i.key !== NONE);
+  if (topN && items.length > topN) {
+    const rest = items.slice(topN);
+    items = items.slice(0, topN);
+    items.push({ key: '__other', label: `Other (${rest.length} values)`, raw: '', n: rest.reduce((s, i) => s + i.n, 0) });
+  }
+  if (blank) items.push(blank);
+  hbarChart(chart, items, rows.length);
+  table.appendChild(dataTable(items, rows.length));
+}
+
+function renderEdu(rows) {
+  const { chart, table } = card('#card-edu', 'Education level',
+    'Highest completed degree, ordered low to high');
+  const order = ['کمتر از دیپلم', 'دیپلم', 'کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری', 'پسادکتری (Postdoc)'];
+  const ramp = ['var(--seq-250)', 'var(--seq-300)', 'var(--seq-350)', 'var(--seq-400)', 'var(--seq-450)', 'var(--seq-500)', 'var(--seq-550)'];
+  const counts = count(rows, 'e', T.edu);
+  const items = order.map((k, i) => {
+    const f = counts.find(c => c.key === k);
+    return { key: k, raw: k, label: T.edu[k], n: f ? f.n : 0, color: ramp[i] };
+  });
+  const blank = counts.find(c => c.key === NONE);
+  if (blank) items.push(blank);
+  hbarChart(chart, items, rows.length);
+  table.appendChild(dataTable(items, rows.length));
+}
+
+function renderLang(rows) {
+  const { chart, table } = card('#card-lang', 'English level (self-assessed)',
+    'IELTS-band self assessment from the form, ordered weak to excellent');
+  const order = ['ضعیف (آیلتس ۴ به پایین)', 'متوسط (آیلتس ۴.۵ تا ۵.۵)', 'خوب (آیلتس ۶ تا ۶.۵)', 'عالی (آیلتس ۷ به بالا)'];
+  const ramp = ['var(--seq-250)', 'var(--seq-350)', 'var(--seq-450)', 'var(--seq-550)'];
+  const counts = count(rows, 'l', T.lang);
+  const items = order.map((k, i) => {
+    const f = counts.find(c => c.key === k);
+    return { key: k, raw: k, label: T.lang[k], n: f ? f.n : 0, color: ramp[i] };
+  });
+  for (const c of counts) if (!order.includes(c.key) && c.key !== NONE) items.push(c);
+  const blank = counts.find(c => c.key === NONE);
+  if (blank) items.push(blank);
+  hbarChart(chart, items, rows.length);
+  table.appendChild(dataTable(items, rows.length));
+}
+
+function renderBudget(rows) {
+  const { chart, table } = card('#card-budget', 'Stated budget',
+    'Grouped by the currency the form asked in — toman forms vs CAD/EUR forms');
+  const groups = [
+    ['Iranian toman', ['کمتر از دو میلیارد تومان', 'دو تا چهار میلیارد تومان', 'چهار تا شش میلیارد تومان', 'بیشتر از شش میلیارد تومان']],
+    ['Canadian dollars', ['کمتر از 10 هزار دلار کانادا', 'بین 10 تا 20 هزار دلار کانادا', 'بین 20 تا 40 هزار دلار کانادا', 'بین 40 تا 100 هزار دلار کانادا', 'بیشتر از 100 هزار دلار کانادا']],
+    ['Euros', ['کمتر از 10 هزار یورو', 'بین 10 تا 20 هزار یورو', 'بین 20 تا 40 هزار یورو', 'بیشتر از 100 هزار یورو']],
+  ];
+  const counts = count(rows, 'b', T.budget);
+  const items = []; const trows = [];
+  for (const [gname, keys] of groups) {
+    const present = keys.map(k => counts.find(c => c.key === k)).filter(Boolean);
+    if (!present.length) continue;
+    items.push({ group: gname });
+    for (const k of keys) {
+      const f = counts.find(c => c.key === k);
+      if (!f) continue;
+      const it = { key: k, raw: k, label: T.budget[k], n: f.n };
+      items.push(it); trows.push(it);
+    }
+  }
+  const blank = counts.find(c => c.key === NONE);
+  if (blank) { items.push({ group: ' ' }); items.push(blank); trows.push(blank); }
+  hbarChart(chart, items, rows.length);
+  table.appendChild(dataTable(trows, rows.length));
+}
+
+function renderAge(rows) {
+  const { chart, table } = card('#card-age', 'Age distribution',
+    'Ages 15–70 in the data; bars are 5-year bands');
+  const bins = [['<20', 0, 19], ['20–24', 20, 24], ['25–29', 25, 29], ['30–34', 30, 34],
+    ['35–39', 35, 39], ['40–44', 40, 44], ['45–49', 45, 49], ['50–54', 50, 54], ['55+', 55, 200]];
+  const items = bins.map(([label, lo, hi]) => ({
+    label, n: rows.filter(r => r.a && r.a >= lo && r.a <= hi).length, tip: 'Age ' + label,
+  }));
+  colChart(chart, items);
+  table.appendChild(dataTable(items.map(i => ({ label: 'Age ' + i.label, n: i.n })), rows.length, ['Age band', 'Leads', 'Share']));
+}
+
+function renderCampaign(rows) {
+  const { chart, table } = card('#card-campaign', 'Top campaigns',
+    'UTM campaign on the lead, where one was captured');
+  const counts = count(rows, 'cp').filter(c => c.key !== NONE).sort((a, b) => b.n - a.n);
+  const tagged = counts.reduce((s, c) => s + c.n, 0);
+  const top = counts.slice(0, 10);
+  const t = el('table', 'dt');
+  const hr = el('tr');
+  for (const [h, cls] of [['Campaign', null], ['Leads', 'num'], ['Share of tagged', 'num']]) {
+    hr.appendChild(el('th', cls, h));
+  }
+  t.appendChild(hr);
+  for (const c of top) {
+    const tr = el('tr');
+    const td = el('td'); td.dir = 'auto'; td.textContent = c.label;
+    tr.appendChild(td);
+    tr.appendChild(el('td', 'num', String(c.n)));
+    tr.appendChild(el('td', 'num', pct(c.n, tagged)));
+    t.appendChild(tr);
+  }
+  chart.appendChild(t);
+  const cap = el('p', 'csub');
+  cap.style.marginTop = '8px';
+  cap.textContent = `${tagged} of ${rows.length} leads carry a campaign tag (${pct(tagged, rows.length)}); the rest arrived untagged — organic, direct, or referral.`;
+  chart.appendChild(cap);
+  table.appendChild(dataTable(counts, tagged, ['Campaign', 'Leads', 'Share of tagged']));
+}
+
+/* ---------- render everything ---------- */
+function renderAll() {
+  const rows = filtered();
+  $('#fcount').replaceChildren();
+  const strong = el('strong', null, String(rows.length));
+  $('#fcount').appendChild(strong);
+  $('#fcount').appendChild(document.createTextNode(` of ${DATA.length} leads`));
+  renderKpis(rows);
+  renderDaily(rows);
+  renderDest(rows);
+  renderScore(rows);
+  simpleHbarCard('#card-method', 'Immigration method', 'What the lead says they want to pursue', rows, 'm', T.method, 10);
+  simpleHbarCard('#card-channel', 'How leads found us', 'Self-reported on the form ("از چه طریقی با ما آشنا شدید؟")', rows, 'ch', T.channel);
+  simpleHbarCard('#card-source', 'Traffic source (UTM)', 'Tracking source captured with the submission', rows, 's', null, 10);
+  simpleHbarCard('#card-medium', 'Traffic medium (UTM)', 'Placement or medium captured with the submission', rows, 'md', null, 10);
+  renderEdu(rows);
+  renderLang(rows);
+  renderBudget(rows);
+  renderAge(rows);
+  renderCampaign(rows);
+}
+
+/* ---------- filter wiring ---------- */
+for (const [id, key] of [['#f-cohort', 'cohort'], ['#f-dest', 'dest']]) {
+  $(id).addEventListener('click', e => {
+    const btn = e.target.closest('.chip');
+    if (!btn) return;
+    state[key] = btn.dataset.v;
+    for (const c of $(id).querySelectorAll('.chip')) {
+      c.setAttribute('aria-pressed', String(c === btn));
+    }
+    renderAll();
+  });
+}
+
+renderAll();
+</script>
+
+</body>
+</html>
