@@ -221,7 +221,11 @@
   <div id="freshness"></div>
   <div class="recency" id="recency"></div>
 
-  <h2 class="section">Whole-period totals</h2>
+  <h2 class="section" id="h30"></h2>
+  <div class="kpis" id="kpis30"></div>
+  <div id="note30"></div>
+
+  <h2 class="section">Whole-period totals — all 18 months</h2>
   <div class="kpis" id="kpis"></div>
 
   <h2 class="section">What the numbers say</h2>
@@ -714,24 +718,60 @@ function renderRecency(baseIdx) {
 }
 
 /* ---------- KPIs ---------- */
-function renderKpis(idx) {
-  const k = $('#kpis'); k.replaceChildren();
+// which currency the budget question was asked in — tiers are only comparable within one currency
+const curOf = i => {
+  const b = val('b', i);
+  return b.includes('تومان') ? 'toman' : b.includes('دلار') ? 'CAD' : b.includes('یورو') ? 'EUR' : '';
+};
+const stats = idx => {
   const n = idx.length;
   const ages = idx.map(i => COL.a[i]).filter(a => a > 0).sort((a, b) => a - b);
-  const ca = idx.filter(i => val('de', i) === 'کانادا').length;
-  const empA = idx.filter(i => val('em', i) !== '');
-  const emp = empA.filter(i => val('em', i) === 'بله').length;
-  const odoo = idx.filter(i => val('od', i) === '1').length;
-  const hi = idx.filter(i => ['3', '4', '5'].includes(val('t', i))).length;
-  const nMonths = new Set(idx.map(i => monthKey(i))).size;
+  return {
+    n, ages,
+    mean: ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : null,
+    median: ages.length ? ages[Math.floor(ages.length / 2)] : null,
+    ca: idx.filter(i => val('de', i) === 'کانادا').length,
+    hi: idx.filter(i => ['3', '4', '5'].includes(val('t', i))).length,
+    months: new Set(idx.map(i => monthKey(i))).size,
+    toman: idx.filter(i => curOf(i) === 'toman').length,
+    tomanHi: idx.filter(i => curOf(i) === 'toman' && ['3', '4', '5'].includes(val('t', i))).length
+  };
+};
+// signed change in percentage points, for rate-style tiles
+const ppNote = (curN, curD, prevN, prevD) => {
+  if (!prevD || !curD) return '';
+  const d = Math.round(100 * curN / curD) - Math.round(100 * prevN / prevD);
+  return d === 0 ? ' · level vs previous' : ` · ${d > 0 ? '+' : ''}${d}pp vs previous`;
+};
+// A naive period-on-period tier comparison is a trap: the CAD/EUR brackets map to higher tiers
+// than the toman brackets for equivalent money, so a shift in the currency mix alone moves the
+// number. When the mix differs, compare toman leads only.
+function tierNote(s, p) {
+  const base = `${fmt(s.hi)} at 4B toman / 20k CAD+`;
+  if (!p || !s.n || !p.n) return base;
+  const mixNow = 1 - s.toman / s.n, mixPrev = 1 - p.toman / p.n;
+  if (Math.abs(mixNow - mixPrev) > 0.05 && s.toman && p.toman) {
+    return `${base} · like-for-like on toman leads ${pct(s.tomanHi, s.toman)} vs ${pct(p.tomanHi, p.toman)}`;
+  }
+  return base + ppNote(s.hi, s.n, p.hi, p.n);
+}
+function renderKpis(mountSel, idx, prevIdx) {
+  const k = $(mountSel); k.replaceChildren();
+  const s = stats(idx);
+  const p = prevIdx ? stats(prevIdx) : null;
+  let volNote = `${s.months} month${s.months === 1 ? '' : 's'} · ${s.months ? fmt(Math.round(s.n / s.months)) : '—'}/month`;
+  if (p) {
+    const d = p.n ? Math.round(100 * (s.n - p.n) / p.n) : null;
+    volNote = d === null ? 'no leads in the previous window'
+      : `${d > 0 ? '+' : ''}${d}% vs previous 30 days (${fmt(p.n)})`;
+  }
   const items = [
-    ['Submissions', fmt(n), `${nMonths} month${nMonths === 1 ? '' : 's'} · ${nMonths ? fmt(Math.round(n / nMonths)) : '—'}/month`],
-    ['Average age', ages.length ? (ages.reduce((a, b) => a + b, 0) / ages.length).toFixed(1) : '—',
-      ages.length ? 'median ' + ages[Math.floor(ages.length / 2)] : ''],
-    ['Choosing Canada', pct(ca, n), fmt(ca) + ' Canada · ' + fmt(n - ca) + ' Europe'],
-    ['Budget tier 3–5', pct(hi, n), fmt(hi) + ' at 4B toman / 20k CAD+'],
-    ['Employed', pct(emp, empA.length || 1), fmt(emp) + ' of ' + fmt(empA.length) + ' answering'],
-    ['Flagged into Odoo', pct(odoo, n), fmt(odoo) + ' of ' + fmt(n) + ' rows carry the flag'],
+    ['Submissions', fmt(s.n), volNote],
+    ['Average age', s.mean != null ? s.mean.toFixed(1) : '—',
+      s.median != null ? 'median ' + s.median + (p && p.mean != null ? ` · previous mean ${p.mean.toFixed(1)}` : '') : ''],
+    ['Choosing Canada', pct(s.ca, s.n),
+      `${fmt(s.ca)} Canada · ${fmt(s.n - s.ca)} Europe` + (p ? ppNote(s.ca, s.n, p.ca, p.n) : '')],
+    ['Budget tier 3–5', pct(s.hi, s.n), tierNote(s, p)],
   ];
   for (const [l, v, note] of items) {
     const t = el('div', 'kpi');
@@ -1103,9 +1143,32 @@ function renderAll() {
   const fc = $('#fcount');
   fc.replaceChildren(el('strong', null, fmt(idx.length)), document.createTextNode(` of ${fmt(N)} leads`));
   renderFreshness();
-  renderRecency(dimIdx());
+  const dim = dimIdx();
+  renderRecency(dim);
+  // last 30 days, anchored to today like the recency cards — independent of the Period filter
+  const anchor = todayUTC();
+  const lo30 = new Date(anchor.getTime() - 30 * DAY);
+  const lo60 = new Date(anchor.getTime() - 60 * DAY);
+  $('#h30').textContent = `Last 30 days — ${fmtDay(lo30)} to ${fmtDay(anchor)}`;
+  const cur30 = dim.filter(i => dayOf(i) >= lo30);
+  const prev30 = dim.filter(i => { const d = dayOf(i); return d >= lo60 && d < lo30; });
+  renderKpis('#kpis30', cur30, prev30);
+  // warn when the tier figure is inflated by the currency switch rather than by better leads
+  const n30 = $('#note30'); n30.replaceChildren();
+  const nonToman = cur30.filter(i => curOf(i) && curOf(i) !== 'toman').length;
+  if (cur30.length && nonToman / cur30.length > 0.05) {
+    const s = stats(cur30), p = stats(prev30);
+    const nb = el('div', 'note');
+    nb.style.margin = '0 0 6px';
+    nb.innerHTML = `<strong>Read the tier figure with care.</strong> ${fmt(nonToman)} of ${fmt(cur30.length)} leads in this
+      window were asked for budget in CAD or EUR, whose brackets map to higher tiers than the toman brackets for
+      equivalent money. On toman leads alone the tier 3–5 rate is
+      <strong>${pct(s.tomanHi, s.toman)}</strong>${p.toman ? ` against ${pct(p.tomanHi, p.toman)} in the previous 30 days` : ''} —
+      so the headline ${pct(s.hi, s.n)} reflects the currency change, not a shift in lead quality.`;
+    n30.appendChild(nb);
+  }
   if (!idx.length) return;
-  renderKpis(idx);
+  renderKpis('#kpis', idx);
   renderFindings(idx);
   renderMonthly(idx);
   renderSrcMix(idx);
