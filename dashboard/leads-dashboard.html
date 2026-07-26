@@ -78,8 +78,13 @@
   .rmix > i:last-child { border-radius: 0 3px 3px 0; }
   .rlist { display: flex; flex-direction: column; gap: 4px; }
   .rrow { display: grid; grid-template-columns: 9px 1fr auto; gap: 7px; align-items: baseline; font-size: 12px; }
+  .rrow.two { align-items: start; }
+  .rrow.two .dot { transform: translateY(4px); }
   .rrow .dot { width: 9px; height: 9px; border-radius: 2px; transform: translateY(1px); }
   .rrow .nm { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* note: do NOT name this "wrap" — it collides with the page container's .wrap rule */
+  .rrow .nm.mline { white-space: normal; }
+  .rrow .money { display: block; font-size: 10.5px; color: var(--muted); line-height: 1.35; margin-top: 1px; }
   .rrow .vv { color: var(--ink); font-variant-numeric: tabular-nums; }
   .rrow .vv small { color: var(--muted); font-weight: 400; }
   .rempty { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
@@ -394,7 +399,13 @@ function activeIdx() {
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
 function el(t, c, x) { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; }
-const pct = (n, t) => t ? Math.round(100 * n / t) + '%' : '0%';
+// never round a non-zero share down to a bare "0%" — it reads as "none"
+const pct = (n, t) => {
+  if (!t) return '0%';
+  const p = 100 * n / t;
+  if (n > 0 && p < 0.5) return '<1%';
+  return Math.round(p) + '%';
+};
 const pct1 = (n, t) => t ? (100 * n / t).toFixed(1) + '%' : '0%';
 const fmt = n => n.toLocaleString('en-US');
 function tally(idx, f) {
@@ -463,13 +474,15 @@ function hbar(mount, items, total, opts = {}) {
     const row = el('div', 'hrow'), lab = el('div', 'hlabel', it.label);
     lab.title = it.label; row.appendChild(lab);
     const track = el('div', 'htrack'), bar = el('div', 'hbar');
+    // it.denom lets a row show a share of its own group (e.g. budget within one currency)
+    const den = it.denom || total;
     bar.style.width = (100 * it.n / max) + '%';
     bar.style.background = it.label === NONE ? 'var(--none-fill)' : (it.color || opts.color || 'var(--s1)');
-    bindTip(bar, () => [`${fmt(it.n)} leads (${pct1(it.n, total)})`, it.label, it.raw]);
+    bindTip(bar, () => [`${fmt(it.n)} leads (${pct1(it.n, den)}${it.denomNote || ''})`, it.label, it.raw]);
     track.appendChild(bar);
     const v = el('span', 'hval');
     v.appendChild(document.createTextNode(fmt(it.n) + ' '));
-    v.appendChild(el('span', 'pc', pct(it.n, total)));
+    v.appendChild(el('span', 'pc', pct(it.n, den)));
     track.appendChild(v); row.appendChild(track); box.appendChild(row);
   }
   mount.appendChild(box);
@@ -573,12 +586,12 @@ function groupBy(idx, keyFn, valFn) {
 // Budget brackets differ by currency (toman for most of the history, CAD/EUR from Jul 2026),
 // so periods are compared on the normalised tier rather than the raw bracket.
 const TIERS = [
-  { k: '1', label: 'Tier 1', money: 'under 2B toman / 10k', color: 'var(--seq-250)' },
-  { k: '2', label: 'Tier 2', money: '2–4B toman / 10–20k', color: 'var(--seq-350)' },
-  { k: '3', label: 'Tier 3', money: '4–6B toman / 20–40k', color: 'var(--seq-450)' },
-  { k: '4', label: 'Tier 4', money: 'over 6B toman / 40–100k', color: 'var(--seq-550)' },
+  { k: '1', label: 'Tier 1', money: 'under 2B toman · under 10k CAD/EUR', color: 'var(--seq-250)' },
+  { k: '2', label: 'Tier 2', money: '2–4B toman · 10–20k CAD/EUR', color: 'var(--seq-350)' },
+  { k: '3', label: 'Tier 3', money: '4–6B toman · 20–40k CAD/EUR', color: 'var(--seq-450)' },
+  { k: '4', label: 'Tier 4', money: 'over 6B toman · 40–100k CAD', color: 'var(--seq-550)' },
   { k: '5', label: 'Tier 5', money: 'over 100k CAD', color: 'var(--seq-600)' },
-  { k: '?', label: 'Unscored', money: 'no usable tier', color: 'var(--none-fill)' }
+  { k: '?', label: 'Unscored', money: 'budget given but no tier assigned', color: 'var(--none-fill)' }
 ];
 const SRC_COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--none-fill)'];
 const DAY = 86400000;
@@ -661,10 +674,11 @@ function renderRecency(baseIdx) {
     c.appendChild(mix);
     const bl = el('div', 'rlist');
     for (const t of tc) {   // tier order, matching the bar above — tiers are ordinal, not ranked by size
-      const row = el('div', 'rrow');
+      const row = el('div', 'rrow two');
       const dot = el('span', 'dot'); dot.style.background = t.color;
       row.appendChild(dot);
-      const nm = el('span', 'nm', t.label); nm.title = `${t.label} — ${t.money}`;
+      const nm = el('span', 'nm mline', t.label);
+      nm.appendChild(el('span', 'money', t.money));
       row.appendChild(nm);
       const vv = el('span', 'vv', pct(t.n, cur.length));
       vv.appendChild(el('small', null, ' · ' + fmt(t.n)));
@@ -874,23 +888,41 @@ function renderTier(idx) {
   note.innerHTML = '<strong>A price band, not a quality score.</strong> Lead_Type is derived from the budget answer (each bracket maps to one tier in 97–100% of rows). Since Jul 2026 some leads are asked in CAD/EUR, where the same money scores higher.';
   const { chart, table } = card('#card-tier', 'Budget tier (the sheet’s Lead_Type)',
     'Tier 1 = lowest bracket, tier 5 = highest', note);
-  const ramp = ['var(--seq-250)', 'var(--seq-350)', 'var(--seq-450)', 'var(--seq-500)', 'var(--seq-550)'];
-  const items = [];
-  for (let s = 1; s <= 5; s++) {
-    items.push({ label: 'Tier ' + s, n: idx.filter(i => val('t', i) === String(s)).length, labelled: true, color: ramp[s - 1] });
-  }
-  const bad = idx.filter(i => val('t', i) === '0' || val('t', i) === '').length;
-  items.push({ label: 'unscored', n: bad, labelled: true, color: 'var(--none-fill)', tip: 'Scored 0 or left blank' });
+  const items = TIERS.map(t => ({
+    label: t.k === '?' ? 'Unscored' : 'Tier ' + t.k,
+    tip: `${t.label} — ${t.money}`,
+    money: t.money,
+    color: t.color,
+    labelled: true,
+    n: idx.filter(i => { const v = val('t', i); return t.k === '?' ? (v === '' || v === '0') : v === t.k; }).length
+  }));
   colChart(chart, items);
-  const cap = el('p', 'csub'); cap.style.marginTop = '8px';
+  // spell out what each tier means in money, so the axis is readable without hovering
+  const key = el('div', 'rlist'); key.style.marginTop = '14px';
+  for (const it of items) {
+    const row = el('div', 'rrow two');
+    const dot = el('span', 'dot'); dot.style.background = it.color;
+    row.appendChild(dot);
+    const nm = el('span', 'nm mline', it.label);
+    nm.appendChild(el('span', 'money', it.money));
+    row.appendChild(nm);
+    const vv = el('span', 'vv', pct(it.n, idx.length));
+    vv.appendChild(el('small', null, ' · ' + fmt(it.n)));
+    row.appendChild(vv);
+    key.appendChild(row);
+  }
+  chart.appendChild(key);
+  const bad = items[items.length - 1].n;
+  const cap = el('p', 'csub'); cap.style.marginTop = '12px';
   cap.textContent = `${fmt(bad)} leads (${pct1(bad, idx.length)}) have no usable tier despite answering the budget question — a scoring gap worth checking.`;
   chart.appendChild(cap);
-  table.appendChild(dataTable(items.map(i => ({ label: i.label, n: i.n })), idx.length, ['Tier', 'Leads', 'Share']));
+  table.appendChild(dataTable(items.map(i => ({ label: i.label + ' — ' + i.money, n: i.n })), idx.length, ['Tier', 'Leads', 'Share']));
 }
 function renderBudget(idx) {
   const note = document.createElement('span');
   note.innerHTML = 'Almost all leads are asked in <strong>toman</strong>; CAD and EUR brackets only appear from Jul 2026. Compare within a currency block, never across.';
-  const { chart, table } = card('#card-budget', 'Stated budget', 'Grouped by the currency the form asked in', note);
+  const { chart, table } = card('#card-budget', 'Stated budget',
+    'Grouped by the currency the form asked in; percentages are within each currency block', note);
   const groups = [
     ['Iranian toman', ['کمتر از دو میلیارد تومان', 'یک تا دو میلیارد تومان', 'دو تا چهار میلیارد تومان', 'چهار تا شش میلیارد تومان', 'بیشتر از شش میلیارد تومان']],
     ['Canadian dollars', ['کمتر از 10 هزار دلار کانادا', 'بین 10 تا 20 هزار دلار کانادا', 'بین 20 تا 40 هزار دلار کانادا', 'بین 40 تا 100 هزار دلار کانادا', 'بیشتر از 100 هزار دلار کانادا']],
@@ -902,10 +934,13 @@ function renderBudget(idx) {
   for (const [gname, keys] of groups) {
     const present = keys.map(k => t.find(x => x.raw === k)).filter(Boolean);
     if (!present.length) continue;
-    items.push({ group: `${gname} — ${fmt(present.reduce((s, x) => s + x.n, 0))} leads` });
+    // percentages within the currency block — a share of all 11k would round every CAD/EUR row to 0%
+    const gTotal = present.reduce((s, x) => s + x.n, 0);
+    items.push({ group: `${gname} — ${fmt(gTotal)} leads (${pct(gTotal, idx.length)} of all)` });
     keys.forEach((k, j) => {
       const hit = t.find(x => x.raw === k); if (!hit) return;
-      const it = { raw: k, label: tr('b', k), n: hit.n, color: ramp[Math.min(j, 4)] };
+      const it = { raw: k, label: tr('b', k), n: hit.n, color: ramp[Math.min(j, 4)],
+        denom: gTotal, denomNote: ' of ' + gname.toLowerCase() + ' leads' };
       items.push(it); trows.push(it);
     });
   }
