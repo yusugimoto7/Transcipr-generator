@@ -73,19 +73,26 @@ at which point it starts posting automatically. Alberta publishes no scored
 entrepreneur draws, so there is nothing to post there.
 
 ### How it runs
-One endpoint does a full cycle; an external cron visits it on a schedule:
+Set `DRAWS_AUTORUN=true` and **the app schedules itself** — there is no cron job
+to create anywhere:
 
 ```
-Render Cron Job ──every 15 min──► /api/draws/run?key=$DRAWS_CRON_SECRET
-                                        │
-             collect all programs ──► drop already-posted ──► post the rest
-                                        └──► refresh the WordPress page (if changed)
+app boots ──► every 15 min ──► collect all programs
+                                 ├─ drop already-posted
+                                 ├─ post the rest
+                                 └─ refresh the WordPress page (if changed)
 ```
 
-Already-posted draws are remembered in your Google Sheet (a `PostedDraws` tab,
-via the same Apps Script as the rest of the app), so nothing is ever posted
-twice — and the memory survives Render redeploys, which wipe the container disk.
-That makes idle runs free, so a missed or repeated ping costs nothing.
+(Prefer an external scheduler? Leave `DRAWS_AUTORUN` off and have anything —
+Render Cron Job, cron-job.org, GitHub Actions — hit
+`/api/draws/run?key=$DRAWS_CRON_SECRET`. Required if you run more than one
+instance, since the built-in scheduler assumes a single one.)
+
+Already-posted draws are remembered in your existing Google Sheet, as records in
+the **Library** tab — this uses the Apps Script endpoints you already have
+deployed, so **no changes to `google-apps-script.gs` are required**. The memory
+survives Render redeploys, which wipe the container disk, so nothing is ever
+posted twice and idle runs are free.
 
 The WordPress page is **fingerprint-gated**: the draw data is hashed (timestamps
 excluded), the hash is stored in an HTML comment on the page, and the page is
@@ -96,7 +103,7 @@ stale number.
 ### Endpoints
 | Route | Purpose |
 |---|---|
-| `GET /api/draws/status?key=…` | **start here** — setup checklist: what's configured, what's missing, next step |
+| `GET /api/draws/status?key=…` | **start here** — setup checklist, plus scheduler state and the last run's result |
 | `GET/POST /api/draws/run?key=…` | one full cycle (this is what cron calls) |
 | `…&dry=1` | collect and report, send nothing |
 | `…&only=alberta,express-entry` | restrict to specific sources |
@@ -108,24 +115,23 @@ and tells you the exact next variable to configure, so you don't have to work
 through this README line by line.
 
 ### Setup
+Setting environment variables is the only manual step — there is no script to
+edit and no cron to configure.
+
 1. **Set the env vars** from `.env.example` (the `CANADA DRAWS AUTO-POSTER`
    block). Only `DRAWS_CRON_SECRET` is required — every channel is independent,
    so any block you leave blank is simply skipped and reported as such.
-2. **Re-deploy your Apps Script** after pulling the updated
-   `google-apps-script.gs` (it adds the `PostedDraws` tab used for dedup).
-   Deploy → Manage deployments → edit → New version → Deploy, so the `/exec`
-   URL stays the same.
-3. **Add the logo** for the Instagram story card: paste your base64 PNG into
-   `assets/story-logo.b64` or the `STORY_LOGO_B64` env var. Without it the card
-   renders a text wordmark.
-4. **Check it** with `/api/draws/preview?key=…` — this posts nothing and shows
-   the exact message text, which items are new, and any source errors.
-5. **Add the cron.** On Render, create a *Cron Job* with schedule `*/15 * * * *`
-   running:
-   ```bash
-   curl -fsS "https://<your-app>.onrender.com/api/draws/run?key=$DRAWS_CRON_SECRET"
-   ```
-   (Any pinger works — cron-job.org, UptimeRobot, GitHub Actions.)
+2. **Check what's left** at `/api/draws/status?key=…` — it lists exactly which
+   variables are still missing and the next step. Then `/api/draws/preview?key=…`
+   shows the real message text without sending anything.
+3. **Turn it on** with `DRAWS_AUTORUN=true`. That's the whole schedule.
+
+Optional: paste a base64 PNG into `assets/story-logo.b64` (or `STORY_LOGO_B64`)
+for the Instagram story card — without it the card renders a text wordmark.
+
+The updated `google-apps-script.gs` in this repo adds a government-page proxy
+that is only needed if your host cannot reach canada.ca / alberta.ca /
+ontario.ca. Everything else works with the Apps Script you already have.
 
 ### Notes
 - **Token expiry** is the one thing that needs occasional attention: X's OAuth
@@ -153,8 +159,11 @@ through this README line by line.
 - `lib/draws/publish.js` — Telegram / X / LinkedIn / Instagram posting
 - `lib/draws/story.js` — Instagram story card (SVG → PNG)
 - `lib/draws/wordpress.js` — fingerprint-gated draws page
-- `lib/draws/store.js` — "already posted" memory (Google Sheet)
+- `lib/draws/store.js` — "already posted" memory (Google Sheet Library tab)
+- `lib/draws/scheduler.js` — built-in interval scheduler (no external cron)
+- `lib/draws/status.js` — setup self-check
 - `lib/draws/run.js` — the orchestrator
+- `instrumentation.js` — arms the scheduler once at server start
 
 ## Notes
 - If the live topic fetch fails (e.g. no API key, network issue), the deck falls back
