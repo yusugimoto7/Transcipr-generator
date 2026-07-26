@@ -141,6 +141,28 @@ through this README line by line.
 - Every source is isolated — one broken parser or unreachable page never stops
   the other programs; failures appear in `sourceErrors` in the run report.
 
+## Leads dashboard (`dashboard/leads-dashboard.html`)
+
+A standalone analytics dashboard for the assessment-form leads sheet — one HTML
+file with its data embedded, no server, no API keys, no network calls at runtime.
+
+**Deploy to Render.** `render.yaml` in the repo root defines it as a static site:
+Render dashboard → **New → Blueprint** → pick this repo → **Apply**. Render serves
+`dashboard/` and rewrites `/` to the dashboard, so the shared link is just the
+service domain. Nothing to build and no environment variables.
+
+**Anyone with the URL can read it.** Render static sites have no access control,
+and the page carries commercially sensitive figures (volumes, budget mix,
+acquisition channels, affiliate codes). Names, emails and phone numbers are *not*
+in the file. The blueprint sets `X-Robots-Tag: noindex` so it stays out of search
+results, but if the link needs to be restricted, serve it behind an authenticated
+route instead of as a static site.
+
+**Refreshing the data.** The file is a snapshot; it does not read the sheet live.
+To update it, re-export the sheet, regenerate the embedded `PACK` object and
+commit — Render redeploys on push. The header states the snapshot date, and the
+dashboard shows a banner when its newest lead is more than a day old.
+
 ## Project structure
 - `app/page.jsx` — the full swipe deck + script UI (client component)
 - `app/api/topics/route.js` — topic feed (web search → 6 ranked topics)

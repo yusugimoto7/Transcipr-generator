@@ -1,0 +1,32 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Publishes the leads dashboard as a static site. The dashboard is a single
+# self-contained HTML file with its data embedded, so there is nothing to build
+# and no server or environment variables are needed.
+#
+# To deploy: Render dashboard → New → Blueprint → pick this repo → Apply.
+services:
+  - type: web
+    name: leads-dashboard
+    runtime: static
+    # Nothing to compile — the file is committed ready to serve.
+    buildCommand: "echo 'static site: nothing to build'"
+    staticPublishPath: ./dashboard
+    pullRequestPreviewsEnabled: false
+    routes:
+      # Serve the dashboard at the site root so the URL you share is just the domain.
+      - type: rewrite
+        source: /
+        destination: /leads-dashboard.html
+    headers:
+      # Business data: keep it out of search engines even though the URL is unlisted.
+      - path: /*
+        name: X-Robots-Tag
+        value: noindex, nofollow
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      # The page loads no external resources, so lock it down to itself.
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
