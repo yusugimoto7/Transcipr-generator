@@ -14,10 +14,11 @@ services:
     staticPublishPath: ./dashboard
     pullRequestPreviewsEnabled: false
     routes:
-      # Serve the dashboard at the site root so the URL you share is just the domain.
+      # The dashboard is index.html, so Render serves it at / with no rewrite needed.
+      # This only keeps the old path working for anyone who bookmarked it.
       - type: rewrite
-        source: /
-        destination: /leads-dashboard.html
+        source: /leads-dashboard.html
+        destination: /index.html
     headers:
       # Business data: keep it out of search engines even though the URL is unlisted.
       - path: /*
