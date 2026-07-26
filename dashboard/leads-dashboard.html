@@ -241,10 +241,10 @@
 
   <h2 class="section">Destination &amp; intent</h2>
   <div class="grid">
-    <div class="card" id="card-dest"></div>
-    <div class="card" id="card-method"></div>
     <div class="card" id="card-method-ca"></div>
     <div class="card" id="card-method-eu"></div>
+    <div class="card" id="card-dest"></div>
+    <div class="card" id="card-method"></div>
   </div>
 
   <h2 class="section">Budget &amp; lead value</h2>
@@ -1252,11 +1252,12 @@ function renderAll() {
   renderSrcMix(idx);
   renderDestQ(idx);
   simple('#card-form', 'Which form they filled', 'The assessment form each submission came through', idx, 'f');
-  renderDest(idx);
-  simple('#card-method', 'Route they want to pursue', 'What the lead says they intend to do', idx, 'm', 10);
   const chan = chanIdx();
   renderRouteWindow('#card-method-ca', 'کانادا', 'Canada', 'var(--s1)', chan);
   renderRouteWindow('#card-method-eu', 'اروپا', 'Europe', 'var(--s2)', chan);
+  renderDest(idx);
+  simple('#card-method', 'Route they want to pursue — all 18 months',
+    'What the lead says they intend to do, across the whole history', idx, 'm', 10);
   renderTier(idx);
   renderBudget(idx);
   renderAge(idx);
