@@ -731,7 +731,7 @@ function renderKpis(idx) {
     ['Choosing Canada', pct(ca, n), fmt(ca) + ' Canada · ' + fmt(n - ca) + ' Europe'],
     ['Budget tier 3–5', pct(hi, n), fmt(hi) + ' at 4B toman / 20k CAD+'],
     ['Employed', pct(emp, empA.length || 1), fmt(emp) + ' of ' + fmt(empA.length) + ' answering'],
-    ['In CRM (Odoo)', pct(odoo, n), fmt(odoo) + ' of ' + fmt(n) + ' synced'],
+    ['Flagged into Odoo', pct(odoo, n), fmt(odoo) + ' of ' + fmt(n) + ' rows carry the flag'],
   ];
   for (const [l, v, note] of items) {
     const t = el('div', 'kpi');
@@ -781,8 +781,9 @@ function renderFindings(idx) {
   add(`<strong>The funnel is overwhelmingly low-budget.</strong> ${fmt(t1)} leads (${pct(t1, n)}) sit in the bottom tier and ${fmt(weak)} (${pct(weak, n)})
     self-rate English at IELTS 4 or below. Only ${pct(idx.filter(i => ['3','4','5'].includes(val('t', i))).length, n)} reach tier 3+.
     ${fmt(other)} (${pct(other, n)}) picked "other / not sure yet" as their route, so intent is soft as well as budget.`);
-  add(`<span class="pill crit">gap</span> <strong>CRM sync loses about four leads in ten.</strong> ${fmt(odooMiss)} leads in this slice (${pct(odooMiss, n)}) are not flagged
-    into Odoo. Sync ran near 99% in Mar 2025 then settled at 43–60% every month after — this is a persistent pipeline fault, not a one-off.`);
+  add(`<span class="pill crit">gap</span> <strong>Four leads in ten carry no Odoo flag.</strong> ${fmt(odooMiss)} leads in this slice (${pct(odooMiss, n)}) have an empty
+    <code>added_to_odoo</code>. The flag ran near 99% in Mar 2025 then settled at 43–60% every month since, and the blanks are scattered across
+    406 of 501 days rather than bunched into outages — a per-record failure in the integration. Note this is the sheet's own flag, not a check against Odoo.`);
   add(`<span class="pill crit">gap</span> <strong>Outreach logging is effectively dead.</strong> <code>sent_email</code> is set on ${fmt(se)} rows and <code>sent_sms</code> on ${fmt(ss)}
     across the whole 18 months, all concentrated in Aug–Sep 2025. For every other month the sheet cannot tell you whether a lead was ever contacted.`);
   add(`<span class="pill warn">check</span> <strong>Paid attribution covers a minority.</strong> Only ${fmt(cpTag)} of ${fmt(n)} leads (${pct(cpTag, n)}) carry a campaign tag,
@@ -965,22 +966,27 @@ function renderAge(idx) {
   table.appendChild(dataTable(items.map(i => ({ label: 'Age ' + i.label, n: i.n })), idx.length, ['Age band', 'Leads', 'Share']));
 }
 function renderOdoo(idx) {
-  const { chart, table } = card('#card-odoo', 'CRM sync by month',
-    'Share of leads flagged added_to_odoo — near-total in Mar 2025, then stuck around half');
+  const note = document.createElement('span');
+  note.innerHTML = `<strong>This reads the sheet's <code>added_to_odoo</code> column, not Odoo itself.</strong>
+    The column is a one-way flag: 6,491 rows hold <code>1</code> and 4,567 are empty — there is no explicit
+    "0", so "not flagged" cannot be distinguished from "the flag was never written after a successful push".
+    Confirming true CRM coverage needs a reconciliation against Odoo on email or phone.`;
+  const { chart, table } = card('#card-odoo', 'Odoo flag by month',
+    'Share of rows carrying added_to_odoo — near-total in Mar 2025, then stuck around half', note);
   const g = groupBy(idx, monthKey, i => val('od', i));
   const ms = [...g.keys()].sort();
   const groups = ms.map(m => ({ label: fmtMonth(m), short: shortMonth(m), v: g.get(m) }));
   stackedCols(chart, groups, [
-    { key: '1', label: 'In Odoo', color: 'var(--s1)' },
-    { key: '0', label: 'Not synced', color: 'var(--none-fill)' }
+    { key: '1', label: 'Flag set', color: 'var(--s1)' },
+    { key: '0', label: 'Flag empty', color: 'var(--none-fill)' }
   ], { height: '150px' });
   const rows = ms.map(m => {
     const o = g.get(m)['1'] || 0, t = (g.get(m)['1'] || 0) + (g.get(m)['0'] || 0);
-    return { label: fmtMonth(m) + ' — synced', n: o, tot: t };
+    return { label: fmtMonth(m) + ' — flagged', n: o, tot: t };
   });
   const cap = el('p', 'csub'); cap.style.marginTop = '10px';
   const worst = rows.reduce((b, r) => (r.n / r.tot < b.n / b.tot ? r : b), rows[0]);
-  cap.textContent = `Worst month: ${worst.label.replace(' — synced', '')} at ${pct(worst.n, worst.tot)}. Bars show synced vs not for each month.`;
+  cap.textContent = `Worst month: ${worst.label.replace(' — flagged', '')} at ${pct(worst.n, worst.tot)}. Bars show flag set vs flag empty for each month.`;
   chart.appendChild(cap);
   table.appendChild(dataTable(rows.map(r => ({ label: r.label, n: r.n })), idx.length, ['Month', 'Synced', 'Share of all']));
 }
@@ -1050,7 +1056,7 @@ function renderQuality() {
     ['Lead_Type is a restatement of the budget bracket', '11,058', 'Relabelled "budget tier"; do not read it as quality'],
     ['Lead_Europe duplicates the destination field (5 = Europe, 0 = Canada)', '10,745', 'Dropped as redundant'],
     ['Budget answered but Lead_Type is 0 or blank', '252', 'Shown as "unscored" in the tier chart'],
-    ['added_to_odoo blank — lead never reached the CRM', '4,567', 'Charted per month; the fault is persistent'],
+    ['added_to_odoo empty — no evidence the lead reached the CRM', '4,567', 'Charted per month. Blanks are scattered across 406 of 501 days rather than clustered into outages, and the rate is even across forms (54–59%) and channels (57–61%), so it looks like a per-record failure in the integration, not a config or downtime problem'],
     ['sent_email / sent_sms filled for Aug–Sep 2025 only', '10,827', 'Outreach cannot be measured for any other month'],
     ['One affiliate stored under two spellings (mahdis.sultani, mahdis-soltani)', '1,188', 'Merged in this dashboard; still split in the sheet'],
     ['Campaign tag missing', '6,830', 'Charted as a coverage gap, not imputed'],
@@ -1079,7 +1085,7 @@ function renderFill(idx) {
     ['Referrer / code', 'rf'], ['Campaign', 'cp'], ['Nationality', 'nat']];
   const items = F.map(([label, k]) => ({ label, raw: '', n: idx.filter(i => val(k, i) !== '').length }));
   items.push({ label: 'Age given', raw: '', n: idx.filter(i => COL.a[i] > 0).length });
-  items.push({ label: 'In Odoo', raw: '', n: idx.filter(i => val('od', i) === '1').length });
+  items.push({ label: 'Odoo flag set', raw: '', n: idx.filter(i => val('od', i) === '1').length });
   items.push({ label: 'Outreach logged', raw: '', n: idx.filter(i => val('se', i) === '1' || val('ss', i) === '1').length });
   items.sort((a, b) => b.n - a.n);
   for (const it of items) {
