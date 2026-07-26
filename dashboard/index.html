@@ -87,6 +87,8 @@
   .rrange { font-size: 11.5px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
   .rbig { font-size: 34px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.05; margin-top: 8px; }
   .rbig .unit { font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+  .rrate { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .rrate span { color: var(--muted); font-variant-numeric: normal; }
   .rdelta { font-size: 12px; margin-top: 2px; display: flex; align-items: center; gap: 5px; }
   .rdelta .arrow { font-weight: 700; }
   .rdelta.up { color: var(--good); }
@@ -693,6 +695,13 @@ function renderRecency(baseIdx) {
     big.appendChild(document.createTextNode(fmt(cur.length)));
     big.appendChild(el('span', 'unit', cur.length === 1 ? 'new lead' : 'new leads'));
     c.appendChild(big);
+
+    // Average per day. Skipped on the 24-hour card, where it would just restate the count.
+    if (w.days > 1) {
+      const rate = el('div', 'rrate', (cur.length / w.days).toFixed(1));
+      rate.appendChild(el('span', null, ` leads / day average over ${w.days} days`));
+      c.appendChild(rate);
+    }
 
     // delta vs the equal-length window before it
     const d = el('div', 'rdelta');
