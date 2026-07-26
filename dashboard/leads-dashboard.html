@@ -243,6 +243,8 @@
   <div class="grid">
     <div class="card" id="card-dest"></div>
     <div class="card" id="card-method"></div>
+    <div class="card" id="card-method-ca"></div>
+    <div class="card" id="card-method-eu"></div>
   </div>
 
   <h2 class="section">Budget &amp; lead value</h2>
@@ -391,6 +393,15 @@ function dimIdx() {
     if (srcI >= 0 && COL.sg[i] !== srcI) continue;
     out.push(i);
   }
+  return out;
+}
+// Channel only. The per-destination route charts pin their own destination, so applying the
+// Destination filter to them as well would empty whichever card the filter excludes.
+function chanIdx() {
+  const srcI = state.src === 'all' ? -1 : DICT.sg.indexOf(state.src);
+  if (srcI < 0) return Array.from({ length: N }, (_, i) => i);
+  const out = [];
+  for (let i = 0; i < N; i++) if (COL.sg[i] === srcI) out.push(i);
   return out;
 }
 function activeIdx() {
@@ -845,11 +856,12 @@ const DEST_SERIES = [
   { key: 'اروپا', label: 'Europe', color: 'var(--s2)', raw: 'اروپا' }
 ];
 // Last 13 weeks, anchored to today like the recency cards — independent of the Period filter.
+const weeks13Start = () => weekStart(new Date(todayUTC().getTime() - 12 * 7 * DAY));
 function renderWeekly(dim) {
   const { chart, table } = card('#card-weekly', 'Submissions per week — last 3 months',
     'The 13 weeks up to today, split by destination. Fixed to today, so the Period filter does not apply here.');
   const anchor = todayUTC();
-  const first = weekStart(new Date(anchor.getTime() - 12 * 7 * DAY));
+  const first = weeks13Start();
   // every week in range, so a quiet week shows as a gap rather than being dropped
   const weeks = [];
   for (let t = first.getTime(); t <= anchor.getTime(); t += 7 * DAY) weeks.push(new Date(t));
@@ -939,8 +951,9 @@ function renderDest(idx) {
 // "Other (N values)" rows come out of the packing step; they are residuals, not categories,
 // so they never compete for rank — they merge with any top-N overflow and sit at the bottom.
 const RESID = /^Other \((\d+) values\)$/;
-function simple(id, title, sub, idx, f, topN, note) {
+function simple(id, title, sub, idx, f, topN, note, color) {
   const { chart, table } = card(id, title, sub, note);
+  if (!idx.length) { chart.appendChild(el('p', 'csub', 'No leads match the current filter.')); return; }
   const all = tally(idx, f).sort((a, b) => b.n - a.n);
   const blank = all.find(i => i.raw === '');
   const packed = all.filter(i => RESID.test(i.raw));
@@ -955,12 +968,24 @@ function simple(id, title, sub, idx, f, topN, note) {
     resCount += rest.length;
   }
   if (resN) {
-    const row = { label: `Other (${fmt(resCount)} values)`, raw: '', n: resN, color: 'var(--seq-250)' };
+    // let a custom series colour carry through to the residual row rather than forcing the blue step
+    const row = { label: `Other (${fmt(resCount)} values)`, raw: '', n: resN };
+    if (!color) row.color = 'var(--seq-250)';
     items.push(row); full.push(row);
   }
   if (blank) { items.push(blank); full.push(blank); }
-  hbar(chart, items, idx.length);
+  hbar(chart, items, idx.length, color ? { color } : {});
   table.appendChild(dataTable(full, idx.length));
+}
+// Route breakdown for one destination over the same 13 weeks as the weekly volume chart,
+// so the two destination charts sum to that chart's total.
+function renderRouteWindow(id, destKey, destLabel, color, dim) {
+  const first = weeks13Start();
+  const sel = dim.filter(i => val('de', i) === destKey && dayOf(i) >= first);
+  simple(id, `Route they want to pursue — ${destLabel}`,
+    `${destLabel} leads only, last 3 months (13 weeks from ${fmtDay(first)}) — ${fmt(sel.length)} leads. `
+    + 'Period and Destination filters do not apply here; Channel does.',
+    sel, 'm', 10, null, color);
 }
 function ordered(id, title, sub, idx, f, order, note) {
   const { chart, table } = card(id, title, sub, note);
@@ -1229,6 +1254,9 @@ function renderAll() {
   simple('#card-form', 'Which form they filled', 'The assessment form each submission came through', idx, 'f');
   renderDest(idx);
   simple('#card-method', 'Route they want to pursue', 'What the lead says they intend to do', idx, 'm', 10);
+  const chan = chanIdx();
+  renderRouteWindow('#card-method-ca', 'کانادا', 'Canada', 'var(--s1)', chan);
+  renderRouteWindow('#card-method-eu', 'اروپا', 'Europe', 'var(--s2)', chan);
   renderTier(idx);
   renderBudget(idx);
   renderAge(idx);
