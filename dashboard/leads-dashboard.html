@@ -232,6 +232,7 @@
 
   <h2 class="section">Volume over time</h2>
   <div class="grid">
+    <div class="card wide" id="card-weekly"></div>
     <div class="card wide" id="card-monthly"></div>
     <div class="card wide" id="card-srcmix"></div>
     <div class="card" id="card-destq"></div>
@@ -834,16 +835,65 @@ function renderFindings(idx) {
 }
 
 /* ---------- charts ---------- */
+// Monday-anchored week containing d
+function weekStart(d) {
+  const dow = (d.getUTCDay() + 6) % 7;
+  return new Date(d.getTime() - dow * DAY);
+}
+const DEST_SERIES = [
+  { key: 'کانادا', label: 'Canada', color: 'var(--s1)', raw: 'کانادا' },
+  { key: 'اروپا', label: 'Europe', color: 'var(--s2)', raw: 'اروپا' }
+];
+// Last 13 weeks, anchored to today like the recency cards — independent of the Period filter.
+function renderWeekly(dim) {
+  const { chart, table } = card('#card-weekly', 'Submissions per week — last 3 months',
+    'The 13 weeks up to today, split by destination. Fixed to today, so the Period filter does not apply here.');
+  const anchor = todayUTC();
+  const first = weekStart(new Date(anchor.getTime() - 12 * 7 * DAY));
+  // every week in range, so a quiet week shows as a gap rather than being dropped
+  const weeks = [];
+  for (let t = first.getTime(); t <= anchor.getTime(); t += 7 * DAY) weeks.push(new Date(t));
+  const buckets = new Map(weeks.map(w => [w.getTime(), {}]));
+  let n = 0;
+  for (const i of dim) {
+    const d = dayOf(i);
+    if (d < first) continue;
+    const k = weekStart(d).getTime();
+    const b = buckets.get(k);
+    if (!b) continue;
+    const v = val('de', i);
+    b[v] = (b[v] || 0) + 1;
+    n++;
+  }
+  const shortD = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const groups = weeks.map(w => {
+    const end = new Date(w.getTime() + 6 * DAY);
+    return {
+      label: `Week of ${shortD(w)} – ${shortD(end)}`,
+      short: shortD(w),
+      v: buckets.get(w.getTime())
+    };
+  });
+  stackedCols(chart, groups, DEST_SERIES, { height: '180px' });
+  const totals = weeks.map(w => Object.values(buckets.get(w.getTime())).reduce((a, b) => a + b, 0));
+  const cap = el('p', 'csub'); cap.style.marginTop = '10px';
+  const mx = totals.indexOf(Math.max(...totals));
+  const lastEnd = new Date(weeks[weeks.length - 1].getTime() + 6 * DAY);
+  const partial = lastEnd > SNAP_DAY;
+  cap.textContent = `${fmt(n)} leads over 13 weeks · average ${fmt(Math.round(n / 13))}/week · busiest week of `
+    + `${shortD(weeks[mx])} at ${fmt(totals[mx])}.`
+    + (partial ? ` The final bar is a part-week — the sheet's newest lead is ${fmtDay(SNAP_DAY)}.` : '');
+  chart.appendChild(cap);
+  table.appendChild(dataTable(
+    groups.map((gp, j) => ({ label: gp.label, n: totals[j] })), n, ['Week', 'Leads', 'Share of 13 weeks']));
+}
 function renderMonthly(idx) {
   const { chart, table } = card('#card-monthly', 'Submissions per month',
     'Every month in the filtered range, split by destination');
   const g = groupBy(idx, monthKey, i => val('de', i));
   const ms = [...g.keys()].sort();
   const groups = ms.map(m => ({ label: fmtMonth(m), short: shortMonth(m), v: g.get(m) }));
-  stackedCols(chart, groups, [
-    { key: 'کانادا', label: 'Canada', color: 'var(--s1)', raw: 'کانادا' },
-    { key: 'اروپا', label: 'Europe', color: 'var(--s2)', raw: 'اروپا' }
-  ], { height: '190px' });
+  stackedCols(chart, groups, DEST_SERIES, { height: '190px' });
   const tot = ms.map(m => Object.values(g.get(m)).reduce((a, b) => a + b, 0));
   const cap = el('p', 'csub'); cap.style.marginTop = '10px';
   const mx = tot.indexOf(Math.max(...tot)), mn = tot.indexOf(Math.min(...tot));
@@ -1172,6 +1222,7 @@ function renderAll() {
   if (!idx.length) return;
   renderKpis('#kpis', idx);
   renderFindings(idx);
+  renderWeekly(dim);
   renderMonthly(idx);
   renderSrcMix(idx);
   renderDestQ(idx);
