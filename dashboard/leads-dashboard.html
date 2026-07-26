@@ -861,18 +861,18 @@ const SRC_SERIES = [
 ];
 function renderSrcMix(idx) {
   const { chart, table } = card('#card-srcmix', 'Channel mix by quarter',
-    'Share of leads from each channel group — shows the shift from paid search to Instagram');
+    'Share of leads from each channel group, newest quarter first — Instagram has led since Q3 2025');
   const named = new Set(SRC_SERIES.map(s => s.key));
   const g = groupBy(idx, quarterOf, i => { const v = val('sg', i); return named.has(v) ? v : '__other'; });
-  const qs = [...g.keys()].sort();
+  const qs = [...g.keys()].sort().reverse();   // newest quarter first
   const trows = stackRows(chart, qs.map(q => ({ label: q, v: g.get(q) })), SRC_SERIES);
   table.appendChild(dataTable(trows, idx.length, ['Quarter — channel', 'Leads', 'Share of all']));
 }
 function renderDestQ(idx) {
   const { chart, table } = card('#card-destq', 'Canada vs Europe by quarter',
-    'Europe interest peaked at 43% in Q3 2025');
+    'Newest quarter first — Europe interest peaked at 43% in Q3 2025');
   const g = groupBy(idx, quarterOf, i => val('de', i));
-  const qs = [...g.keys()].sort();
+  const qs = [...g.keys()].sort().reverse();   // newest quarter first
   const trows = stackRows(chart, qs.map(q => ({ label: q, v: g.get(q) })), [
     { key: 'کانادا', label: 'Canada', color: 'var(--s1)', raw: 'کانادا' },
     { key: 'اروپا', label: 'Europe', color: 'var(--s2)', raw: 'اروپا' }
@@ -1034,9 +1034,9 @@ function renderOdoo(idx) {
 }
 function renderIp(idx) {
   const { chart, table } = card('#card-ip', 'Tehran office meeting requests',
-    'Opt-in for an in-person meeting in the Vanak office, by quarter');
+    'Opt-in for an in-person meeting in the Vanak office, newest quarter first');
   const g = groupBy(idx, quarterOf, i => val('ip', i));
-  const qs = [...g.keys()].sort();
+  const qs = [...g.keys()].sort().reverse();   // newest quarter first
   const trows = stackRows(chart, qs.map(q => ({ label: q, v: g.get(q) })), [
     { key: '1', label: 'Wants in-person', color: 'var(--s2)' },
     { key: '0', label: 'No request', color: 'var(--none-fill)' }
