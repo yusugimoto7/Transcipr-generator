@@ -55,6 +55,35 @@
   .fcount { margin-left: auto; color: var(--muted); font-size: 13px; }
   .fcount strong { color: var(--ink); font-weight: 650; }
 
+  /* ---- recency panel ---- */
+  .recency { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 6px; }
+  @media (max-width: 980px) { .recency { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 520px) { .recency { grid-template-columns: 1fr; } }
+  .rcard { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 15px 16px 14px; min-width: 0; }
+  .rcard.lead { border-color: var(--s1); box-shadow: inset 3px 0 0 var(--s1); }
+  .rhead { font-size: 13px; font-weight: 650; }
+  .rrange { font-size: 11.5px; color: var(--muted); margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .rbig { font-size: 34px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.05; margin-top: 8px; }
+  .rbig .unit { font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+  .rdelta { font-size: 12px; margin-top: 2px; display: flex; align-items: center; gap: 5px; }
+  .rdelta .arrow { font-weight: 700; }
+  .rdelta.up { color: var(--good); }
+  .rdelta.down { color: var(--critical); }
+  .rdelta.flat { color: var(--muted); }
+  .rsub { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--grid); }
+  .rmix { display: flex; gap: 2px; height: 14px; margin-bottom: 8px; }
+  .rmix > i { display: block; min-width: 2px; }
+  .rmix > i:first-child { border-radius: 3px 0 0 3px; }
+  .rmix > i:last-child { border-radius: 0 3px 3px 0; }
+  .rlist { display: flex; flex-direction: column; gap: 4px; }
+  .rrow { display: grid; grid-template-columns: 9px 1fr auto; gap: 7px; align-items: baseline; font-size: 12px; }
+  .rrow .dot { width: 9px; height: 9px; border-radius: 2px; transform: translateY(1px); }
+  .rrow .nm { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rrow .vv { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .rrow .vv small { color: var(--muted); font-weight: 400; }
+  .rempty { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
+
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 22px; }
   .kpi { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px 12px; }
   .klabel { font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
@@ -180,6 +209,14 @@
     <div class="fcount" id="fcount"></div>
   </div>
 
+  <h2 class="section">Recent activity — new leads, budget mix and sources</h2>
+  <p class="csub" style="margin:-4px 0 12px">Windows are measured from today, so they ignore the Period filter above.
+    Destination and Channel filters do apply. Budget is shown as the normalised tier because the form asks
+    in toman for most of the history and in CAD/EUR from Jul 2026 — raw brackets are not comparable across periods.</p>
+  <div id="freshness"></div>
+  <div class="recency" id="recency"></div>
+
+  <h2 class="section">Whole-period totals</h2>
   <div class="kpis" id="kpis"></div>
 
   <h2 class="section">What the numbers say</h2>
@@ -331,20 +368,27 @@ function monthsBack(k) {
   const set = new Set(MONTHS.slice(-k));
   return set;
 }
-function activeIdx() {
+// Destination + channel only. The recency windows use this so they stay anchored to
+// today's date regardless of which Period is selected.
+function dimIdx() {
   const out = [];
-  const per = state.period;
-  const win = per === 'l6' ? monthsBack(6) : per === 'l12' ? monthsBack(12) : null;
   const destI = state.dest === 'all' ? -1 : DICT.de.indexOf(state.dest);
   const srcI = state.src === 'all' ? -1 : DICT.sg.indexOf(state.src);
   for (let i = 0; i < N; i++) {
     if (destI >= 0 && COL.de[i] !== destI) continue;
     if (srcI >= 0 && COL.sg[i] !== srcI) continue;
-    if (per === '2025' || per === '2026') { if (monthKey(i).slice(0, 4) !== per) continue; }
-    else if (win && !win.has(monthKey(i))) continue;
     out.push(i);
   }
   return out;
+}
+function activeIdx() {
+  const per = state.period;
+  const win = per === 'l6' ? monthsBack(6) : per === 'l12' ? monthsBack(12) : null;
+  return dimIdx().filter(i => {
+    if (per === '2025' || per === '2026') return monthKey(i).slice(0, 4) === per;
+    if (win) return win.has(monthKey(i));
+    return true;
+  });
 }
 
 /* ---------- helpers ---------- */
@@ -523,6 +567,136 @@ function groupBy(idx, keyFn, valFn) {
     o[v] = (o[v] || 0) + 1;
   }
   return m;
+}
+
+/* ---------- recency panel ---------- */
+// Budget brackets differ by currency (toman for most of the history, CAD/EUR from Jul 2026),
+// so periods are compared on the normalised tier rather than the raw bracket.
+const TIERS = [
+  { k: '1', label: 'Tier 1', money: 'under 2B toman / 10k', color: 'var(--seq-250)' },
+  { k: '2', label: 'Tier 2', money: '2–4B toman / 10–20k', color: 'var(--seq-350)' },
+  { k: '3', label: 'Tier 3', money: '4–6B toman / 20–40k', color: 'var(--seq-450)' },
+  { k: '4', label: 'Tier 4', money: 'over 6B toman / 40–100k', color: 'var(--seq-550)' },
+  { k: '5', label: 'Tier 5', money: 'over 100k CAD', color: 'var(--seq-600)' },
+  { k: '?', label: 'Unscored', money: 'no usable tier', color: 'var(--none-fill)' }
+];
+const SRC_COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--none-fill)'];
+const DAY = 86400000;
+const SNAP_DAY = new Date(D0.getTime() + Math.max(...COL.dt) * DAY);
+function todayUTC() {
+  const d = new Date();
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+const fmtDay = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+const WINDOWS = [
+  { days: 1, label: 'Last 24 hours' },
+  { days: 3, label: 'Last 72 hours' },
+  { days: 7, label: 'Last 7 days' },
+  { days: 30, label: 'Last 30 days' }
+];
+function renderFreshness() {
+  const box = $('#freshness'); box.replaceChildren();
+  const gap = Math.round((todayUTC() - SNAP_DAY) / DAY);
+  if (gap < 2) return;
+  const n = el('div', 'note');
+  n.innerHTML = `<strong>The sheet's newest lead is ${fmtDay(SNAP_DAY)} — ${gap} days ago.</strong>
+    These windows are measured against today, so the shorter ones will read zero until the sheet is refreshed.
+    That is a data-freshness gap, not necessarily a drop in real leads.`;
+  n.style.marginBottom = '14px';
+  box.appendChild(n);
+}
+function renderRecency(baseIdx) {
+  const box = $('#recency'); box.replaceChildren();
+  const anchor = todayUTC();
+  for (const w of WINDOWS) {
+    const lo = new Date(anchor.getTime() - w.days * DAY);
+    const prevLo = new Date(lo.getTime() - w.days * DAY);
+    const cur = baseIdx.filter(i => dayOf(i) >= lo);
+    const prev = baseIdx.filter(i => { const d = dayOf(i); return d >= prevLo && d < lo; });
+
+    const c = el('div', 'rcard' + (w.days === 1 ? ' lead' : ''));
+    c.appendChild(el('div', 'rhead', w.label));
+    c.appendChild(el('div', 'rrange', `${fmtDay(lo)} → ${fmtDay(anchor)}`));
+    const big = el('div', 'rbig');
+    big.appendChild(document.createTextNode(fmt(cur.length)));
+    big.appendChild(el('span', 'unit', cur.length === 1 ? 'new lead' : 'new leads'));
+    c.appendChild(big);
+
+    // delta vs the equal-length window before it
+    const d = el('div', 'rdelta');
+    if (!prev.length && !cur.length) {
+      d.className = 'rdelta flat';
+      d.appendChild(el('span', null, 'nothing in either window'));
+    } else if (!prev.length) {
+      d.className = 'rdelta flat';
+      d.appendChild(el('span', null, 'no leads in the previous window'));
+    } else {
+      const ch = Math.round(100 * (cur.length - prev.length) / prev.length);
+      d.className = 'rdelta ' + (ch > 0 ? 'up' : ch < 0 ? 'down' : 'flat');
+      d.appendChild(el('span', 'arrow', ch > 0 ? '▲' : ch < 0 ? '▼' : '■'));
+      d.appendChild(el('span', null, `${ch > 0 ? '+' : ''}${ch}% vs previous ${w.days === 1 ? '24h' : w.days + ' days'} (${fmt(prev.length)})`));
+    }
+    c.appendChild(d);
+
+    if (!cur.length) {
+      c.appendChild(el('p', 'rempty', 'No leads dated in this window, so there is no budget or source mix to show.'));
+      box.appendChild(c);
+      continue;
+    }
+
+    // --- budget mix, by normalised tier ---
+    c.appendChild(el('div', 'rsub', 'Budget mix'));
+    const tc = TIERS.map(t => ({
+      ...t,
+      n: cur.filter(i => { const v = val('t', i); return t.k === '?' ? (v === '' || v === '0') : v === t.k; }).length
+    })).filter(t => t.n);
+    const mix = el('div', 'rmix');
+    for (const t of tc) {
+      const seg = document.createElement('i');
+      seg.style.flex = t.n + ' 0 0'; seg.style.background = t.color;
+      bindTip(seg, () => [`${fmt(t.n)} leads (${pct1(t.n, cur.length)})`, `${t.label} — ${t.money}`, '']);
+      mix.appendChild(seg);
+    }
+    c.appendChild(mix);
+    const bl = el('div', 'rlist');
+    for (const t of tc) {   // tier order, matching the bar above — tiers are ordinal, not ranked by size
+      const row = el('div', 'rrow');
+      const dot = el('span', 'dot'); dot.style.background = t.color;
+      row.appendChild(dot);
+      const nm = el('span', 'nm', t.label); nm.title = `${t.label} — ${t.money}`;
+      row.appendChild(nm);
+      const vv = el('span', 'vv', pct(t.n, cur.length));
+      vv.appendChild(el('small', null, ' · ' + fmt(t.n)));
+      row.appendChild(vv);
+      bl.appendChild(row);
+    }
+    c.appendChild(bl);
+
+    // --- sources ---
+    c.appendChild(el('div', 'rsub', 'Top sources'));
+    const sc = [...cur.reduce((m, i) => {
+      const v = val('s', i) || '(untracked)';
+      return m.set(v, (m.get(v) || 0) + 1);
+    }, new Map())].map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n);
+    const top = sc.slice(0, 4);
+    const restN = sc.slice(4).reduce((s, x) => s + x.n, 0);
+    if (restN) top.push({ label: `other (${sc.length - 4})`, n: restN });
+    const sl = el('div', 'rlist');
+    top.forEach((s, j) => {
+      const row = el('div', 'rrow');
+      const dot = el('span', 'dot'); dot.style.background = SRC_COLORS[Math.min(j, 4)];
+      row.appendChild(dot);
+      const nm = el('span', 'nm', s.label); nm.title = s.label;
+      row.appendChild(nm);
+      const vv = el('span', 'vv', pct(s.n, cur.length));
+      vv.appendChild(el('small', null, ' · ' + fmt(s.n)));
+      row.appendChild(vv);
+      sl.appendChild(row);
+    });
+    c.appendChild(sl);
+    box.appendChild(c);
+  }
 }
 
 /* ---------- KPIs ---------- */
@@ -887,6 +1061,8 @@ function renderAll() {
   $('#hsub').textContent = `${fmt(N)} unique submissions from about 10,232 people · 7 Feb 2025 – 25 Jul 2026 · built from tabs 1–3 (12,653 raw rows) · snapshot 26 Jul 2026`;
   const fc = $('#fcount');
   fc.replaceChildren(el('strong', null, fmt(idx.length)), document.createTextNode(` of ${fmt(N)} leads`));
+  renderFreshness();
+  renderRecency(dimIdx());
   if (!idx.length) return;
   renderKpis(idx);
   renderFindings(idx);
