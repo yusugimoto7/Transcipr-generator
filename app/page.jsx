@@ -242,6 +242,30 @@ export default function App() {
   const [initialArticle, setInitialArticle] = useState(null);
   const [scriptReturn, setScriptReturn] = useState("deck"); // where "Back" goes
 
+  // Telegram is sent AUTOMATICALLY on approve (no manual button). This tracks
+  // that auto-send so the script view can show its status.
+  const [tgState, setTgState] = useState("idle"); // idle | sending | sent | error
+  const [tgMsg, setTgMsg] = useState("");
+
+  const sendToTelegramAuto = useCallback(async (topic, fa, en) => {
+    if (!fa && !en) return;
+    setTgState("sending");
+    setTgMsg("");
+    try {
+      const res = await fetch("/api/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, fa, en }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "failed");
+      setTgState("sent");
+    } catch (e) {
+      setTgState("error");
+      setTgMsg(String(e.message || e));
+    }
+  }, []);
+
   // drag state
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -380,6 +404,8 @@ export default function App() {
       setLoadingScript(false);
       setScriptTab("fa");
       setScriptReturn("library");
+      setTgState("idle"); // reopening from Library never re-sends to Telegram
+      setTgMsg("");
       setView("script");
     },
     [library]
@@ -422,6 +448,8 @@ export default function App() {
     setScriptError(null);
     setScriptTab("fa");
     setScriptReturn("deck");
+    setTgState("idle");
+    setTgMsg("");
     setView("script");
     setLoadingScript(true);
     setTimeout(advance, 260);
@@ -431,6 +459,8 @@ export default function App() {
         fetchScript(topic, "en"),
       ]);
       setScripts({ fa, en });
+      // Auto-send the approved post to Telegram (no manual button).
+      sendToTelegramAuto(topic, fa, en);
       if (fa || en) {
         saveToLibrary({
           id: "script:" + topicKey(topic),
@@ -634,6 +664,9 @@ export default function App() {
           onBack={() => { setView(scriptReturn === "library" ? "library" : "deck"); }}
           onUndo={undo}
           canUndo={canUndo && scriptReturn !== "library"}
+          tgState={tgState}
+          tgMsg={tgMsg}
+          onRetryTelegram={() => sendToTelegramAuto(scriptTopic, scripts.fa, scripts.en)}
           onSaveArticle={(t, art) =>
             saveToLibrary({
               id: "article:" + topicKey(t),
@@ -901,43 +934,9 @@ function ScriptBody({ text, tab }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, onSaveArticle }) {
+function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, onSaveArticle, tgState = "idle", tgMsg = "", onRetryTelegram }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
   const active = tab === "fa" ? scripts.fa : scripts.en;
-
-  // Telegram send state
-  const [tgState, setTgState] = useState("idle"); // idle | sending | sent | error
-  const [tgMsg, setTgMsg] = useState("");
-
-  const sendTelegram = async () => {
-    if (tgState === "sending") return;
-    if (!scripts.fa && !scripts.en) return;
-    setTgState("sending");
-    setTgMsg("");
-    try {
-      const res = await fetch("/api/telegram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, fa: scripts.fa, en: scripts.en }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "failed");
-      setTgState("sent");
-      setTimeout(() => setTgState("idle"), 3000);
-    } catch (e) {
-      setTgState("error");
-      setTgMsg(String(e.message || e));
-    }
-  };
-
-  const tgLabel =
-    tgState === "sending"
-      ? "Sending…"
-      : tgState === "sent"
-      ? "Sent to Telegram ✓"
-      : tgState === "error"
-      ? "Retry Telegram"
-      : "✈ Send to Telegram";
 
   // Blog article (on-demand). Seeded from a saved item when opened via Library.
   const [artState, setArtState] = useState(initialArticle ? "ready" : "idle"); // idle | generating | ready | error
@@ -1090,34 +1089,46 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
         )}
       </div>
 
-      {/* Telegram */}
-      {!loading && !error && (
-        <>
-          <button
-            onClick={sendTelegram}
-            disabled={tgState === "sending" || (!scripts.fa && !scripts.en)}
-            style={{
-              marginTop: 16,
-              background: tgState === "sent" ? C.slate : "rgba(50,81,93,0.35)",
-              color: C.cream,
-              border: `1px solid ${C.slate}`,
-              borderRadius: 12,
-              padding: "12px",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: tgState === "sending" ? "default" : "pointer",
-              opacity: tgState === "sending" ? 0.6 : 1,
-              fontFamily: "'Space Grotesk', sans-serif",
-            }}
-          >
-            {tgLabel}
-          </button>
+      {/* Telegram — sent AUTOMATICALLY on approve; this only reports status. */}
+      {!loading && !error && tgState !== "idle" && (
+        <div
+          style={{
+            marginTop: 16,
+            background: tgState === "error" ? "rgba(241,114,18,0.12)" : "rgba(50,81,93,0.28)",
+            border: `1px solid ${tgState === "error" ? "rgba(241,114,18,0.35)" : C.slate}`,
+            borderRadius: 12,
+            padding: "12px",
+            fontSize: 13.5,
+            fontWeight: 600,
+            fontFamily: "'Space Grotesk', sans-serif",
+            color: C.cream,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          <span>
+            {tgState === "sending"
+              ? "✈ در حال ارسال خودکار به تلگرام…"
+              : tgState === "sent"
+              ? "✓ به‌صورت خودکار به تلگرام ارسال شد"
+              : "⚠️ ارسال خودکار به تلگرام ناموفق بود"}
+          </span>
           {tgState === "error" && (
-            <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, fontFamily: "'Space Grotesk', sans-serif", textAlign: "center" }}>
-              {tgMsg}
-            </div>
+            <>
+              <span style={{ fontSize: 11, color: C.orange, direction: "ltr", fontWeight: 500 }}>{tgMsg}</span>
+              {onRetryTelegram && (
+                <button
+                  onClick={onRetryTelegram}
+                  style={{ alignSelf: "center", background: "transparent", color: C.cream, border: `1px solid ${C.slate}`, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
+                >
+                  دوباره تلاش کن
+                </button>
+              )}
+            </>
           )}
-        </>
+        </div>
       )}
 
       {/* Blog article (on-demand) */}
