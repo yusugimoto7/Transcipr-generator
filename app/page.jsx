@@ -140,9 +140,11 @@ function unmarkSeenLocal(topic) {
   saveSeen(seen);
 }
 
-// Record an APPROVED topic to the durable cross-device history (Google Sheet).
-// Only approved topics are logged there — fire-and-forget.
-async function recordApprovedRemote(topic) {
+// Record a DECIDED topic (approved OR rejected) to the durable cross-device
+// history (Google Sheet) so it never returns on any device. Only topics the
+// user acted on are logged — never at generation time. Evergreens are exempt
+// (they recur). Fire-and-forget.
+async function recordSeenRemote(topic) {
   if (!topic || topic.evergreen) return;
   try {
     await fetch("/api/seen", {
@@ -422,10 +424,10 @@ export default function App() {
   const doReject = () => {
     if (exiting) return;
     pushHistory();
-    // Seen on this device only (so it won't reappear here), but NOT written to
-    // the durable Sheet — rejects aren't content, and other devices may still
-    // see it.
+    // Rejecting is a decision too: remember it on this device AND in the durable
+    // cross-device Sheet so it never returns anywhere. (Evergreens are exempt.)
     markSeenLocal(current);
+    recordSeenRemote(current);
     setReviewedCount((n) => n + 1);
     setExiting("left");
     setTimeout(advance, 260);
@@ -440,7 +442,7 @@ export default function App() {
     // Approved: remember it on this device AND in the durable cross-device
     // history (never repeat it — it's content you're making).
     markSeenLocal(topic);
-    recordApprovedRemote(topic);
+    recordSeenRemote(topic);
     setExiting("right");
     setScriptTopic(topic);
     setScripts({ fa: "", en: "" });

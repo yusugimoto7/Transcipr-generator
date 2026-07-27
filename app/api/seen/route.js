@@ -3,10 +3,11 @@ import { sheetEnabled, appendRows } from "../../../lib/sheet";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Record a single APPROVED topic to the durable, cross-device "seen" history so
-// it never comes back on any device. Called by the client when the user swipes
-// right / taps ✓ — NOT at generation time. Topics the user never approved are
-// never written here, so they stay available in future runs.
+// Record a single DECIDED topic (approved OR rejected) to the durable,
+// cross-device "seen" history so it never comes back on any device. Called by
+// the client when the user swipes either way — NOT at generation time. Topics
+// the user never acted on are never written here, so they stay available in
+// future runs.
 export async function POST(request) {
   try {
     const { topic } = await request.json();
