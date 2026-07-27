@@ -69,7 +69,7 @@ export async function POST(req, { params }) {
   if (!def) return error('Unknown package.', 404);
   const cleanPages = body.cleanPages !== false; // default: remove blank/unrelated pages
 
-  // Ensure the generated sub-documents this package needs exist.
+  // Ensure the generated sub-documents this package needs exist (top level only).
   const neededGen = [...new Set(def.sections.filter((s) => s.generatedKey).map((s) => s.generatedKey))];
   for (const key of neededGen) {
     try {
@@ -79,13 +79,13 @@ export async function POST(req, { params }) {
     }
   }
 
-  // Resolve each section's content items.
-  const sections = [];
   let droppedTotal = 0;
-  for (const sec of def.sections) {
+
+  // Resolve one node's (section or child) content items.
+  const resolveItems = async (node) => {
     const items = [];
-    if (sec.generatedKey) {
-      const meta = (app.generated || []).find((g) => g.key === sec.generatedKey);
+    if (node.generatedKey) {
+      const meta = (app.generated || []).find((g) => g.key === node.generatedKey);
       if (meta?.stored) {
         try {
           const bytes = await readGenerated(app.id, meta.stored);
@@ -94,8 +94,8 @@ export async function POST(req, { params }) {
           /* skip */
         }
       }
-    } else if (sec.category) {
-      const docs = (app.documents || []).filter((d) => d.category === sec.category);
+    } else if (node.category) {
+      const docs = (app.documents || []).filter((d) => d.category === node.category);
       for (const d of docs) {
         try {
           const bytes = await readUpload(app.id, d.stored);
@@ -115,17 +115,34 @@ export async function POST(req, { params }) {
         }
       }
     }
-    sections.push({ name: sec.name, items });
+    return items;
+  };
+
+  const d = app.data || {};
+  const sections = [];
+  for (const sec of def.sections) {
+    let name = sec.name;
+    if (sec.supporter && (d.sponsorName || '').trim()) name = `${sec.name} (${d.sponsorName.trim()})`;
+    const items = await resolveItems(sec);
+    const children = [];
+    for (const child of sec.children || []) {
+      children.push({ name: child.name, items: await resolveItems(child) });
+    }
+    sections.push({ name, items, children });
   }
 
-  const includedCount = sections.filter((s) => s.items.length).length;
+  const includedCount = sections.filter(
+    (s) => s.items.length || s.children.some((c) => c.items.length)
+  ).length;
   if (!includedCount) {
     return error('Nothing to compile yet — upload the documents for this package first.', 400);
   }
 
+  const applicantName = [d.givenName, d.familyName].filter(Boolean).join(' ');
+
   let compiled;
   try {
-    compiled = await compilePackage(def.title, sections);
+    compiled = await compilePackage(def.title, applicantName, sections);
   } catch (e) {
     return error(`Compilation failed: ${e.message}`, 500);
   }
@@ -143,6 +160,9 @@ export async function POST(req, { params }) {
     generated: updated.generated,
     key,
     droppedPages: droppedTotal,
-    included: sections.map((s) => ({ name: s.name, count: s.items.length })),
+    included: sections.map((s) => ({
+      name: s.name,
+      count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0),
+    })),
   });
 }

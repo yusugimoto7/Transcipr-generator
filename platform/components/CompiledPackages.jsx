@@ -7,13 +7,13 @@ const PKGS = [
     pkg: 'client-info',
     key: 'client-info-package',
     title: 'Client Information',
-    desc: 'One PDF with a Table of Contents: SOP, CV, transcripts, certificates, job offer, birth certificate/ID, flight ticket, accommodation.',
+    desc: 'One PDF with TOC: SOP, CV, degree & transcripts, employment/job offer/leave/internship letters, certificates, ties, birth certificate/ID, flight, accommodation.',
   },
   {
     pkg: 'financial-proof',
     key: 'financial-proof-package',
     title: 'Financial Support Proof',
-    desc: 'One PDF with a Table of Contents: financial cover letter, financial summary, deposit, bank statements, source of funds, affidavit, title deeds.',
+    desc: "One PDF with TOC: cover letter, summary report, deposit, my bank statement (+ source of my money), my title deeds, supporter's documents (affidavit, bank, pay slips, deeds, ID).",
   },
 ];
 
