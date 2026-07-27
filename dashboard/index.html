@@ -113,6 +113,53 @@
   .rrow .vv small { color: var(--muted); font-weight: 400; }
   .rempty { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }
 
+  /* ---- two-period comparison ---- */
+  .cmp-bar {
+    display: flex; flex-wrap: wrap; gap: 18px 22px; align-items: center;
+    padding: 12px 14px; margin-bottom: 14px;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
+  }
+  .cmp-bar input[type="date"], .cmp-bar select {
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--grid); border-radius: 7px; padding: 4px 8px; min-width: 0;
+  }
+  .cmp-bar select { max-width: 220px; }
+  .cmp-bar input[type="date"]:focus-visible, .cmp-bar select:focus-visible { outline: 2px solid var(--s1); outline-offset: 1px; }
+  .cmp-bar .arrow { color: var(--muted); font-size: 12px; }
+  .cmp-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 14px; }
+
+  /* dumbbell: one row per category, a dot for each period joined by a connector */
+  .db { display: flex; flex-direction: column; gap: 10px; }
+  .dbrow { display: grid; grid-template-columns: 190px 1fr 132px; gap: 10px; align-items: center; }
+  @media (max-width: 700px) { .dbrow { grid-template-columns: 116px 1fr 108px; } }
+  .dblabel { font-size: 12.5px; color: var(--ink-2); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dbtrack { position: relative; height: 20px; }
+  .dbtrack .axis { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--grid); }
+  .dbtrack .conn { position: absolute; top: 50%; height: 2px; transform: translateY(-1px); background: var(--baseline); border-radius: 1px; }
+  .dbtrack .dot {
+    position: absolute; top: 50%; width: 11px; height: 11px; border-radius: 50%;
+    transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--surface);
+  }
+  .dbdelta { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dbdelta .pair { color: var(--muted); }
+  .dbdelta .up { color: var(--good); font-weight: 600; }
+  .dbdelta .down { color: var(--critical); font-weight: 600; }
+  .dbdelta .flat { color: var(--muted); }
+
+  table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cmp th { text-align: right; font-weight: 600; color: var(--muted); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+  .cmp th:first-child { text-align: left; }
+  .cmp td { padding: 7px 8px; border-bottom: 1px solid var(--grid); color: var(--ink-2); text-align: right;
+    font-variant-numeric: tabular-nums; }
+  .cmp td:first-child { text-align: left; color: var(--ink); font-variant-numeric: normal; }
+  .cmp tr:last-child td { border-bottom: none; }
+  .cmp .chg { font-weight: 600; }
+  .cmp .up { color: var(--good); }
+  .cmp .down { color: var(--critical); }
+  .cmp .flat { color: var(--muted); }
+  .cmp .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 22px; }
   .kpi { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px 12px; }
   .klabel { font-size: 12px; color: var(--ink-2); margin-bottom: 4px; }
@@ -257,6 +304,39 @@
 
   <h2 class="section">Whole-period totals — all 18 months</h2>
   <div class="kpis" id="kpis"></div>
+
+  <h2 class="section">Compare two periods</h2>
+  <p class="csub" style="margin:-4px 0 12px">Pick any two date ranges and any field to break down by. Shares are of each
+    period's own total, so ranges of different lengths stay comparable — the leads-per-day row covers absolute volume.
+    The Destination and Channel filters above apply; the Period filter does not.</p>
+  <div class="cmp-bar">
+    <div class="fgroup">
+      <span class="flabel">Quick compare</span>
+      <button class="chip" data-cmp="7">7 vs prev 7</button>
+      <button class="chip" data-cmp="30" aria-pressed="true">30 vs prev 30</button>
+      <button class="chip" data-cmp="90">90 vs prev 90</button>
+      <button class="chip" data-cmp="month">This vs last month</button>
+      <button class="chip" data-cmp="year">Year vs year</button>
+    </div>
+    <div class="fgroup">
+      <span class="flabel" style="color:var(--s2)">Period A</span>
+      <input type="date" id="a-from" aria-label="Period A start"><span class="arrow">→</span>
+      <input type="date" id="a-to" aria-label="Period A end">
+    </div>
+    <div class="fgroup">
+      <span class="flabel" style="color:var(--s1)">Period B</span>
+      <input type="date" id="b-from" aria-label="Period B start"><span class="arrow">→</span>
+      <input type="date" id="b-to" aria-label="Period B end">
+    </div>
+    <div class="fgroup">
+      <span class="flabel">Break down by</span>
+      <select id="cmp-dim" aria-label="Dimension to break down by"></select>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card wide" id="card-cmp-summary"></div>
+    <div class="card wide" id="card-cmp-dim"></div>
+  </div>
 
   <h2 class="section">Volume over time</h2>
   <div class="grid">
@@ -1301,6 +1381,289 @@ function renderBrand() {
   b.appendChild(el('span', 'env', 'Leads analytics'));
 }
 
+/* ---------- two-period comparison ---------- */
+// A is drawn in orange (the earlier / baseline period), B in blue (the one you are
+// judging). Shares are always of each period's own total so unequal ranges compare.
+const CMP_A = 'var(--s2)', CMP_B = 'var(--s1)';
+const CMP_DIMS = [
+  ['de', 'Destination'], ['m', 'Route they want'], ['t', 'Budget tier'], ['b', 'Stated budget'],
+  ['e', 'Education level'], ['l', 'Language level'], ['fg', 'Field of study'],
+  ['em', 'Employed'], ['nat', 'Nationality'], ['ageBand', 'Age band'],
+  ['sg', 'Channel group'], ['s', 'Traffic source'], ['md', 'Traffic medium'],
+  ['ch', 'How they found us'], ['cp', 'Campaign'], ['ct', 'Ad / content tag'],
+  ['rf', 'Affiliate / referrer'], ['f', 'Form'], ['ip', 'Wants Tehran meeting'],
+  ['od', 'Odoo flag']
+];
+const AGE_BANDS = [['<20',0,19],['20–24',20,24],['25–29',25,29],['30–34',30,34],['35–39',35,39],
+                   ['40–44',40,44],['45–49',45,49],['50–54',50,54],['55+',55,200]];
+const BOOL_LABEL = { ip: { '1': 'Yes', '0': 'No' }, od: { '1': 'Flag set', '0': 'Flag empty' } };
+const cmp = { dim: 'sg', a: null, b: null };
+
+const iso = d => d.toISOString().slice(0, 10);
+const addDays = (d, n) => new Date(d.getTime() + n * DAY);
+function cmpPresetRanges(kind) {
+  const t = todayUTC();
+  if (kind === 'month') {
+    const bFrom = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1));
+    const aFrom = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - 1, 1));
+    return { a: [iso(aFrom), iso(addDays(bFrom, -1))], b: [iso(bFrom), iso(t)] };
+  }
+  if (kind === 'year') {
+    const y = t.getUTCFullYear();
+    return { a: [`${y - 1}-01-01`, `${y - 1}-12-31`], b: [`${y}-01-01`, iso(t)] };
+  }
+  const n = Number(kind);
+  const bFrom = addDays(t, -(n - 1));
+  return { a: [iso(addDays(bFrom, -n)), iso(addDays(bFrom, -1))], b: [iso(bFrom), iso(t)] };
+}
+// dimension value for a record, including the derived age band
+function cmpVal(f, i) {
+  if (f === 'ageBand') {
+    const a = COL.a[i];
+    if (!a) return '';
+    const hit = AGE_BANDS.find(([, lo, hi]) => a >= lo && a <= hi);
+    return hit ? hit[0] : '';
+  }
+  return val(f, i);
+}
+function cmpLabel(f, raw) {
+  if (raw === '') return NONE;
+  if (BOOL_LABEL[f]) return BOOL_LABEL[f][raw] || raw;
+  if (f === 't') return raw === '0' ? 'Unscored' : 'Tier ' + raw;
+  if (f === 'ageBand') return 'Age ' + raw;
+  return tr(f, raw);
+}
+function inRange(i, r) {
+  if (!r) return false;
+  const d = iso(dayOf(i));
+  return d >= r[0] && d <= r[1];
+}
+const spanDays = r => Math.round((isoDay(r[1]) - isoDay(r[0])) / DAY) + 1;
+
+function cmpStats(idx) {
+  const n = idx.length;
+  const ages = idx.map(i => COL.a[i]).filter(a => a > 0);
+  const toman = idx.filter(i => curOf(i) === 'toman');
+  return {
+    n,
+    age: ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : null,
+    ca: idx.filter(i => val('de', i) === 'کانادا').length,
+    hi: idx.filter(i => ['3', '4', '5'].includes(val('t', i))).length,
+    toman: toman.length,
+    tomanHi: toman.filter(i => ['3', '4', '5'].includes(val('t', i))).length,
+    odoo: idx.filter(i => val('od', i) === '1').length,
+    ip: idx.filter(i => val('ip', i) === '1').length
+  };
+}
+function chgCell(cur, prev, kind) {
+  // kind 'pct' → relative change; 'pp' → percentage-point change; 'abs' → plain difference
+  const td = el('td', 'chg');
+  if (prev === null || cur === null || (kind === 'pct' && !prev)) {
+    td.className = 'chg flat'; td.textContent = '—'; return td;
+  }
+  const d = kind === 'pct' ? Math.round(100 * (cur - prev) / prev) : +(cur - prev).toFixed(kind === 'abs' ? 1 : 0);
+  td.classList.add(d > 0 ? 'up' : d < 0 ? 'down' : 'flat');
+  const unit = kind === 'pct' ? '%' : kind === 'pp' ? 'pp' : '';
+  td.textContent = (d > 0 ? '+' : '') + d + unit;
+  return td;
+}
+function renderCmpSummary(A, B) {
+  const c = $('#card-cmp-summary'); c.replaceChildren();
+  c.appendChild(el('h3', null, 'Period A vs Period B'));
+  const sub = el('p', 'csub');
+  sub.textContent = `A: ${fmtDay(isoDay(cmp.a[0]))} – ${fmtDay(isoDay(cmp.a[1]))} (${spanDays(cmp.a)} days) `
+    + `· B: ${fmtDay(isoDay(cmp.b[0]))} – ${fmtDay(isoDay(cmp.b[1]))} (${spanDays(cmp.b)} days)`;
+  c.appendChild(sub);
+  if (!A.length && !B.length) {
+    c.appendChild(el('p', 'rempty', 'Neither period contains any leads under the current filters.'));
+    return;
+  }
+  const sa = cmpStats(A), sb = cmpStats(B);
+  const da = spanDays(cmp.a), db_ = spanDays(cmp.b);
+  const t = el('table', 'cmp'), hr = el('tr');
+  ['Metric', 'Period A', 'Period B', 'Change'].forEach(x => hr.appendChild(el('th', null, x)));
+  t.appendChild(hr);
+  const row = (label, aTxt, bTxt, chg, note) => {
+    const tr_ = el('tr');
+    const first = el('td', null, label);
+    if (note) first.appendChild(el('span', 'sub', note));
+    tr_.appendChild(first);
+    tr_.appendChild(el('td', null, aTxt));
+    tr_.appendChild(el('td', null, bTxt));
+    tr_.appendChild(chg);
+    t.appendChild(tr_);
+  };
+  row('Leads', fmt(sa.n), fmt(sb.n), chgCell(sb.n, sa.n, 'pct'));
+  row('Leads per day', (sa.n / da).toFixed(1), (sb.n / db_).toFixed(1),
+      chgCell(sb.n / db_, sa.n / da, 'pct'), 'the fair comparison when ranges differ in length');
+  row('Choosing Canada', pct(sa.ca, sa.n), pct(sb.ca, sb.n),
+      chgCell(sa.n && sb.n ? 100 * sb.ca / sb.n : null, sa.n ? 100 * sa.ca / sa.n : null, 'pp'));
+  const mixShift = sa.n && sb.n && Math.abs((1 - sb.toman / sb.n) - (1 - sa.toman / sa.n)) > 0.05;
+  row('Budget tier 3–5', pct(sa.hi, sa.n), pct(sb.hi, sb.n),
+      chgCell(sb.n ? 100 * sb.hi / sb.n : null, sa.n ? 100 * sa.hi / sa.n : null, 'pp'),
+      mixShift ? 'currency mix differs — see the toman-only row below' : null);
+  if (mixShift) {
+    row('Budget tier 3–5, toman leads only', pct(sa.tomanHi, sa.toman), pct(sb.tomanHi, sb.toman),
+        chgCell(sb.toman ? 100 * sb.tomanHi / sb.toman : null, sa.toman ? 100 * sa.tomanHi / sa.toman : null, 'pp'),
+        'like-for-like');
+  }
+  row('Average age', sa.age ? sa.age.toFixed(1) : '—', sb.age ? sb.age.toFixed(1) : '—',
+      chgCell(sb.age, sa.age, 'abs'));
+  row('Wants Tehran meeting', pct(sa.ip, sa.n), pct(sb.ip, sb.n),
+      chgCell(sb.n ? 100 * sb.ip / sb.n : null, sa.n ? 100 * sa.ip / sa.n : null, 'pp'));
+  row('Odoo flag set', pct(sa.odoo, sa.n), pct(sb.odoo, sb.n),
+      chgCell(sb.n ? 100 * sb.odoo / sb.n : null, sa.n ? 100 * sa.odoo / sa.n : null, 'pp'));
+  c.appendChild(el('div', 'tscroll')).appendChild(t);
+}
+function renderCmpDim(A, B) {
+  const dimName = (CMP_DIMS.find(d => d[0] === cmp.dim) || [, cmp.dim])[1];
+  const { chart, table } = card('#card-cmp-dim', `${dimName} — A vs B`,
+    'Each row is one category: the dot marks its share of that period, the connector the gap between them.');
+  if (!A.length || !B.length) {
+    chart.appendChild(el('p', 'rempty',
+      'Both periods need at least one lead to compare. Widen a range or clear a filter.'));
+    return;
+  }
+  const tally2 = idx => {
+    const m = new Map();
+    for (const i of idx) { const v = cmpVal(cmp.dim, i); m.set(v, (m.get(v) || 0) + 1); }
+    return m;
+  };
+  const ma = tally2(A), mb = tally2(B);
+  let rows = [...new Set([...ma.keys(), ...mb.keys()])].map(raw => {
+    const na = ma.get(raw) || 0, nb = mb.get(raw) || 0;
+    return { raw, label: cmpLabel(cmp.dim, raw), na, nb,
+      pa: 100 * na / A.length, pb: 100 * nb / B.length };
+  }).sort((x, y) => y.pb - x.pb || y.pa - x.pa);
+  // "(not answered)" is a coverage figure, not a category. On fields where most rows are
+  // blank it would dominate the axis and flatten every real category, so it is reported in
+  // the caption and the table instead of being plotted.
+  const blank = rows.find(r => r.raw === '');
+  rows = rows.filter(r => r.raw !== '');
+  const CAP = 12;
+  if (rows.length > CAP) {
+    const rest = rows.slice(CAP);
+    rows = rows.slice(0, CAP);
+    rows.push({ raw: '', label: `Other (${rest.length} values)`,
+      na: rest.reduce((s, r) => s + r.na, 0), nb: rest.reduce((s, r) => s + r.nb, 0),
+      pa: rest.reduce((s, r) => s + r.pa, 0), pb: rest.reduce((s, r) => s + r.pb, 0), isOther: true });
+  }
+  if (!rows.length) {
+    chart.appendChild(el('p', 'rempty', 'Every lead in both periods left this field blank, so there is nothing to compare.'));
+    return;
+  }
+  const max = Math.max(...rows.map(r => Math.max(r.pa, r.pb)), 1);
+  const box = el('div', 'db');
+  for (const r of rows) {
+    const line = el('div', 'dbrow');
+    const lab = el('div', 'dblabel', r.label); lab.title = r.label;
+    line.appendChild(lab);
+    const track = el('div', 'dbtrack');
+    track.appendChild(el('div', 'axis'));
+    const xa = 100 * r.pa / max, xb = 100 * r.pb / max;
+    const conn = el('div', 'conn');
+    conn.style.left = Math.min(xa, xb) + '%';
+    conn.style.width = Math.abs(xb - xa) + '%';
+    track.appendChild(conn);
+    for (const [x, n, p, color, name] of [[xa, r.na, r.pa, CMP_A, 'Period A'], [xb, r.nb, r.pb, CMP_B, 'Period B']]) {
+      const dot = el('div', 'dot');
+      dot.style.left = x + '%'; dot.style.background = color;
+      bindTip(dot, () => [`${p.toFixed(1)}% · ${fmt(n)} leads`, `${r.label} — ${name}`, r.isOther ? '' : r.raw]);
+      track.appendChild(dot);
+    }
+    line.appendChild(track);
+    const d = el('div', 'dbdelta');
+    d.appendChild(el('span', 'pair', `${r.pa.toFixed(0)}% → ${r.pb.toFixed(0)}%  `));
+    const pp = Math.round(r.pb - r.pa);
+    d.appendChild(el('span', pp > 0 ? 'up' : pp < 0 ? 'down' : 'flat',
+      (pp > 0 ? '+' : '') + pp + 'pp'));
+    line.appendChild(d);
+    box.appendChild(line);
+  }
+  chart.appendChild(box);
+  const lg = el('div', 'cmp-legend');
+  for (const [color, name, r] of [[CMP_A, 'Period A', cmp.a], [CMP_B, 'Period B', cmp.b]]) {
+    const it = el('span', 'lg');
+    const sw = el('span', 'sw'); sw.style.background = color; sw.style.borderRadius = '50%';
+    it.appendChild(sw);
+    it.appendChild(el('span', null, `${name} · ${fmtDay(isoDay(r[0]))} – ${fmtDay(isoDay(r[1]))}`));
+    lg.appendChild(it);
+  }
+  chart.appendChild(lg);
+  if (blank && (blank.na || blank.nb)) {
+    const cap = el('p', 'csub');
+    cap.style.marginTop = '10px';
+    cap.textContent = `Not answered: ${blank.pa.toFixed(0)}% of A (${fmt(blank.na)}) vs `
+      + `${blank.pb.toFixed(0)}% of B (${fmt(blank.nb)}). Left off the chart so the answered `
+      + `categories keep a readable scale — it is in the table below.`;
+    chart.appendChild(cap);
+  }
+
+  const tableRows = blank && (blank.na || blank.nb) ? [...rows, blank] : rows;
+  const t = el('table', 'cmp'), hr = el('tr');
+  ['Category', 'A leads', 'A share', 'B leads', 'B share', 'Change'].forEach(x => hr.appendChild(el('th', null, x)));
+  t.appendChild(hr);
+  for (const r of tableRows) {
+    const tr_ = el('tr');
+    const td = el('td', null, r.label);
+    if (!r.isOther && r.raw && r.raw !== r.label) { const fa = el('div', 'fa', r.raw); fa.dir = 'rtl'; td.appendChild(fa); }
+    tr_.appendChild(td);
+    tr_.appendChild(el('td', null, fmt(r.na)));
+    tr_.appendChild(el('td', null, r.pa.toFixed(1) + '%'));
+    tr_.appendChild(el('td', null, fmt(r.nb)));
+    tr_.appendChild(el('td', null, r.pb.toFixed(1) + '%'));
+    tr_.appendChild(chgCell(r.pb, r.pa, 'pp'));
+    t.appendChild(tr_);
+  }
+  table.appendChild(t);
+}
+function renderCompare() {
+  const pool = dimIdx();   // destination + channel filters apply; period does not
+  const A = pool.filter(i => inRange(i, cmp.a));
+  const B = pool.filter(i => inRange(i, cmp.b));
+  renderCmpSummary(A, B);
+  renderCmpDim(A, B);
+}
+function syncCmpInputs() {
+  $('#a-from').value = cmp.a[0]; $('#a-to').value = cmp.a[1];
+  $('#b-from').value = cmp.b[0]; $('#b-to').value = cmp.b[1];
+}
+function initCompare() {
+  const sel = $('#cmp-dim');
+  for (const [k, label] of CMP_DIMS) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = label;
+    if (k === cmp.dim) o.selected = true;
+    sel.appendChild(o);
+  }
+  const lo = iso(D0), hi = iso(SNAP_DAY);
+  for (const id of ['#a-from', '#a-to', '#b-from', '#b-to']) {
+    const inp = $(id); inp.min = lo; inp.max = iso(todayUTC()) > hi ? iso(todayUTC()) : hi;
+  }
+  const pre = cmpPresetRanges('30');
+  cmp.a = pre.a; cmp.b = pre.b;
+  syncCmpInputs();
+  sel.addEventListener('change', () => { cmp.dim = sel.value; renderCompare(); });
+  $('.cmp-bar').addEventListener('click', e => {
+    const btn = e.target.closest('.chip[data-cmp]');
+    if (!btn) return;
+    const r = cmpPresetRanges(btn.dataset.cmp);
+    cmp.a = r.a; cmp.b = r.b;
+    for (const c of $('.cmp-bar').querySelectorAll('.chip[data-cmp]')) c.setAttribute('aria-pressed', String(c === btn));
+    syncCmpInputs(); renderCompare();
+  });
+  for (const [id, slot, ix] of [['#a-from','a',0],['#a-to','a',1],['#b-from','b',0],['#b-to','b',1]]) {
+    $(id).addEventListener('change', () => {
+      const v = $(id).value;
+      if (!v) return;
+      cmp[slot][ix] = v;
+      if (cmp[slot][0] > cmp[slot][1]) cmp[slot] = [cmp[slot][1], cmp[slot][0]];   // tolerate reversed entry
+      for (const c of $('.cmp-bar').querySelectorAll('.chip[data-cmp]')) c.setAttribute('aria-pressed', 'false');
+      syncCmpInputs(); renderCompare();
+    });
+  }
+}
+
 /* ---------- render ---------- */
 function renderAll() {
   const idx = activeIdx();
@@ -1369,6 +1732,7 @@ function renderAll() {
   renderOutreach(idx);
   renderQuality();
   renderFill(idx);
+  renderCompare();
 }
 for (const [id, key] of [['#f-period', 'period'], ['#f-dest', 'dest'], ['#f-src', 'src']]) {
   $(id).addEventListener('click', e => {
@@ -1378,6 +1742,7 @@ for (const [id, key] of [['#f-period', 'period'], ['#f-dest', 'dest'], ['#f-src'
     renderAll();
   });
 }
+initCompare();
 renderAll();
 </script>
 
