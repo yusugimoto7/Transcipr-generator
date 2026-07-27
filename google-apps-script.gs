@@ -21,6 +21,12 @@
  *
  * After that, every topic the app shows is appended as a row here, and it
  * will never show the same article twice — on any device, forever.
+ *
+ * OPTIONAL — "Make Google Doc" button (turns a generated article into a Google
+ * Doc in your Drive): enable the Advanced Drive Service once. In the Apps Script
+ * editor, click "Services" (the + next to Services in the left sidebar), pick
+ * "Drive API", click Add, then Save and re-deploy the web app. Without this, the
+ * doc button returns an error but everything else keeps working.
  */
 
 const SECRET = "CHANGE-ME-to-a-long-random-string";
@@ -94,6 +100,12 @@ function doPost(e) {
   var body = {};
   try { body = JSON.parse(e.postData.contents || "{}"); } catch (_) {}
   if (body.secret !== SECRET) return json({ error: "unauthorized" });
+
+  // Google Doc: create a Doc from an article (title + HTML) and return its URL.
+  // Requires the Advanced Drive Service enabled (see setup notes at top).
+  if (body.doc) {
+    return json(createArticleDoc(body.doc.title || "Untitled", body.doc.html || ""));
+  }
 
   // Library save: append full script/article records (kept as JSON).
   if (body.library) {
@@ -180,6 +192,39 @@ function getPostedDrawsSheet() {
     ]);
   }
   return sh;
+}
+
+// Create a Google Doc from article HTML and return its edit URL.
+// REQUIRES the Advanced Drive Service: in the Apps Script editor, click
+// "Services" (+) in the left sidebar, add "Drive API", Save. Then re-deploy.
+function createArticleDoc(title, html) {
+  try {
+    // Wrap RTL so the Farsi content aligns right when Google imports the HTML.
+    var wrapped =
+      '<html><body dir="rtl" style="text-align:right">' + (html || "") + "</body></html>";
+    var blob = Utilities.newBlob(wrapped, "text/html", title);
+    var file = Drive.Files.insert(
+      { title: title, mimeType: "application/vnd.google-apps.document" },
+      blob
+    );
+    // Tidy: move it into a dedicated folder.
+    try {
+      DriveApp.getFileById(file.id).moveTo(getArticlesFolder());
+    } catch (e) {}
+    return {
+      ok: true,
+      id: file.id,
+      url: "https://docs.google.com/document/d/" + file.id + "/edit",
+    };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function getArticlesFolder() {
+  var name = "Sugimoto Articles";
+  var it = DriveApp.getFoldersByName(name);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(name);
 }
 
 function json(obj) {

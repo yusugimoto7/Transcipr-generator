@@ -991,6 +991,31 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
     }
   };
 
+  // Make a Google Doc from the article (alternative to WordPress publishing).
+  const [docState, setDocState] = useState("idle"); // idle | creating | done | error
+  const [docUrl, setDocUrl] = useState("");
+  const [docMsg, setDocMsg] = useState("");
+
+  const makeDoc = async () => {
+    if (!article || docState === "creating") return;
+    setDocState("creating");
+    setDocMsg("");
+    try {
+      const res = await fetch("/api/gdoc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ article }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "failed");
+      setDocUrl(data.url || "");
+      setDocState("done");
+    } catch (e) {
+      setDocState("error");
+      setDocMsg(String(e.message || e));
+    }
+  };
+
   return (
     <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -1179,6 +1204,41 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
               {pubState === "error" && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{pubMsg}</div>
               )}
+
+              {/* Make Google Doc (alternative output — no WordPress needed) */}
+              {docState !== "done" ? (
+                <button
+                  onClick={makeDoc}
+                  disabled={docState === "creating"}
+                  style={{
+                    width: "100%", marginTop: 10,
+                    background: "rgba(50,81,93,0.35)", color: C.cream,
+                    border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
+                    fontWeight: 600, fontSize: 14, cursor: docState === "creating" ? "default" : "pointer",
+                    opacity: docState === "creating" ? 0.6 : 1, fontFamily: "'Space Grotesk', sans-serif",
+                  }}
+                >
+                  {docState === "creating" ? "در حال ساخت گوگل داک…" : docState === "error" ? "دوباره امتحان کن — Google Doc" : "📄 ساخت Google Doc"}
+                </button>
+              ) : (
+                <a
+                  href={docUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "block", marginTop: 10, textAlign: "center",
+                    background: C.slate, color: C.cream, border: `1px solid ${C.slate}`,
+                    borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14,
+                    textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
+                  }}
+                >
+                  ✓ Google Doc ساخته شد — باز کردن ↗
+                </a>
+              )}
+              {docState === "error" && (
+                <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{docMsg}</div>
+              )}
+
               <button onClick={generateArticle} disabled={artState === "generating"} style={{ width: "100%", marginTop: 8, background: "transparent", color: "rgba(242,229,192,0.6)", border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
                 ↻ بازنویسی مقاله
               </button>
