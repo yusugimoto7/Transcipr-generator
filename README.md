@@ -158,10 +158,24 @@ in the file. The blueprint sets `X-Robots-Tag: noindex` so it stays out of searc
 results, but if the link needs to be restricted, serve it behind an authenticated
 route instead of as a static site.
 
-**Refreshing the data.** The file is a snapshot; it does not read the sheet live.
-To update it, re-export the sheet, regenerate the embedded `PACK` object and
-commit — Render redeploys on push. The header states the snapshot date, and the
-dashboard shows a banner when its newest lead is more than a day old.
+**Refreshing the data.** The page is a snapshot — nothing in it reads the sheet at
+runtime, so the numbers stay frozen until the file is rebuilt. To refresh:
+
+```sh
+pip install openpyxl
+# Sheet -> File -> Download -> Microsoft Excel (.xlsx)
+python3 scripts/build_dashboard.py ~/Downloads/leads.xlsx
+git commit -am "Refresh dashboard data" && git push      # Render redeploys on push
+```
+
+The script re-reads the first three tabs, de-duplicates the overlap between them,
+drops test rows, and rewrites both the embedded data and every figure the page
+states in prose, so the narrative can never contradict the charts. It prints a
+summary of what it found. The header shows when the data was last rebuilt, and a
+banner appears automatically once the newest lead is more than a day old.
+
+Use the **xlsx** export, never Drive's plain-text export — the latter silently
+truncates large sheets to a few dozen rows per tab.
 
 ## Project structure
 - `app/page.jsx` — the full swipe deck + script UI (client component)
