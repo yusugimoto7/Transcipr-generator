@@ -58,15 +58,24 @@ services:
       - key: CALCOM_TELEMETRY_DISABLED
         value: '1'
 
+      # Mail is sent through the IONOS-hosted booking@ mailbox.
+      # Regional endpoint: use smtp.ionos.co.uk / smtp.ionos.de instead if the
+      # IONOS account is UK/DE rather than US.
       - key: EMAIL_FROM
         value: booking@sugimotovisa.com
       - key: EMAIL_SERVER_HOST
-        value: smtp.gmail.com
+        value: smtp.ionos.com
+      # 465 = implicit SSL. If the host blocks 465, switch to 587 (STARTTLS).
       - key: EMAIL_SERVER_PORT
         value: '465'
+      # IONOS authenticates with the full email address as the username.
       - key: EMAIL_SERVER_USER
         value: booking@sugimotovisa.com
-      # Gmail App Password. The app boots without it; outbound email fails
-      # until it is set.
+      # The IONOS mailbox password itself — IONOS has no scoped app-password
+      # equivalent, so treat booking@ as a send-only mailbox. The app boots
+      # without this; outbound email fails until it is set.
+      #
+      # Mail also requires MX + SPF + DKIM records for sugimotovisa.com in
+      # Cloudflare (authoritative DNS), not in IONOS.
       - key: EMAIL_SERVER_PASSWORD
         sync: false
