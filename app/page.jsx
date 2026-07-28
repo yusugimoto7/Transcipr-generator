@@ -996,6 +996,19 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
   const [docState, setDocState] = useState("idle"); // idle | creating | done | error
   const [docUrl, setDocUrl] = useState("");
   const [docMsg, setDocMsg] = useState("");
+  const [docCopied, setDocCopied] = useState(false);
+
+  // Open the doc robustly: some in-app browsers block target="_blank" new tabs,
+  // so try window.open and fall back to same-tab navigation if it's blocked.
+  const openDoc = (e) => {
+    if (e) e.preventDefault();
+    if (!docUrl) return;
+    let w = null;
+    try {
+      w = window.open(docUrl, "_blank", "noopener");
+    } catch (_) {}
+    if (!w) window.location.href = docUrl;
+  };
 
   const makeDoc = async () => {
     if (!article || docState === "creating") return;
@@ -1234,19 +1247,40 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                   {docState === "creating" ? "در حال ساخت گوگل داک…" : docState === "error" ? "دوباره امتحان کن — Google Doc" : "📄 ساخت Google Doc"}
                 </button>
               ) : (
-                <a
-                  href={docUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "block", marginTop: 10, textAlign: "center",
-                    background: C.slate, color: C.cream, border: `1px solid ${C.slate}`,
-                    borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14,
-                    textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
-                  }}
-                >
-                  ✓ Google Doc ساخته شد — باز کردن ↗
-                </a>
+                <div style={{ marginTop: 10 }}>
+                  <a
+                    href={docUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={openDoc}
+                    style={{
+                      display: "block", textAlign: "center",
+                      background: C.slate, color: C.cream, border: `1px solid ${C.slate}`,
+                      borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14,
+                      textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
+                    }}
+                  >
+                    ✓ Google Doc ساخته شد — باز کردن ↗
+                  </a>
+                  {/* Copy-link fallback for in-app browsers that block new tabs */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                    <input
+                      readOnly
+                      value={docUrl}
+                      onFocus={(e) => e.target.select()}
+                      style={{ flex: 1, minWidth: 0, background: "rgba(242,229,192,0.06)", color: "rgba(242,229,192,0.8)", border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 11, fontFamily: "monospace", direction: "ltr" }}
+                    />
+                    <button
+                      onClick={() => { try { navigator.clipboard?.writeText(docUrl); } catch (_) {} setDocCopied(true); setTimeout(() => setDocCopied(false), 1500); }}
+                      style={{ background: docCopied ? C.orangeDeep : "rgba(241,114,18,0.15)", color: docCopied ? "#fff" : C.orange, border: `1px solid rgba(241,114,18,0.35)`, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif", whiteSpace: "nowrap" }}
+                    >
+                      {docCopied ? "کپی شد ✓" : "کپی لینک"}
+                    </button>
+                  </div>
+                  <div dir="rtl" style={{ marginTop: 6, fontSize: 10.5, color: "rgba(242,229,192,0.45)", textAlign: "center", fontFamily: "'Vazirmatn', sans-serif" }}>
+                    اگر با زدن دکمه باز نشد، لینک رو کپی کن و توی مرورگر (Safari/Chrome) باز کن
+                  </div>
+                </div>
               )}
               {docState === "error" && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{docMsg}</div>
