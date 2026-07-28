@@ -197,6 +197,7 @@ async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
       date: src.published ? src.published.slice(0, 10) : "",
       source_url: src.source_url,
       source_name: src.source_name,
+      snippet: src.snippet || "",
       score: Number(p.score) || 75,
     });
   }

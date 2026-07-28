@@ -1,6 +1,7 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiArticle } from "../../../lib/openai";
 import { getInternalLinks } from "../../../lib/wordpress";
+import { fetchArticleText } from "../../../lib/news";
 import { articlePrompt, parseArticle } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -24,7 +25,11 @@ export async function POST(request) {
     // Pull the site's pages as the allowed internal-link list (public, no auth).
     const links = await getInternalLinks();
     const today = new Date().toLocaleDateString("en-CA");
-    const prompt = articlePrompt(topic, links, today);
+    // Ground the article in the REAL source article text (never fabricate).
+    let sourceText = "";
+    if (topic.source_url) sourceText = await fetchArticleText(topic.source_url).catch(() => "");
+    if (!sourceText && topic.snippet) sourceText = String(topic.snippet);
+    const prompt = articlePrompt(topic, links, today, sourceText);
 
     let text = "";
     let provider = "anthropic";
