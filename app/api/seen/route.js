@@ -14,8 +14,6 @@ export async function POST(request) {
     if (!topic || !(topic.title_fa || topic.title_en)) {
       return Response.json({ error: "bad request" }, { status: 400 });
     }
-    // Evergreen how-to cards are meant to recur — never burn them.
-    if (topic.evergreen) return Response.json({ ok: true, skipped: "evergreen" });
     if (!sheetEnabled()) return Response.json({ ok: true, skipped: "no-sheet" });
     await appendRows([topic]);
     return Response.json({ ok: true });

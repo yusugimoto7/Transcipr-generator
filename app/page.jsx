@@ -113,19 +113,17 @@ function saveSeen(list) {
   } catch (_) {}
 }
 
-// Has this topic (by title OR source article) been shown before? Evergreen
-// how-to cards are exempt — they're allowed to recur to keep the deck full.
+// Has this topic (by title OR source article) been shown before?
 function isSeen(t, seenTitleSet, seenUrlSet) {
-  if (t.evergreen) return false;
   const uk = urlKey(t);
   return seenTitleSet.has(topicKey(t)) || (uk && seenUrlSet.has(uk));
 }
 
 // Mark a topic as seen ON THIS DEVICE — called when the user acts on a card
 // (approve OR reject), never at load time. Topics the user never reaches stay
-// unseen and can appear again. Evergreen cards are never burned.
+// unseen and can appear again.
 function markSeenLocal(topic) {
-  if (!topic || topic.evergreen) return;
+  if (!topic) return;
   const seen = loadSeen();
   seen.push({ key: topicKey(topic), url: urlKey(topic), en: topic.title_en || topic.title_fa });
   saveSeen(seen);
@@ -133,7 +131,7 @@ function markSeenLocal(topic) {
 
 // Reverse a local "seen" mark (used by Undo) so the card can be acted on again.
 function unmarkSeenLocal(topic) {
-  if (!topic || topic.evergreen) return;
+  if (!topic) return;
   const k = topicKey(topic);
   const u = urlKey(topic);
   const seen = loadSeen().filter((s) => s.key !== k && (!u || s.url !== u));
@@ -142,10 +140,9 @@ function unmarkSeenLocal(topic) {
 
 // Record a DECIDED topic (approved OR rejected) to the durable cross-device
 // history (Google Sheet) so it never returns on any device. Only topics the
-// user acted on are logged — never at generation time. Evergreens are exempt
-// (they recur). Fire-and-forget.
+// user acted on are logged — never at generation time. Fire-and-forget.
 async function recordSeenRemote(topic) {
-  if (!topic || topic.evergreen) return;
+  if (!topic) return;
   try {
     await fetch("/api/seen", {
       method: "POST",
