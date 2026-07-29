@@ -56,10 +56,17 @@ export async function POST(request) {
       );
       const data = await res.json();
       if (!data.ok) {
-        return Response.json(
-          { error: data.description || "Telegram send failed" },
-          { status: 502 }
-        );
+        const desc = String(data.description || "Telegram send failed");
+        let hint = "";
+        if (/chat not found/i.test(desc)) {
+          hint =
+            " — ربات به کانال دسترسی نداره. مطمئن شو: ۱) ربات به‌عنوان Admin با اجازهٔ Post به کانال اضافه شده، و ۲) مقدار TELEGRAM_CHANNEL_ID دقیقاً درست باشه (آی‌دی عددی مثل -100xxxxxxxxxx یا @username کانال).";
+        } else if (/bot.*(kicked|not a member|forbidden)/i.test(desc) || /forbidden/i.test(desc)) {
+          hint = " — ربات از کانال حذف شده یا Admin نیست. دوباره به‌عنوان Admin اضافه‌ش کن.";
+        } else if (/chat_id is empty|invalid/i.test(desc)) {
+          hint = " — TELEGRAM_CHANNEL_ID خالی یا نامعتبره.";
+        }
+        return Response.json({ error: desc + hint }, { status: 502 });
       }
     }
     return Response.json({ ok: true, sent: messages.length });
