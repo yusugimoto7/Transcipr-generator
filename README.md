@@ -158,8 +158,32 @@ in the file. The blueprint sets `X-Robots-Tag: noindex` so it stays out of searc
 results, but if the link needs to be restricted, serve it behind an authenticated
 route instead of as a static site.
 
-**Refreshing the data.** The page is a snapshot — nothing in it reads the sheet at
-runtime, so the numbers stay frozen until the file is rebuilt. To refresh:
+**Live data (recommended).** With an endpoint configured the page fetches the
+sheet on every load, so a browser refresh is always current:
+
+1. Open the leads spreadsheet → **Extensions → Apps Script**, paste
+   `apps-script/leads-dashboard.gs`, set `SECRET` to a long random string.
+2. **Deploy → New deployment → Web app**, *Execute as* Me, *Who has access*
+   Anyone. Authorize it (it is your own script).
+3. Put the resulting URL in `LIVE_DATA_URL` near the top of the script block in
+   `dashboard/index.html`:
+   `https://script.google.com/macros/s/AKfy.../exec?secret=YOUR_SECRET`
+4. Commit and push — Render redeploys.
+
+The page renders its embedded snapshot instantly, then swaps in the live pack and
+re-renders, so it never shows a blank screen and never breaks if the endpoint is
+down — it falls back to the snapshot and says so in the header badge. The badge
+reads "Live · HH:MM" when fresh, and carries a Refresh button. Add `?live=<url>`
+to the page URL to point a single visit at a different endpoint.
+
+The endpoint returns **only the anonymised pack** — no names, emails, phone
+numbers or résumé text. `SECRET` is embedded in the page, so treat it as
+obfuscation, not access control: anyone who can open the dashboard can call the
+endpoint and get exactly what the dashboard already shows. The Apps Script
+transform is verified byte-identical to the Python build script's output.
+
+**Rebuilding the embedded snapshot.** Independent of the live endpoint, the
+fallback snapshot can be refreshed so the page is useful even offline:
 
 ```sh
 pip install openpyxl

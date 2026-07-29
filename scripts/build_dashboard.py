@@ -296,10 +296,11 @@ def main():
     payload = json.dumps(pack, ensure_ascii=False, separators=(",", ":"))
 
     html = TARGET.read_text(encoding="utf-8")
-    new, count = re.subn(r"const PACK = \{.*?\};", f"const PACK = {payload};",
+    # `let` since the page can swap this snapshot for a live pack at runtime
+    new, count = re.subn(r"(?:const|let) PACK = \{.*?\};", f"let PACK = {payload};",
                          html, count=1, flags=re.S)
     if count != 1:
-        sys.exit("could not find the `const PACK = {...};` line in dashboard/index.html")
+        sys.exit("could not find the `let PACK = {...};` line in dashboard/index.html")
     TARGET.write_text(new, encoding="utf-8")
 
     months = Counter(r["_date"][:7] for r in dated)

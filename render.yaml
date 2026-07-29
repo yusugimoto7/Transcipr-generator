@@ -27,7 +27,9 @@ services:
       - path: /*
         name: Referrer-Policy
         value: no-referrer
-      # The page loads no external resources, so lock it down to itself.
+      # No external resources are loaded. connect-src additionally allows the live
+      # data fetch to the Apps Script endpoint (Apps Script redirects /exec to
+      # script.googleusercontent.com, so both hosts are needed).
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+        value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
