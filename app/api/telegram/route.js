@@ -1,3 +1,5 @@
+import { tgCall, approvalEnabled } from "../../../lib/telegram";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -68,6 +70,37 @@ export async function POST(request) {
   const { topic, fa, en } = payload || {};
   const title = topic?.title_fa || topic?.title_en || "Sugimoto topic";
   const sourceLine = topic?.source_url ? `\n\n🔗 ${topic.source_url}` : "";
+
+  // APPROVAL FLOW: send ONE publish-ready post (Farsi primary) to the review
+  // chat with Approve/Reject buttons. Tapping ✅ (handled by the webhook)
+  // publishes it to the public channel. Nothing hits the public channel until
+  // it's approved.
+  if (approvalEnabled()) {
+    const body = fa || en;
+    if (!body) return Response.json({ error: "nothing to send" }, { status: 400 });
+    const post = `🎬 ${title}\n\n${clamp(body)}${sourceLine}`;
+    try {
+      const data = await tgCall("sendMessage", {
+        chat_id: process.env.TELEGRAM_REVIEW_CHAT_ID,
+        text: post,
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "✅ انتشار در کانال", callback_data: "pub" },
+              { text: "❌ رد", callback_data: "rej" },
+            ],
+          ],
+        },
+      });
+      if (!data.ok) {
+        return Response.json({ error: (data.description || "send failed") }, { status: 502 });
+      }
+      return Response.json({ ok: true, mode: "review" });
+    } catch (e) {
+      return Response.json({ error: String(e?.message || e) }, { status: 500 });
+    }
+  }
 
   const messages = [];
   if (fa) messages.push(`🎬 ${title}\n\n🇮🇷 سناریو فارسی:\n\n${clamp(fa)}${sourceLine}`);
