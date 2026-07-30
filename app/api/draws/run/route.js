@@ -8,6 +8,8 @@
 //
 // Query flags:
 //   ?dry=1            collect + report, send nothing
+//   ?seed=1           mark current draws as posted WITHOUT sending (run once
+//                     before enabling autorun to skip the existing backlog)
 //   ?only=alberta,ee  restrict to specific sources (ids from lib/draws/sources)
 //   ?wp=0             skip the WordPress page this run
 export const runtime = "nodejs";
@@ -41,6 +43,9 @@ async function handle(request) {
   const dryRun = ["1", "true", "yes"].includes(
     (url.searchParams.get("dry") || "").toLowerCase()
   );
+  const seed = ["1", "true", "yes"].includes(
+    (url.searchParams.get("seed") || "").toLowerCase()
+  );
   const withWordPress = !["0", "false", "no"].includes(
     (url.searchParams.get("wp") || "").toLowerCase()
   );
@@ -50,7 +55,7 @@ async function handle(request) {
     : null;
 
   try {
-    const report = await runDrawCycle({ dryRun, only, withWordPress });
+    const report = await runDrawCycle({ dryRun, seed, only, withWordPress });
     return Response.json(report, { status: report.ok ? 200 : 500 });
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
