@@ -6,16 +6,22 @@
  * a frozen snapshot.
  *
  * SETUP (one time, ~3 minutes)
- *  1. Open the leads spreadsheet ("Specific Access/Site-Assessments Leads").
- *  2. Extensions -> Apps Script. Delete whatever is there and paste this file.
- *  3. SECRET below is already filled in — leave it as it is.
- *  4. Deploy -> New deployment -> gear -> Web app
+ *  This is a STANDALONE script — do not paste it into the spreadsheet's own
+ *  Apps Script project. That project already runs the lead pipeline, and Apps
+ *  Script shares one global namespace per project, so a second doGet() there
+ *  would collide with the existing one.
+ *
+ *  1. Go to https://script.google.com and click "New project".
+ *  2. Delete the empty myFunction() stub and paste this whole file.
+ *  3. Rename the project (top left) to something like "Leads dashboard API".
+ *     SECRET and SHEET_ID below are already filled in — leave them alone.
+ *  4. Run the `testBuild` function once from the toolbar. Google will ask for
+ *     authorization: it is your own script, so Advanced -> "Go to <project>
+ *     (unsafe)" -> Allow. Check the log shows ~11,000 submissions.
+ *  5. Deploy -> New deployment -> gear -> Web app
  *       Execute as:      Me
  *       Who has access:  Anyone
- *     Deploy, then Authorize access (it is your own script: Advanced ->
- *     "Go to <project> (unsafe)" -> Allow).
- *  5. Copy the Web app URL (ends in /exec) and set LIVE_DATA_URL in
- *     dashboard/index.html to:
+ *     Deploy, copy the Web app URL (ends in /exec), and use:
  *       https://script.google.com/macros/s/AKfy.../exec?secret=YOUR_SECRET
  *
  * WHAT LEAVES THIS SCRIPT
@@ -27,6 +33,9 @@
  */
 
 const SECRET = 'sgv_a7mftc7VvVgM4UaCrI7QRYYhVubQoBEf';
+// The leads spreadsheet. Opened by ID so this can live in its own project and
+// never touch the sheet-bound script that runs the lead pipeline.
+const SHEET_ID = '1hiRcyNEA-zggpDW-OldQ1CRcbPVmjMipfpG0BZIiIOU';
 const TABS_TO_READ = 3;       // the first three tabs: Main + the two dated exports
 const CACHE_SECONDS = 300;    // serve a cached pack for 5 minutes to keep loads snappy
 
@@ -110,7 +119,10 @@ function referrerOf(v) {
 
 /* ------------------------------------------------------------------ pipeline */
 function readRows() {
-  var sheets = SpreadsheetApp.getActive().getSheets().slice(0, TABS_TO_READ);
+  // openById works from a standalone project; getActive() is the fallback if this
+  // file ever does end up bound to the spreadsheet itself.
+  var ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActive();
+  var sheets = ss.getSheets().slice(0, TABS_TO_READ);
   var rows = [], tabs = [];
   sheets.forEach(function (sh) {
     var values = sh.getDataRange().getValues();
@@ -327,10 +339,13 @@ function doGet(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-/** Run this from the Apps Script editor to sanity-check the output. */
+/** Run this from the Apps Script editor to sanity-check the output before deploying. */
 function testBuild() {
   var payload = buildPayload();
   var pack = JSON.parse(payload);
+  Logger.log('tabs read: %s', pack.meta.tabs.map(function (t) {
+    return t.name + ' (' + t.rows + ')';
+  }).join(', '));
   Logger.log('submissions: %s', pack.n);
   Logger.log('range: %s -> %s', pack.meta.firstDate, pack.meta.lastDate);
   Logger.log('raw rows: %s, dupes: %s, tests: %s',
