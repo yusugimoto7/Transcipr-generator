@@ -109,6 +109,10 @@ stale number.
 | `…&only=alberta,express-entry` | restrict to specific sources |
 | `…&wp=0` | skip the WordPress page this run |
 | `GET /api/draws/preview?key=…` | show exactly what *would* post, send nothing |
+| `GET /api/draws/story?key=…` | **see the Instagram story card** for a real draw, as an image |
+| `…&program=alberta-aaip-weekly` | pick which program's card to render |
+| `…&list=1` | which programs currently have a card |
+| `…&png=1` | render through HCTI and return the hosted PNG URL |
 
 `/api/draws/status` never reveals secret values — only whether each one is set —
 and tells you the exact next variable to configure, so you don't have to work
@@ -128,6 +132,22 @@ edit and no cron to configure.
 
 Optional: paste a base64 PNG into `assets/story-logo.b64` (or `STORY_LOGO_B64`)
 for the Instagram story card — without it the card renders a text wordmark.
+
+### Instagram stories
+Every draw with numbers gets a story card automatically — the same 1080×1920
+design for all programs, re-labelled per draw (CRS + invitations for Express
+Entry, min score + ITAs for the provincial programs, week totals for the Alberta
+digest). Program *updates* have no numbers, so they post to the text channels
+only and skip Instagram.
+
+Check the design before enabling it: open `/api/draws/story?key=…` and the card
+renders in the browser. Then set `IG_USER_ID`, `IG_ACCESS_TOKEN`, `HCTI_USER_ID`
+and `HCTI_API_KEY` and stories start going out with the rest.
+
+Instagram will not accept inline image data, so the card is rendered to a hosted
+PNG first — that is what the HCTI credentials are for. Rendering happens in a
+real browser, which is what makes the Persian typography and the web font come
+out correctly.
 
 The updated `google-apps-script.gs` in this repo adds a government-page proxy
 that is only needed if your host cannot reach canada.ca / alberta.ca /
