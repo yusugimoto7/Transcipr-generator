@@ -1709,9 +1709,33 @@ function initCompare() {
 const LIVE_DATA_URL = '';
 
 const live = { state: 'off', at: null, error: null };
+const LIVE_KEY = 'leadsDashboardLiveUrl';
+// Resolution order: ?live= in the address bar, then whatever this browser saved,
+// then the value committed into the file. The first two let you point the page at a
+// freshly deployed endpoint and confirm it works before committing anything.
 function liveUrl() {
   const q = new URLSearchParams(location.search).get('live');
-  return q || LIVE_DATA_URL || '';
+  if (q) { try { localStorage.setItem(LIVE_KEY, q); } catch (e) {} return q; }
+  let saved = '';
+  try { saved = localStorage.getItem(LIVE_KEY) || ''; } catch (e) {}
+  return saved || LIVE_DATA_URL || '';
+}
+function connectLive() {
+  const current = liveUrl();
+  const url = prompt(
+    'Paste the Apps Script web-app URL, including the secret:\n\n' +
+    'https://script.google.com/macros/s/AKfy.../exec?secret=...\n\n' +
+    'Leave empty and press OK to disconnect and go back to the snapshot.',
+    current);
+  if (url === null) return;
+  try {
+    if (url.trim()) localStorage.setItem(LIVE_KEY, url.trim());
+    else localStorage.removeItem(LIVE_KEY);
+  } catch (e) {}
+  // reload on disconnect: the fetched pack is already loaded, and reloading is the
+  // simplest way to get the embedded snapshot back rather than leave stale live data
+  if (url.trim()) goLive(true);
+  else location.reload();
 }
 function renderLiveBadge() {
   const host = $('#liveBadge');
@@ -1741,6 +1765,13 @@ function renderLiveBadge() {
   if (live.state === 'live' || live.state === 'err') {
     const btn = el('button', 'lvbtn', 'Refresh');
     btn.addEventListener('click', () => goLive(true));
+    host.appendChild(btn);
+    const edit = el('button', 'lvbtn', 'Change');
+    edit.addEventListener('click', connectLive);
+    host.appendChild(edit);
+  } else if (live.state === 'off') {
+    const btn = el('button', 'lvbtn', 'Connect live data');
+    btn.addEventListener('click', connectLive);
     host.appendChild(btn);
   }
 }

@@ -8,7 +8,7 @@
  * SETUP (one time, ~3 minutes)
  *  1. Open the leads spreadsheet ("Specific Access/Site-Assessments Leads").
  *  2. Extensions -> Apps Script. Delete whatever is there and paste this file.
- *  3. Change SECRET below to a long random string.
+ *  3. SECRET below is already filled in — leave it as it is.
  *  4. Deploy -> New deployment -> gear -> Web app
  *       Execute as:      Me
  *       Who has access:  Anyone
@@ -26,7 +26,7 @@
  *  dashboard can call this endpoint and get exactly what the dashboard shows.
  */
 
-const SECRET = 'CHANGE-ME-to-a-long-random-string';
+const SECRET = 'sgv_a7mftc7VvVgM4UaCrI7QRYYhVubQoBEf';
 const TABS_TO_READ = 3;       // the first three tabs: Main + the two dated exports
 const CACHE_SECONDS = 300;    // serve a cached pack for 5 minutes to keep loads snappy
 
