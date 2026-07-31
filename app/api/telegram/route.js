@@ -69,11 +69,14 @@ export async function GET() {
 export async function POST(request) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHANNEL_ID;
-  if (!token || !chatId) {
+  // Configured if we have a bot token AND either the approval flow (review +
+  // public) OR a direct channel. Previously this wrongly required
+  // TELEGRAM_CHANNEL_ID even in approval mode, where it is intentionally empty.
+  if (!token || (!approvalEnabled() && !chatId)) {
     return Response.json(
       {
         error:
-          "Telegram is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID in your environment.",
+          "Telegram is not configured. Set TELEGRAM_BOT_TOKEN plus either TELEGRAM_REVIEW_CHAT_ID + TELEGRAM_PUBLIC_CHANNEL_ID (approval flow) or TELEGRAM_CHANNEL_ID (direct).",
       },
       { status: 500 }
     );
