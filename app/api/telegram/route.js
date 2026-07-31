@@ -1,6 +1,6 @@
 import { tgCall, approvalEnabled } from "../../../lib/telegram";
 import { newsPostPrompt } from "../../../lib/prompts";
-import { findRelatedLink } from "../../../lib/wordpress";
+import { getRelatedCandidates } from "../../../lib/wordpress";
 import { fetchArticleText } from "../../../lib/news";
 import { openaiEnabled, openaiRewrite } from "../../../lib/openai";
 import { callClaude } from "../../../lib/anthropic";
@@ -37,6 +37,42 @@ async function generateNewsPost(topic, fallback) {
   } catch (_) {
     return escapeHtml(clamp(fallback || topic?.title_fa || ""));
   }
+}
+
+// Pick the single genuinely-relevant sugimotovisa.com link for a topic. Pulls a
+// shortlist from the site, then lets the model choose the best match — or NONE,
+// so we never attach an unrelated page.
+async function pickRelatedLink(topic) {
+  const candidates = await getRelatedCandidates(topic).catch(() => []);
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  const list = candidates.map((c, i) => `${i + 1}. ${c.title} — ${c.url}`).join("\n");
+  const prompt = `موضوع خبر: ${topic?.title_fa || topic?.title_en || ""}
+
+از بین صفحات زیر از سایت سوگیموتوویزا، فقط مرتبط‌ترین صفحه به همین موضوع خبری رو انتخاب کن. فقط شمارهٔ همون یک مورد رو بنویس (مثلاً: 3). اگه هیچ‌کدوم واقعاً به موضوع مربوط نیست، دقیقاً بنویس: NONE
+
+${list}`;
+
+  let ans = "";
+  try {
+    if (openaiEnabled()) {
+      try {
+        ans = await openaiRewrite(prompt);
+      } catch (e) {
+        if (!process.env.ANTHROPIC_API_KEY) throw e;
+        ans = await callClaude([{ role: "user", content: prompt }], false, 30);
+      }
+    } else {
+      ans = await callClaude([{ role: "user", content: prompt }], false, 30);
+    }
+  } catch (_) {
+    return null; // don't attach a link we're unsure about
+  }
+  if (/none/i.test(ans)) return null;
+  const m = String(ans).match(/\d+/);
+  if (!m) return null;
+  return candidates[parseInt(m[0], 10) - 1] || null;
 }
 
 // GET diagnostic: open /api/telegram in a browser to see which bot the token
@@ -133,12 +169,13 @@ export async function POST(request) {
     try {
       const [newsHtml, related] = await Promise.all([
         generateNewsPost(topic, fa || en),
-        findRelatedLink(topic).catch(() => null),
+        pickRelatedLink(topic).catch(() => null),
       ]);
       let post = newsHtml || escapeHtml(clamp(fa || en || title));
-      if (topic?.source_url) post += `\n\n🔗 <a href="${escapeHtml(topic.source_url)}">منبع خبر</a>`;
+      // No external "news source" link in the channel — only the relevant
+      // sugimotovisa.com page (when one genuinely matches).
       if (related?.url) {
-        post += `\n📎 <a href="${escapeHtml(related.url)}">${escapeHtml(related.title || "مطلب مرتبط در سوگیموتوویزا")}</a>`;
+        post += `\n\n📎 <a href="${escapeHtml(related.url)}">${escapeHtml(related.title || "مطلب مرتبط در سوگیموتوویزا")}</a>`;
       }
       const keyboard = {
         inline_keyboard: [
