@@ -29,12 +29,22 @@ export async function POST(request) {
   const publicChannel = process.env.TELEGRAM_PUBLIC_CHANNEL_ID;
 
   try {
-    if (data === "pub" && msg && publicChannel) {
-      const text = msg.text || "";
-      const sent = await tgCall("sendMessage", {
+    if (data === "edit") {
+      // You can edit the draft directly in Telegram (long-press → Edit, or the
+      // ⋮ menu on desktop). Publishing copies the LIVE message, so your edits
+      // are what goes out.
+      await tgCall("answerCallbackQuery", {
+        callback_query_id: cq.id,
+        text: "برای ویرایش: همین پیام را مستقیم ویرایش کن (لمس طولانی ← ویرایش، یا در دسکتاپ ⋮ ← Edit)، بعد دکمهٔ ✅ انتشار را بزن.",
+        show_alert: true,
+      });
+    } else if (data === "pub" && msg && publicChannel) {
+      // copyMessage sends the message's CURRENT content (including your edits)
+      // to the public channel, without the buttons.
+      const sent = await tgCall("copyMessage", {
         chat_id: publicChannel,
-        text,
-        disable_web_page_preview: true,
+        from_chat_id: msg.chat.id,
+        message_id: msg.message_id,
       });
       if (!sent.ok) {
         await tgCall("answerCallbackQuery", {
@@ -44,20 +54,28 @@ export async function POST(request) {
         });
         return Response.json({ ok: true });
       }
-      // Lock the draft: remove buttons and mark it published.
-      await tgCall("editMessageText", {
+      // Lock the draft: drop the buttons and confirm as a reply.
+      await tgCall("editMessageReplyMarkup", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text: text + "\n\n✅ منتشر شد در کانال",
-        disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: [] },
+      });
+      await tgCall("sendMessage", {
+        chat_id: msg.chat.id,
+        reply_to_message_id: msg.message_id,
+        text: "✅ منتشر شد در کانال اصلی",
       });
       await tgCall("answerCallbackQuery", { callback_query_id: cq.id, text: "منتشر شد ✓" });
     } else if (data === "rej" && msg) {
-      await tgCall("editMessageText", {
+      await tgCall("editMessageReplyMarkup", {
         chat_id: msg.chat.id,
         message_id: msg.message_id,
-        text: (msg.text || "") + "\n\n❌ رد شد",
-        disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: [] },
+      });
+      await tgCall("sendMessage", {
+        chat_id: msg.chat.id,
+        reply_to_message_id: msg.message_id,
+        text: "❌ رد شد — منتشر نشد",
       });
       await tgCall("answerCallbackQuery", { callback_query_id: cq.id, text: "رد شد" });
     } else {

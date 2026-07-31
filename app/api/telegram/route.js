@@ -1,4 +1,9 @@
 import { tgCall, approvalEnabled } from "../../../lib/telegram";
+import { newsPostPrompt } from "../../../lib/prompts";
+import { findRelatedLink } from "../../../lib/wordpress";
+import { fetchArticleText } from "../../../lib/news";
+import { openaiEnabled, openaiRewrite } from "../../../lib/openai";
+import { callClaude } from "../../../lib/anthropic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -6,6 +11,32 @@ export const dynamic = "force-dynamic";
 // Telegram messages cap at 4096 chars; keep headroom for the header.
 function clamp(s) {
   return String(s || "").slice(0, 3800);
+}
+
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Generate a CLEAN Farsi news post (no hooks / no sales CTA), grounded in the
+// real source article. Falls back to the provided fa script if generation fails.
+async function generateNewsPost(topic, fallback) {
+  let sourceText = "";
+  if (topic?.source_url) sourceText = await fetchArticleText(topic.source_url).catch(() => "");
+  if (!sourceText && topic?.snippet) sourceText = String(topic.snippet);
+  const prompt = newsPostPrompt(topic, sourceText);
+  try {
+    if (openaiEnabled()) {
+      try {
+        return (await openaiRewrite(prompt)).trim();
+      } catch (e) {
+        if (!process.env.ANTHROPIC_API_KEY) throw e;
+        return (await callClaude([{ role: "user", content: prompt }], false, 1500)).trim();
+      }
+    }
+    return (await callClaude([{ role: "user", content: prompt }], false, 1500)).trim();
+  } catch (_) {
+    return escapeHtml(clamp(fallback || topic?.title_fa || ""));
+  }
 }
 
 // GET diagnostic: open /api/telegram in a browser to see which bot the token
@@ -93,30 +124,49 @@ export async function POST(request) {
   const title = topic?.title_fa || topic?.title_en || "Sugimoto topic";
   const sourceLine = topic?.source_url ? `\n\n🔗 ${topic.source_url}` : "";
 
-  // APPROVAL FLOW: send ONE publish-ready post (Farsi primary) to the review
-  // chat with Approve/Reject buttons. Tapping ✅ (handled by the webhook)
-  // publishes it to the public channel. Nothing hits the public channel until
+  // APPROVAL FLOW: send ONE clean news post to the review chat with buttons.
+  // The post is grounded NEWS (no hooks / no sales CTA), with the source link
+  // AND the most relevant sugimotovisa.com link. Tapping ✅ (webhook) publishes
+  // it — you can edit the message first. Nothing hits the public channel until
   // it's approved.
   if (approvalEnabled()) {
-    const body = fa || en;
-    if (!body) return Response.json({ error: "nothing to send" }, { status: 400 });
-    const post = `🎬 ${title}\n\n${clamp(body)}${sourceLine}`;
     try {
-      const data = await tgCall("sendMessage", {
-        chat_id: process.env.TELEGRAM_REVIEW_CHAT_ID,
-        text: post,
-        disable_web_page_preview: true,
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "✅ انتشار در کانال", callback_data: "pub" },
-              { text: "❌ رد", callback_data: "rej" },
-            ],
+      const [newsHtml, related] = await Promise.all([
+        generateNewsPost(topic, fa || en),
+        findRelatedLink(topic).catch(() => null),
+      ]);
+      let post = newsHtml || escapeHtml(clamp(fa || en || title));
+      if (topic?.source_url) post += `\n\n🔗 <a href="${escapeHtml(topic.source_url)}">منبع خبر</a>`;
+      if (related?.url) {
+        post += `\n📎 <a href="${escapeHtml(related.url)}">${escapeHtml(related.title || "مطلب مرتبط در سوگیموتوویزا")}</a>`;
+      }
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: "✅ انتشار", callback_data: "pub" },
+            { text: "✏️ ویرایش", callback_data: "edit" },
+            { text: "❌ رد", callback_data: "rej" },
           ],
-        },
+        ],
+      };
+      // Try HTML; if the model emitted a stray tag, retry as plain text.
+      let data = await tgCall("sendMessage", {
+        chat_id: process.env.TELEGRAM_REVIEW_CHAT_ID,
+        text: post.slice(0, 3900),
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+        reply_markup: keyboard,
       });
+      if (!data.ok && /parse|entit|tag/i.test(data.description || "")) {
+        data = await tgCall("sendMessage", {
+          chat_id: process.env.TELEGRAM_REVIEW_CHAT_ID,
+          text: post.replace(/<[^>]+>/g, "").slice(0, 3900),
+          disable_web_page_preview: true,
+          reply_markup: keyboard,
+        });
+      }
       if (!data.ok) {
-        return Response.json({ error: (data.description || "send failed") }, { status: 502 });
+        return Response.json({ error: data.description || "send failed" }, { status: 502 });
       }
       return Response.json({ ok: true, mode: "review" });
     } catch (e) {
