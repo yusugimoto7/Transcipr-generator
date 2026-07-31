@@ -14,35 +14,54 @@ function clamp(s) {
 // title) — never the token. This is the fastest way to debug "chat not found".
 export async function GET() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHANNEL_ID;
-  const out = { token_set: !!token, chat_id_configured: chatId || null };
+  const out = { token_set: !!token };
   if (!token) {
-    out.error = "TELEGRAM_BOT_TOKEN is not set.";
+    out.error = "TELEGRAM_BOT_TOKEN is not set in Render.";
     return Response.json(out);
   }
+
+  // Which bot does this token belong to?
   try {
     const me = await fetch(`https://api.telegram.org/bot${token}/getMe`).then((r) => r.json());
     out.bot = me.ok ? "@" + me.result.username : { error: me.description };
   } catch (e) {
     out.bot = { error: String(e?.message || e) };
   }
-  if (!chatId) {
-    out.chat_check = { ok: false, error: "TELEGRAM_CHANNEL_ID is not set." };
-    return Response.json(out);
-  }
-  try {
-    const chat = await fetch(
-      `https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(chatId)}`
-    ).then((r) => r.json());
-    out.chat_check = chat.ok
-      ? { ok: true, title: chat.result.title || chat.result.username || "(reachable)" }
-      : { ok: false, error: chat.description };
-    if (!chat.ok && /chat not found/i.test(chat.description || "")) {
-      out.fix =
-        "The bot above must be an admin of THIS channel, and chat_id_configured must be that exact channel's id. Post a message in the channel, then check /api/telegram/updates to read the real id.";
+
+  // Check EVERY channel the app might use — so you can see exactly which one is
+  // wrong. "review" + "public" = the approval flow; "direct" = the old mode.
+  const roles = {
+    review: process.env.TELEGRAM_REVIEW_CHAT_ID,
+    public: process.env.TELEGRAM_PUBLIC_CHANNEL_ID,
+    direct: process.env.TELEGRAM_CHANNEL_ID,
+  };
+  out.approval_flow_active = !!(roles.review && roles.public);
+  out.channels = {};
+  for (const [role, id] of Object.entries(roles)) {
+    if (!id) {
+      out.channels[role] = { set: false };
+      continue;
     }
-  } catch (e) {
-    out.chat_check = { ok: false, error: String(e?.message || e) };
+    try {
+      const chat = await fetch(
+        `https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(id)}`
+      ).then((r) => r.json());
+      if (chat.ok) {
+        out.channels[role] = { set: true, id, reachable: true, title: chat.result.title || chat.result.username || "(ok)" };
+      } else {
+        out.channels[role] = {
+          set: true,
+          id,
+          reachable: false,
+          error: chat.description,
+          fix: /chat not found/i.test(chat.description || "")
+            ? "Add the bot above as an admin of this channel (with Post messages), OR fix this id. Post in the channel then open /api/telegram/updates to get its real id."
+            : undefined,
+        };
+      }
+    } catch (e) {
+      out.channels[role] = { set: true, id, reachable: false, error: String(e?.message || e) };
+    }
   }
   return Response.json(out);
 }
