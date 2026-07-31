@@ -203,10 +203,21 @@ function createArticleDoc(title, html) {
     var wrapped =
       '<html><body dir="rtl" style="text-align:right">' + (html || "") + "</body></html>";
     var blob = Utilities.newBlob(wrapped, "text/html", title);
-    var file = Drive.Files.insert(
-      { title: title, mimeType: "application/vnd.google-apps.document" },
-      blob
-    );
+    // The Advanced Drive Service API changed between versions: v3 uses
+    // Drive.Files.create({name}), v2 uses Drive.Files.insert({title}).
+    // Support both so it works regardless of which version was added.
+    var file;
+    if (Drive.Files.create) {
+      file = Drive.Files.create(
+        { name: title, mimeType: "application/vnd.google-apps.document" },
+        blob
+      );
+    } else {
+      file = Drive.Files.insert(
+        { title: title, mimeType: "application/vnd.google-apps.document" },
+        blob
+      );
+    }
     // Tidy: move it into a dedicated folder.
     try {
       DriveApp.getFileById(file.id).moveTo(getArticlesFolder());
