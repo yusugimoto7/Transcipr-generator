@@ -926,7 +926,7 @@ function ScriptBody({ text, tab }) {
             minHeight: "1em",
           }}
         >
-          {line || " "}
+          {line || " "}
         </div>
       ))}
     </div>
@@ -989,38 +989,63 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
     }
   };
 
-  // Make a Google Doc from the article (alternative to WordPress publishing).
-  const [docState, setDocState] = useState("idle"); // idle | creating | done | error
-  const [docUrl, setDocUrl] = useState("");
+  // Word file from the article — generated ENTIRELY in the app (no Google
+  // account, no Apps Script, no config). Download locally and/or send the file
+  // to the Telegram review channel.
+  const [docState, setDocState] = useState("idle"); // idle | sending | sent | downloaded | error
   const [docMsg, setDocMsg] = useState("");
-  const [docCopied, setDocCopied] = useState(false);
 
-  // Open the doc robustly: some in-app browsers block target="_blank" new tabs,
-  // so try window.open and fall back to same-tab navigation if it's blocked.
-  const openDoc = (e) => {
-    if (e) e.preventDefault();
-    if (!docUrl) return;
-    let w = null;
-    try {
-      w = window.open(docUrl, "_blank", "noopener");
-    } catch (_) {}
-    if (!w) window.location.href = docUrl;
+  const buildDocHtml = () => {
+    if (!article) return "";
+    return (
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' +
+      '<head><meta charset="utf-8"></head>' +
+      '<body dir="rtl" style="text-align:right;font-family:Arial,sans-serif;line-height:1.8">' +
+      "<h1>" + (article.title_fa || "") + "</h1>" +
+      (article.content_html || "") +
+      "</body></html>"
+    );
   };
 
-  const makeDoc = async () => {
-    if (!article || docState === "creating") return;
-    setDocState("creating");
+  const docFileName = () => ((article && (article.slug || "article")) + ".doc");
+
+  // Download as a Word-compatible .doc — pure client-side, works offline of
+  // any backend or Google service. Opens in Word and imports into Google Docs.
+  const downloadDoc = () => {
+    if (!article) return;
+    try {
+      const blob = new Blob(["﻿", buildDocHtml()], { type: "application/msword" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = docFileName();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setDocState("downloaded");
+      setTimeout(() => setDocState("idle"), 2500);
+    } catch (e) {
+      setDocState("error");
+      setDocMsg(String(e.message || e));
+    }
+  };
+
+  // Send the Word file to the Telegram review channel (uses the existing bot).
+  const sendDocToTelegram = async () => {
+    if (!article || docState === "sending") return;
+    setDocState("sending");
     setDocMsg("");
     try {
-      const res = await fetch("/api/gdoc", {
+      const res = await fetch("/api/docfile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ article }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "failed");
-      setDocUrl(data.url || "");
-      setDocState("done");
+      setDocState("sent");
+      setTimeout(() => setDocState("idle"), 3000);
     } catch (e) {
       setDocState("error");
       setDocMsg(String(e.message || e));
@@ -1228,57 +1253,34 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{pubMsg}</div>
               )}
 
-              {/* Make Google Doc (alternative output — no WordPress needed) */}
-              {docState !== "done" ? (
+              {/* Word file — generated in the app, no Google account needed. */}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <button
-                  onClick={makeDoc}
-                  disabled={docState === "creating"}
+                  onClick={downloadDoc}
                   style={{
-                    width: "100%", marginTop: 10,
-                    background: "rgba(50,81,93,0.35)", color: C.cream,
+                    flex: 1, background: "rgba(50,81,93,0.35)", color: C.cream,
                     border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
-                    fontWeight: 600, fontSize: 14, cursor: docState === "creating" ? "default" : "pointer",
-                    opacity: docState === "creating" ? 0.6 : 1, fontFamily: "'Space Grotesk', sans-serif",
+                    fontWeight: 600, fontSize: 13.5, cursor: "pointer",
+                    fontFamily: "'Space Grotesk', sans-serif",
                   }}
                 >
-                  {docState === "creating" ? "در حال ساخت گوگل داک…" : docState === "error" ? "دوباره امتحان کن — Google Doc" : "📄 ساخت Google Doc"}
+                  {docState === "downloaded" ? "دانلود شد ✓" : "📄 دانلود فایل Word"}
                 </button>
-              ) : (
-                <div style={{ marginTop: 10 }}>
-                  <a
-                    href={docUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={openDoc}
-                    style={{
-                      display: "block", textAlign: "center",
-                      background: C.slate, color: C.cream, border: `1px solid ${C.slate}`,
-                      borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14,
-                      textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
-                    }}
-                  >
-                    ✓ Google Doc ساخته شد — باز کردن ↗
-                  </a>
-                  {/* Copy-link fallback for in-app browsers that block new tabs */}
-                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
-                    <input
-                      readOnly
-                      value={docUrl}
-                      onFocus={(e) => e.target.select()}
-                      style={{ flex: 1, minWidth: 0, background: "rgba(242,229,192,0.06)", color: "rgba(242,229,192,0.8)", border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", fontSize: 11, fontFamily: "monospace", direction: "ltr" }}
-                    />
-                    <button
-                      onClick={() => { try { navigator.clipboard?.writeText(docUrl); } catch (_) {} setDocCopied(true); setTimeout(() => setDocCopied(false), 1500); }}
-                      style={{ background: docCopied ? C.orangeDeep : "rgba(241,114,18,0.15)", color: docCopied ? "#fff" : C.orange, border: `1px solid rgba(241,114,18,0.35)`, borderRadius: 8, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif", whiteSpace: "nowrap" }}
-                    >
-                      {docCopied ? "کپی شد ✓" : "کپی لینک"}
-                    </button>
-                  </div>
-                  <div dir="rtl" style={{ marginTop: 6, fontSize: 10.5, color: "rgba(242,229,192,0.45)", textAlign: "center", fontFamily: "'Vazirmatn', sans-serif" }}>
-                    اگر با زدن دکمه باز نشد، لینک رو کپی کن و توی مرورگر (Safari/Chrome) باز کن
-                  </div>
-                </div>
-              )}
+                <button
+                  onClick={sendDocToTelegram}
+                  disabled={docState === "sending"}
+                  style={{
+                    flex: 1, background: "rgba(50,81,93,0.35)", color: C.cream,
+                    border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
+                    fontWeight: 600, fontSize: 13.5,
+                    cursor: docState === "sending" ? "default" : "pointer",
+                    opacity: docState === "sending" ? 0.6 : 1,
+                    fontFamily: "'Space Grotesk', sans-serif",
+                  }}
+                >
+                  {docState === "sending" ? "در حال ارسال…" : docState === "sent" ? "ارسال شد ✓" : "✈ فایل به تلگرام"}
+                </button>
+              </div>
               {docState === "error" && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{docMsg}</div>
               )}
