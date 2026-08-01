@@ -33,8 +33,16 @@ const SECRET = "CHANGE-ME-to-a-long-random-string";
 const SHEET_NAME = "Seen";
 const LIBRARY_SHEET = "Library";
 const POSTED_DRAWS_SHEET = "PostedDraws";
+// Bump when editing so the live deployment can be identified via ?ping=1
+// (no secret needed; exposes nothing but this number).
+const SCRIPT_VERSION = 3;
 
 function doGet(e) {
+  // Version probe — open <exec-url>?ping=1 in a browser to see which code is
+  // actually deployed. If the number doesn't match, the deploy didn't take.
+  if (e && e.parameter && e.parameter.ping) {
+    return json({ ok: true, version: SCRIPT_VERSION });
+  }
   if (!e || e.parameter.secret !== SECRET) return json({ error: "unauthorized" });
 
   // Library view: return every saved script/article record.
@@ -195,37 +203,48 @@ function getPostedDrawsSheet() {
 }
 
 // Create a Google Doc from article HTML and return its edit URL.
-// REQUIRES the Advanced Drive Service: in the Apps Script editor, click
-// "Services" (+) in the left sidebar, add "Drive API", Save. Then re-deploy.
+// Uses the Drive REST API directly via UrlFetchApp + the script's own OAuth
+// token — no Advanced Drive Service needed, so it works regardless of which
+// Drive service version (v2/v3/none) is enabled in the project.
 function createArticleDoc(title, html) {
   try {
     // Wrap RTL so the Farsi content aligns right when Google imports the HTML.
     var wrapped =
       '<html><body dir="rtl" style="text-align:right">' + (html || "") + "</body></html>";
-    var blob = Utilities.newBlob(wrapped, "text/html", title);
-    // The Advanced Drive Service API changed between versions: v3 uses
-    // Drive.Files.create({name}), v2 uses Drive.Files.insert({title}).
-    // Support both so it works regardless of which version was added.
-    var file;
-    if (Drive.Files.create) {
-      file = Drive.Files.create(
-        { name: title, mimeType: "application/vnd.google-apps.document" },
-        blob
-      );
-    } else {
-      file = Drive.Files.insert(
-        { title: title, mimeType: "application/vnd.google-apps.document" },
-        blob
-      );
+    var boundary = "sugimoto-doc-boundary";
+    var metadata = { name: title, mimeType: "application/vnd.google-apps.document" };
+    var payload =
+      "--" + boundary + "\r\n" +
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+      JSON.stringify(metadata) + "\r\n" +
+      "--" + boundary + "\r\n" +
+      "Content-Type: text/html; charset=UTF-8\r\n\r\n" +
+      wrapped + "\r\n" +
+      "--" + boundary + "--";
+    var resp = UrlFetchApp.fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+      {
+        method: "post",
+        contentType: "multipart/related; boundary=" + boundary,
+        payload: payload,
+        headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true,
+      }
+    );
+    var data = {};
+    try { data = JSON.parse(resp.getContentText() || "{}"); } catch (e) {}
+    if (resp.getResponseCode() >= 400 || !data.id) {
+      var msg = (data.error && data.error.message) || resp.getContentText().slice(0, 200);
+      return { ok: false, error: "Drive API " + resp.getResponseCode() + ": " + msg };
     }
     // Tidy: move it into a dedicated folder.
     try {
-      DriveApp.getFileById(file.id).moveTo(getArticlesFolder());
+      DriveApp.getFileById(data.id).moveTo(getArticlesFolder());
     } catch (e) {}
     return {
       ok: true,
-      id: file.id,
-      url: "https://docs.google.com/document/d/" + file.id + "/edit",
+      id: data.id,
+      url: "https://docs.google.com/document/d/" + data.id + "/edit",
     };
   } catch (e) {
     return { ok: false, error: String(e) };
