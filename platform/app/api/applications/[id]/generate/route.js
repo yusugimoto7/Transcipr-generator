@@ -87,8 +87,8 @@ export async function POST(req, { params }) {
         key,
         filename: `${DOC_TITLES[key] || key}.pdf`,
         bytes: Buffer.from(bytes),
+        ...(text ? { text } : {}),
       });
-      if (text) meta.text = text; // enables Word (.docx) export
       produced.push(meta);
     } catch (e) {
       errors.push({ key, message: e.message });
@@ -110,13 +110,14 @@ export async function POST(req, { params }) {
       blocks: textToBlocks(note.text, DOC_TITLES['next-steps']),
       meta: { title: DOC_TITLES['next-steps'] },
     });
-    const noteMeta = await saveGenerated(app.id, {
-      key: 'next-steps',
-      filename: `${DOC_TITLES['next-steps']}.pdf`,
-      bytes: Buffer.from(noteBytes),
-    });
-    noteMeta.text = note.text;
-    produced.push(noteMeta);
+    produced.push(
+      await saveGenerated(app.id, {
+        key: 'next-steps',
+        filename: `${DOC_TITLES['next-steps']}.pdf`,
+        bytes: Buffer.from(noteBytes),
+        text: note.text,
+      })
+    );
   } catch (e) {
     errors.push({ key: 'next-steps', message: e.message });
   }

@@ -78,13 +78,20 @@ export async function readUpload(appId, stored) {
   return fs.readFile(path.join(UPLOAD_DIR, appId, stored));
 }
 
-/** Save a generated output file (PDF/text). Returns metadata. */
-export async function saveGenerated(appId, { key, filename, bytes, mime = 'application/pdf' }) {
+/**
+ * Save a generated output file (PDF/text). If `text` is supplied it is also
+ * written as a sidecar (<key>.source.txt) so Word export keeps working even if
+ * the application metadata is trimmed or predates the docx feature.
+ */
+export async function saveGenerated(appId, { key, filename, bytes, mime = 'application/pdf', text }) {
   const dir = path.join(UPLOAD_DIR, appId, 'generated');
   await fs.mkdir(dir, { recursive: true });
   const ext = mime === 'application/pdf' ? 'pdf' : 'txt';
   const stored = `${key}.${ext}`;
   await fs.writeFile(path.join(dir, stored), bytes);
+  if (text) {
+    await fs.writeFile(path.join(dir, `${key}.source.txt`), String(text), 'utf8');
+  }
   return {
     key,
     filename: filename || stored,
@@ -92,11 +99,21 @@ export async function saveGenerated(appId, { key, filename, bytes, mime = 'appli
     mime,
     size: bytes.length ?? bytes.byteLength ?? 0,
     generatedAt: new Date().toISOString(),
+    ...(text ? { text } : {}),
   };
 }
 
 export async function readGenerated(appId, stored) {
   return fs.readFile(path.join(UPLOAD_DIR, appId, 'generated', stored));
+}
+
+/** Read the sidecar source text for a generated document, or null. */
+export async function readGeneratedText(appId, key) {
+  try {
+    return await fs.readFile(path.join(UPLOAD_DIR, appId, 'generated', `${key}.source.txt`), 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteUpload(appId, stored) {

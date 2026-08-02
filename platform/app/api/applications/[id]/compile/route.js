@@ -3,7 +3,7 @@ import { readGenerated, readUpload, saveGenerated, buildDocBlocks } from '@/lib/
 import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop, selectSopDocs } from '@/lib/generators/sop';
 import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
-import { compilePackage, PACKAGES } from '@/lib/compile';
+import { compilePackage, PACKAGES, PACKAGE_CATEGORIES } from '@/lib/compile';
 import { detectBlankPages } from '@/lib/generators/blankdetect';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
@@ -44,8 +44,7 @@ async function ensureGenerated(app, key) {
     return app;
   }
   const bytes = await renderDocPdf({ blocks: textToBlocks(text, GEN_TITLE[key]) });
-  const meta = await saveGenerated(app.id, { key, filename: `${GEN_TITLE[key]}.pdf`, bytes: Buffer.from(bytes) });
-  meta.text = text;
+  const meta = await saveGenerated(app.id, { key, filename: `${GEN_TITLE[key]}.pdf`, bytes: Buffer.from(bytes), text });
   return updateApplication(app.id, (a) => {
     const m = new Map((a.generated || []).map((g) => [g.key, g]));
     m.set(key, meta);
@@ -80,6 +79,22 @@ export async function POST(req, { params }) {
   }
 
   let droppedTotal = 0;
+  const usedDocIds = new Set(); // documents already placed in a section
+
+  const loadDoc = async (d) => {
+    const bytes = await readUpload(app.id, d.stored);
+    let keepPages = null;
+    if (cleanPages && d.mime === 'application/pdf') {
+      // Deterministic: rasterize each page and measure ink coverage.
+      const { pages, blank } = await detectBlankPages(bytes);
+      if (pages > 0 && blank.length > 0 && blank.length < pages) {
+        const blankSet = new Set(blank);
+        keepPages = Array.from({ length: pages }, (_, i) => i + 1).filter((n) => !blankSet.has(n));
+        droppedTotal += blank.length;
+      }
+    }
+    return { bytes, mime: d.mime, filename: d.filename, keepPages };
+  };
 
   // Resolve one node's (section or child) content items.
   const resolveItems = async (node) => {
@@ -94,25 +109,27 @@ export async function POST(req, { params }) {
           /* skip */
         }
       }
-    } else if (node.category) {
-      const docs = (app.documents || []).filter((d) => d.category === node.category);
-      for (const d of docs) {
-        try {
-          const bytes = await readUpload(app.id, d.stored);
-          let keepPages = null;
-          if (cleanPages && d.mime === 'application/pdf') {
-            // Deterministic: rasterize each page and measure ink coverage.
-            const { pages, blank } = await detectBlankPages(bytes);
-            if (pages > 0 && blank.length > 0 && blank.length < pages) {
-              const blankSet = new Set(blank);
-              keepPages = Array.from({ length: pages }, (_, i) => i + 1).filter((n) => !blankSet.has(n));
-              droppedTotal += blank.length;
-            }
-          }
-          items.push({ bytes, mime: d.mime, filename: d.filename, keepPages });
-        } catch {
-          /* skip */
-        }
+      return items;
+    }
+
+    let docs = [];
+    if (node.catchAll) {
+      // Anything belonging to this package (or uncategorized) not already used.
+      const owned = new Set(PACKAGE_CATEGORIES[body.pkg] || []);
+      docs = (app.documents || []).filter(
+        (d) => !usedDocIds.has(d.id) && (!d.category || owned.has(d.category))
+      );
+    } else if (node.categories?.length) {
+      const wanted = new Set(node.categories);
+      docs = (app.documents || []).filter((d) => wanted.has(d.category));
+    }
+
+    for (const d of docs) {
+      try {
+        items.push(await loadDoc(d));
+        usedDocIds.add(d.id);
+      } catch {
+        /* skip */
       }
     }
     return items;

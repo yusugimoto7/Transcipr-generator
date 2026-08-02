@@ -1,4 +1,4 @@
-import { readGenerated } from '@/lib/uploads';
+import { readGenerated, readGeneratedText } from '@/lib/uploads';
 import { renderDocx } from '@/lib/docx';
 import { error, requireOwnedApp } from '@/lib/api';
 
@@ -17,8 +17,16 @@ export async function GET(req, { params }) {
   const format = searchParams.get('format');
 
   if (format === 'docx') {
-    const text = meta.text || (params.doc === 'sop' ? app.sop?.text : '');
-    if (!text) return error('Word export is not available for this document.', 400);
+    const text =
+      meta.text ||
+      (await readGeneratedText(app.id, params.doc)) ||
+      (params.doc === 'sop' ? app.sop?.text : '');
+    if (!text) {
+      return error(
+        'Word export needs the document to be generated again (its source text was not stored). Press "Re-generate" for this document, then download Word.',
+        400
+      );
+    }
     const title = (meta.filename || params.doc).replace(/\.pdf$/i, '');
     const buffer = await renderDocx({ text, title });
     const name = `${title}.docx`.replace(/[^\w.\- ]+/g, '_');

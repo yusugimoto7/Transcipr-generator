@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 
 /**
  * Compile a submission package: merge section content (generated docs + uploaded
@@ -50,19 +50,36 @@ async function addContent(doc, font, item) {
       if (Array.isArray(keepPages) && keepPages.length) {
         pages = keepPages.filter((n) => n >= 1 && n <= pages.length).map((n) => src.getPage(n - 1));
       }
-      // Embed via each page's CropBox (what viewers display) and normalize to Letter.
+      // Embed via each page's CropBox (what viewers display) and normalize to
+      // Letter. Source pages carry a /Rotate flag that viewers apply but
+      // embedPages does not — so we re-apply it here, otherwise 90° scans get
+      // cut off and 180° scans come out upside down.
       const boxes = pages.map((p) => {
         const cb = p.getCropBox();
         return { left: cb.x, bottom: cb.y, right: cb.x + cb.width, top: cb.y + cb.height };
       });
+      const rotations = pages.map((p) => ((p.getRotation().angle % 360) + 360) % 360);
       const embedded = await doc.embedPages(pages, boxes);
-      for (const ep of embedded) {
+      embedded.forEach((ep, i) => {
+        const rot = rotations[i];
+        // Visual dimensions after the page's own rotation is applied.
+        const visW = rot === 90 || rot === 270 ? ep.height : ep.width;
+        const visH = rot === 90 || rot === 270 ? ep.width : ep.height;
+        const scale = Math.min(PAGE_W / visW, PAGE_H / visH);
+        const w = visW * scale;
+        const h = visH * scale;
         const page = doc.addPage([PAGE_W, PAGE_H]);
-        const scale = Math.min(PAGE_W / ep.width, PAGE_H / ep.height);
-        const w = ep.width * scale;
-        const h = ep.height * scale;
-        page.drawPage(ep, { x: (PAGE_W - w) / 2, y: (PAGE_H - h) / 2, width: w, height: h });
-      }
+        const originX = (PAGE_W - w) / 2;
+        const originY = (PAGE_H - h) / 2;
+        const opts = { width: ep.width * scale, height: ep.height * scale, rotate: degrees(rot) };
+        // drawPage rotates about the given origin, so shift the origin per angle
+        // to keep the rotated content inside the target box.
+        if (rot === 90) Object.assign(opts, { x: originX + w, y: originY });
+        else if (rot === 180) Object.assign(opts, { x: originX + w, y: originY + h });
+        else if (rot === 270) Object.assign(opts, { x: originX, y: originY + h });
+        else Object.assign(opts, { x: originX, y: originY });
+        page.drawPage(ep, opts);
+      });
       return;
     } catch {
       await addNotePage(doc, font, `"${filename}" could not be embedded automatically; include it manually.`);
@@ -196,19 +213,26 @@ export const PACKAGES = {
   'client-info': {
     title: 'Client Information',
     filename: 'Client Information.pdf',
+    // `catchAll: true` collects any uploaded document that belongs to this
+    // package but wasn't matched by an earlier section, so nothing is lost.
     sections: [
       { name: 'Statement of Purpose', generatedKey: 'sop' },
-      { name: 'Curriculum Vitae', category: 'cv' },
-      { name: 'Degree Certificate and Transcripts', category: 'transcripts' },
-      { name: 'Employment Letter', category: 'employment-letter' },
-      { name: 'Job Offer Letter', category: 'job-offer' },
-      { name: 'Leave of Absence Letter', category: 'leave-of-absence' },
-      { name: 'Internship Certificate', category: 'internship' },
-      { name: 'Certificates', category: 'certificates' },
-      { name: 'Ties to Home Country', category: 'ties-docs' },
-      { name: 'Birth Certificate and National Identity Card', category: 'national-id' },
-      { name: 'Flight Ticket', category: 'flight' },
-      { name: 'Accommodation Arrangement', category: 'accommodation' },
+      { name: 'PAL / PAL Exemption', categories: ['pal'] },
+      { name: 'Curriculum Vitae', categories: ['cv'] },
+      { name: 'Degree Certificate and Transcripts', categories: ['transcripts'] },
+      { name: 'Language Test Result', categories: ['language'] },
+      { name: 'Employment Letter', categories: ['employment-letter'] },
+      { name: 'Job Offer Letter', categories: ['job-offer'] },
+      { name: 'Leave of Absence Letter', categories: ['leave-of-absence'] },
+      { name: 'Internship Certificate', categories: ['internship'] },
+      { name: 'Certificates', categories: ['certificates'] },
+      { name: 'Ties to Home Country', categories: ['ties-docs'] },
+      { name: 'Birth Certificate and National Identity Card', categories: ['national-id'] },
+      { name: 'Military Service Card', categories: ['military'] },
+      { name: 'Police Clearance Certificate', categories: ['police-clearance'] },
+      { name: 'Flight Ticket', categories: ['flight'] },
+      { name: 'Accommodation Arrangement', categories: ['accommodation'] },
+      { name: 'Other Supporting Documents', catchAll: true },
     ],
   },
   'financial-proof': {
@@ -217,24 +241,38 @@ export const PACKAGES = {
     sections: [
       { name: 'Financial Cover Letter', generatedKey: 'financial-cover-letter' },
       { name: 'Financial Summary Report', generatedKey: 'financial-summary' },
-      { name: 'Deposit Payment Confirmation', category: 'deposit' },
+      { name: 'Deposit Payment Confirmation', categories: ['deposit', 'gic'] },
       {
         name: 'My Bank Statement',
-        category: 'proof-of-funds',
-        children: [{ name: 'Source of My Money', category: 'source-of-funds' }],
+        categories: ['proof-of-funds'],
+        children: [{ name: 'Source of My Money', categories: ['source-of-funds'] }],
       },
-      { name: 'My Title Deeds', category: 'title-deeds' },
+      { name: 'My Title Deeds', categories: ['title-deeds'] },
       {
         name: "My Supporter's Documents",
         supporter: true,
         children: [
-          { name: 'Affidavit of Financial Support', category: 'affidavit-support' },
-          { name: 'Bank Statements', category: 'supporter-bank' },
-          { name: 'Pay Slips / Employment Letter', category: 'supporter-income' },
-          { name: 'Title Deeds', category: 'supporter-deeds' },
-          { name: 'Birth Certificate / National ID', category: 'supporter-id' },
+          { name: 'Affidavit of Financial Support', categories: ['affidavit-support'] },
+          { name: 'Bank Statements', categories: ['supporter-bank'] },
+          { name: 'Pay Slips / Employment Letter', categories: ['supporter-income'] },
+          { name: 'Title Deeds', categories: ['supporter-deeds'] },
+          { name: 'Birth Certificate / National ID', categories: ['supporter-id'] },
         ],
       },
     ],
   },
+};
+
+/** Categories that belong to each package (used for the catch-all section). */
+export const PACKAGE_CATEGORIES = {
+  'client-info': [
+    'pal', 'cv', 'transcripts', 'language', 'employment-letter', 'job-offer',
+    'leave-of-absence', 'internship', 'certificates', 'ties-docs', 'national-id',
+    'military', 'police-clearance', 'flight', 'accommodation', 'sop', 'other',
+  ],
+  'financial-proof': [
+    'deposit', 'gic', 'proof-of-funds', 'source-of-funds', 'title-deeds',
+    'affidavit-support', 'supporter-bank', 'supporter-income', 'supporter-deeds',
+    'supporter-id',
+  ],
 };

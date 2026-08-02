@@ -22,6 +22,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
   const [msg, setMsg] = useState(null);
   const [note, setNote] = useState(null);
   const [missingModal, setMissingModal] = useState(null); // { fields: [labels] }
+  const [regenKey, setRegenKey] = useState(null);
   const generated = app.generated || [];
 
   const toggle = (key) =>
@@ -41,7 +42,29 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
     doGenerate();
   }
 
-  async function doGenerate() {
+  // Re-generate a single document (used by the per-row ↻ button).
+  async function regenerateOne(key) {
+    setRegenKey(key);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/applications/${app.id}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docs: [key] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generation failed.');
+      patchLocal({ generated: data.generated });
+      setNote(data.note || null);
+      setMsg({ type: 'ok', text: `Re-generated: ${DOCS.find((d) => d.key === key)?.label || key}.` });
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message });
+    } finally {
+      setRegenKey(null);
+    }
+  }
+
+  async function doGenerate(docs = selected) {
     setMissingModal(null);
     setBusy(true);
     setMsg(null);
@@ -49,7 +72,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
       const res = await fetch(`/api/applications/${app.id}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docs: selected }),
+        body: JSON.stringify({ docs }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Generation failed.');
@@ -92,6 +115,14 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
               </label>
               {hasGenerated(d.key) && (
                 <div className="btn-row" style={{ gap: 6 }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => regenerateOne(d.key)}
+                    disabled={regenKey === d.key || busy}
+                    title="Re-generate this document"
+                  >
+                    {regenKey === d.key ? <span className="spinner" /> : '↻'}
+                  </button>
                   <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/${d.key}`}>
                     ↓ PDF
                   </a>
