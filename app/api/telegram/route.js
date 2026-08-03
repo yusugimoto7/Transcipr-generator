@@ -167,9 +167,18 @@ export async function POST(request) {
   // it's approved.
   if (approvalEnabled()) {
     try {
+      // Hard time budget: enrichment (AI rewrite + related-link lookup) must
+      // never delay the post. If it isn't ready in time we send the script text
+      // as-is rather than leaving the user staring at a spinner.
+      const budget = (p, ms, fallback) =>
+        Promise.race([
+          Promise.resolve(p).catch(() => fallback),
+          new Promise((r) => setTimeout(() => r(fallback), ms)),
+        ]);
+
       const [newsHtml, related] = await Promise.all([
-        generateNewsPost(topic, fa || en),
-        pickRelatedLink(topic).catch(() => null),
+        budget(generateNewsPost(topic, fa || en), 25000, escapeHtml(clamp(fa || en || ""))),
+        budget(pickRelatedLink(topic), 12000, null),
       ]);
       let post = newsHtml || escapeHtml(clamp(fa || en || title));
       // No external "news source" link in the channel — only the relevant
