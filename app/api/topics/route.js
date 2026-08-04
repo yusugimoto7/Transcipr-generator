@@ -51,7 +51,7 @@ function underHourlyCap() {
   return lastHour < MAX_GENERATIONS_PER_HOUR && generationTimestamps.length < MAX_GENERATIONS_PER_DAY;
 }
 
-const MAX_AGE_DAYS = 45; // drop any dated news older than this — hard recency guard
+const MAX_AGE_DAYS = 14; // drop any dated news older than this — hard recency guard
 
 // Belt-and-suspenders: drop any Express Entry topic even if the model ignored
 // the prompt's exclusion (the brand already covers EE draws elsewhere).
@@ -153,7 +153,7 @@ async function generate(clientExclude) {
 // Farsi hooks. Real source_url + published date are re-attached server-side
 // from the article the model referenced by id (the model never invents them).
 async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
-  const { items, feedStatus } = await fetchNews({ maxAgeDays: 12, limit: 30, nowMs });
+  const { items, feedStatus } = await fetchNews({ maxAgeDays: 7, limit: 30, nowMs });
   const okFeeds = feedStatus.filter((f) => f.ok).map((f) => f.name);
   console.log(`[topics] feeds ok: ${okFeeds.join(", ") || "none"}; ${items.length} recent items`);
   if (!items.length) return [];
