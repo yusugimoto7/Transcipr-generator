@@ -1,4 +1,4 @@
-import { wordpressEnabled, whoAmI, testDraftRoundtrip } from "../../../lib/wordpress";
+import { wordpressEnabled, whoAmI, testDraftRoundtrip, detectRedirect } from "../../../lib/wordpress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,11 +80,28 @@ async function checkWordPress() {
     return [{ name: "WordPress", ok: false, detail: "WP_USER / WP_APP_PASSWORD not set" }];
   }
   const rows = [];
+
+  // Surface a redirect first — it silently strips credentials in plain fetch.
+  try {
+    const rd = await withTimeout(detectRedirect(), 10000, "redirect check");
+    if (rd.redirects) {
+      rows.push({
+        name: "Site redirect",
+        ok: !rd.cross_origin,
+        detail: rd.cross_origin
+          ? `${rd.from} → ${rd.to} — set WP_BASE_URL to ${rd.to}`
+          : "same-origin redirect (harmless)",
+      });
+    } else if (rd.redirects === false) {
+      rows.push({ name: "Site redirect", ok: true, detail: "none (" + process.env.WP_BASE_URL + ")" });
+    }
+  } catch (_) {}
+
   let me;
   try {
     me = await withTimeout(whoAmI(), 15000, "WordPress login");
   } catch (e) {
-    return [{ name: "WordPress login", ok: false, detail: String(e.message || e) }];
+    return [...rows, { name: "WordPress login", ok: false, detail: String(e.message || e) }];
   }
   rows.push({
     name: "WordPress login",
