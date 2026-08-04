@@ -1,7 +1,7 @@
 {
-  "name": "sugimoto-topic-engine",
+  "name": "sugimoto-draws",
   "version": "1.0.0",
-  "description": "Sugimoto Visa — Video Topic Engine. Swipe live Canada/Europe immigration news topics and generate bilingual (Farsi + English) Reel scripts.",
+  "description": "Watches Canadian immigration draws (Express Entry, BC PNP, OINP, Alberta AAIP) and publishes each new one to Telegram, X, LinkedIn and Instagram, and keeps the sugimotovisa.com draws page up to date.",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -13,9 +13,7 @@
     "node": ">=18.18"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.68.0",
     "next": "14.2.35",
-    "openai": "^6.48.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }
