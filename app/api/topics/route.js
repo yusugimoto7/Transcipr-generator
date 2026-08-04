@@ -6,7 +6,6 @@ import {
   topicPrompt,
   topicsFromNewsPrompt,
   parseTopics,
-  EVERGREEN_TOPICS,
 } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -116,26 +115,22 @@ async function generate(clientExclude) {
   }
   const exclude = [...new Set([...(clientExclude || []), ...sheetTitles])].slice(-100);
 
-  // 1. Try the real news feeds first. Evergreen how-to cards are only used to
-  // BACKFILL a thin news day (up to MIN_DECK), and they dedupe like news — each
-  // shows at most once, so the deck never recycles the same generic topics.
-  const MIN_DECK = 6;
+  // 1. Real news feeds only. NO evergreen/how-to filler: those were generic
+  // pages (not news), repeated, and some had dead links. An honest empty deck
+  // beats filler — if there's no fresh news, the app says so.
   let list = [];
   let provider = "feeds";
   try {
     const news = await collectFeedTopics({ today, nowMs, exclude, seenUrlSet });
-    const needed = Math.max(0, MIN_DECK - news.length);
-    const evergreens = needed > 0 ? pickEvergreens(seenUrlSet, needed) : [];
-    list = [...news, ...evergreens];
+    list = news;
     if (list.length) provider = openaiEnabled() ? "feeds+openai" : "feeds+anthropic";
-    console.log(`[topics] ${news.length} news + ${evergreens.length} evergreen backfill`);
+    console.log(`[topics] ${news.length} news topics from feeds`);
   } catch (e) {
     console.log("[topics] feed path failed:", String(e?.message || e));
     list = [];
   }
 
-  // 2. Fallback to the LLM web-search path only if we have nothing at all
-  // (no fresh news AND no unseen evergreens left).
+  // 2. Fallback to the LLM web-search path only if the feeds produced nothing.
   if (!list.length) {
     const r = await collectSearchTopics(exclude, today);
     list = r.list;
@@ -208,19 +203,6 @@ async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
   }
   topics.sort((a, b) => (b.score || 0) - (a.score || 0));
   return topics.slice(0, 7);
-}
-
-// Pick up to `n` UNSEEN evergreen how-to cards to backfill a thin news day.
-// They dedupe like news (once acted on, they're recorded and never returned),
-// so filter out any already in the durable "seen" set before offering them.
-function pickEvergreens(seenUrlSet, n) {
-  const unseen = EVERGREEN_TOPICS.filter((t) => {
-    if (!seenUrlSet) return true;
-    const k = normalizeUrl(t.source_url);
-    return !(k && seenUrlSet.has(k));
-  });
-  const shuffled = [...unseen].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, Math.max(0, n)).map((t) => ({ ...t, date: "" }));
 }
 
 // Old path: ask an LLM (OpenAI search model, else Claude web search) to both
