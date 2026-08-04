@@ -30,7 +30,7 @@
 
 const SECRET = "CHANGE-ME-to-a-long-random-string";
 const SHEET_NAME = "PostedDraws";
-const SCRIPT_VERSION = 1;
+const SCRIPT_VERSION = 2;
 
 function doGet(e) {
   if (e && e.parameter && e.parameter.ping) {
@@ -53,10 +53,17 @@ function doPost(e) {
   try {
     body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
   } catch (_) {}
-  if (body.secret !== SECRET) return json({ error: "unauthorized" });
+  if (body.secret !== SECRET) {
+    return json({ error: "unauthorized", version: SCRIPT_VERSION });
+  }
 
-  const entries = body.keys || [];
-  if (!entries.length) return json({ ok: true, added: 0 });
+  // Accept either field name. The dedicated-sheet client sends "keys"; the
+  // older shared-sheet client sends "library". Reading only one of them is how
+  // a write silently becomes a no-op.
+  const entries = body.keys || body.library || [];
+  if (!entries.length) {
+    return json({ ok: true, added: 0, received: 0, version: SCRIPT_VERSION });
+  }
 
   const sheet = getSheet();
   // Never store the same key twice, even if a run is retried.
@@ -86,7 +93,12 @@ function doPost(e) {
     added++;
   });
 
-  return json({ ok: true, added: added });
+  return json({
+    ok: true,
+    added: added,
+    received: entries.length,
+    version: SCRIPT_VERSION,
+  });
 }
 
 function getSheet() {
