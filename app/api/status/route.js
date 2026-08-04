@@ -1,4 +1,10 @@
-import { wordpressEnabled, whoAmI, testDraftRoundtrip, detectRedirect } from "../../../lib/wordpress";
+import {
+  wordpressEnabled,
+  whoAmI,
+  testDraftRoundtrip,
+  detectRedirect,
+  credentialShape,
+} from "../../../lib/wordpress";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +86,31 @@ async function checkWordPress() {
     return [{ name: "WordPress", ok: false, detail: "WP_USER / WP_APP_PASSWORD not set" }];
   }
   const rows = [];
+
+  // Show the SHAPE of the configured credentials (never the password itself).
+  // A wrong username, a quoted value, or a truncated password is visible here.
+  const cs = credentialShape();
+  rows.push({
+    name: "WP_BASE_URL",
+    ok: /^https:\/\//.test(cs.base_url),
+    detail: cs.base_url,
+  });
+  rows.push({
+    name: "WP_USER",
+    ok: !!cs.user && !cs.user_has_space && !cs.user_looks_like_email,
+    detail:
+      cs.user +
+      (cs.user_looks_like_email ? "  ⚠️ looks like an email — use the LOGIN username" : "") +
+      (cs.user_has_space ? "  ⚠️ contains a space" : ""),
+  });
+  rows.push({
+    name: "WP_APP_PASSWORD",
+    ok: cs.pass_shape_ok && !cs.pass_quoted,
+    detail:
+      `${cs.pass_len} chars (${cs.pass_len_stripped} without spaces)` +
+      (cs.pass_shape_ok ? " ✓ correct length" : "  ⚠️ should be 24 letters/digits") +
+      (cs.pass_quoted ? "  ⚠️ remove the surrounding quotes" : ""),
+  });
 
   // Surface a redirect first — it silently strips credentials in plain fetch.
   try {
