@@ -320,10 +320,6 @@
   <p class="csub" style="margin:-8px 0 0">Period scopes every section below. Destination and Channel scope those too, and
     additionally re-slice the four cards above.</p>
 
-  <h2 class="section" id="h30"></h2>
-  <div class="kpis" id="kpis30"></div>
-  <div id="note30"></div>
-
   <h2 class="section" id="hAll"></h2>
   <div id="notePeriod"></div>
   <div class="kpis" id="kpis"></div>
@@ -1880,32 +1876,11 @@ function renderAll() {
   renderFreshness();
   const dim = dimIdx();
   renderRecency(dim);
-  // last 30 days, anchored to today like the recency cards — independent of the Period filter
   const anchor = todayUTC();
-  const lo30 = new Date(anchor.getTime() - 30 * DAY);
-  const lo60 = new Date(anchor.getTime() - 60 * DAY);
-  $('#h30').textContent = `Last 30 days — ${fmtDay(lo30)} to ${fmtDay(anchor)}`;
   const pf = periodStart();
   $('#hAll').textContent = state.period === 'all'
     ? `Selected period — all time (${fmtDay(isoDay(M.firstDate))} to ${fmtDay(isoDay(M.lastDate))})`
     : `Selected period — ${PERIOD_LABEL[state.period]} (${fmtDay(pf)} to ${fmtDay(anchor)})`;
-  const cur30 = dim.filter(i => dayOf(i) >= lo30);
-  const prev30 = dim.filter(i => { const d = dayOf(i); return d >= lo60 && d < lo30; });
-  renderKpis('#kpis30', cur30, prev30);
-  // warn when the tier figure is inflated by the currency switch rather than by better leads
-  const n30 = $('#note30'); n30.replaceChildren();
-  const nonToman = cur30.filter(i => curOf(i) && curOf(i) !== 'toman').length;
-  if (cur30.length && nonToman / cur30.length > 0.05) {
-    const s = stats(cur30), p = stats(prev30);
-    const nb = el('div', 'note');
-    nb.style.margin = '0 0 6px';
-    nb.innerHTML = `<strong>Read the tier figure with care.</strong> ${fmt(nonToman)} of ${fmt(cur30.length)} leads in this
-      window were asked for budget in CAD or EUR, whose brackets map to higher tiers than the toman brackets for
-      equivalent money. On toman leads alone the tier 3–5 rate is
-      <strong>${pct(s.tomanHi, s.toman)}</strong>${p.toman ? ` against ${pct(p.tomanHi, p.toman)} in the previous 30 days` : ''} —
-      so the headline ${pct(s.hi, s.n)} reflects the currency change, not a shift in lead quality.`;
-    n30.appendChild(nb);
-  }
   // These ignore the Period filter, so they render whatever it is set to.
   renderWeekly(dim);
   const chan = chanIdx();
