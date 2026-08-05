@@ -293,11 +293,13 @@
   <div class="filters" role="group" aria-label="Filters">
     <div class="fgroup" id="f-period">
       <span class="flabel">Period</span>
-      <button class="chip" data-v="all" aria-pressed="true">All 18 months</button>
-      <button class="chip" data-v="2025" aria-pressed="false">2025</button>
-      <button class="chip" data-v="2026" aria-pressed="false">2026</button>
-      <button class="chip" data-v="l6" aria-pressed="false">Last 6 months</button>
-      <button class="chip" data-v="l12" aria-pressed="false">Last 12 months</button>
+      <button class="chip" data-v="3" aria-pressed="false">3 days</button>
+      <button class="chip" data-v="7" aria-pressed="false">7 days</button>
+      <button class="chip" data-v="30" aria-pressed="false">30 days</button>
+      <button class="chip" data-v="90" aria-pressed="false">90 days</button>
+      <button class="chip" data-v="182" aria-pressed="false">6 months</button>
+      <button class="chip" data-v="365" aria-pressed="false">1 year</button>
+      <button class="chip" data-v="all" aria-pressed="true">All time</button>
     </div>
     <div class="fgroup" id="f-dest">
       <span class="flabel">Destination</span>
@@ -322,7 +324,8 @@
   <div class="kpis" id="kpis30"></div>
   <div id="note30"></div>
 
-  <h2 class="section">Whole-period totals — all 18 months</h2>
+  <h2 class="section" id="hAll"></h2>
+  <div id="notePeriod"></div>
   <div class="kpis" id="kpis"></div>
 
   <h2 class="section">Compare two periods</h2>
@@ -533,10 +536,6 @@ const shortMonth = mk => new Date(mk + '-01T00:00:00Z')
 
 /* ---------- filter ---------- */
 const state = { period: 'all', dest: 'all', src: 'all' };
-function monthsBack(k) {
-  const set = new Set(MONTHS.slice(-k));
-  return set;
-}
 // Destination + channel only. The recency windows use this so they stay anchored to
 // today's date regardless of which Period is selected.
 function dimIdx() {
@@ -559,15 +558,45 @@ function chanIdx() {
   for (let i = 0; i < N; i++) if (COL.sg[i] === srcI) out.push(i);
   return out;
 }
-function activeIdx() {
-  const per = state.period;
-  const win = per === 'l6' ? monthsBack(6) : per === 'l12' ? monthsBack(12) : null;
-  return dimIdx().filter(i => {
-    if (per === '2025' || per === '2026') return monthKey(i).slice(0, 4) === per;
-    if (win) return win.has(monthKey(i));
-    return true;
-  });
+// Period is a rolling window of N days counted back from today, so "3 days" means
+// exactly three days rather than three calendar buckets' worth of rows.
+const PERIOD_LABEL = { '3': 'last 3 days', '7': 'last 7 days', '30': 'last 30 days',
+  '90': 'last 90 days', '182': 'last 6 months', '365': 'last year', all: 'all time' };
+function periodStart() {
+  if (state.period === 'all') return null;
+  return new Date(todayUTC().getTime() - (Number(state.period) - 1) * DAY);
 }
+function activeIdx() {
+  const from = periodStart();
+  return from ? dimIdx().filter(i => dayOf(i) >= from) : dimIdx();
+}
+// Days the current view spans — drives how the time charts bucket.
+function activeSpanDays() {
+  return state.period === 'all' ? Math.round((SNAP_DAY - D0) / DAY) + 1 : Number(state.period);
+}
+// Bucketing a 3-day window by month yields one meaningless bar, so the volume chart
+// steps down to weeks and then days as the window shrinks.
+function timeBucket() {
+  const d = activeSpanDays();
+  return d <= 45 ? 'day' : d <= 210 ? 'week' : 'month';
+}
+const BUCKET_OF = {
+  day: i => iso(dayOf(i)),
+  week: i => iso(weekStart(dayOf(i))),
+  month: i => monthKey(i)
+};
+const BUCKET_LABEL = {
+  day: k => fmtDay(isoDay(k)),
+  week: k => 'Week of ' + fmtDay(isoDay(k)),
+  month: k => fmtMonth(k)
+};
+const shortDayLabel = k => isoDay(k).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const BUCKET_SHORT = { day: shortDayLabel, week: shortDayLabel, month: k => shortMonth(k) };
+const BUCKET_NOUN = { day: 'day', week: 'week', month: 'month' };
+// The share-over-time charts group coarser: by month on short spans, by quarter on long.
+function groupUnit() { return activeSpanDays() <= 210 ? 'month' : 'quarter'; }
+const groupKeyOf = i => groupUnit() === 'month' ? monthKey(i) : quarterOf(i);
+const groupLabelOf = k => groupUnit() === 'month' ? fmtMonth(k) : k;
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -1060,18 +1089,23 @@ function renderWeekly(dim) {
     groups.map((gp, j) => ({ label: gp.label, n: totals[j] })), n, ['Week', 'Leads', 'Share of 13 weeks']));
 }
 function renderMonthly(idx) {
-  const { chart, table } = card('#card-monthly', 'Submissions per month',
-    'Every month in the filtered range, split by destination');
-  const g = groupBy(idx, monthKey, i => val('de', i));
-  const ms = [...g.keys()].sort();
-  const groups = ms.map(m => ({ label: fmtMonth(m), short: shortMonth(m), v: g.get(m) }));
+  const b = timeBucket(), noun = BUCKET_NOUN[b];
+  const { chart, table } = card('#card-monthly', `Submissions per ${noun}`,
+    `Every ${noun} in the selected period (${PERIOD_LABEL[state.period]}), split by destination`);
+  if (!idx.length) { chart.appendChild(el('p', 'rempty', 'No leads in this period.')); return; }
+  const g = groupBy(idx, BUCKET_OF[b], i => val('de', i));
+  const ks = [...g.keys()].sort();
+  const groups = ks.map(k => ({ label: BUCKET_LABEL[b](k), short: BUCKET_SHORT[b](k), v: g.get(k) }));
   stackedCols(chart, groups, DEST_SERIES, { height: '190px' });
-  const tot = ms.map(m => Object.values(g.get(m)).reduce((a, b) => a + b, 0));
+  const tot = ks.map(k => Object.values(g.get(k)).reduce((a, x) => a + x, 0));
   const cap = el('p', 'csub'); cap.style.marginTop = '10px';
   const mx = tot.indexOf(Math.max(...tot)), mn = tot.indexOf(Math.min(...tot));
-  cap.textContent = `Peak ${fmtMonth(ms[mx])} at ${fmt(tot[mx])} · lowest ${fmtMonth(ms[mn])} at ${fmt(tot[mn])} · average ${fmt(Math.round(tot.reduce((a, b) => a + b, 0) / tot.length))}/month.`;
+  cap.textContent = `Peak ${BUCKET_LABEL[b](ks[mx])} at ${fmt(tot[mx])} · lowest `
+    + `${BUCKET_LABEL[b](ks[mn])} at ${fmt(tot[mn])} · average `
+    + `${fmt(Math.round(tot.reduce((a, x) => a + x, 0) / tot.length))}/${noun}.`;
   chart.appendChild(cap);
-  table.appendChild(dataTable(ms.map((m, j) => ({ label: fmtMonth(m), n: tot[j] })), idx.length, ['Month', 'Leads', 'Share']));
+  table.appendChild(dataTable(ks.map((k, j) => ({ label: BUCKET_LABEL[b](k), n: tot[j] })),
+    idx.length, [noun[0].toUpperCase() + noun.slice(1), 'Leads', 'Share']));
 }
 
 const SRC_SERIES = [
@@ -1082,24 +1116,28 @@ const SRC_SERIES = [
   { key: '__other', label: 'Other / untracked', color: 'var(--none-fill)' }
 ];
 function renderSrcMix(idx) {
-  const { chart, table } = card('#card-srcmix', 'Channel mix by quarter',
-    'Share of leads from each channel group, newest quarter first — Instagram has led since Q3 2025');
+  const u = groupUnit();
+  const { chart, table } = card('#card-srcmix', `Channel mix by ${u}`,
+    `Share of leads from each channel group, newest ${u} first — Instagram has led since Q3 2025`);
+  if (!idx.length) { chart.appendChild(el('p', 'rempty', 'No leads in this period.')); return; }
   const named = new Set(SRC_SERIES.map(s => s.key));
-  const g = groupBy(idx, quarterOf, i => { const v = val('sg', i); return named.has(v) ? v : '__other'; });
-  const qs = [...g.keys()].sort().reverse();   // newest quarter first
-  const trows = stackRows(chart, qs.map(q => ({ label: q, v: g.get(q) })), SRC_SERIES);
-  table.appendChild(dataTable(trows, idx.length, ['Quarter — channel', 'Leads', 'Share of all']));
+  const g = groupBy(idx, groupKeyOf, i => { const v = val('sg', i); return named.has(v) ? v : '__other'; });
+  const ks = [...g.keys()].sort().reverse();   // newest first
+  const trows = stackRows(chart, ks.map(k => ({ label: groupLabelOf(k), v: g.get(k) })), SRC_SERIES);
+  table.appendChild(dataTable(trows, idx.length, [`${u} — channel`, 'Leads', 'Share of all']));
 }
 function renderDestQ(idx) {
-  const { chart, table } = card('#card-destq', 'Canada vs Europe by quarter',
-    'Newest quarter first — Europe interest peaked at 43% in Q3 2025');
-  const g = groupBy(idx, quarterOf, i => val('de', i));
-  const qs = [...g.keys()].sort().reverse();   // newest quarter first
-  const trows = stackRows(chart, qs.map(q => ({ label: q, v: g.get(q) })), [
+  const u = groupUnit();
+  const { chart, table } = card('#card-destq', `Canada vs Europe by ${u}`,
+    `Newest ${u} first — Europe interest peaked at 43% in Q3 2025`);
+  if (!idx.length) { chart.appendChild(el('p', 'rempty', 'No leads in this period.')); return; }
+  const g = groupBy(idx, groupKeyOf, i => val('de', i));
+  const ks = [...g.keys()].sort().reverse();   // newest first
+  const trows = stackRows(chart, ks.map(k => ({ label: groupLabelOf(k), v: g.get(k) })), [
     { key: 'کانادا', label: 'Canada', color: 'var(--s1)', raw: 'کانادا' },
     { key: 'اروپا', label: 'Europe', color: 'var(--s2)', raw: 'اروپا' }
   ]);
-  table.appendChild(dataTable(trows, idx.length, ['Quarter — destination', 'Leads', 'Share of all']));
+  table.appendChild(dataTable(trows, idx.length, [`${u} — destination`, 'Leads', 'Share of all']));
 }
 function renderDest(idx) {
   const { chart, table } = card('#card-dest', 'Destination', 'Where the lead wants to go');
@@ -1248,35 +1286,37 @@ function renderOdoo(idx) {
     The column is a one-way flag: 6,491 rows hold <code>1</code> and 4,567 are empty — there is no explicit
     "0", so "not flagged" cannot be distinguished from "the flag was never written after a successful push".
     Confirming true CRM coverage needs a reconciliation against Odoo on email or phone.`;
-  const { chart, table } = card('#card-odoo', 'Odoo flag by month',
+  const { chart, table } = card('#card-odoo', `Odoo flag by ${BUCKET_NOUN[timeBucket()]}`,
     'Share of rows carrying added_to_odoo — near-total in Mar 2025, then stuck around half', note);
-  const g = groupBy(idx, monthKey, i => val('od', i));
+  const b = timeBucket();
+  const g = groupBy(idx, BUCKET_OF[b], i => val('od', i));
   const ms = [...g.keys()].sort();
-  const groups = ms.map(m => ({ label: fmtMonth(m), short: shortMonth(m), v: g.get(m) }));
+  const groups = ms.map(m => ({ label: BUCKET_LABEL[b](m), short: BUCKET_SHORT[b](m), v: g.get(m) }));
   stackedCols(chart, groups, [
     { key: '1', label: 'Flag set', color: 'var(--s1)' },
     { key: '0', label: 'Flag empty', color: 'var(--none-fill)' }
   ], { height: '150px' });
   const rows = ms.map(m => {
     const o = g.get(m)['1'] || 0, t = (g.get(m)['1'] || 0) + (g.get(m)['0'] || 0);
-    return { label: fmtMonth(m) + ' — flagged', n: o, tot: t };
+    return { label: BUCKET_LABEL[b](m) + ' — flagged', n: o, tot: t };
   });
   const cap = el('p', 'csub'); cap.style.marginTop = '10px';
   const worst = rows.reduce((b, r) => (r.n / r.tot < b.n / b.tot ? r : b), rows[0]);
-  cap.textContent = `Worst month: ${worst.label.replace(' — flagged', '')} at ${pct(worst.n, worst.tot)}. Bars show flag set vs flag empty for each month.`;
+  cap.textContent = `Worst ${BUCKET_NOUN[b]}: ${worst.label.replace(' — flagged', '')} at ${pct(worst.n, worst.tot)}.`
+    + ` Bars show flag set vs flag empty for each ${BUCKET_NOUN[b]}.`;
   chart.appendChild(cap);
-  table.appendChild(dataTable(rows.map(r => ({ label: r.label, n: r.n })), idx.length, ['Month', 'Synced', 'Share of all']));
+  table.appendChild(dataTable(rows.map(r => ({ label: r.label, n: r.n })), idx.length, ['Period', 'Synced', 'Share of all']));
 }
 function renderIp(idx) {
   const { chart, table } = card('#card-ip', 'Tehran office meeting requests',
-    'Opt-in for an in-person meeting in the Vanak office, newest quarter first');
-  const g = groupBy(idx, quarterOf, i => val('ip', i));
-  const qs = [...g.keys()].sort().reverse();   // newest quarter first
-  const trows = stackRows(chart, qs.map(q => ({ label: q, v: g.get(q) })), [
+    'Opt-in for an in-person meeting in the Vanak office, newest period first');
+  const g = groupBy(idx, groupKeyOf, i => val('ip', i));
+  const ks = [...g.keys()].sort().reverse();   // newest first
+  const trows = stackRows(chart, ks.map(k => ({ label: groupLabelOf(k), v: g.get(k) })), [
     { key: '1', label: 'Wants in-person', color: 'var(--s2)' },
     { key: '0', label: 'No request', color: 'var(--none-fill)' }
   ]);
-  table.appendChild(dataTable(trows, idx.length, ['Quarter — request', 'Leads', 'Share of all']));
+  table.appendChild(dataTable(trows, idx.length, ['Period — request', 'Leads', 'Share of all']));
 }
 function renderOutreach(idx) {
   const note = document.createElement('span');
@@ -1799,6 +1839,36 @@ async function goLive(force) {
   }
 }
 
+// Cards that follow the Period filter. When the period holds no leads these are
+// cleared with a message — leaving the previous period's charts on screen next to a
+// "0 leads" label would quietly show the wrong numbers.
+const PERIOD_CARDS = ['card-findings', 'card-monthly', 'card-srcmix', 'card-destq', 'card-form',
+  'card-dest', 'card-method', 'card-tier', 'card-budget', 'card-age', 'card-edu', 'card-lang',
+  'card-field', 'card-emp', 'card-nat', 'card-channel', 'card-source', 'card-medium',
+  'card-campaign', 'card-content', 'card-ref', 'card-odoo', 'card-ip', 'card-outreach', 'card-fill'];
+function renderEmptyPeriod() {
+  for (const id of PERIOD_CARDS) {
+    const c = $('#' + id);
+    if (!c) continue;
+    c.replaceChildren();
+    c.appendChild(el('p', 'rempty', 'No leads in the selected period.'));
+  }
+}
+// The banner has to sit at the top of the period-dependent area: the findings card is
+// now at the foot of the page, far below the empty cards it would be explaining.
+function renderPeriodNote(idx) {
+  const host = $('#notePeriod');
+  host.replaceChildren();
+  if (idx.length || state.period === 'all') return;
+  const nb = el('div', 'note');
+  nb.style.margin = '0 0 14px';
+  nb.innerHTML = `<strong>No leads between ${fmtDay(periodStart())} and ${fmtDay(todayUTC())}.</strong> `
+    + `The newest lead in the data is ${fmtDay(SNAP_DAY)}, so everything below is empty for this window. `
+    + `Widen the period, or check that the sheet is still receiving submissions. The recent-activity cards, `
+    + `the weekly chart and the two destination route charts have their own fixed windows and are unaffected.`;
+  host.appendChild(nb);
+}
+
 /* ---------- render ---------- */
 function renderAll() {
   const idx = activeIdx();
@@ -1815,6 +1885,10 @@ function renderAll() {
   const lo30 = new Date(anchor.getTime() - 30 * DAY);
   const lo60 = new Date(anchor.getTime() - 60 * DAY);
   $('#h30').textContent = `Last 30 days — ${fmtDay(lo30)} to ${fmtDay(anchor)}`;
+  const pf = periodStart();
+  $('#hAll').textContent = state.period === 'all'
+    ? `Selected period — all time (${fmtDay(isoDay(M.firstDate))} to ${fmtDay(isoDay(M.lastDate))})`
+    : `Selected period — ${PERIOD_LABEL[state.period]} (${fmtDay(pf)} to ${fmtDay(anchor)})`;
   const cur30 = dim.filter(i => dayOf(i) >= lo30);
   const prev30 = dim.filter(i => { const d = dayOf(i); return d >= lo60 && d < lo30; });
   renderKpis('#kpis30', cur30, prev30);
@@ -1832,20 +1906,25 @@ function renderAll() {
       so the headline ${pct(s.hi, s.n)} reflects the currency change, not a shift in lead quality.`;
     n30.appendChild(nb);
   }
-  if (!idx.length) return;
-  renderKpis('#kpis', idx);
-  renderFindings(idx);
+  // These ignore the Period filter, so they render whatever it is set to.
   renderWeekly(dim);
+  const chan = chanIdx();
+  renderRouteWindow('#card-method-ca', 'کانادا', 'Canada', 'var(--s1)', chan);
+  renderRouteWindow('#card-method-eu', 'اروپا', 'Europe', 'var(--s2)', chan);
+  renderQuality();
+  renderCompare();
+
+  renderKpis('#kpis', idx);
+  renderPeriodNote(idx);
+  if (!idx.length) { renderEmptyPeriod(); return; }
+  renderFindings(idx);
   renderMonthly(idx);
   renderSrcMix(idx);
   renderDestQ(idx);
   simple('#card-form', 'Which form they filled', 'The assessment form each submission came through', idx, 'f');
-  const chan = chanIdx();
-  renderRouteWindow('#card-method-ca', 'کانادا', 'Canada', 'var(--s1)', chan);
-  renderRouteWindow('#card-method-eu', 'اروپا', 'Europe', 'var(--s2)', chan);
   renderDest(idx);
-  simple('#card-method', 'Route they want to pursue — all 18 months',
-    'What the lead says they intend to do, across the whole history', idx, 'm', 10);
+  simple('#card-method', `Route they want to pursue — ${PERIOD_LABEL[state.period]}`,
+    'What the lead says they intend to do, over the selected period', idx, 'm', 10);
   renderTier(idx);
   renderBudget(idx);
   renderAge(idx);
@@ -1865,9 +1944,7 @@ function renderAll() {
   renderOdoo(idx);
   renderIp(idx);
   renderOutreach(idx);
-  renderQuality();
   renderFill(idx);
-  renderCompare();
 }
 for (const [id, key] of [['#f-period', 'period'], ['#f-dest', 'dest'], ['#f-src', 'src']]) {
   $(id).addEventListener('click', e => {
