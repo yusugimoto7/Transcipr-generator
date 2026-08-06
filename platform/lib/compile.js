@@ -58,11 +58,19 @@ async function addContent(doc, font, item) {
         const cb = p.getCropBox();
         return { left: cb.x, bottom: cb.y, right: cb.x + cb.width, top: cb.y + cb.height };
       });
-      const rotations = pages.map((p) => ((p.getRotation().angle % 360) + 360) % 360);
+      // Total correction per page = the page's own /Rotate plus any extra
+      // rotation detected from the scan's content (upside-down photos have no
+      // /Rotate flag at all).
+      const extra = Array.isArray(item.pageRotations) ? item.pageRotations : [];
+      const rotations = pages.map((p, i) => {
+        const own = p.getRotation().angle;
+        const add = Number(extra[i] || 0);
+        return (((own + add) % 360) + 360) % 360;
+      });
       const embedded = await doc.embedPages(pages, boxes);
       embedded.forEach((ep, i) => {
         const rot = rotations[i];
-        // Visual dimensions after the page's own rotation is applied.
+        // Visual dimensions after rotation is applied.
         const visW = rot === 90 || rot === 270 ? ep.height : ep.width;
         const visH = rot === 90 || rot === 270 ? ep.width : ep.height;
         const scale = Math.min(PAGE_W / visW, PAGE_H / visH);
@@ -71,12 +79,13 @@ async function addContent(doc, font, item) {
         const page = doc.addPage([PAGE_W, PAGE_H]);
         const originX = (PAGE_W - w) / 2;
         const originY = (PAGE_H - h) / 2;
-        const opts = { width: ep.width * scale, height: ep.height * scale, rotate: degrees(rot) };
-        // drawPage rotates about the given origin, so shift the origin per angle
-        // to keep the rotated content inside the target box.
-        if (rot === 90) Object.assign(opts, { x: originX + w, y: originY });
+        // PDF /Rotate is CLOCKWISE; pdf-lib's `rotate` is counter-clockwise —
+        // so negate. drawPage rotates about the origin, so shift the origin per
+        // angle to keep the rotated content inside the target box.
+        const opts = { width: ep.width * scale, height: ep.height * scale, rotate: degrees(-rot) };
+        if (rot === 90) Object.assign(opts, { x: originX, y: originY + h });
         else if (rot === 180) Object.assign(opts, { x: originX + w, y: originY + h });
-        else if (rot === 270) Object.assign(opts, { x: originX, y: originY + h });
+        else if (rot === 270) Object.assign(opts, { x: originX + w, y: originY });
         else Object.assign(opts, { x: originX, y: originY });
         page.drawPage(ep, opts);
       });

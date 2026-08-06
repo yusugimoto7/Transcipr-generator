@@ -25,10 +25,11 @@ ENV HOSTNAME=0.0.0.0
 ENV DATA_DIR=/data/store
 ENV UPLOAD_DIR=/data/uploads
 
-# Python (XFA form filler) + poppler-utils (blank-page detection in compiled
-# packages). The venv is put on PATH.
+# Python (XFA form filler), poppler-utils (page rasterizing for blank-page
+# detection) and tesseract + OSD data (detects sideways/upside-down scans).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 python3-venv poppler-utils \
+ && apt-get install -y --no-install-recommends \
+      python3 python3-venv poppler-utils tesseract-ocr tesseract-ocr-osd \
  && python3 -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-cache-dir pikepdf==10.10.0 lxml==5.3.0 \
  && rm -rf /var/lib/apt/lists/*

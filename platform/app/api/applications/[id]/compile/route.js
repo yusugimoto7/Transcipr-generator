@@ -4,7 +4,7 @@ import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop, selectSopDocs } from '@/lib/generators/sop';
 import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
 import { compilePackage, PACKAGES, PACKAGE_CATEGORIES } from '@/lib/compile';
-import { detectBlankPages } from '@/lib/generators/blankdetect';
+import { analyzePages } from '@/lib/generators/blankdetect';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -66,7 +66,8 @@ export async function POST(req, { params }) {
   }
   const def = PACKAGES[body.pkg];
   if (!def) return error('Unknown package.', 404);
-  const cleanPages = body.cleanPages !== false; // default: remove blank/unrelated pages
+  const cleanPages = body.cleanPages !== false; // default: remove blank pages
+  const fixRotation = body.fixRotation !== false; // default: auto-correct sideways/upside-down scans
 
   // Ensure the generated sub-documents this package needs exist (top level only).
   const neededGen = [...new Set(def.sections.filter((s) => s.generatedKey).map((s) => s.generatedKey))];
@@ -79,21 +80,34 @@ export async function POST(req, { params }) {
   }
 
   let droppedTotal = 0;
+  let rotatedTotal = 0;
   const usedDocIds = new Set(); // documents already placed in a section
 
   const loadDoc = async (d) => {
     const bytes = await readUpload(app.id, d.stored);
     let keepPages = null;
-    if (cleanPages && d.mime === 'application/pdf') {
-      // Deterministic: rasterize each page and measure ink coverage.
-      const { pages, blank } = await detectBlankPages(bytes);
-      if (pages > 0 && blank.length > 0 && blank.length < pages) {
-        const blankSet = new Set(blank);
-        keepPages = Array.from({ length: pages }, (_, i) => i + 1).filter((n) => !blankSet.has(n));
-        droppedTotal += blank.length;
+    let pageRotations = null;
+    if (d.mime === 'application/pdf' && (cleanPages || fixRotation)) {
+      // Rasterize once: measure ink (blank pages) and run OSD (orientation).
+      const { pages, blank, rotate } = await analyzePages(bytes, {
+        detectOrientation: fixRotation,
+      });
+      if (pages > 0) {
+        let kept = Array.from({ length: pages }, (_, i) => i + 1);
+        if (cleanPages && blank.length > 0 && blank.length < pages) {
+          const blankSet = new Set(blank);
+          kept = kept.filter((n) => !blankSet.has(n));
+          droppedTotal += blank.length;
+          keepPages = kept;
+        }
+        // Rotations must line up with the pages actually kept.
+        if (rotate && Object.keys(rotate).length) {
+          pageRotations = kept.map((n) => Number(rotate[String(n)] || 0));
+          rotatedTotal += Object.keys(rotate).length;
+        }
       }
     }
-    return { bytes, mime: d.mime, filename: d.filename, keepPages };
+    return { bytes, mime: d.mime, filename: d.filename, keepPages, pageRotations };
   };
 
   // Resolve one node's (section or child) content items.
@@ -177,6 +191,7 @@ export async function POST(req, { params }) {
     generated: updated.generated,
     key,
     droppedPages: droppedTotal,
+    rotatedPages: rotatedTotal,
     included: sections.map((s) => ({
       name: s.name,
       count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0),

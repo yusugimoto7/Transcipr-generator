@@ -21,6 +21,7 @@ export default function CompiledPackages({ app, patchLocal }) {
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const [cleanPages, setCleanPages] = useState(true);
+  const [fixRotation, setFixRotation] = useState(true);
   const generated = app.generated || [];
   const has = (key) => generated.some((g) => g.key === key);
 
@@ -31,14 +32,16 @@ export default function CompiledPackages({ app, patchLocal }) {
       const res = await fetch(`/api/applications/${app.id}/compile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pkg, cleanPages }),
+        body: JSON.stringify({ pkg, cleanPages, fixRotation }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Compilation failed.');
       patchLocal({ generated: data.generated });
       const included = (data.included || []).filter((s) => s.count > 0).map((s) => s.name);
       const missing = (data.included || []).filter((s) => s.count === 0).map((s) => s.name);
-      const dropped = data.droppedPages ? ` Removed ${data.droppedPages} blank page(s).` : '';
+      const dropped =
+        (data.droppedPages ? ` Removed ${data.droppedPages} blank page(s).` : '') +
+        (data.rotatedPages ? ` Re-oriented ${data.rotatedPages} page(s).` : '');
       setMsg({
         type: missing.length ? 'warn' : 'ok',
         text:
@@ -65,6 +68,10 @@ export default function CompiledPackages({ app, patchLocal }) {
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '10px 0 2px' }}>
         <input type="checkbox" style={{ width: 16 }} checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} />
         <span className="small">Remove blank pages automatically</span>
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '2px 0' }}>
+        <input type="checkbox" style={{ width: 16 }} checked={fixRotation} onChange={(e) => setFixRotation(e.target.checked)} />
+        <span className="small">Auto-correct sideways / upside-down scans</span>
       </label>
       <div style={{ marginTop: 10 }}>
         {PKGS.map((p) => (
