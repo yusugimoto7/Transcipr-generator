@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-Analyze the pages of a PDF for package compilation:
+Analyze the pages of a PDF for package compilation.
 
-  * blank pages    - rasterize each page and measure ink coverage. A scanned
-                     blank sheet is near-uniform white (~0% ink).
-  * orientation    - use Tesseract's OSD (orientation & script detection) to
-                     find pages whose CONTENT is rotated (e.g. a page photo-
-                     graphed upside down carries no /Rotate flag, so metadata
-                     alone cannot detect it).
+  * blank pages - rasterize cheaply and measure ink coverage. A scanned blank
+                  sheet is near-uniform white (~0% ink).
+  * thumbnails  - optionally render small PNGs of the non-blank pages so the
+                  caller can check orientation with a vision model. (Tesseract's
+                  OSD is unreliable for Persian/Arabic scans, so orientation is
+                  decided by the caller, not here.)
 
-Usage:  python3 analyze_pages.py file.pdf
-Output: {"ok": true, "pages": N,
-         "blank": [1-based page numbers],
-         "rotate": {"<1-based page>": 90|180|270}}   # clockwise degrees to fix
+NOTE: pdftoppm applies each page's /Rotate flag when rendering, so a thumbnail
+already reflects that flag. Any rotation derived from a thumbnail is therefore
+ADDITIONAL to the page's own /Rotate.
 
-Everything is best-effort: missing tools or unreadable pages yield empty
-results rather than errors, so the caller keeps all pages unchanged.
+Usage:  python3 analyze_pages.py file.pdf [thumb_dir]
+Output: {"ok": true, "pages": N, "blank": [...], "thumbs": {"<page>": "path"}}
 """
 import sys
 import os
@@ -25,10 +24,10 @@ import re
 import subprocess
 import tempfile
 
-DARK_THRESHOLD = 128      # gray value below which a pixel counts as ink
-MIN_INK_FRACTION = 0.002  # pages with less ink than this are blank
-RENDER_DPI = 120          # enough for Tesseract OSD, still fast
-MIN_OSD_CONFIDENCE = 1.0  # ignore low-confidence orientation guesses
+DARK_THRESHOLD = 128       # gray value below which a pixel counts as ink
+MIN_INK_FRACTION = 0.002   # pages with less ink than this are blank
+INK_DPI = 25               # cheap raster, plenty for blank detection
+THUMB_WIDTH = 520          # px wide, enough for a vision model to read layout
 
 
 def page_ink_fraction(path):
@@ -65,47 +64,24 @@ def page_ink_fraction(path):
     return dark / len(px)
 
 
-def detect_rotation(path):
-    """Clockwise degrees needed to make the page upright, per Tesseract OSD."""
-    try:
-        out = subprocess.run(
-            ["tesseract", path, "-", "--psm", "0"],
-            capture_output=True,
-            timeout=60,
-            text=True,
-        )
-    except Exception:
-        return 0
-    text = (out.stdout or "") + (out.stderr or "")
-    m = re.search(r"Rotate:\s*(\d+)", text)
-    if not m:
-        return 0
-    conf = re.search(r"Orientation confidence:\s*([\d.]+)", text)
-    if conf:
-        try:
-            if float(conf.group(1)) < MIN_OSD_CONFIDENCE:
-                return 0
-        except ValueError:
-            pass
-    deg = int(m.group(1)) % 360
-    return deg if deg in (90, 180, 270) else 0
+def page_no(fp):
+    m = re.search(r"-(\d+)\.(pgm|png)$", fp)
+    return int(m.group(1)) if m else 0
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(json.dumps({"ok": False, "error": "usage: analyze_pages.py file.pdf"}))
+    if len(sys.argv) not in (2, 3):
+        print(json.dumps({"ok": False, "error": "usage: analyze_pages.py file.pdf [thumb_dir]"}))
         return 2
     pdf = sys.argv[1]
-    detect_orientation = os.environ.get("DETECT_ORIENTATION", "1") != "0"
+    thumb_dir = sys.argv[2] if len(sys.argv) == 3 else None
 
     with tempfile.TemporaryDirectory() as td:
         prefix = os.path.join(td, "p")
         try:
             subprocess.run(
-                ["pdftoppm", "-gray", "-r", str(RENDER_DPI), pdf, prefix],
-                check=True,
-                timeout=600,
-                capture_output=True,
+                ["pdftoppm", "-gray", "-r", str(INK_DPI), pdf, prefix],
+                check=True, timeout=600, capture_output=True,
             )
         except FileNotFoundError:
             print(json.dumps({"ok": False, "error": "pdftoppm not installed"}))
@@ -114,26 +90,34 @@ def main():
             print(json.dumps({"ok": False, "error": str(e)}))
             return 1
 
-        files = glob.glob(prefix + "-*.pgm")
-
-        def page_no(fp):
-            m = re.search(r"-(\d+)\.pgm$", fp)
-            return int(m.group(1)) if m else 0
-
-        files.sort(key=page_no)
+        files = sorted(glob.glob(prefix + "-*.pgm"), key=page_no)
         blank = []
-        rotate = {}
         for fp in files:
-            n = page_no(fp)
             frac = page_ink_fraction(fp)
             if frac is not None and frac < MIN_INK_FRACTION:
-                blank.append(n)
-                continue  # no need to check orientation of a blank page
-            if detect_orientation:
-                deg = detect_rotation(fp)
-                if deg:
-                    rotate[str(n)] = deg
-        print(json.dumps({"ok": True, "pages": len(files), "blank": blank, "rotate": rotate}))
+                blank.append(page_no(fp))
+
+        thumbs = {}
+        if thumb_dir:
+            os.makedirs(thumb_dir, exist_ok=True)
+            tprefix = os.path.join(thumb_dir, "t")
+            try:
+                subprocess.run(
+                    ["pdftoppm", "-png", "-scale-to-x", str(THUMB_WIDTH), "-scale-to-y", "-1",
+                     pdf, tprefix],
+                    check=True, timeout=900, capture_output=True,
+                )
+                blank_set = set(blank)
+                for fp in sorted(glob.glob(tprefix + "-*.png"), key=page_no):
+                    n = page_no(fp)
+                    if n in blank_set:
+                        os.remove(fp)
+                        continue
+                    thumbs[str(n)] = fp
+            except Exception:
+                thumbs = {}
+
+        print(json.dumps({"ok": True, "pages": len(files), "blank": blank, "thumbs": thumbs}))
         return 0
 
 
