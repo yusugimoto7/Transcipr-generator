@@ -5,6 +5,7 @@ import { generateSop, selectSopDocs } from '@/lib/generators/sop';
 import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
 import { compilePackage, PACKAGES, PACKAGE_CATEGORIES } from '@/lib/compile';
 import { analyzePages } from '@/lib/generators/blankdetect';
+import { normalizeImage } from '@/lib/images';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -85,6 +86,15 @@ export async function POST(req, { params }) {
 
   const loadDoc = async (d) => {
     const bytes = await readUpload(app.id, d.stored);
+
+    // Uploaded photos: bake in EXIF orientation and vision-check the pixels.
+    // (PDF embedding ignores EXIF, so phone photos otherwise come out rotated.)
+    if (d.mime === 'image/jpeg' || d.mime === 'image/png' || d.mime === 'image/webp') {
+      const fixed = await normalizeImage(bytes, d.mime, { vision: fixRotation });
+      if (fixed.rotated) rotatedTotal++;
+      return { bytes: fixed.bytes, mime: fixed.mime, filename: d.filename };
+    }
+
     let keepPages = null;
     let pageRotations = null;
     if (d.mime === 'application/pdf' && (cleanPages || fixRotation)) {

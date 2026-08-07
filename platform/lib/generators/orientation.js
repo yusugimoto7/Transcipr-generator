@@ -84,8 +84,44 @@ export async function detectOrientations(thumbs) {
   const batches = [];
   for (let i = 0; i < entries.length; i += BATCH) batches.push(entries.slice(i, i + BATCH));
 
-  const settled = await Promise.all(
-    batches.map((b) => detectBatch(b).catch(() => ({})))
+  // Sequential (not parallel): many simultaneous image-heavy requests trip API
+  // rate limits, and a failed batch used to silently mean "no rotation" for
+  // its pages. One retry per batch, and failures are logged so they show up in
+  // the server logs instead of vanishing.
+  const results = {};
+  for (const b of batches) {
+    let out = null;
+    try {
+      out = await detectBatch(b);
+    } catch (e1) {
+      await new Promise((r) => setTimeout(r, 2500));
+      try {
+        out = await detectBatch(b);
+      } catch (e2) {
+        console.error(
+          `[orientation] batch for pages ${b.map((e) => e.page).join(',')} failed twice: ${e2.message}`
+        );
+      }
+    }
+    if (out) Object.assign(results, out);
+  }
+  console.log(
+    `[orientation] checked ${entries.length} page(s), ${Object.keys(results).length} need rotation`
   );
-  return Object.assign({}, ...settled);
+  return results;
+}
+
+/**
+ * Orientation for a single standalone image (uploaded photo).
+ * @param {string} pngB64 - base64 PNG thumbnail of the image
+ * @returns {Promise<number>} clockwise degrees (0 if upright/unsure)
+ */
+export async function detectImageOrientation(pngB64) {
+  try {
+    const out = await detectBatch([{ page: 1, b64: pngB64 }]);
+    return out['1'] || 0;
+  } catch (e) {
+    console.error(`[orientation] single-image check failed: ${e.message}`);
+    return 0;
+  }
 }
