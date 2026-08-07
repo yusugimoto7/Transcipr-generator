@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 function Field({ field, value, onChange }) {
   const common = {
@@ -52,8 +52,23 @@ function Field({ field, value, onChange }) {
   );
 }
 
-export default function IntakePanel({ app, schema, onFieldChange, onFinish }) {
-  const [stepIdx, setStepIdx] = useState(0);
+export default function IntakePanel({ app, schema, onFieldChange, onFinish, activeStepId, onStepChange }) {
+  const fromUrl = schema.steps.findIndex((s) => s.id === activeStepId);
+  const [stepIdx, setStepIdxState] = useState(fromUrl >= 0 ? fromUrl : 0);
+
+  // Follow the URL when it changes (refresh, back/forward).
+  useEffect(() => {
+    const i = schema.steps.findIndex((s) => s.id === activeStepId);
+    if (i >= 0 && i !== stepIdx) setStepIdxState(i);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeStepId]);
+
+  const setStepIdx = (next) => {
+    const i = typeof next === 'function' ? next(stepIdx) : next;
+    setStepIdxState(i);
+    onStepChange?.(schema.steps[i]?.id || null);
+  };
+
   const step = schema.steps[stepIdx];
 
   const stepComplete = (s) =>

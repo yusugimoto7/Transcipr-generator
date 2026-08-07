@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import DocumentsPanel from '@/components/panels/DocumentsPanel';
 import IntakePanel from '@/components/panels/IntakePanel';
 import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
@@ -15,11 +15,59 @@ const TABS = [
   { id: 'generate', label: '5. Generate' },
 ];
 
+const TAB_IDS = TABS.map((t) => t.id);
+
+/** Read "#tab" or "#tab:substep" from the URL. */
+function readHash() {
+  if (typeof window === 'undefined') return {};
+  const raw = decodeURIComponent(window.location.hash.replace(/^#/, ''));
+  const [tab, sub] = raw.split(':');
+  return TAB_IDS.includes(tab) ? { tab, sub: sub || null } : {};
+}
+
 export default function Workspace({ initialApp, schema, initialChecklist }) {
   const [app, setApp] = useState(initialApp);
-  const [tab, setTab] = useState('documents');
+  const [tab, setTabState] = useState('documents');
+  const [intakeStep, setIntakeStepState] = useState(null);
   const [saveState, setSaveState] = useState('saved'); // saved | saving | error
   const saveTimer = useRef(null);
+
+  // Restore the position from the URL on load, and follow browser back/forward.
+  useEffect(() => {
+    const sync = () => {
+      const { tab: t, sub } = readHash();
+      if (t) {
+        setTabState(t);
+        setIntakeStepState(sub);
+      }
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    window.addEventListener('hashchange', sync);
+    return () => {
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener('hashchange', sync);
+    };
+  }, []);
+
+  /** Change tab (and optional sub-step) and record it in the URL. */
+  const setTab = useCallback((next, sub = null) => {
+    setTabState(next);
+    setIntakeStepState(sub);
+    if (typeof window !== 'undefined') {
+      const hash = `#${next}${sub ? `:${sub}` : ''}`;
+      window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+    }
+  }, []);
+
+  /** Remember the intake sub-step without adding a history entry per field. */
+  const setIntakeStep = useCallback((stepId) => {
+    setIntakeStepState(stepId);
+    if (typeof window !== 'undefined') {
+      const hash = `#intake${stepId ? `:${stepId}` : ''}`;
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+    }
+  }, []);
 
   // Merge a partial update into local app state.
   const patchLocal = useCallback((partial) => {
@@ -86,7 +134,14 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
         <DocumentsPanel app={app} patchLocal={patchLocal} onExtracted={onFieldChange} goIntake={() => setTab('intake')} />
       )}
       {tab === 'intake' && (
-        <IntakePanel app={app} schema={schema} onFieldChange={onFieldChange} onFinish={() => setTab('review')} />
+        <IntakePanel
+          app={app}
+          schema={schema}
+          onFieldChange={onFieldChange}
+          onFinish={() => setTab('review')}
+          activeStepId={intakeStep}
+          onStepChange={setIntakeStep}
+        />
       )}
       {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
       {tab === 'review' && (
