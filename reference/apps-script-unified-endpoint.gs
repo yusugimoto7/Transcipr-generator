@@ -100,7 +100,11 @@ function stripTags_(html) {
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    // &lt; matters: BC publishes small counts as "<5". Left encoded, the value
+    // failed the is-this-a-count check and silently dropped seven real draws
+    // across the two tables. Decode before &amp; so "&amp;lt;" cannot
+    // double-decode into a stray "<".
+    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     .replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ').trim();
 }
