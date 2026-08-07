@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { completeJson } from '../anthropic';
+import { completeJson } from '../ai';
 
 /**
  * Decide how each scanned page must be rotated to sit upright, by *looking* at

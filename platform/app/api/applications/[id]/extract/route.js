@@ -8,7 +8,7 @@ export const maxDuration = 300;
 
 const CONF_RANK = { high: 3, medium: 2, low: 1 };
 
-// Group docs into batches so we never send one enormous request to Claude.
+// Group docs into batches so we never send one enormous request to the model.
 // New batch when it would exceed ~4 files or ~4 MB of raw upload bytes.
 function batchDocs(docs) {
   const MAX_FILES = 4;
@@ -30,7 +30,7 @@ function batchDocs(docs) {
 }
 
 /**
- * Read the application's uploaded documents with Claude and return suggested
+ * Read the application's uploaded documents with the model and return suggested
  * field values. Large sets are processed in parallel batches and merged.
  * Does NOT overwrite the applicant's data unless { apply: true } is passed
  * (and then only fills fields that are currently empty).

@@ -1,4 +1,4 @@
-import { complete } from '../anthropic';
+import { complete } from '../ai';
 import { signatureBlock, getFirm } from '../firm';
 import { buildChecklist } from '../checklist';
 import { pronouns, BOILERPLATE, COST_BENCHMARK } from '../applicant';

@@ -1,4 +1,4 @@
-import { completeJson } from '../anthropic';
+import { completeJson } from '../ai';
 import { buildChecklist } from '../checklist';
 import { requiredMissing } from '../schema';
 

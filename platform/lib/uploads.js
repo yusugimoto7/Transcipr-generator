@@ -125,7 +125,8 @@ export async function deleteUpload(appId, stored) {
 }
 
 /**
- * Build Anthropic content blocks from a set of stored documents so Claude can read them.
+ * Build model content blocks from a set of stored documents so the model can read
+ * them (see lib/ai.js for the block format).
  * PDFs -> document blocks; images -> image blocks; DOCX -> extracted text.
  * Each document is numbered so the model can refer back to it (classification).
  */
@@ -141,6 +142,7 @@ export async function buildDocBlocks(appId, docs) {
     if (doc.mime === 'application/pdf') {
       blocks.push({
         type: 'document',
+        filename: doc.filename || `document-${i + 1}.pdf`,
         source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') },
       });
     } else if (doc.mime === DOCX_MIME) {

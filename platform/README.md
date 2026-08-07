@@ -17,7 +17,7 @@ and current IRCC instructions before submitting.
 
 - **Accounts** — email/password sign-up, one account per user, multiple applications each.
 - **Document upload** — PDFs and photos (passport, LOA, PAL, bank statements, transcripts, language results).
-- **AI extraction** — Claude reads uploads and pre-fills intake fields; the applicant confirms.
+- **AI extraction** — GPT reads uploads and pre-fills intake fields; the applicant confirms.
 - **Guided intake** — a multi-step wizard covering personal, passport, contact, study, finances, education, language, history, and ties/intent.
 - **Checklist + AI review** — personalized document checklist and an AI readiness review with a score and concrete fixes.
 - **Generated outputs** (PDF):
@@ -33,7 +33,7 @@ and current IRCC instructions before submitting.
 - Next.js 14 (App Router) + React 18 — all pure-JS, no native modules
 - Auth: `bcryptjs` password hashing + `jose` JWT session cookies (httpOnly)
 - Storage: file-based JSON store behind `lib/store.js` (swap for Postgres later)
-- AI: `@anthropic-ai/sdk` (server-side only)
+- AI: `openai` SDK — OpenAI GPT (server-side only)
 - PDFs: `pdf-lib`
 
 ## Run locally
@@ -43,7 +43,7 @@ Requires Node 18.18+.
 ```bash
 cd platform
 npm install
-cp .env.example .env.local   # set ANTHROPIC_API_KEY and AUTH_SECRET
+cp .env.example .env.local   # set OPENAI_API_KEY and AUTH_SECRET
 npm run dev                   # http://localhost:3001
 ```
 
@@ -51,9 +51,10 @@ npm run dev                   # http://localhost:3001
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | yes | Claude API key (server only) |
+| `OPENAI_API_KEY` | yes | OpenAI (GPT) API key (server only) |
 | `AUTH_SECRET` | yes | Long random string to sign session cookies |
-| `ANTHROPIC_MODEL` | no | Defaults to `claude-sonnet-5` |
+| `OPENAI_MODEL` | no | Defaults to `gpt-4.1`. Must support image + PDF input |
+| `OPENAI_BASE_URL` | no | Only for Azure OpenAI / a gateway / an OpenAI-compatible proxy |
 | `DATA_DIR` | no | Where accounts/applications JSON live (default `./data`) |
 | `UPLOAD_DIR` | no | Where uploaded & generated files live (default `./uploads`) |
 
@@ -72,10 +73,10 @@ platform/
   lib/
     store.js                  data layer (users + applications)
     auth.js                   sessions & password hashing
-    anthropic.js              Claude client + JSON helpers
+    ai.js                     OpenAI (GPT) client + JSON helpers
     schema.js                 study-permit intake schema (source of truth)
     checklist.js              document checklist
-    uploads.js                file storage + Claude content blocks
+    uploads.js                file storage + model content blocks
     pdf.js                    text → PDF renderer
     generators/               extract, review, sop, coverdocs, forms
 ```
@@ -93,7 +94,7 @@ configures everything (service, root dir, disk at `/data`, env vars) automatical
 
 1. Sign up at [render.com](https://render.com) with your GitHub account.
 2. **New + → Blueprint** → select the `Transcipr-generator` repo.
-3. Render reads `render.yaml`; enter your `ANTHROPIC_API_KEY` when prompted
+3. Render reads `render.yaml`; enter your `OPENAI_API_KEY` when prompted
    (`AUTH_SECRET` is generated automatically). Click **Apply**.
 4. When the service shows **Live**, you're online at `https://canada-visa-platform.onrender.com`
    (or similar).
@@ -107,7 +108,7 @@ configures everything (service, root dir, disk at `/data`, env vars) automatical
    - **Instance Type**: **Starter** or above. ⚠️ The Free tier cannot attach a disk —
      applicant data would be erased on every deploy/restart, so it is not usable here.
 4. **Environment variables** (Advanced or the Environment tab):
-   - `ANTHROPIC_API_KEY` = your key from console.anthropic.com
+   - `OPENAI_API_KEY` = your key from platform.openai.com
    - `AUTH_SECRET` = a long random string (32+ chars)
 5. **Add a Disk** (Advanced → Add Disk, or the service's Disks tab after creation):
    - Name: `visa-data` · **Mount Path: `/data`** · Size: 1 GB is plenty to start.

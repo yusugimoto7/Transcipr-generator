@@ -1,4 +1,4 @@
-import { getClient, MODEL } from '@/lib/anthropic';
+import { chat } from '@/lib/ai';
 import { getApplication, updateApplication } from '@/lib/store';
 import { buildChecklist } from '@/lib/checklist';
 import { json, error, requireUser } from '@/lib/api';
@@ -59,21 +59,14 @@ export async function POST(req) {
     }
   }
 
-  const anthropicMessages = messages.map((m, i) =>
-    i === messages.length - 1 && context
-      ? { role: m.role, content: [{ type: 'text', text: m.content + context }] }
-      : m
+  // Attach the file summary to the newest question only, so it stays current.
+  const history = messages.map((m, i) =>
+    i === messages.length - 1 && context ? { role: m.role, content: m.content + context } : m
   );
 
   let reply;
   try {
-    const res = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: SYSTEM,
-      messages: anthropicMessages,
-    });
-    reply = res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+    reply = await chat({ system: SYSTEM, history, maxTokens: 1024 });
   } catch (e) {
     return error(`Assistant unavailable: ${e.message}`, 502);
   }

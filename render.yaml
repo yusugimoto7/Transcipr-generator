@@ -20,8 +20,8 @@ services:
       mountPath: /data
       sizeGB: 1
     envVars:
-      # Enter your key from console.anthropic.com when Render prompts for it.
-      - key: ANTHROPIC_API_KEY
+      # Enter your key from platform.openai.com when Render prompts for it.
+      - key: OPENAI_API_KEY
         sync: false
       # Render generates a strong random value automatically.
       - key: AUTH_SECRET

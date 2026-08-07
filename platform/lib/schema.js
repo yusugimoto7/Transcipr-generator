@@ -3,7 +3,7 @@
  *
  * This is the single source of truth for:
  *   - the guided intake wizard (steps + fields)
- *   - what Claude tries to extract from uploaded documents
+ *   - what the model tries to extract from uploaded documents
  *   - what the generators (SOP, cover docs) and IMM form-fillers read
  *
  * Field types: text, textarea, date, number, select, tel, email, country, bool.

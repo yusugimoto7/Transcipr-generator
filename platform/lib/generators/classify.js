@@ -2,7 +2,7 @@
  * Document classification into checklist / package categories.
  *
  * Fast path: filename heuristics at upload time (instant, no API cost).
- * Accurate path: Claude assigns categories while reading the documents during
+ * Accurate path: the model assigns categories while reading the documents during
  * extraction (see extract.js) — those override the heuristics.
  */
 

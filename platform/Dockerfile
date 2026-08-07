@@ -1,7 +1,7 @@
 # Canada Visa Platform — production image
 # Build:  docker build -t canada-visa-platform .
 # Run:    docker run -p 3000:3000 -v visa-data:/data \
-#           -e ANTHROPIC_API_KEY=... -e AUTH_SECRET=... canada-visa-platform
+#           -e OPENAI_API_KEY=... -e AUTH_SECRET=... canada-visa-platform
 #
 # Debian base (not Alpine) so the Python XFA form-filler deps (pikepdf/lxml)
 # install from prebuilt wheels.

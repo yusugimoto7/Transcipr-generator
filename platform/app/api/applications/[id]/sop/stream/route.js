@@ -1,5 +1,5 @@
 import { updateApplication } from '@/lib/store';
-import { streamText } from '@/lib/anthropic';
+import { streamText } from '@/lib/ai';
 import { buildSopPrompt, selectSopDocs } from '@/lib/generators/sop';
 import { buildDocBlocks } from '@/lib/uploads';
 import { SOP_QUESTIONS } from '@/lib/sopQuestions';

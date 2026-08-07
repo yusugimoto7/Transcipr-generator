@@ -1,9 +1,9 @@
-import { completeJson } from '../anthropic';
+import { completeJson } from '../ai';
 import { allFields } from '../schema';
 import { CATEGORY_KEYS } from './classify';
 
 /**
- * Build a Claude field dictionary describing what we want extracted.
+ * Build a field dictionary describing what we want extracted.
  */
 function fieldGuide(type) {
   return allFields(type)
