@@ -38,6 +38,7 @@ const CATEGORY_LABELS = {
   accommodation: 'Accommodation',
   medical: 'Medical exam',
   'family-info': 'Family information',
+  internal: 'Internal / intake form (never compiled)',
   other: 'Other',
 };
 

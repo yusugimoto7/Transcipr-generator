@@ -11,6 +11,10 @@
 const SUPPORTER = /(father|mother|spouse|husband|wife|sponsor|supporter|پدر|مادر|همسر)/i;
 
 const RULES = [
+  // Agency paperwork and templates must never be compiled into an IRCC package,
+  // so this rule outranks everything (e.g. "CV template with a sample.docx"
+  // must land here, not in 'cv').
+  ['internal', /intake|questionnaire|template|پرسشنامه|فرم[ _-]?اطلاعات/i],
   ['passport', /passport|پاسپورت/i],
   ['loa', /\b(loa|acceptance|admission)\b/i],
   ['pal', /\b(pal|tal|attestation)\b/i],
@@ -97,5 +101,6 @@ export const CATEGORY_KEYS = [
   'accommodation',
   'medical',
   'family-info',
+  'internal',
   'other',
 ];

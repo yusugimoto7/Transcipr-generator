@@ -35,8 +35,15 @@ upright: 0, 90, 180 or 270.
  - 90  = currently rotated so the top of the text points LEFT
  - 270 = currently rotated so the top of the text points RIGHT
 
-Return ONLY JSON: {"rotations": {"<page number>": <0|90|180|270>, ...}}
-Include every page listed above. If you are unsure about a page, answer 0.`;
+Separately, report any page that is MIRRORED (a left-right flipped scan: every
+letter and digit reads backwards, as if seen in a mirror — no rotation can fix
+it). Stamps and seals reading backwards while the main text reads normally is
+NOT mirroring; the WHOLE page must read backwards.
+
+Return ONLY JSON:
+{"rotations": {"<page number>": <0|90|180|270>, ...}, "mirrored": [<page number>, ...]}
+Include every page in "rotations". If you are unsure about a page, answer 0 and
+do not list it as mirrored.`;
 }
 
 async function detectBatch(entries) {
@@ -48,18 +55,24 @@ async function detectBatch(entries) {
       source: { type: 'base64', media_type: 'image/png', data: e.b64 },
     });
   }
-  const res = await completeJson({ system: SYSTEM, content, maxTokens: 500 });
-  const out = {};
+  const res = await completeJson({ system: SYSTEM, content, maxTokens: 600 });
+  const rotations = {};
   for (const [k, v] of Object.entries(res.rotations || {})) {
     const deg = Number(v);
-    if ([90, 180, 270].includes(deg)) out[String(Number(k))] = deg;
+    if ([90, 180, 270].includes(deg)) rotations[String(Number(k))] = deg;
   }
-  return out;
+  const wanted = new Set(entries.map((e) => e.page));
+  const mirrored = (Array.isArray(res.mirrored) ? res.mirrored : [])
+    .map(Number)
+    .filter((n) => wanted.has(n));
+  return { rotations, mirrored };
 }
 
 /**
  * @param {Record<string,string>} thumbs - { pageNumber: pngPath }
- * @returns {Promise<Record<string, number>>} { pageNumber: clockwiseDegrees }
+ * @returns {Promise<{rotate: Record<string, number>, mirrored: number[]}>}
+ *   rotate   - { pageNumber: clockwiseDegrees } for rotated pages
+ *   mirrored - page numbers that are left-right flipped (unfixable by rotation)
  */
 export async function detectOrientations(thumbs) {
   const pages = Object.keys(thumbs)
@@ -67,7 +80,7 @@ export async function detectOrientations(thumbs) {
     .filter((n) => Number.isFinite(n))
     .sort((a, b) => a - b)
     .slice(0, MAX_PAGES);
-  if (!pages.length) return {};
+  if (!pages.length) return { rotate: {}, mirrored: [] };
 
   // Load thumbnails, skipping any that can't be read.
   const entries = [];
@@ -79,7 +92,7 @@ export async function detectOrientations(thumbs) {
       /* skip */
     }
   }
-  if (!entries.length) return {};
+  if (!entries.length) return { rotate: {}, mirrored: [] };
 
   const batches = [];
   for (let i = 0; i < entries.length; i += BATCH) batches.push(entries.slice(i, i + BATCH));
@@ -88,7 +101,8 @@ export async function detectOrientations(thumbs) {
   // rate limits, and a failed batch used to silently mean "no rotation" for
   // its pages. One retry per batch, and failures are logged so they show up in
   // the server logs instead of vanishing.
-  const results = {};
+  const rotate = {};
+  const mirrored = [];
   for (const b of batches) {
     let out = null;
     try {
@@ -103,25 +117,29 @@ export async function detectOrientations(thumbs) {
         );
       }
     }
-    if (out) Object.assign(results, out);
+    if (out) {
+      Object.assign(rotate, out.rotations);
+      mirrored.push(...out.mirrored);
+    }
   }
   console.log(
-    `[orientation] checked ${entries.length} page(s), ${Object.keys(results).length} need rotation`
+    `[orientation] checked ${entries.length} page(s): ${Object.keys(rotate).length} rotated, ${mirrored.length} mirrored`
   );
-  return results;
+  return { rotate, mirrored };
 }
 
 /**
  * Orientation for a single standalone image (uploaded photo).
  * @param {string} pngB64 - base64 PNG thumbnail of the image
- * @returns {Promise<number>} clockwise degrees (0 if upright/unsure)
+ * @returns {Promise<{rotate: number, mirrored: boolean}>}
+ *   rotate 0 when upright/unsure; mirrored true when left-right flipped
  */
 export async function detectImageOrientation(pngB64) {
   try {
     const out = await detectBatch([{ page: 1, b64: pngB64 }]);
-    return out['1'] || 0;
+    return { rotate: out.rotations['1'] || 0, mirrored: out.mirrored.includes(1) };
   } catch (e) {
     console.error(`[orientation] single-image check failed: ${e.message}`);
-    return 0;
+    return { rotate: 0, mirrored: false };
   }
 }

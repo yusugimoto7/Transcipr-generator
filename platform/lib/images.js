@@ -28,15 +28,23 @@ export async function normalizeImage(bytes, mime, { vision = true } = {}) {
     }
     let out = await img.toBuffer();
 
-    // Step 2: vision check for pixel-level rotation.
+    // Step 2: vision check for pixel-level rotation and mirroring.
     let extra = 0;
+    let flipped = false;
     if (vision) {
       try {
-        const thumb = await sharp(out)
-          .resize({ width: 480, withoutEnlargement: true })
-          .png()
-          .toBuffer();
-        extra = await detectImageOrientation(thumb.toString('base64'));
+        const thumbOf = async (buf) =>
+          (await sharp(buf).resize({ width: 480, withoutEnlargement: true }).png().toBuffer())
+            .toString('base64');
+        let res = await detectImageOrientation(await thumbOf(out));
+        if (res.mirrored) {
+          // A mirrored photo CAN be repaired: flip it back, then re-judge the
+          // rotation (an answer read off a mirrored image isn't trustworthy).
+          out = await sharp(out).flop().toBuffer();
+          flipped = true;
+          res = await detectImageOrientation(await thumbOf(out));
+        }
+        extra = res.rotate;
       } catch {
         extra = 0;
       }
@@ -45,7 +53,7 @@ export async function normalizeImage(bytes, mime, { vision = true } = {}) {
       out = await sharp(out).rotate(extra).toBuffer(); // sharp rotates clockwise
     }
 
-    return { bytes: out, mime: outMime, rotated: hadExif || extra > 0 };
+    return { bytes: out, mime: outMime, rotated: hadExif || flipped || extra > 0 };
   } catch (e) {
     console.error(`[images] normalize failed: ${e.message}`);
     return { bytes, mime, rotated: false };

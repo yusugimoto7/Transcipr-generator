@@ -35,12 +35,9 @@ function wrapText(page, font, text, x, y, size, maxWidth, color) {
   return cy;
 }
 
-async function addNotePage(doc, font, message) {
-  const p = doc.addPage([PAGE_W, PAGE_H]);
-  p.drawText('Document', { x: MARGIN, y: PAGE_H - MARGIN, size: 12, font, color: MUTED });
-  wrapText(p, font, message, MARGIN, PAGE_H - MARGIN - 40, 11, PAGE_W - MARGIN * 2, INK);
-}
-
+// Add one item's pages to the package. Returns true on success; false means the
+// item could NOT be embedded — the caller reports it to the applicant instead
+// of shipping a placeholder page inside a file meant for a visa officer.
 async function addContent(doc, font, item) {
   const { bytes, mime, filename, keepPages } = item;
   if (mime === 'application/pdf') {
@@ -89,10 +86,9 @@ async function addContent(doc, font, item) {
         else Object.assign(opts, { x: originX, y: originY });
         page.drawPage(ep, opts);
       });
-      return;
+      return true;
     } catch {
-      await addNotePage(doc, font, `"${filename}" could not be embedded automatically; include it manually.`);
-      return;
+      return false;
     }
   }
   if (mime === 'image/jpeg' || mime === 'image/png') {
@@ -108,17 +104,13 @@ async function addContent(doc, font, item) {
         width: img.width * s,
         height: img.height * s,
       });
-      return;
+      return true;
     } catch {
-      await addNotePage(doc, font, `Image "${filename}" could not be embedded.`);
-      return;
+      return false;
     }
   }
-  await addNotePage(
-    doc,
-    font,
-    `"${filename}" was uploaded as ${mime} (e.g. a Word file) and must be added to this package manually.`
-  );
+  // Unsupported type (e.g. .docx) — never emit a placeholder page.
+  return false;
 }
 
 export async function compilePackage(title, applicantName, sections) {
@@ -133,22 +125,38 @@ export async function compilePackage(title, applicantName, sections) {
   const bodyBold = await body.embedFont(StandardFonts.HelveticaBold);
   const bodyFont = await body.embedFont(StandardFonts.Helvetica);
   const marks = []; // { label, page(0-based in body), level }
+  const skipped = []; // filenames that could not be embedded
 
   for (let i = 0; i < included.length; i++) {
     const sec = included[i];
-    marks.push({ label: `${i + 1}) ${sec.name}`, page: body.getPageCount(), level: 0 });
+    const dividerIdx = body.getPageCount();
+    const secMarkIdx = marks.length;
+    marks.push({ label: `${i + 1}) ${sec.name}`, page: dividerIdx, level: 0 });
     const dp = body.addPage([PAGE_W, PAGE_H]);
     dp.drawText(`${i + 1})`, { x: MARGIN, y: PAGE_H / 2 + 20, size: 22, font: bodyBold, color: INK });
     wrapText(dp, bodyBold, sec.name, MARGIN, PAGE_H / 2 - 12, 22, PAGE_W - MARGIN * 2, INK);
-    for (const item of sec.items || []) await addContent(body, bodyFont, item);
+    for (const item of sec.items || []) {
+      if (!(await addContent(body, bodyFont, item))) skipped.push(item.filename || 'document');
+    }
     let letter = 97; // 'a'
     for (const child of sec.children) {
-      marks.push({
-        label: `${String.fromCharCode(letter++)}) ${child.name}`,
-        page: body.getPageCount(),
-        level: 1,
-      });
-      for (const item of child.items) await addContent(body, bodyFont, item);
+      const childStart = body.getPageCount();
+      for (const item of child.items) {
+        if (!(await addContent(body, bodyFont, item))) skipped.push(item.filename || 'document');
+      }
+      // Only list the child in the TOC if something was actually embedded.
+      if (body.getPageCount() > childStart) {
+        marks.push({
+          label: `${String.fromCharCode(letter++)}) ${child.name}`,
+          page: childStart,
+          level: 1,
+        });
+      }
+    }
+    // Every item in this section failed: drop the orphan divider and its marks.
+    if (body.getPageCount() === dividerIdx + 1) {
+      body.removePage(dividerIdx);
+      marks.splice(secMarkIdx);
     }
   }
 
@@ -210,7 +218,7 @@ export async function compilePackage(title, applicantName, sections) {
     p.drawText(s, { x: (PAGE_W - w) / 2, y: 24, size: 9, font, color: MUTED });
   });
 
-  return final.save();
+  return { bytes: await final.save(), skipped };
 }
 
 /**

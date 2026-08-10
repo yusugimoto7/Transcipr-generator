@@ -41,11 +41,15 @@ export default function CompiledPackages({ app, patchLocal }) {
       const missing = (data.included || []).filter((s) => s.count === 0).map((s) => s.name);
       const dropped =
         (data.droppedPages ? ` Removed ${data.droppedPages} blank page(s).` : '') +
+        (data.mirroredPages ? ` Removed ${data.mirroredPages} mirrored scan page(s).` : '') +
         (data.rotatedPages ? ` Re-oriented ${data.rotatedPages} page(s).` : '');
+      const skippedFiles = (data.skippedFiles || []).length
+        ? ` ⚠️ Left out of the PDF (convert to PDF/JPG and re-upload): ${data.skippedFiles.join(', ')}.`
+        : '';
       setMsg({
-        type: missing.length ? 'warn' : 'ok',
+        type: missing.length || skippedFiles ? 'warn' : 'ok',
         text:
-          `Compiled ${included.length} section(s): ${included.join(', ')}.${dropped}` +
+          `Compiled ${included.length} section(s): ${included.join(', ')}.${dropped}${skippedFiles}` +
           (missing.length
             ? ` ⚠️ Skipped (no matching documents): ${missing.join(', ')} — set each file's type on the Documents tab, then re-compile.`
             : ''),

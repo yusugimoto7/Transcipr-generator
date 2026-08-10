@@ -82,7 +82,11 @@ export async function POST(req, { params }) {
 
   let droppedTotal = 0;
   let rotatedTotal = 0;
+  let mirroredTotal = 0;
+  const skippedFiles = []; // files excluded from the package, reported to the applicant
   const usedDocIds = new Set(); // documents already placed in a section
+
+  const EMBEDDABLE = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 
   const loadDoc = async (d) => {
     const bytes = await readUpload(app.id, d.stored);
@@ -98,16 +102,21 @@ export async function POST(req, { params }) {
     let keepPages = null;
     let pageRotations = null;
     if (d.mime === 'application/pdf' && (cleanPages || fixRotation)) {
-      // Rasterize once: measure ink (blank pages) and run OSD (orientation).
-      const { pages, blank, rotate } = await analyzePages(bytes, {
+      // Rasterize once: measure ink (blank pages) and check orientation.
+      const { pages, blank, rotate, mirrored } = await analyzePages(bytes, {
         detectOrientation: fixRotation,
       });
       if (pages > 0) {
+        // Drop blank pages and mirrored scan artifacts (no rotation fixes a
+        // mirrored page) — but never every page of a document.
+        const drop = new Set();
+        if (cleanPages) blank.forEach((n) => drop.add(n));
+        if (fixRotation) mirrored.forEach((n) => drop.add(n));
         let kept = Array.from({ length: pages }, (_, i) => i + 1);
-        if (cleanPages && blank.length > 0 && blank.length < pages) {
-          const blankSet = new Set(blank);
-          kept = kept.filter((n) => !blankSet.has(n));
-          droppedTotal += blank.length;
+        if (drop.size > 0 && drop.size < pages) {
+          kept = kept.filter((n) => !drop.has(n));
+          droppedTotal += blank.filter((n) => drop.has(n)).length;
+          mirroredTotal += mirrored.filter((n) => drop.has(n) && !blank.includes(n)).length;
           keepPages = kept;
         }
         // Rotations must line up with the pages actually kept.
@@ -139,9 +148,13 @@ export async function POST(req, { params }) {
     let docs = [];
     if (node.catchAll) {
       // Anything belonging to this package (or uncategorized) not already used.
+      // 'internal' (agency intake forms, templates) must NEVER reach a package.
       const owned = new Set(PACKAGE_CATEGORIES[body.pkg] || []);
       docs = (app.documents || []).filter(
-        (d) => !usedDocIds.has(d.id) && (!d.category || owned.has(d.category))
+        (d) =>
+          !usedDocIds.has(d.id) &&
+          d.category !== 'internal' &&
+          (!d.category || owned.has(d.category))
       );
     } else if (node.categories?.length) {
       const wanted = new Set(node.categories);
@@ -149,11 +162,19 @@ export async function POST(req, { params }) {
     }
 
     for (const d of docs) {
+      // Word files can't be embedded in a PDF — leave them out and tell the
+      // applicant, instead of printing a placeholder page into the package.
+      if (!EMBEDDABLE.has(d.mime)) {
+        skippedFiles.push(d.filename);
+        usedDocIds.add(d.id);
+        continue;
+      }
       try {
         items.push(await loadDoc(d));
         usedDocIds.add(d.id);
       } catch {
-        /* skip */
+        skippedFiles.push(d.filename);
+        usedDocIds.add(d.id);
       }
     }
     return items;
@@ -187,9 +208,10 @@ export async function POST(req, { params }) {
   } catch (e) {
     return error(`Compilation failed: ${e.message}`, 500);
   }
+  skippedFiles.push(...compiled.skipped);
 
   const key = `${body.pkg}-package`;
-  const meta = await saveGenerated(app.id, { key, filename: def.filename, bytes: Buffer.from(compiled) });
+  const meta = await saveGenerated(app.id, { key, filename: def.filename, bytes: Buffer.from(compiled.bytes) });
   const updated = await updateApplication(app.id, (a) => {
     const m = new Map((a.generated || []).map((g) => [g.key, g]));
     m.set(key, meta);
@@ -202,6 +224,8 @@ export async function POST(req, { params }) {
     key,
     droppedPages: droppedTotal,
     rotatedPages: rotatedTotal,
+    mirroredPages: mirroredTotal,
+    skippedFiles: [...new Set(skippedFiles)],
     included: sections.map((s) => ({
       name: s.name,
       count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0),
