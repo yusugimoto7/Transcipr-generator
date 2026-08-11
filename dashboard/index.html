@@ -208,6 +208,7 @@
   @media (max-width: 480px) { .hrow { grid-template-columns: 110px 1fr; } }
   .hlabel { font-size: 12.5px; color: var(--ink-2); text-align: right;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hlabel .hsub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
   .htrack { position: relative; height: 20px; display: flex; align-items: center; }
   .hbar { height: 18px; border-radius: 0 4px 4px 0; min-width: 2px; }
   .hval { font-size: 12px; color: var(--ink-2); margin-left: 7px; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -239,6 +240,20 @@
   .legend { display: flex; gap: 15px; margin-top: 12px; flex-wrap: wrap; }
   .lg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
   .lg .sw { width: 11px; height: 11px; border-radius: 3px; }
+
+  /* ---- Instagram ---- */
+  /* tiles inside a card, so they read as one panel rather than eight more cards */
+  .soc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 14px 20px; margin-top: 4px; }
+  .soc-k .klabel { font-size: 11.5px; }
+  .soc-k .kvalue { font-size: 25px; }
+  /* two bars per x slot, for reach next to views */
+  .colpair { display: flex; align-items: flex-end; justify-content: center; gap: 2px;
+    width: 100%; max-width: 30px; height: 100%; }
+  .colpair .colbar { max-width: none; flex: 1 1 0; }
+  .dt a { color: var(--s1); }
+  .dt td.cap { max-width: 330px; }
+  .dt td.cap span { display: block; color: var(--muted); font-size: 11.5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   table.dt { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
   .dt th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px;
@@ -366,6 +381,24 @@
     <div class="card" id="card-form"></div>
   </div>
 
+  <!-- Populated from the Instagram insights tabs. Hidden entirely when the collector
+       has not run yet, so the page still works with lead data alone. -->
+  <div id="social" hidden>
+    <h2 class="section">Instagram performance</h2>
+    <p class="csub" id="socSub" style="margin:-4px 0 12px"></p>
+    <div class="filters" id="f-acct" role="group" aria-label="Instagram account" hidden></div>
+    <div class="grid">
+      <div class="card wide" id="card-soc-kpi"></div>
+      <div class="card wide" id="card-soc-reach"></div>
+      <div class="card wide" id="card-soc-funnel"></div>
+      <div class="card" id="card-soc-surface"></div>
+      <div class="card" id="card-soc-eng"></div>
+      <div class="card wide" id="card-soc-posts"></div>
+      <div class="card" id="card-soc-country"></div>
+      <div class="card" id="card-soc-demo"></div>
+    </div>
+  </div>
+
   <h2 class="section">Destination &amp; intent</h2>
   <div class="grid">
     <div class="card" id="card-method-ca"></div>
@@ -475,6 +508,25 @@ function loadPack(pack) {
   MONTHS = [...new Set(Array.from({ length: N }, (_, i) => monthKey(i)))].sort();
   LASTM = MONTHS[MONTHS.length - 1];
   SNAP_DAY = new Date(D0.getTime() + Math.max(...COL.dt) * DAY);
+  loadSocial();
+}
+/* Instagram insights, if the collector has written any. Column orders travel with
+   the payload rather than being hard-coded here, so adding a metric server-side
+   does not silently shift every column on the page. */
+let SOC = null;
+function loadSocial() {
+  SOC = null;
+  const s = PACK.social;
+  if (!s || !s.daily || !s.daily.length) return;
+  const at = cols => { const o = {}; (cols || []).forEach((c, i) => o[c] = i); return o; };
+  SOC = {
+    accounts: s.accounts || ['Instagram'],
+    daily: s.daily, di: at(s.dailyCols),
+    posts: s.posts || [], pi: at(s.postCols),
+    stories: s.stories || [], si: at(s.storyCols),
+    audience: s.audience || [], ai: at(s.audCols), audDate: s.audDate || '',
+    lastRun: s.lastRun || ''
+  };
 }
 const isoDay = s => new Date(s + 'T00:00:00Z');
 // count matching records across the whole dataset (data-quality figures are not filtered)
@@ -531,7 +583,7 @@ const shortMonth = mk => new Date(mk + '-01T00:00:00Z')
   .toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' }).replace(' ', "'");
 
 /* ---------- filter ---------- */
-const state = { period: 'all', dest: 'all', src: 'all' };
+const state = { period: 'all', dest: 'all', src: 'all', acct: 'all' };
 // Destination + channel only. The recency windows use this so they stay anchored to
 // today's date regardless of which Period is selected.
 function dimIdx() {
@@ -1861,8 +1913,485 @@ function renderPeriodNote(idx) {
   nb.innerHTML = `<strong>No leads between ${fmtDay(periodStart())} and ${fmtDay(todayUTC())}.</strong> `
     + `The newest lead in the data is ${fmtDay(SNAP_DAY)}, so everything below is empty for this window. `
     + `Widen the period, or check that the sheet is still receiving submissions. The recent-activity cards, `
-    + `the weekly chart and the two destination route charts have their own fixed windows and are unaffected.`;
+    + `the weekly chart and the two destination route charts have their own fixed windows and are unaffected, 
+    and the Instagram section shows whatever social data the window holds.`;
   host.appendChild(nb);
+}
+
+/* ---------- Instagram ---------- */
+// Surfaces are kept in one place because Meta names them inconsistently
+// (REEL vs REELS, POST/CAROUSEL_CONTAINER both meaning FEED).
+const SOC_SURFACES = [
+  { key: 'FEED', label: 'Posts', color: 'var(--s1)' },
+  { key: 'REELS', label: 'Reels', color: 'var(--s3)' },
+  { key: 'STORY', label: 'Stories', color: 'var(--s4)' }
+];
+const SOC_INTERACTIONS = [
+  { f: 'likes', label: 'Likes', color: 'var(--seq-250)' },
+  { f: 'comments', label: 'Comments', color: 'var(--seq-350)' },
+  { f: 'shares', label: 'Shares', color: 'var(--seq-450)' },
+  { f: 'saves', label: 'Saves', color: 'var(--seq-550)' },
+  { f: 'replies', label: 'Story replies', color: 'var(--s4)' }
+];
+// Meta returns ISO-3166 alpha-2 codes; Intl turns them into names without a lookup table
+const REGION_NAMES = (() => {
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { return null; }
+})();
+const countryName = c => {
+  if (!/^[A-Z]{2}$/.test(c)) return c;
+  try { return (REGION_NAMES && REGION_NAMES.of(c)) || c; } catch (e) { return c; }
+};
+const GENDER_LABEL = { F: 'Women', M: 'Men', U: 'Not specified' };
+const socNum = v => (v === null || v === undefined || v === '') ? 0 : (Number(v) || 0);
+const kfmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2) + 'M'
+  : n >= 1e5 ? Math.round(n / 1000) + 'k'
+  : n >= 1e4 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : fmt(Math.round(n));
+// a share of reach can be a fraction of a percent, where one decimal reads as "0.0%"
+const socShare = (n, t) => !t ? '—' : (100 * n / t < 1 ? (100 * n / t).toFixed(2) : (100 * n / t).toFixed(1)) + '%';
+
+/** Period + account filter, over any social table whose date column is `d`. */
+function socRows(rows, ci) {
+  const from = periodStart();
+  const fromIso = from ? iso(from) : null;
+  const ai = SOC.accounts.indexOf(state.acct);
+  return rows.filter(r => {
+    if (state.acct !== 'all' && r[ci.a] !== ai) return false;
+    if (!fromIso) return true;
+    return String(r[ci.d] || '').slice(0, 10) >= fromIso;
+  });
+}
+const socSum = (rows, ci, f) => rows.reduce((s, r) => s + socNum(r[ci[f]]), 0);
+function socBucket(dateIso) {
+  const b = timeBucket();
+  if (b === 'day') return dateIso;
+  if (b === 'month') return dateIso.slice(0, 7);
+  return iso(weekStart(isoDay(dateIso)));
+}
+/**
+ * Instagram-sourced leads per bucket. The Channel filter is deliberately ignored:
+ * selecting "WhatsApp" would otherwise zero out the conversion figures while the
+ * reach numbers stayed put, which reads as a collapse rather than a filter.
+ */
+function socLeadBuckets() {
+  const destI = state.dest === 'all' ? -1 : DICT.de.indexOf(state.dest);
+  const igI = DICT.sg.indexOf('Instagram');
+  const from = periodStart();
+  const m = new Map();
+  let total = 0;
+  for (let i = 0; i < N; i++) {
+    if (COL.sg[i] !== igI) continue;
+    if (destI >= 0 && COL.de[i] !== destI) continue;
+    const d = dayOf(i);
+    if (from && d < from) continue;
+    const k = socBucket(iso(d));
+    m.set(k, (m.get(k) || 0) + 1);
+    total++;
+  }
+  return { byBucket: m, total };
+}
+
+/* Horizontal bars with an explicit unit, since the shared hbar() says "leads". */
+function socBars(mount, items, opts = {}) {
+  const box = el('div', 'hbars');
+  const max = Math.max(...items.filter(i => typeof i.n === 'number').map(i => i.n), 1);
+  const total = opts.total !== undefined ? opts.total
+    : items.reduce((s, i) => s + (typeof i.n === 'number' ? i.n : 0), 0);
+  for (const it of items) {
+    if (it.group !== undefined) { box.appendChild(el('div', 'hgroup-title', it.group)); continue; }
+    const row = el('div', 'hrow'), lab = el('div', 'hlabel', it.label);
+    lab.title = it.tip || it.label;
+    // A Persian caption next to an ASCII date reorders under bidi and the date jumps
+    // to the front of the line, so the caption gets its own auto-direction element.
+    if (it.sub) { const sb = el('div', 'hsub', it.sub); sb.dir = 'auto'; lab.appendChild(sb); }
+    row.appendChild(lab);
+    const track = el('div', 'htrack'), bar = el('div', 'hbar');
+    bar.style.width = (100 * it.n / max) + '%';
+    bar.style.background = it.color || opts.color || 'var(--s1)';
+    const unit = it.unit || opts.unit || '';
+    bindTip(bar, () => [`${fmt(it.n)} ${unit}`.trim() + (opts.noShare ? '' : ` (${pct1(it.n, total)})`),
+      it.tip || it.label]);
+    track.appendChild(bar);
+    const v = el('span', 'hval');
+    v.appendChild(document.createTextNode(kfmt(it.n) + ' '));
+    if (!opts.noShare) v.appendChild(el('span', 'pc', pct(it.n, total)));
+    else if (it.note) v.appendChild(el('span', 'pc', it.note));
+    track.appendChild(v); row.appendChild(track); box.appendChild(row);
+  }
+  mount.appendChild(box);
+}
+
+/* Two bars per x slot. Reach and views are different quantities measured on the same
+   scale, so side-by-side bars beat a second y axis. */
+function socPairCols(mount, groups, series, opts = {}) {
+  const wrap = el('div'), cols = el('div', 'cols'), xrow = el('div', 'colx');
+  cols.style.height = opts.height || '180px';
+  let max = 1;
+  for (const g of groups) for (const sd of series) max = Math.max(max, g.v[sd.key] || 0);
+  groups.forEach(g => {
+    const slot = el('div', 'colslot'), pair = el('div', 'colpair');
+    for (const sd of series) {
+      const n = g.v[sd.key] || 0;
+      const bar = el('div', 'colbar');
+      bar.style.height = Math.max(1.5, 100 * n / max) + '%';
+      bar.style.background = sd.color;
+      bindTip(bar, () => [`${fmt(n)} ${sd.unit || ''}`.trim(), `${sd.label} — ${g.label}`]);
+      pair.appendChild(bar);
+    }
+    slot.appendChild(pair); cols.appendChild(slot);
+    const xl = el('div', 'xlab', g.short || g.label); xl.title = g.label; xrow.appendChild(xl);
+  });
+  wrap.appendChild(cols); wrap.appendChild(xrow); mount.appendChild(wrap);
+  const lg = el('div', 'legend');
+  for (const sd of series) {
+    const it = el('span', 'lg'), sw = el('span', 'sw');
+    sw.style.background = sd.color; it.appendChild(sw); it.appendChild(el('span', null, sd.label));
+    lg.appendChild(it);
+  }
+  mount.appendChild(lg);
+}
+
+function socTable(rows, cols) {
+  const t = el('table', 'dt'), hr = el('tr');
+  cols.forEach((c, i) => hr.appendChild(el('th', i ? 'num' : null, c)));
+  t.appendChild(hr);
+  for (const r of rows) {
+    const tr_ = el('tr');
+    r.forEach((cell, i) => {
+      if (i === 0 && cell && cell.nodeType) { const td = el('td'); td.appendChild(cell); tr_.appendChild(td); }
+      else tr_.appendChild(el('td', i ? 'num' : null, cell === '' || cell === null ? '—' : String(cell)));
+    });
+    t.appendChild(tr_);
+  }
+  return t;
+}
+
+function renderSocial() {
+  const host = $('#social');
+  if (!SOC) { host.hidden = true; return; }
+  host.hidden = false;
+  renderSocAcctFilter();
+  const daily = socRows(SOC.daily, SOC.di);
+  const posts = socRows(SOC.posts, SOC.pi);
+  const stories = socRows(SOC.stories, SOC.si);
+  const leads = socLeadBuckets();
+  renderSocSub(daily);
+  renderSocKpi(daily, posts, stories, leads);
+  renderSocReach(daily, leads);
+  renderSocFunnel(daily, posts, stories, leads);
+  renderSocSurface(posts, stories);
+  renderSocEngagement(daily);
+  renderSocPosts(posts);
+  renderSocAudience();
+}
+
+function renderSocAcctFilter() {
+  const host = $('#f-acct');
+  if (SOC.accounts.length < 2) { host.hidden = true; return; }
+  host.hidden = false;
+  if (host.dataset.built === String(SOC.accounts.length)) {
+    for (const ch of host.querySelectorAll('.chip')) {
+      ch.setAttribute('aria-pressed', String(ch.dataset.v === state.acct));
+    }
+    return;
+  }
+  host.replaceChildren();
+  const g = el('div', 'fgroup');
+  g.appendChild(el('span', 'flabel', 'Account'));
+  for (const v of ['all'].concat(SOC.accounts)) {
+    const b = el('button', 'chip', v === 'all' ? 'All accounts' : '@' + v);
+    b.dataset.v = v;
+    b.setAttribute('aria-pressed', String(v === state.acct));
+    g.appendChild(b);
+  }
+  host.appendChild(g);
+  host.dataset.built = String(SOC.accounts.length);
+}
+
+function renderSocSub(daily) {
+  // distinct dates, not rows: two accounts produce two rows for the same day
+  const days = [...new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10)))].sort();
+  const newest = days.length ? days[days.length - 1] : '';
+  const gap = newest ? Math.round((todayUTC() - isoDay(newest)) / DAY) : null;
+  const scope = state.period === 'all'
+    ? `all ${fmt(days.length)} collected day${days.length === 1 ? '' : 's'}`
+    : PERIOD_LABEL[state.period];
+  let txt = `Straight from the Instagram Graph API, following the Period filter — currently ${scope}. `
+    + `Meta revises these numbers for up to 48 hours, so the last two days move. `;
+  txt += newest
+    ? `Newest collected day: ${fmtDay(isoDay(newest))}${gap > 2 ? ` — ${gap} days ago, so the collector may have stopped` : ''}.`
+    : 'No days collected in this window.';
+  $('#socSub').textContent = txt;
+}
+
+function renderSocKpi(daily, posts, stories, leads) {
+  // this card is tiles only, so the Table toggle card() adds has nothing to show
+  const { chart } = card('#card-soc-kpi', 'Instagram at a glance',
+    'Account totals for the selected period. Reach is unique accounts per day, so summing days counts a person once per day they saw something — treat it as exposure, not audience size.');
+  const reach = socSum(daily, SOC.di, 'reach');
+  const views = socSum(daily, SOC.di, 'views');
+  const inter = socSum(daily, SOC.di, 'inter');
+  const taps = socSum(daily, SOC.di, 'taps');
+  const gained = socSum(daily, SOC.di, 'follows');
+  const lost = socSum(daily, SOC.di, 'unfollows');
+  const visits = socSum(posts, SOC.pi, 'visits');
+  const clicks = socSum(stories, SOC.si, 'clicks');
+  // Follower count is a running total, not a daily figure, so it has to be read as
+  // first-and-last per account and only then summed — taking the first and last row
+  // of a two-account list compares one account's start with the other's end.
+  const span = new Map();
+  for (const r of daily) {
+    const f = socNum(r[SOC.di.followers]);
+    if (!f) continue;
+    const d = String(r[SOC.di.d]).slice(0, 10);
+    const e = span.get(r[SOC.di.a]) || { firstD: '9999', lastD: '', first: 0, last: 0 };
+    if (d < e.firstD) { e.firstD = d; e.first = f; }
+    if (d > e.lastD) { e.lastD = d; e.last = f; }
+    span.set(r[SOC.di.a], e);
+  }
+  const marks = [...span.values()];
+  const followersNow = marks.reduce((s, e) => s + e.last, 0);
+  const netF = followersNow - marks.reduce((s, e) => s + e.first, 0);
+  const grew = marks.some(e => e.firstD !== e.lastD);
+  const dayCount = new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10))).size;
+  const items = [
+    ['Accounts reached', kfmt(reach), `${fmt(reach)} over ${fmt(dayCount)} day${dayCount === 1 ? '' : 's'}`],
+    ['Views', kfmt(views), reach ? `${(views / reach).toFixed(1)} views per account reached` : 'no reach recorded'],
+    ['Interactions', kfmt(inter), `${pct1(inter, reach)} of reach engaged`],
+    ['Followers', followersNow ? fmt(followersNow) : '—',
+      grew ? `${netF > 0 ? '+' : ''}${fmt(netF)} over the window · ${fmt(gained)} followed, ${fmt(lost)} left`
+           : `${fmt(gained)} followed, ${fmt(lost)} left in the window`],
+    ['Profile visits', kfmt(visits), `from post and story insights · ${fmt(taps + clicks)} link and contact taps`],
+    ['Instagram leads', fmt(leads.total), 'form submissions tagged Instagram, same window'],
+    ['Leads per 1k reached', reach ? (1000 * leads.total / reach).toFixed(2) : '—',
+      reach ? `${fmt(leads.total)} leads from ${kfmt(reach)} reached` : 'needs reach data'],
+    ['Reach per day', dayCount ? kfmt(Math.round(reach / dayCount)) : '—',
+      `averaged over ${fmt(dayCount)} collected day${dayCount === 1 ? '' : 's'}`]
+  ];
+  const box = el('div', 'soc-kpis');
+  for (const [l, v, note] of items) {
+    const t = el('div', 'soc-k');
+    t.appendChild(el('div', 'klabel', l));
+    t.appendChild(el('div', 'kvalue', v));
+    t.appendChild(el('div', 'knote', note));
+    box.appendChild(t);
+  }
+  chart.appendChild(box);
+  const btn = $('#card-soc-kpi .tbl-btn');
+  if (btn) btn.remove();
+}
+
+function renderSocReach(daily, leads) {
+  const noun = BUCKET_NOUN[timeBucket()];
+  const { chart, table } = card('#card-soc-reach', `Reach and views per ${noun}`,
+    `Accounts reached next to total views, bucketed by ${noun} like the lead volume chart. Instagram-sourced leads for the same buckets are in the table.`
+    + (noun === 'day' ? '' : ` The first and last ${noun} can be partial, so a short bar at either end is a clipped ${noun} rather than a drop.`));
+  const m = new Map();
+  for (const r of daily) {
+    const k = socBucket(String(r[SOC.di.d]).slice(0, 10));
+    const b = m.get(k) || { reach: 0, views: 0 };
+    b.reach += socNum(r[SOC.di.reach]);
+    b.views += socNum(r[SOC.di.views]);
+    m.set(k, b);
+  }
+  const keys = [...m.keys()].sort();
+  if (!keys.length) { chart.appendChild(el('p', 'rempty', 'No Instagram days in this window.')); return; }
+  const groups = keys.map(k => ({
+    label: BUCKET_LABEL[timeBucket()](k), short: BUCKET_SHORT[timeBucket()](k), v: m.get(k)
+  }));
+  socPairCols(chart, groups, [
+    { key: 'reach', label: 'Accounts reached', color: 'var(--s1)', unit: 'accounts' },
+    { key: 'views', label: 'Views', color: 'var(--s2)', unit: 'views' }
+  ], { height: '190px' });
+  table.appendChild(socTable(keys.map(k => {
+    const b = m.get(k), ld = leads.byBucket.get(k) || 0;
+    return [BUCKET_LABEL[timeBucket()](k), fmt(b.reach), fmt(b.views), fmt(ld),
+      b.reach ? (1000 * ld / b.reach).toFixed(2) : '—'];
+  }), [noun.replace(/^./, c => c.toUpperCase()), 'Reached', 'Views', 'IG leads', 'Leads/1k']));
+}
+
+function renderSocFunnel(daily, posts, stories, leads) {
+  const reach = socSum(daily, SOC.di, 'reach');
+  const inter = socSum(daily, SOC.di, 'inter');
+  const visits = socSum(posts, SOC.pi, 'visits');
+  const taps = socSum(daily, SOC.di, 'taps');
+  const clicks = socSum(stories, SOC.si, 'clicks');
+  const { chart, table } = card('#card-soc-funnel', 'From reach to leads',
+    'Each stage as a share of accounts reached. Profile visits come from post and story insights, so they are missing for any post published before the collector started; link taps are account-level and complete.',
+    (() => {
+      const n = el('span');
+      n.textContent = 'Stages are measured separately by Meta and are not a strict subset of one another — read them as scale, not as a literal drop-off.';
+      return n;
+    })());
+  const stages = [
+    { label: 'Accounts reached', n: reach, color: 'var(--seq-250)' },
+    { label: 'Interacted', n: inter, color: 'var(--seq-350)' },
+    { label: 'Profile visits', n: visits, color: 'var(--seq-450)' },
+    { label: 'Link / contact taps', n: taps + clicks, color: 'var(--seq-550)' },
+    { label: 'Leads submitted', n: leads.total, color: 'var(--s3)' }
+  ];
+  socBars(chart, stages.map(s => ({
+    label: s.label, n: s.n, color: s.color, unit: 'accounts',
+    note: socShare(s.n, reach)
+  })), { noShare: true });
+  table.appendChild(socTable(stages.map((s, i) => [
+    s.label, fmt(s.n), socShare(s.n, reach),
+    i ? socShare(s.n, stages[i - 1].n) : '—'
+  ]), ['Stage', 'Count', 'Of reach', 'Of previous stage']));
+}
+
+function renderSocSurface(posts, stories) {
+  const { chart, table } = card('#card-soc-surface', 'Which format earns the reach',
+    'Reach and views summed over the individual posts, reels and stories published in this window. A post keeps accruing reach after the day it went out, so these will not match the daily account totals.');
+  const acc = {};
+  for (const s of SOC_SURFACES) acc[s.key] = { reach: 0, views: 0, inter: 0, n: 0 };
+  for (const p of posts) {
+    const k = acc[String(p[SOC.pi.surface] || 'FEED').toUpperCase()] || acc.FEED;
+    k.reach += socNum(p[SOC.pi.reach]); k.views += socNum(p[SOC.pi.views]);
+    k.inter += socNum(p[SOC.pi.inter]); k.n++;
+  }
+  for (const s of stories) {
+    acc.STORY.reach += socNum(s[SOC.si.reach]); acc.STORY.views += socNum(s[SOC.si.views]);
+    acc.STORY.inter += socNum(s[SOC.si.replies]); acc.STORY.n += socNum(s[SOC.si.n]);
+  }
+  const live = SOC_SURFACES.filter(s => acc[s.key].n || acc[s.key].reach);
+  if (!live.length) { chart.appendChild(el('p', 'rempty', 'No posts collected in this window.')); return; }
+  socBars(chart, live.map(s => ({
+    label: `${s.label} (${fmt(acc[s.key].n)})`, n: acc[s.key].reach, color: s.color, unit: 'accounts reached'
+  })), { unit: 'accounts reached' });
+  table.appendChild(socTable(live.map(s => {
+    const a = acc[s.key];
+    return [s.label, fmt(a.n), fmt(a.reach), fmt(a.views), fmt(a.inter),
+      a.reach ? pct1(a.inter, a.reach) : '—',
+      a.n ? fmt(Math.round(a.reach / a.n)) : '—'];
+  }), ['Format', 'Published', 'Reach', 'Views', 'Interactions', 'Eng. rate', 'Reach each']));
+}
+
+function renderSocEngagement(daily) {
+  const { chart, table } = card('#card-soc-eng', 'What the engagement is made of',
+    'Account-level interaction counts for the period. Saves and shares travel furthest in the algorithm, so their share matters more than the raw total.');
+  const items = SOC_INTERACTIONS.map(s => ({
+    label: s.label, n: socSum(daily, SOC.di, s.f), color: s.color, unit: 'interactions'
+  })).filter(i => i.n);
+  if (!items.length) { chart.appendChild(el('p', 'rempty', 'No interactions collected in this window.')); return; }
+  socBars(chart, items, { unit: 'interactions' });
+  const total = items.reduce((s, i) => s + i.n, 0);
+  table.appendChild(socTable(items.map(i => [i.label, fmt(i.n), pct1(i.n, total)]),
+    ['Interaction', 'Count', 'Share']));
+}
+
+function renderSocPosts(posts) {
+  const { chart, table } = card('#card-soc-posts', 'Best performing posts and reels',
+    'Ranked by accounts reached within the selected period. Stories are excluded — they are rolled up by day in the format card above.');
+  if (!posts.length) { chart.appendChild(el('p', 'rempty', 'No posts collected in this window.')); return; }
+  const ranked = posts.slice().sort((a, b) => socNum(b[SOC.pi.reach]) - socNum(a[SOC.pi.reach]));
+  const top = ranked.slice(0, 12);
+  socBars(chart, top.map(p => {
+    const cap = String(p[SOC.pi.cap] || '').trim();
+    const when = String(p[SOC.pi.d] || '').slice(0, 10);
+    const surface = SOC_SURFACES.find(s => s.key === String(p[SOC.pi.surface]).toUpperCase())
+      || SOC_SURFACES[0];
+    return {
+      label: fmtDay(isoDay(when)) + ' · ' + surface.label.replace(/s$/, ''),
+      sub: cap || '(no caption)',
+      tip: cap || '(no caption)',
+      n: socNum(p[SOC.pi.reach]),
+      color: surface.color,
+      unit: 'accounts reached'
+    };
+  }), { noShare: true });
+  const lg = el('div', 'legend');
+  for (const s of SOC_SURFACES.slice(0, 2)) {
+    const it = el('span', 'lg'), sw = el('span', 'sw');
+    sw.style.background = s.color; it.appendChild(sw); it.appendChild(el('span', null, s.label));
+    lg.appendChild(it);
+  }
+  chart.appendChild(lg);
+  table.appendChild(socTable(ranked.slice(0, 60).map(p => {
+    const cell = el('div');
+    const link = String(p[SOC.pi.link] || '');
+    const head = link ? el('a', null, String(p[SOC.pi.d] || '').slice(0, 10)) : el('span', null, String(p[SOC.pi.d] || '').slice(0, 10));
+    if (link) { head.href = link; head.target = '_blank'; head.rel = 'noopener noreferrer'; }
+    cell.appendChild(head);
+    const cap = String(p[SOC.pi.cap] || '').trim();
+    if (cap) cell.appendChild(el('span', null, cap));
+    const reach = socNum(p[SOC.pi.reach]);
+    return [cell, String(p[SOC.pi.surface] || ''), fmt(reach), fmt(socNum(p[SOC.pi.views])),
+      fmt(socNum(p[SOC.pi.inter])), reach ? pct1(socNum(p[SOC.pi.inter]), reach) : '—',
+      fmt(socNum(p[SOC.pi.visits])), fmt(socNum(p[SOC.pi.follows])),
+      p[SOC.pi.watch] ? p[SOC.pi.watch] + 's' : '—'];
+  }), ['Post', 'Format', 'Reach', 'Views', 'Interactions', 'Eng. rate', 'Profile visits', 'Follows', 'Avg watch']));
+  const cells = table.querySelectorAll('tr td:first-child');
+  for (const c of cells) c.className = 'cap';
+}
+
+/** Demographics are lifetime snapshots from Meta, so they ignore the Period filter. */
+function renderSocAudience() {
+  const ai = SOC.ai;
+  const acctI = SOC.accounts.indexOf(state.acct);
+  const rows = SOC.audience.filter(r => state.acct === 'all' || r[ai.a] === acctI);
+  const pick = (audience, dim) => {
+    const m = new Map();
+    for (const r of rows) {
+      if (r[ai.audience] !== audience || r[ai.dim] !== dim) continue;
+      const k = String(r[ai.key] || '');
+      m.set(k, (m.get(k) || 0) + socNum(r[ai.value]));
+    }
+    return [...m].map(([k, n]) => ({ label: k, n })).sort((a, b) => b.n - a.n);
+  };
+  const when = SOC.audDate ? ` Snapshot of ${fmtDay(isoDay(SOC.audDate))}.` : '';
+  const geoCard = card('#card-soc-country', 'Where the audience is',
+    'Followers by country and city, top values only — Meta returns at most the 45 largest and only for viewers it has data on. Cities are reported separately, so they do not add up to the country figures.' + when);
+  const countries = pick('followers', 'country');
+  const cities = pick('followers', 'city');
+  if (countries.length) {
+    const tot = countries.reduce((s, c) => s + c.n, 0);
+    const cityTot = cities.reduce((s, c) => s + c.n, 0);
+    const items = [{ group: 'By country' }].concat(
+      countries.slice(0, 8).map(c => ({
+        label: countryName(c.label), tip: c.label, n: c.n, unit: 'followers', note: pct(c.n, tot)
+      })));
+    if (cities.length) {
+      items.push({ group: 'By city' });
+      for (const c of cities.slice(0, 6)) {
+        items.push({ label: c.label.split(',')[0], tip: c.label, n: c.n,
+          color: 'var(--s3)', unit: 'followers', note: pct(c.n, cityTot) });
+      }
+    }
+    socBars(geoCard.chart, items, { noShare: true });
+    geoCard.table.appendChild(socTable(
+      countries.map(c => [countryName(c.label), fmt(c.n), pct1(c.n, tot)])
+        .concat(cities.length ? [['— top cities —', '', '']] : [])
+        .concat(cities.slice(0, 15).map(c => [c.label, fmt(c.n), pct1(c.n, cityTot)])),
+      ['Place', 'Followers', 'Share']));
+  } else {
+    geoCard.chart.appendChild(el('p', 'rempty',
+      'No demographics collected yet. Meta withholds these until the account has 100+ followers.'));
+  }
+
+  const demo = card('#card-soc-demo', 'Who follows, and who engages',
+    'Age and gender of followers next to the audience that actually engaged.' + when);
+  const items = [];
+  for (const [aud, label] of [['followers', 'Followers'], ['engaged', 'Engaged audience']]) {
+    const age = pick(aud, 'age'), gen = pick(aud, 'gender');
+    if (!age.length && !gen.length) continue;
+    items.push({ group: label });
+    const tot = age.reduce((s, a) => s + a.n, 0) || 1;
+    for (const a of age.slice().sort((x, y) => x.label < y.label ? -1 : 1)) {
+      items.push({ label: a.label, n: a.n, color: 'var(--s1)', unit: 'accounts', note: pct1(a.n, tot) });
+    }
+    const gtot = gen.reduce((s, g) => s + g.n, 0);
+    for (const g of gen) {
+      items.push({ label: GENDER_LABEL[g.label] || g.label, n: g.n, color: 'var(--s2)',
+        unit: 'accounts', note: pct(g.n, gtot) });
+    }
+  }
+  if (items.length) {
+    socBars(demo.chart, items, { noShare: true });
+    demo.table.appendChild(socTable(items.filter(i => i.group === undefined)
+      .map(i => [i.label, fmt(i.n)]), ['Bucket', 'Accounts']));
+  } else {
+    demo.chart.appendChild(el('p', 'rempty', 'No age or gender data collected yet.'));
+  }
 }
 
 /* ---------- render ---------- */
@@ -1888,6 +2417,7 @@ function renderAll() {
   renderRouteWindow('#card-method-eu', 'اروپا', 'Europe', 'var(--s2)', chan);
   renderQuality();
   renderCompare();
+  renderSocial();
 
   renderKpis('#kpis', idx);
   renderPeriodNote(idx);
@@ -1921,7 +2451,8 @@ function renderAll() {
   renderOutreach(idx);
   renderFill(idx);
 }
-for (const [id, key] of [['#f-period', 'period'], ['#f-dest', 'dest'], ['#f-src', 'src']]) {
+for (const [id, key] of [['#f-period', 'period'], ['#f-dest', 'dest'], ['#f-src', 'src'],
+                         ['#f-acct', 'acct']]) {
   $(id).addEventListener('click', e => {
     const b = e.target.closest('.chip'); if (!b) return;
     state[key] = b.dataset.v;

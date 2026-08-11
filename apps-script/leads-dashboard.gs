@@ -39,6 +39,12 @@ const SHEET_ID = '1hiRcyNEA-zggpDW-OldQ1CRcbPVmjMipfpG0BZIiIOU';
 const TABS_TO_READ = 3;       // the first three tabs: Main + the two dated exports
 const CACHE_SECONDS = 300;    // serve a cached pack for 5 minutes to keep loads snappy
 
+// Instagram insights, written into these tabs by instagram-insights.gs. Absent
+// tabs are not an error: the dashboard just hides its Social section.
+const SOCIAL_TABS = { daily: 'IG Daily', posts: 'IG Posts', audience: 'IG Audience' };
+const SOCIAL_DAYS = 400;      // history sent to the page; older rows stay in the sheet
+const SOCIAL_POST_DAYS = 120;
+
 /* ------------------------------------------------------------------ columns */
 var C = {
   name: 'Name & Surname', date: 'Created At', age: 'سن شما',
@@ -118,10 +124,16 @@ function referrerOf(v) {
 }
 
 /* ------------------------------------------------------------------ pipeline */
-function readRows() {
+var _book = null;
+function book() {
   // openById works from a standalone project; getActive() is the fallback if this
   // file ever does end up bound to the spreadsheet itself.
-  var ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActive();
+  if (!_book) _book = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActive();
+  return _book;
+}
+
+function readRows() {
+  var ss = book();
   var sheets = ss.getSheets().slice(0, TABS_TO_READ);
   var rows = [], tabs = [];
   sheets.forEach(function (sh) {
@@ -274,6 +286,133 @@ function peopleStats(recs) {
   return { people: people, repeatPeople: repeat, extraSubs: extra };
 }
 
+/* -------------------------------------------------------------------- social */
+/** Reads a tab into objects keyed by its own header row, or [] if the tab is absent. */
+function readTab(name) {
+  var sh = book().getSheetByName(name);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var values = sh.getDataRange().getValues();
+  var header = values[0].map(txt);
+  var out = [];
+  for (var i = 1; i < values.length; i++) {
+    var rec = {}, any = false;
+    for (var c = 0; c < header.length; c++) {
+      if (!header[c]) continue;
+      rec[header[c]] = values[i][c];
+      if (txt(values[i][c]) !== '') any = true;
+    }
+    if (any) out.push(rec);
+  }
+  return out;
+}
+
+function dayText(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  var s = String(v || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return normDate(s);
+}
+function num(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  var n = Number(v);
+  return isNaN(n) ? null : n;
+}
+function daysAgo(dateStr, today) {
+  if (!dateStr) return 1e9;
+  return Math.round((Date.parse(today) - Date.parse(dateStr)) / 86400000);
+}
+
+/**
+ * Packs the Instagram tabs into a compact block. Individual posts and reels are
+ * sent as rows; stories are rolled up per day, because a few thousand expired
+ * stories would dominate the payload and none of them is separately actionable.
+ */
+function buildSocial() {
+  var daily = readTab(SOCIAL_TABS.daily);
+  var posts = readTab(SOCIAL_TABS.posts);
+  var audience = readTab(SOCIAL_TABS.audience);
+  if (!daily.length && !posts.length) return null;
+
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var accounts = [], acctIdx = {};
+  var acct = function (v) {
+    var k = txt(v) || '(unknown)';
+    if (!(k in acctIdx)) { acctIdx[k] = accounts.length; accounts.push(k); }
+    return acctIdx[k];
+  };
+
+  var dailyCols = ['d', 'a', 'followers', 'reach', 'views', 'engaged', 'inter', 'likes',
+    'comments', 'shares', 'saves', 'replies', 'taps', 'follows', 'unfollows'];
+  var dailyRows = [];
+  daily.forEach(function (r) {
+    var d = dayText(r.date);
+    if (!d || daysAgo(d, today) > SOCIAL_DAYS) return;
+    dailyRows.push([d, acct(r.account), num(r.followers), num(r.reach), num(r.views),
+      num(r.accounts_engaged), num(r.total_interactions), num(r.likes), num(r.comments),
+      num(r.shares), num(r.saves), num(r.replies), num(r.profile_links_taps),
+      num(r.follows), num(r.unfollows)]);
+  });
+  dailyRows.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+
+  var postCols = ['id', 'a', 'd', 'surface', 'type', 'link', 'cap', 'reach', 'views',
+    'likes', 'comments', 'saved', 'shares', 'inter', 'visits', 'follows', 'watch'];
+  var postRows = [], storyAgg = {};
+  posts.forEach(function (r) {
+    var stamp = txt(r.posted_at) || dayText(r.posted_at);
+    var d = dayText(stamp.slice(0, 10));
+    if (!d || daysAgo(d, today) > SOCIAL_POST_DAYS) return;
+    var surface = (txt(r.surface) || 'FEED').toUpperCase();
+    if (surface === 'STORY') {
+      var key = d + '|' + txt(r.account);
+      var agg = storyAgg[key] || (storyAgg[key] = { d: d, a: acct(r.account), n: 0,
+        reach: 0, views: 0, replies: 0, clicks: 0, follows: 0 });
+      agg.n++;
+      ['reach', 'views', 'replies', 'follows'].forEach(function (f) {
+        agg[f] += num(r[f]) || 0;
+      });
+      agg.clicks += num(r.link_clicks) || 0;
+      return;
+    }
+    postRows.push([txt(r.media_id), acct(r.account), stamp.slice(0, 16), surface,
+      txt(r.media_type), txt(r.permalink), txt(r.caption), num(r.reach), num(r.views),
+      num(r.likes), num(r.comments), num(r.saved), num(r.shares),
+      num(r.total_interactions), num(r.profile_visits), num(r.follows),
+      num(r.avg_watch_time_s)]);
+  });
+  postRows.sort(function (a, b) { return a[2] < b[2] ? 1 : a[2] > b[2] ? -1 : 0; });
+
+  var storyCols = ['d', 'a', 'n', 'reach', 'views', 'replies', 'clicks', 'follows'];
+  var storyRows = Object.keys(storyAgg).map(function (k) {
+    var s = storyAgg[k];
+    return [s.d, s.a, s.n, s.reach, s.views, s.replies, s.clicks, s.follows];
+  }).sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+
+  // Demographics are lifetime snapshots, so only the newest one is worth sending.
+  var audDate = '';
+  audience.forEach(function (r) {
+    var d = dayText(r.date);
+    if (d && d > audDate) audDate = d;
+  });
+  var audCols = ['a', 'audience', 'dim', 'key', 'value'];
+  var audRows = [];
+  audience.forEach(function (r) {
+    if (dayText(r.date) !== audDate) return;
+    audRows.push([acct(r.account), txt(r.audience), txt(r.dimension), txt(r.key), num(r.value)]);
+  });
+
+  return {
+    accounts: accounts,
+    dailyCols: dailyCols, daily: dailyRows,
+    postCols: postCols, posts: postRows,
+    storyCols: storyCols, stories: storyRows,
+    audCols: audCols, audience: audRows, audDate: audDate,
+    lastRun: txt(PropertiesService.getScriptProperties().getProperty('IG_LAST_RUN') || ''),
+    generatedAt: new Date().toISOString()
+  };
+}
+
 function buildPayload() {
   var read = readRows();
   var raw = read.rows;
@@ -291,6 +430,13 @@ function buildPayload() {
   pack.meta.people = ppl.people;
   pack.meta.repeatPeople = ppl.repeatPeople;
   pack.meta.extraSubs = ppl.extraSubs;
+  // Social is optional: a failure here must not cost the page its lead data.
+  try {
+    var social = buildSocial();
+    if (social) pack.social = social;
+  } catch (err) {
+    pack.meta.socialError = String(err && err.message || err).slice(0, 200);
+  }
   return JSON.stringify(pack);
 }
 
@@ -351,4 +497,12 @@ function testBuild() {
   Logger.log('raw rows: %s, dupes: %s, tests: %s',
              pack.meta.rawRows, pack.meta.dupes, pack.meta.testRows);
   Logger.log('people: %s, payload KB: %s', pack.meta.people, Math.round(payload.length / 1024));
+  if (pack.social) {
+    Logger.log('social: %s account(s), %s day(s), %s post(s), %s story-day(s), audience %s',
+      pack.social.accounts.length, pack.social.daily.length, pack.social.posts.length,
+      pack.social.stories.length, pack.social.audDate || 'none');
+  } else {
+    Logger.log('social: no IG tabs yet%s',
+      pack.meta.socialError ? ' (error: ' + pack.meta.socialError + ')' : '');
+  }
 }
