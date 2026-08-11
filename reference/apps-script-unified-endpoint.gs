@@ -294,3 +294,97 @@ function testBC() {
 }
 
 function testON() { Logger.log(JSON.stringify(getOINP_().slice(0, 6), null, 2)); }
+
+// ============================== MANITOBA ==============================
+// Manitoba publishes nothing like a table. /draws/ is a WordPress archive of
+// posts, one per EOI draw, and each draw contains several sub-selections
+// (occupation-specific, Francophone, Skilled Worker Stream, IES...) each with
+// its own count. The figure that matters is the total, stated once as
+// "Of the N Letters of Advice to Apply issued in this draw".
+//
+// TWO TRAPS, both of which produce a confidently wrong number:
+//
+// 1. The total is split across tags: <strong>76</strong><strong>6</strong> is
+//    766, not 76. stripTags_ replaces every tag with a space, which turns that
+//    into "76 6" and reads 76 — out by a factor of ten. So inline formatting
+//    tags are removed with an EMPTY replacement first. Check against draw #276:
+//    74 + 605 + 17 + 70 = 766.
+//
+// 2. The archive carries no dates, and the post URL gives only year and month.
+//    The exact date lives in each post's <meta property="article:published_time">,
+//    so each draw costs one extra fetch. MB_MAX_DRAWS bounds that.
+var MB_URL = 'https://immigratemanitoba.com/draws/';
+var MB_MAX_DRAWS = 6;
+var MB_MONTHS = ['January','February','March','April','May','June',
+                 'July','August','September','October','November','December'];
+
+// Inline tags vanish with no separator; everything else strips normally.
+function mbText_(html) {
+  return stripTags_(String(html).replace(/<\/?(strong|b|em|i|span|u)[^>]*>/gi, ''));
+}
+
+function mbDisplayDate_(iso) {
+  var t = Date.parse(iso);
+  if (isNaN(t)) return '';
+  var d = new Date(t);
+  return MB_MONTHS[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear();
+}
+
+function getMPNP_() {
+  var html = fetchText_(MB_URL);
+  var re = /https:\/\/immigratemanitoba\.com\/(\d{4})\/(\d{2})\/expression-of-interest-draw-(\d+)\//gi;
+  var seen = {}, links = [], m;
+  while ((m = re.exec(html)) !== null) {
+    var n = m[3];
+    if (seen[n]) continue;
+    seen[n] = true;
+    links.push({ url: m[0], number: n });
+    if (links.length >= MB_MAX_DRAWS) break;
+  }
+
+  var out = [];
+  for (var i = 0; i < links.length; i++) {
+    // One unreadable draw must not lose the others.
+    try {
+      var row = mbParseDraw_(links[i]);
+      if (row) out.push(row);
+    } catch (err) {
+      Logger.log('MB draw ' + links[i].number + ' failed: ' + err);
+    }
+  }
+  out.sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); });
+  return dedupe_(out);
+}
+
+function mbParseDraw_(link) {
+  var page = fetchText_(link.url);
+
+  var pm = page.match(/<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i);
+  var iso = pm ? pm[1] : '';
+
+  var text = mbText_(page);
+  var tm = text.match(/Of the\s+([\d,]+)\s+Letters of Advice to Apply issued in this draw/i);
+  if (!tm) return null;  // no stated total — report nothing rather than a guess
+
+  // A draw can state several lowest-ranked scores, one per sub-selection. With
+  // more than one there is no single honest number to publish, so publish none.
+  var scores = [], sre = /Ranking score of lowest-ranked candidate invited:?\s*([\d,]+)/gi, sm;
+  while ((sm = sre.exec(text)) !== null) scores.push(sm[1].replace(/,/g, ''));
+
+  return {
+    date: mbDisplayDate_(iso),
+    dateISO: toISO_(iso),
+    invitations: tm[1].replace(/,/g, ''),
+    stream: 'EOI Draw #' + link.number,
+    score: scores.length === 1 ? scores[0] : '',
+    factors: ''
+  };
+}
+
+// Run this and check the totals against immigratemanitoba.com/draws/ BEFORE
+// deploying. Draw #276 must read 766, not 76.
+function testMB() {
+  var rows = getMPNP_();
+  Logger.log('MANITOBA ' + rows.length + ' draws, newest ' + (rows[0] ? rows[0].date : 'NONE'));
+  Logger.log(JSON.stringify(rows, null, 2));
+}
