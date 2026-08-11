@@ -54,33 +54,34 @@ Apps Script's own ceiling is 6 minutes, so 300s is the useful maximum.
 keeps running the old nodes until `publish_workflow` is called. A run that
 looks fixed in the editor and still fails hourly is this, every time.
 
-## Manitoba returns zero draws — one-line fix, not applied yet
-
-The deployed endpoint reports:
-
-    "MB": { "source": "Manitoba (MPNP)",
-            "url": "https://immigratemanitoba.com/notices/", "draws": [] }
+## Manitoba — fixed and deployed 2026-08-11
 
 `getMPNP_` was written and tested, but `doGet` was never wired to it — the MB
 row still carried the placeholder `noParserYet_` and the old notices URL, so
-the working parser was simply never called. In `doGet`, replace:
-
-    MB: province_('Manitoba (MPNP)', 'https://immigratemanitoba.com/notices/', noParserYet_),
-
-with:
+the working parser was simply never called. `doGet` now reads:
 
     MB: province_('Manitoba (MPNP)', MB_URL, getMPNP_),
 
-then redeploy with **Manage deployments → New version** (New deployment mints
-a new URL and both workflows would have to be re-pointed).
+and the endpoint returns 6 draws, newest 30 July, EOI Draw #276 = 766.
 
 Testing a parser function on its own proves the parser, not the endpoint.
 `getMPNP_()` returned six draws in the editor while `/exec` returned none,
 because they were not connected.
 
-Zero draws is treated as "hide this province", so a broken fetch and a quiet
+## Current endpoint URL
+
+    https://script.google.com/macros/s/AKfycbwVPTpr39_-ubP57wVDsuOFT80SCdQ-glVifWLlE5hf5VtGPQdqzt3-LQC-jVExDbQ4/exec
+
+This was a **New deployment**, so it is a new URL and every consumer has to be
+re-pointed. Prefer **Manage deployments → New version**: it keeps the URL and
+nothing downstream needs touching.
+
+Still pointing at an older URL: the social workflow `1jejYyUcyc79YVdW`.
+
+Zero draws is treated as "hide this province", so a broken parser and a quiet
 province look identical on the page. That is the safe direction — better a
 missing card than invented numbers — but it means a parser can rot silently.
+Alberta and Saskatchewan are still on `noParserYet_`.
 
 ## Proven as of 2026-08-06
 
