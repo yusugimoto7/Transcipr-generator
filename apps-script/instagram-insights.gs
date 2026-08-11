@@ -48,6 +48,8 @@ var IG_REFRESH_DAYS = 4;               // re-fetch recent days: data lags up to 
 var IG_POST_LOOKBACK = 120;            // days of posts to keep metrics fresh for
 var IG_POST_HOT_DAYS = 14;             // a new post is re-measured on every run
 var IG_POST_COLD_DAYS = 7;             // an older one, at most weekly
+var IG_BUDGET_MS = 4.5 * 60 * 1000;    // stop before Apps Script's 6-minute kill
+var IG_FLUSH_EVERY = 25;               // write partial progress this often
 var IG_TAB_DAILY = 'IG Daily';
 var IG_TAB_POSTS = 'IG Posts';
 var IG_TAB_AUDIENCE = 'IG Audience';
@@ -80,6 +82,20 @@ var IG_POST_HEADERS = ['media_id', 'account', 'posted_at', 'surface', 'media_typ
   'avg_watch_time_s', 'updated_at', 'notes'];
 
 var IG_AUDIENCE_HEADERS = ['date', 'account', 'audience', 'dimension', 'key', 'value', 'updated_at'];
+
+/* -------------------------------------------------------------------- budget */
+/**
+ * Apps Script kills a function at six minutes with no warning and no chance to
+ * save. A large account needs more calls than that allows on a first run, so the
+ * collector watches the clock, writes what it has, and says it needs another go.
+ * Every phase is resumable because rows are upserted by key.
+ */
+var igRunStart = 0;
+function igStartClock() { igRunStart = Date.now(); }
+function igOutOfTime() {
+  if (!igRunStart) igStartClock();
+  return Date.now() - igRunStart > IG_BUDGET_MS;
+}
 
 /* ------------------------------------------------------------------- config */
 function igProps() { return PropertiesService.getScriptProperties(); }
@@ -370,14 +386,24 @@ function igCollectDaily() {
   igRead(sh, IG_DAILY_HEADERS).forEach(function (r) { have[igDailyKey(r)] = r; });
   var accounts = igAccounts(cfg);
   var today = igToday(), rows = [], log = [];
+  var written = { updated: 0, added: 0 }, ranOut = false;
+  var flush = function () {
+    if (!rows.length) return;
+    var r = igUpsert(sh, IG_DAILY_HEADERS, igDailyKey, rows);
+    written.updated += r.updated; written.added += r.added;
+    rows = [];
+  };
 
   accounts.forEach(function (acct) {
     var fetched = 0;
-    for (var back = IG_DAILY_BACKFILL; back >= 0; back--) {
+    // newest day first: if the clock runs out, the days that matter most are saved
+    for (var back = 0; back <= IG_DAILY_BACKFILL; back++) {
       var day = igShiftDay(today, -back);
       var key = day + '|' + acct.label;
       // Days already stored are left alone once they are old enough to be final.
       if (have[key] && back >= IG_REFRESH_DAYS) continue;
+      if (igOutOfTime()) { ranOut = true; break; }
+      if (rows.length >= IG_FLUSH_EVERY) flush();
       var m = igDayMetrics(cfg, acct.id, day);
       var split = igFollowSplit(cfg, acct.id, day);
       rows.push({
@@ -409,9 +435,10 @@ function igCollectDaily() {
     log.push(acct.label + ': ' + fetched + ' day(s)');
   });
 
-  var res = igUpsert(sh, IG_DAILY_HEADERS, igDailyKey, rows);
-  Logger.log('IG Daily -> %s updated, %s added (%s)', res.updated, res.added, log.join('; '));
-  return res;
+  flush();
+  Logger.log('IG Daily -> %s updated, %s added (%s)%s', written.updated, written.added,
+    log.join('; '), ranOut ? ' — OUT OF TIME, run igCollectAll again to finish' : '');
+  return written;
 }
 
 function igBlank(v) { return (v === undefined || v === null) ? '' : v; }
@@ -501,8 +528,16 @@ function igCollectPosts() {
   var accounts = igAccounts(cfg);
   var cutoff = new Date(new Date().getTime() - IG_POST_LOOKBACK * 86400000).getTime();
   var rows = [], log = [];
+  var written = { updated: 0, added: 0 }, ranOut = false;
+  var flush = function () {
+    if (!rows.length) return;
+    var r = igUpsert(sh, IG_POST_HEADERS, igMediaKey, rows);
+    written.updated += r.updated; written.added += r.added;
+    rows = [];
+  };
 
   accounts.forEach(function (acct) {
+    if (ranOut) return;
     var fields = 'id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count';
     var json = igFetch(cfg, acct.id + '/media', { fields: fields, limit: 50 });
     var count = 0, skipped = 0, pages = 0, done = false;
@@ -513,6 +548,10 @@ function igCollectPosts() {
         var ts = media.timestamp ? new Date(media.timestamp).getTime() : 0;
         if (ts && ts < cutoff) { done = true; break; }
         if (!igStale(seen[String(media.id)], media.timestamp)) { skipped++; continue; }
+        // /media returns newest first, so an interrupted run has still covered the
+        // posts most likely to still be moving.
+        if (igOutOfTime()) { ranOut = true; done = true; break; }
+        if (rows.length >= IG_FLUSH_EVERY) flush();
         rows.push(igMediaRow(acct, media, igMediaInsights(cfg, media)));
         count++;
       }
@@ -522,9 +561,10 @@ function igCollectPosts() {
     log.push(acct.label + ': ' + count + ' post(s), ' + skipped + ' already current');
   });
 
-  var res = igUpsert(sh, IG_POST_HEADERS, igMediaKey, rows);
-  Logger.log('IG Posts -> %s updated, %s added (%s)', res.updated, res.added, log.join('; '));
-  return res;
+  flush();
+  Logger.log('IG Posts -> %s updated, %s added (%s)%s', written.updated, written.added,
+    log.join('; '), ranOut ? ' — OUT OF TIME, run igCollectAll again to finish' : '');
+  return written;
 }
 
 /**
@@ -632,12 +672,20 @@ function igCollectAll() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) { Logger.log('another collection is already running'); return; }
   igAccountCache = null;
+  igStartClock();
   try {
     igCollectStories();     // first: these expire
     igCollectDaily();
     igCollectPosts();
-    igCollectAudience();
+    // Demographics are a lifetime snapshot — losing today's costs nothing, so it
+    // yields to the phases that capture data which cannot be re-read later.
+    if (igOutOfTime()) {
+      Logger.log('skipping audience this run: out of time. Run igCollectAll again.');
+    } else {
+      igCollectAudience();
+    }
     igProps().setProperty('IG_LAST_RUN', igIsoNow());
+    Logger.log('run finished in %ss', Math.round((Date.now() - igRunStart) / 1000));
   } finally {
     lock.releaseLock();
   }
