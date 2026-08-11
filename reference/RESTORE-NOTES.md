@@ -61,14 +61,22 @@ The deployed endpoint reports:
     "MB": { "source": "Manitoba (MPNP)",
             "url": "https://immigratemanitoba.com/notices/", "draws": [] }
 
-`MB_URL` still points at the old **notices** page. The parser fetches it,
-finds no draw table, and returns nothing — which is correct behaviour for the
-wrong page. Set:
+`getMPNP_` was written and tested, but `doGet` was never wired to it — the MB
+row still carried the placeholder `noParserYet_` and the old notices URL, so
+the working parser was simply never called. In `doGet`, replace:
 
-    var MB_URL = 'https://immigratemanitoba.com/draws/';
+    MB: province_('Manitoba (MPNP)', 'https://immigratemanitoba.com/notices/', noParserYet_),
+
+with:
+
+    MB: province_('Manitoba (MPNP)', MB_URL, getMPNP_),
 
 then redeploy with **Manage deployments → New version** (New deployment mints
 a new URL and both workflows would have to be re-pointed).
+
+Testing a parser function on its own proves the parser, not the endpoint.
+`getMPNP_()` returned six draws in the editor while `/exec` returned none,
+because they were not connected.
 
 Zero draws is treated as "hide this province", so a broken fetch and a quiet
 province look identical on the page. That is the safe direction — better a

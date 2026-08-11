@@ -47,7 +47,7 @@ function doGet(e) {
       BCE: province_('British Columbia — Entrepreneur', BC_URL, getBCEntrepreneur_),
       AB:  province_('Alberta (AAIP)', AB_URL, noParserYet_),
       SK:  province_('Saskatchewan (SINP)', 'https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program', noParserYet_),
-      MB:  province_('Manitoba (MPNP)', 'https://immigratemanitoba.com/notices/', noParserYet_),
+      MB:  province_('Manitoba (MPNP)', MB_URL, getMPNP_),
       NS:  province_('Nova Scotia (NSNP)', 'https://liveinnovascotia.com/nova-scotia-nominee-program', noParserYet_),
       NB:  province_('New Brunswick (NBPNP)', 'https://www.welcomenb.ca/content/wel-bien/en/immigrating_and_settling/content/HowToImmigrate/NBProvincialNomineeProgram.html', noParserYet_),
       PE:  province_('Prince Edward Island', 'https://www.princeedwardisland.ca/en/information/office-of-immigration/expression-of-interest-draws', noParserYet_),
