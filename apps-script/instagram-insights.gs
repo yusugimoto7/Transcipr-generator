@@ -46,6 +46,8 @@ var IG_SHEET_ID = '1hiRcyNEA-zggpDW-OldQ1CRcbPVmjMipfpG0BZIiIOU';
 var IG_DAILY_BACKFILL = 30;            // Meta keeps ~30d of day-level account data
 var IG_REFRESH_DAYS = 4;               // re-fetch recent days: data lags up to 48h
 var IG_POST_LOOKBACK = 120;            // days of posts to keep metrics fresh for
+var IG_POST_HOT_DAYS = 14;             // a new post is re-measured on every run
+var IG_POST_COLD_DAYS = 7;             // an older one, at most weekly
 var IG_TAB_DAILY = 'IG Daily';
 var IG_TAB_POSTS = 'IG Posts';
 var IG_TAB_AUDIENCE = 'IG Audience';
@@ -144,12 +146,41 @@ function igMetricMap(json) {
   return out;
 }
 
+/* -------------------------------------------------------- unsupported metrics */
+/**
+ * Meta rejects an entire insights call when any one metric in it is unavailable
+ * for the account, so a single retired name would blank every metric beside it.
+ * Names that fail on their own are remembered and skipped from then on, which
+ * also stops the collector burning a failing request on every run.
+ */
+function igBadMetrics() {
+  var raw = igProps().getProperty('IG_BAD_METRICS') || '';
+  var set = {};
+  raw.split(',').forEach(function (m) { if (m) set[m] = true; });
+  return set;
+}
+function igMarkBad(metric) {
+  var set = igBadMetrics();
+  if (set[metric]) return;
+  set[metric] = true;
+  igProps().setProperty('IG_BAD_METRICS', Object.keys(set).join(','));
+  Logger.log('metric "%s" is unavailable for this account and will be skipped from now on', metric);
+}
+/** Clears the skip list — run after adding a permission or when Meta ships a metric. */
+function igResetBadMetrics() {
+  igProps().deleteProperty('IG_BAD_METRICS');
+  Logger.log('metric skip list cleared');
+}
+
 /* ----------------------------------------------------------------- accounts */
 /**
  * Resolves the accounts to collect. IG_ACCOUNTS wins when set; otherwise the
  * token is asked what it can see, which differs by login type.
  */
+var igAccountCache = null;
 function igAccounts(cfg) {
+  // Four collections per run would otherwise re-resolve and re-profile every account.
+  if (igAccountCache) return igAccountCache;
   var out = [];
   if (cfg.accounts) {
     cfg.accounts.split(',').forEach(function (pair) {
@@ -187,6 +218,7 @@ function igAccounts(cfg) {
       acct.profileError = String(err.message || err);
     }
   });
+  igAccountCache = out;
   return out;
 }
 
@@ -274,18 +306,37 @@ function igDayStr2(v) {
 function igDayMetrics(cfg, acctId, dateStr) {
   var since = igDayStart(dateStr);
   var until = since + 86399;
+  var base = { period: 'day', metric_type: 'total_value', since: since, until: until };
+  var ask = function (metrics) {
+    var params = { metric: metrics.join(',') };
+    for (var k in base) params[k] = base[k];
+    return igMetricMap(igFetch(cfg, acctId + '/insights', params));
+  };
+  var bad = igBadMetrics();
   var out = {}, notes = [];
   IG_DAILY_GROUPS.forEach(function (group) {
+    var wanted = group.filter(function (m) { return !bad[m]; });
+    if (!wanted.length) return;
     try {
-      var json = igFetch(cfg, acctId + '/insights', {
-        metric: group.join(','), period: 'day', metric_type: 'total_value',
-        since: since, until: until
-      });
-      var got = igMetricMap(json);
+      var got = ask(wanted);
       for (var k in got) out[k] = got[k];
+      return;
     } catch (err) {
-      notes.push(group.join('+') + ': ' + String(err.message || err).slice(0, 120));
+      // One unavailable name fails the whole group, so fall back to asking each
+      // metric on its own and remember which one is actually broken.
+      if (wanted.length === 1) { igMarkBad(wanted[0]); notes.push(wanted[0] + ' unavailable'); return; }
     }
+    var lost = [];
+    wanted.forEach(function (metric) {
+      try {
+        var one = ask([metric]);
+        for (var k2 in one) out[k2] = one[k2];
+      } catch (inner) {
+        igMarkBad(metric);
+        lost.push(metric);
+      }
+    });
+    if (lost.length) notes.push('unavailable: ' + lost.join(','));
   });
   out._notes = notes.join(' | ');
   return out;
@@ -425,6 +476,22 @@ function igMediaRow(acct, media, ins) {
 
 function igMediaKey(r) { return String(r.media_id); }
 
+/**
+ * A post keeps accruing reach for a couple of weeks and then barely moves, so
+ * older ones are only re-measured weekly. Without this the collector spends a
+ * request per post per run and runs into Meta's hourly call limit.
+ */
+function igStale(prev, postedAt) {
+  if (!prev) return true;
+  var posted = postedAt ? new Date(postedAt).getTime() : 0;
+  if (!posted || (Date.now() - posted) / 86400000 <= IG_POST_HOT_DAYS) return true;
+  var seen = prev.updated_at;
+  var last = (Object.prototype.toString.call(seen) === '[object Date]')
+    ? seen.getTime() : Date.parse(String(seen || '').replace(' ', 'T'));
+  if (!last) return true;
+  return (Date.now() - last) / 86400000 >= IG_POST_COLD_DAYS;
+}
+
 /** Posts and reels: walk back through /media until older than IG_POST_LOOKBACK. */
 function igCollectPosts() {
   var cfg = igConfig(), ss = igBook();
@@ -438,20 +505,21 @@ function igCollectPosts() {
   accounts.forEach(function (acct) {
     var fields = 'id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count';
     var json = igFetch(cfg, acct.id + '/media', { fields: fields, limit: 50 });
-    var count = 0, pages = 0, done = false;
+    var count = 0, skipped = 0, pages = 0, done = false;
     while (json && !done) {
       var items = json.data || [];
       for (var i = 0; i < items.length; i++) {
         var media = items[i];
         var ts = media.timestamp ? new Date(media.timestamp).getTime() : 0;
         if (ts && ts < cutoff) { done = true; break; }
+        if (!igStale(seen[String(media.id)], media.timestamp)) { skipped++; continue; }
         rows.push(igMediaRow(acct, media, igMediaInsights(cfg, media)));
         count++;
       }
       if (done || !json.paging || !json.paging.next || ++pages > 20) break;
       json = igFetchUrl(cfg, json.paging.next);
     }
-    log.push(acct.label + ': ' + count + ' post(s)');
+    log.push(acct.label + ': ' + count + ' post(s), ' + skipped + ' already current');
   });
 
   var res = igUpsert(sh, IG_POST_HEADERS, igMediaKey, rows);
@@ -563,6 +631,7 @@ function igAudienceFetch(cfg, acctId, metric, dim) {
 function igCollectAll() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) { Logger.log('another collection is already running'); return; }
+  igAccountCache = null;
   try {
     igCollectStories();     // first: these expire
     igCollectDaily();
@@ -577,6 +646,7 @@ function igCollectAll() {
 /** One-time check. Run this before anything else and read the log. */
 function igSetup() {
   var cfg = igConfig();
+  igAccountCache = null;
   Logger.log('host: %s  version: %s', cfg.host, IG_VERSION);
   var accounts = igAccounts(cfg);
   accounts.forEach(function (acct) {
