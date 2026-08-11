@@ -161,8 +161,11 @@ route instead of as a static site.
 **Live data (recommended).** With an endpoint configured the page fetches the
 sheet on every load, so a browser refresh is always current:
 
-1. Open the leads spreadsheet → **Extensions → Apps Script**, paste
-   `apps-script/leads-dashboard.gs`, set `SECRET` to a long random string.
+1. Go to [script.google.com](https://script.google.com) → **New project** and
+   paste `apps-script/leads-dashboard.gs`. Use a **standalone** project, not the
+   spreadsheet's own Apps Script — that one runs the lead pipeline, and Apps
+   Script shares a global namespace per project, so a second `doGet` collides.
+   `SECRET` and `SHEET_ID` are already filled in.
 2. **Deploy → New deployment → Web app**, *Execute as* Me, *Who has access*
    Anyone. Authorize it (it is your own script).
 3. Put the resulting URL in `LIVE_DATA_URL` near the top of the script block in
@@ -201,6 +204,62 @@ banner appears automatically once the newest lead is more than a day old.
 Use the **xlsx** export, never Drive's plain-text export — the latter silently
 truncates large sheets to a few dozen rows per tab.
 
+### Instagram insights on the dashboard
+
+`apps-script/instagram-insights.gs` calls the Instagram Graph API and writes
+three tabs into the same spreadsheet — `IG Daily`, `IG Posts`, `IG Audience` —
+which the live endpoint then ships to the page as an **Instagram performance**
+section: reach and views over time, a reach-to-leads funnel, posts vs reels vs
+stories, top posts, and audience demographics.
+
+**It stores history rather than querying live, deliberately.** Meta keeps
+day-level account metrics for about 30 days and drops story insights roughly 24
+hours after a story is posted. A day nobody collected cannot be recovered later,
+so the collector accumulates its own record. That is what makes month-on-month
+comparison possible at all — and why it is worth starting sooner rather than
+later, even before anyone looks at the charts.
+
+Setup:
+
+1. Open the **Leads dashboard API** project (the standalone one above), add a
+   file (`+ → Script`, name it `instagram-insights`) and paste
+   `apps-script/instagram-insights.gs`. Every identifier in it is `ig`-prefixed,
+   so it cannot collide with the leads endpoint in the same project.
+2. **Project Settings → Script properties**:
+   - `IG_TOKEN` — a long-lived access token (required)
+   - `IG_HOST` — `graph.instagram.com` (default) or `graph.facebook.com` if the
+     token came from Facebook Login
+   - `IG_ACCOUNTS` — optional `label:instagram_user_id,label:id`; omit and the
+     collector asks the token which accounts it can see
+3. Run **`igSetup`** and read the log. It prints each account it found and
+   probes insights separately, because a token can list an account and still
+   lack permission to read its numbers.
+4. Run **`igCollectAll`** once, then **`igInstallTrigger`** to run it every three
+   hours. Three-hourly rather than nightly is what catches stories before they
+   expire.
+
+The account must be Business or Creator. Scopes: `instagram_business_basic` +
+`instagram_business_manage_insights` for Instagram Login, or `instagram_basic` +
+`instagram_manage_insights` + `pages_read_engagement` for Facebook Login.
+
+**The token never reaches the browser.** It lives in Script Properties; only the
+aggregated numbers travel to the page. Do not put it in `.env`, the dashboard, or
+a commit.
+
+Notes:
+- Metric names are written against the **v26.0** API (June 2026). `impressions`
+  is gone; `views` replaces it. When Meta retires a name, the collector notices
+  that the metric fails on its own, records it in the `IG_BAD_METRICS` script
+  property, and skips it from then on instead of losing the metrics beside it.
+  Run `igResetBadMetrics` after adding a permission or when Meta ships something
+  new.
+- Meta revises figures for up to 48 hours, so the collector re-fetches the last
+  four days on every run and overwrites those rows in place.
+- Demographics need 100+ followers, and Meta only counts viewers it has data on,
+  so the buckets sum to less than the follower count.
+- Keep the IG tabs **after** the three lead tabs. The endpoint reads the first
+  three tabs as leads.
+
 ## Project structure
 - `app/page.jsx` — the full swipe deck + script UI (client component)
 - `app/api/topics/route.js` — topic feed (web search → 6 ranked topics)
@@ -215,6 +274,10 @@ truncates large sheets to a few dozen rows per tab.
 - `lib/draws/wordpress.js` — fingerprint-gated draws page
 - `lib/draws/store.js` — "already posted" memory (Google Sheet)
 - `lib/draws/run.js` — the orchestrator
+- `dashboard/index.html` — the leads + Instagram dashboard (self-contained)
+- `apps-script/leads-dashboard.gs` — live data endpoint for the dashboard
+- `apps-script/instagram-insights.gs` — Instagram Graph API collector
+- `scripts/build_dashboard.py` — rebuilds the dashboard's embedded snapshot
 
 ## Notes
 - If the live topic fetch fails (e.g. no API key, network issue), the deck falls back
