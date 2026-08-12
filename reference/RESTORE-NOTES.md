@@ -106,6 +106,34 @@ that normally take 7-50s sat past 300s when three overlapped. The hourly
 schedules are staggered (:07 social, :17 page) and do not collide, but do not
 launch manual test runs on top of each other — wait for one to finish.
 
+## Social workflow 1jejYyUcyc79YVdW — 2026-08-12
+
+Now on the current endpoint with a 300s timeout and 3 retries, same as the page.
+
+**Telegram values are escaped.** `buildTexts` interpolates the date, category,
+count and score into `parse_mode: HTML`. BC publishes counts under five as the
+literal `<5`, which Telegram rejects as malformed HTML — the whole message
+fails, not just that field. X, LinkedIn and the IG caption are plain text and
+take raw values.
+
+**The per-run cap was hiding draws, not throttling them.** `Expand Programs`
+sliced to MAX_ITEMS_PER_RUN *before* the dedup lookup, so only the newest draw
+was ever a candidate. Once Express Entry #434 was recorded, every run produced
+that one item, dedup dropped it, and the five BC draws from 6 August behind it
+were unreachable — permanently, not just delayed. The Code node now emits every
+candidate and a Limit node ("One per run") after the IF caps the UNPOSTED ones.
+
+**Ontario is deliberately not posted.** The OINP parser returns prose
+fragments, not stream names: one row is `the Masters Graduate stream and 244
+invitations to apply to candidates who may qualify und` — cut mid-word — and
+another carries the source's own `nternational` typo. Fine in a table next to a
+link to the official page; not fine as the headline of a post under an RCIC's
+name. Re-add ON to `PROV` once the parser returns a clean stream name.
+
+**MAX_AGE_DAYS is 10.** BC Entrepreneur and Manitoba arrived with a backlog
+going back to April. A wide window would announce a 16 July draw as
+«نتیجه جدیدترین دراو» a month late.
+
 ## Proven as of 2026-08-06
 
 All four channels have posted successfully at least once, and the duplicate
