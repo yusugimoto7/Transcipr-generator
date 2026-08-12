@@ -82,6 +82,29 @@ Zero draws is treated as "hide this province", so a broken parser and a quiet
 province look identical on the page. That is the safe direction — better a
 missing card than invented numbers — but it means a parser can rot silently.
 Alberta and Saskatchewan are still on `noParserYet_`.
+## Why the page timestamp does not move every hour
+
+By design. The page is rewritten only when the fingerprint changes, and the
+fingerprint covers draw data plus TEMPLATE_VERSION — never the clock. On a
+quiet week every hourly run returns `changed:false` and the page is left
+alone, so the stamp shows the last WRITE, not the last CHECK.
+
+Template v9 replaces the run timestamp with the date of the newest draw
+across all sources, plus a line saying the page is checked hourly. Nothing on
+the page now claims a time it cannot back up, and no hourly rewrite is needed
+to keep it honest. Printing a live "last checked" time would mean rewriting
+the page every hour — 24 WordPress revisions a day for data that moves twice a
+week, which is exactly what the fingerprint gate exists to prevent.
+
+Newest-draw dates are formatted from ISO parts by hand: `new Date('2026-08-07')`
+is UTC midnight and formats as August 6 in Vancouver.
+
+## Apps Script serialises concurrent calls
+
+Firing several executions at the same endpoint at once makes them queue: runs
+that normally take 7-50s sat past 300s when three overlapped. The hourly
+schedules are staggered (:07 social, :17 page) and do not collide, but do not
+launch manual test runs on top of each other — wait for one to finish.
 
 ## Proven as of 2026-08-06
 
