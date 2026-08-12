@@ -161,6 +161,20 @@ Totals containing a `<5` are printed as `500+`, never as an exact figure —
 `<5` means one to four, and stripping the `<` to make it 5 invents a number.
 Cut-offs across a date are shown as a range («68 تا 102»).
 
+## "<5" flips to "5>" in right-to-left text
+
+BC publishes counts under five as `<5`. Rendered inside an RTL line the bracket
+mirrors, so the reader sees `5>` — "more than five", the opposite of what BC
+said. It reached the test channel looking exactly like that.
+
+The website page fixes it with `direction:ltr` on the numeric cell. Telegram, X,
+LinkedIn and Instagram captions have no CSS, so the value is written in words
+instead: `countFa()` turns `<5` into «کمتر از 5». The story card keeps the raw
+`<5` because its number sits in an LTR English font and renders correctly.
+
+Dedup keys use the raw figure, never the Persian wording, so rewording the text
+can never make an already-published draw look new.
+
 ## Proven as of 2026-08-06
 
 All four channels have posted successfully at least once, and the duplicate
