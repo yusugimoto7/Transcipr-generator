@@ -133,6 +133,33 @@ name. Re-add ON to `PROV` once the parser returns a clean stream name.
 **MAX_AGE_DAYS is 10.** BC Entrepreneur and Manitoba arrived with a backlog
 going back to April. A wide window would announce a 16 July draw as
 «نتیجه جدیدترین دراو» a month late.
+## The dedup lookup was dropping new draws
+
+The Data Table `get` node emits only the rows it MATCHES. An unmatched input —
+which is exactly what a brand new draw is — produces no output item at all, so
+new draws disappeared before the IF that was meant to let them through. Proof
+from execution 1314993: `Expand Programs` emitted 2 items, `Already posted?`
+emitted 1, and the one it kept was the already-posted Express Entry round.
+
+It only ever looked correct because a run never had more than one candidate:
+with a single input, `alwaysOutputData` produced one empty item and the empty
+`dedup_key` read as "not posted".
+
+Replaced with `Fetch posted keys` (returnAll, executeOnce) followed by a
+`Drop already posted` Code node that filters `$('Expand Programs').all()`
+against the key set. One query per run instead of one per candidate, and
+unmatched means fresh rather than gone.
+
+## Combined posts, one per province per date
+
+BC ran five streams on 6 August, each with its own cut-off (102, 84, 68, 72,
+88). Telegram, LinkedIn and Instagram carry the total plus a per-stream
+breakdown; X is summary-only because a five-line breakdown would be truncated
+mid-figure.
+
+Totals containing a `<5` are printed as `500+`, never as an exact figure —
+`<5` means one to four, and stripping the `<` to make it 5 invents a number.
+Cut-offs across a date are shown as a range («68 تا 102»).
 
 ## Proven as of 2026-08-06
 
