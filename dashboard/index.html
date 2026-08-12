@@ -241,6 +241,18 @@
   .lg { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
   .lg .sw { width: 11px; height: 11px; border-radius: 3px; }
 
+  /* ---- per-card period chips ---- */
+  /* Deliberately quieter and smaller than the filter bar's chips: the bar is the
+     master control, these are local overrides and should not compete with it. */
+  .cperiod { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 12px; }
+  .cperiod .clab { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); margin-right: 3px; }
+  .cperiod .chip { font-size: 11px; padding: 1.5px 7px; border-radius: 999px; line-height: 1.5; }
+  .cperiod .chip[aria-pressed="true"] { background: var(--ink-2); border-color: var(--ink-2); }
+  .cperiod.own .clab { color: var(--s1); font-weight: 650; }
+  .cperiod.own .chip[aria-pressed="true"] { background: var(--s1); border-color: var(--s1); color: #fff; }
+  .cperiod .chip.reset { padding: 1.5px 6px; color: var(--s1); border-color: var(--s1); }
+
   /* ---- Instagram ---- */
   /* tiles inside a card, so they read as one panel rather than eight more cards */
   .soc-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 14px 20px; margin-top: 4px; }
@@ -610,9 +622,25 @@ function chanIdx() {
 // exactly three days rather than three calendar buckets' worth of rows.
 const PERIOD_LABEL = { '3': 'last 3 days', '7': 'last 7 days', '30': 'last 30 days',
   '90': 'last 90 days', '182': 'last 6 months', '365': 'last year', all: 'all time' };
+// Short forms for the per-card chips, where the filter bar's wording will not fit.
+const PERIOD_CHIPS = [['3', '3d'], ['7', '7d'], ['30', '30d'], ['90', '90d'],
+  ['182', '6m'], ['365', '1y'], ['all', 'All']];
+/**
+ * The filter bar's Period is the master: changing it drops every per-card
+ * override. A card can then be set on its own without disturbing the others.
+ * The card being rendered publishes its period here rather than each chart
+ * threading it through every helper that needs to know the span.
+ */
+const cardPeriod = {};
+let RENDER_PERIOD = null;
+const curPeriod = () => RENDER_PERIOD || state.period;
+const periodOf = id => cardPeriod[id] || state.period;
+function clearCardPeriods() { for (const k in cardPeriod) delete cardPeriod[k]; }
+
 function periodStart() {
-  if (state.period === 'all') return null;
-  return new Date(todayUTC().getTime() - (Number(state.period) - 1) * DAY);
+  const p = curPeriod();
+  if (p === 'all') return null;
+  return new Date(todayUTC().getTime() - (Number(p) - 1) * DAY);
 }
 function activeIdx() {
   const from = periodStart();
@@ -620,7 +648,7 @@ function activeIdx() {
 }
 // Days the current view spans — drives how the time charts bucket.
 function activeSpanDays() {
-  return state.period === 'all' ? Math.round((SNAP_DAY - D0) / DAY) + 1 : Number(state.period);
+  return curPeriod() === 'all' ? Math.round((SNAP_DAY - D0) / DAY) + 1 : Number(curPeriod());
 }
 // Bucketing a 3-day window by month yields one meaningless bar, so the volume chart
 // steps down to weeks and then days as the window shrinks.
@@ -687,12 +715,44 @@ function bindTip(node, get) {
   node.addEventListener('blur', hideTip);
 }
 
+// Remembered so a card that comes back empty can still show its own name.
+const CARD_TITLE = {};
+/** Compact period chips for one card. Absent for cards on a fixed window. */
+function cardPeriodRow(id) {
+  const row = el('div', 'cperiod');
+  const own = !!cardPeriod[id];
+  const lab = el('span', 'clab', 'Period');
+  if (own) lab.title = 'This card is set on its own — the filter bar above says '
+    + PERIOD_LABEL[state.period];
+  row.appendChild(lab);
+  for (const [v, short] of PERIOD_CHIPS) {
+    const b = el('button', 'chip', short);
+    b.dataset.v = v;
+    b.setAttribute('aria-pressed', String(periodOf(id) === v));
+    b.addEventListener('click', () => {
+      if (v === state.period) delete cardPeriod[id]; else cardPeriod[id] = v;
+      renderAll();
+    });
+    row.appendChild(b);
+  }
+  if (own) {
+    const r = el('button', 'chip reset', '⟲');
+    r.title = 'Follow the filter bar again';
+    r.setAttribute('aria-label', 'Follow the main period filter again');
+    r.addEventListener('click', () => { delete cardPeriod[id]; renderAll(); });
+    row.appendChild(r);
+    row.classList.add('own');
+  }
+  return row;
+}
 function card(id, title, sub, note) {
   const c = $(id); c.replaceChildren();
+  CARD_TITLE[id] = title;
   const head = el('div', 'chead'); head.appendChild(el('h3', null, title));
   const btn = el('button', 'tbl-btn', 'Table'); btn.setAttribute('aria-pressed', 'false');
   head.appendChild(btn); c.appendChild(head);
   if (sub) c.appendChild(el('p', 'csub', sub));
+  if (PERIOD_SCOPED.has(id)) c.appendChild(cardPeriodRow(id));
   if (note) { const nb = el('div', 'note'); nb.appendChild(note); c.appendChild(nb); }
   const chart = el('div'), table = el('div', 'tscroll'); table.hidden = true;
   c.appendChild(chart); c.appendChild(table);
@@ -1036,8 +1096,10 @@ function renderKpis(mountSel, idx, prevIdx) {
 /* ---------- findings ---------- */
 function renderFindings(idx) {
   const c = $('#card-findings'); c.replaceChildren();
+  CARD_TITLE['#card-findings'] = 'Headline read';
   c.appendChild(el('h3', null, 'Headline read'));
   c.appendChild(el('p', 'csub', 'Recomputed against the current filter. Flagged items are data problems worth fixing at the source.'));
+  c.appendChild(cardPeriodRow('#card-findings'));
   const list = el('ul', 'findings');
   const add = h => { const li = document.createElement('li'); li.innerHTML = h; list.appendChild(li); };
   const n = idx.length;
@@ -1139,7 +1201,7 @@ function renderWeekly(dim) {
 function renderMonthly(idx) {
   const b = timeBucket(), noun = BUCKET_NOUN[b];
   const { chart, table } = card('#card-monthly', `Submissions per ${noun}`,
-    `Every ${noun} in the selected period (${PERIOD_LABEL[state.period]}), split by destination`);
+    `Every ${noun} in the selected period (${PERIOD_LABEL[curPeriod()]}), split by destination`);
   if (!idx.length) { chart.appendChild(el('p', 'rempty', 'No leads in this period.')); return; }
   const g = groupBy(idx, BUCKET_OF[b], i => val('de', i));
   const ks = [...g.keys()].sort();
@@ -1442,8 +1504,10 @@ function renderQuality() {
 }
 function renderFill(idx) {
   const c = $('#card-fill'); c.replaceChildren();
+  CARD_TITLE['#card-fill'] = 'How complete each field is';
   c.appendChild(el('h3', null, 'How complete each field is'));
   c.appendChild(el('p', 'csub', 'Share of leads in the current filter that have a value. Low-coverage fields cannot support confident conclusions.'));
+  c.appendChild(cardPeriodRow('#card-fill'));
   const F = [['Destination', 'de'], ['Route', 'm'], ['Budget', 'b'], ['Budget tier', 't'], ['Education', 'e'],
     ['Field of study', 'fg'], ['English level', 'l'], ['Employed', 'em'], ['Form ID', 'f'],
     ['Traffic source', 's'], ['Medium', 'md'], ['How they found us', 'ch'], ['Ad content', 'ct'],
@@ -1890,16 +1954,38 @@ async function goLive(force) {
 // Cards that follow the Period filter. When the period holds no leads these are
 // cleared with a message — leaving the previous period's charts on screen next to a
 // "0 leads" label would quietly show the wrong numbers.
-const PERIOD_CARDS = ['card-findings', 'card-monthly', 'card-srcmix', 'card-destq', 'card-form',
-  'card-dest', 'card-method', 'card-tier', 'card-budget', 'card-age', 'card-edu', 'card-lang',
-  'card-field', 'card-emp', 'card-nat', 'card-channel', 'card-source', 'card-medium',
-  'card-campaign', 'card-content', 'card-ref', 'card-odoo', 'card-ip', 'card-outreach', 'card-fill'];
-function renderEmptyPeriod() {
-  for (const id of PERIOD_CARDS) {
-    const c = $('#' + id);
-    if (!c) continue;
-    c.replaceChildren();
-    c.appendChild(el('p', 'rempty', 'No leads in the selected period.'));
+/**
+ * Every card that follows a period, and so carries its own chip row. Cards on a
+ * fixed window (the 13-week chart, the two route charts, data quality, the
+ * two-period comparison) are deliberately absent, as are the Instagram
+ * demographics, which are a lifetime snapshot rather than a range.
+ */
+const PERIOD_SCOPED = new Set(['#card-findings', '#card-monthly', '#card-srcmix', '#card-destq',
+  '#card-form', '#card-dest', '#card-method', '#card-tier', '#card-budget', '#card-age',
+  '#card-edu', '#card-lang', '#card-field', '#card-emp', '#card-nat', '#card-channel',
+  '#card-source', '#card-medium', '#card-campaign', '#card-content', '#card-ref', '#card-odoo',
+  '#card-ip', '#card-outreach', '#card-fill',
+  '#card-soc-kpi', '#card-soc-reach', '#card-soc-funnel', '#card-soc-surface',
+  '#card-soc-eng', '#card-soc-posts']);
+
+/**
+ * Renders one card under its own period, so an empty window blanks only that
+ * card. The chip row is kept on an empty card — without it there would be no way
+ * to widen the window that emptied it.
+ */
+function inPeriod(id, fn) {
+  RENDER_PERIOD = periodOf(id);
+  try {
+    const sub = activeIdx();
+    if (sub.length) fn(sub);
+    else {
+      const { chart } = card(id, CARD_TITLE[id] || 'No data', '');
+      chart.appendChild(el('p', 'rempty', `No leads in the ${PERIOD_LABEL[periodOf(id)]}.`));
+      const btn = $(id + ' .tbl-btn');
+      if (btn) btn.remove();
+    }
+  } finally {
+    RENDER_PERIOD = null;
   }
 }
 // The banner has to sit at the top of the period-dependent area: the findings card is
@@ -1913,8 +1999,8 @@ function renderPeriodNote(idx) {
   nb.innerHTML = `<strong>No leads between ${fmtDay(periodStart())} and ${fmtDay(todayUTC())}.</strong> `
     + `The newest lead in the data is ${fmtDay(SNAP_DAY)}, so everything below is empty for this window. `
     + `Widen the period, or check that the sheet is still receiving submissions. The recent-activity cards, `
-    + `the weekly chart and the two destination route charts have their own fixed windows and are unaffected, 
-    and the Instagram section shows whatever social data the window holds.`;
+    + `the weekly chart and the two destination route charts have their own fixed windows and are unaffected. 
+    Any single card can also be put on its own window with the small Period chips inside it.`;
   host.appendChild(nb);
 }
 
@@ -2071,25 +2157,35 @@ function socTable(rows, cols) {
   return t;
 }
 
+/** Everything one Instagram card needs, resolved under whatever period is active. */
+function socCtx() {
+  const daily = socRows(SOC.daily, SOC.di);
+  const days = new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10)));
+  const unit = socBucketUnit(days.size);
+  return {
+    daily: daily,
+    posts: socRows(SOC.posts, SOC.pi),
+    stories: socRows(SOC.stories, SOC.si),
+    days: days, unit: unit, leads: socLeadBuckets(days, unit)
+  };
+}
 function renderSocial() {
   const host = $('#social');
   if (!SOC) { host.hidden = true; return; }
   host.hidden = false;
   renderSocAcctFilter();
-  const daily = socRows(SOC.daily, SOC.di);
-  const posts = socRows(SOC.posts, SOC.pi);
-  const stories = socRows(SOC.stories, SOC.si);
-  const days = new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10)));
-  const unit = socBucketUnit(days.size);
-  const leads = socLeadBuckets(days, unit);
-  renderSocSub(daily, days);
-  renderSocKpi(daily, posts, stories, leads, days);
-  renderSocReach(daily, leads, unit);
-  renderSocFunnel(daily, posts, stories, leads);
-  renderSocSurface(posts, stories);
-  renderSocEngagement(daily);
-  renderSocPosts(posts);
-  renderSocAudience();
+  renderSocSub(socCtx());                 // the intro describes the master filter
+  const run = (id, fn) => {
+    RENDER_PERIOD = periodOf(id);
+    try { fn(socCtx()); } finally { RENDER_PERIOD = null; }
+  };
+  run('#card-soc-kpi', renderSocKpi);
+  run('#card-soc-reach', renderSocReach);
+  run('#card-soc-funnel', renderSocFunnel);
+  run('#card-soc-surface', renderSocSurface);
+  run('#card-soc-eng', renderSocEngagement);
+  run('#card-soc-posts', renderSocPosts);
+  renderSocAudience();                    // a lifetime snapshot: no period applies
 }
 
 function renderSocAcctFilter() {
@@ -2115,13 +2211,14 @@ function renderSocAcctFilter() {
   host.dataset.built = String(SOC.accounts.length);
 }
 
-function renderSocSub(daily, daySet) {
-  const days = [...daySet].sort();
+function renderSocSub(ctx) {
+  const days = [...ctx.days].sort();
   const newest = days.length ? days[days.length - 1] : '';
   const gap = newest ? Math.round((todayUTC() - isoDay(newest)) / DAY) : null;
   const scope = state.period === 'all'
     ? `all ${fmt(days.length)} collected day${days.length === 1 ? '' : 's'}`
     : PERIOD_LABEL[state.period];
+  const own = [...PERIOD_SCOPED].filter(id => id.indexOf('#card-soc') === 0 && cardPeriod[id]).length;
   let txt = `Straight from the Instagram Graph API, following the Period filter — currently ${scope}. `
     + `Collection started recently, so this window is only as wide as the days already collected — `
     + `lead figures here are counted over those same days so the two sides stay comparable. `
@@ -2129,10 +2226,12 @@ function renderSocSub(daily, daySet) {
   txt += newest
     ? `Newest collected day: ${fmtDay(isoDay(newest))}${gap > 2 ? ` — ${gap} days ago, so the collector may have stopped` : ''}.`
     : 'No days collected in this window.';
+  if (own) txt += ` ${own} card${own === 1 ? ' below is' : 's below are'} on a window of their own.`;
   $('#socSub').textContent = txt;
 }
 
-function renderSocKpi(daily, posts, stories, leads, daySet) {
+function renderSocKpi(ctx) {
+  const daily = ctx.daily, posts = ctx.posts, stories = ctx.stories, leads = ctx.leads;
   // this card is tiles only, so the Table toggle card() adds has nothing to show
   const { chart } = card('#card-soc-kpi', 'Instagram at a glance',
     'Account totals for the selected period. Reach is unique accounts per day, so summing days counts a person once per day they saw something — treat it as exposure, not audience size.');
@@ -2165,7 +2264,7 @@ function renderSocKpi(daily, posts, stories, leads, daySet) {
   // collected — which is shorter than the window until a month has passed.
   const fSpan = marks.reduce((n, e) => Math.max(n,
     Math.round((isoDay(e.lastD) - isoDay(e.firstD)) / DAY)), 0);
-  const dayCount = daySet.size;
+  const dayCount = ctx.days.size;
   const items = [
     ['Accounts reached', kfmt(reach), `${fmt(reach)} over ${fmt(dayCount)} day${dayCount === 1 ? '' : 's'}`],
     ['Views', kfmt(views), reach ? `${(views / reach).toFixed(1)} views per account reached` : 'no reach recorded'],
@@ -2194,7 +2293,8 @@ function renderSocKpi(daily, posts, stories, leads, daySet) {
   if (btn) btn.remove();
 }
 
-function renderSocReach(daily, leads, unit) {
+function renderSocReach(ctx) {
+  const daily = ctx.daily, leads = ctx.leads, unit = ctx.unit;
   const noun = BUCKET_NOUN[unit];
   const { chart, table } = card('#card-soc-reach', `Reach and views per ${noun}`,
     `Accounts reached next to total views, bucketed by ${noun} like the lead volume chart. Instagram-sourced leads for the same buckets are in the table.`
@@ -2223,7 +2323,8 @@ function renderSocReach(daily, leads, unit) {
   }), [noun.replace(/^./, c => c.toUpperCase()), 'Reached', 'Views', 'IG leads', 'Leads/1k']));
 }
 
-function renderSocFunnel(daily, posts, stories, leads) {
+function renderSocFunnel(ctx) {
+  const daily = ctx.daily, posts = ctx.posts, stories = ctx.stories, leads = ctx.leads;
   const reach = socSum(daily, SOC.di, 'reach');
   const inter = socSum(daily, SOC.di, 'inter');
   const visits = socSum(posts, SOC.pi, 'visits');
@@ -2253,7 +2354,8 @@ function renderSocFunnel(daily, posts, stories, leads) {
   ]), ['Stage', 'Count', 'Of reach', 'Of previous stage']));
 }
 
-function renderSocSurface(posts, stories) {
+function renderSocSurface(ctx) {
+  const posts = ctx.posts, stories = ctx.stories;
   const { chart, table } = card('#card-soc-surface', 'Which format earns the reach',
     'Reach and views summed over the individual posts, reels and stories published in this window. A post keeps accruing reach after the day it went out, so these will not match the daily account totals.');
   const acc = {};
@@ -2280,7 +2382,8 @@ function renderSocSurface(posts, stories) {
   }), ['Format', 'Published', 'Reach', 'Views', 'Interactions', 'Eng. rate', 'Reach each']));
 }
 
-function renderSocEngagement(daily) {
+function renderSocEngagement(ctx) {
+  const daily = ctx.daily;
   const { chart, table } = card('#card-soc-eng', 'What the engagement is made of',
     'Account-level interaction counts for the period. Saves and shares travel furthest in the algorithm, so their share matters more than the raw total.');
   const items = SOC_INTERACTIONS.map(s => ({
@@ -2293,7 +2396,8 @@ function renderSocEngagement(daily) {
     ['Interaction', 'Count', 'Share']));
 }
 
-function renderSocPosts(posts) {
+function renderSocPosts(ctx) {
+  const posts = ctx.posts;
   const { chart, table } = card('#card-soc-posts', 'Best performing posts and reels',
     'Ranked by accounts reached within the selected period. Stories are excluded — they are rolled up by day in the format card above.');
   if (!posts.length) { chart.appendChild(el('p', 'rempty', 'No posts collected in this window.')); return; }
@@ -2435,40 +2539,55 @@ function renderAll() {
 
   renderKpis('#kpis', idx);
   renderPeriodNote(idx);
-  if (!idx.length) { renderEmptyPeriod(); return; }
-  renderFindings(idx);
-  renderMonthly(idx);
-  renderSrcMix(idx);
-  renderDestQ(idx);
-  simple('#card-form', 'Which form they filled', 'The assessment form each submission came through', idx, 'f');
-  renderDest(idx);
-  simple('#card-method', `Route they want to pursue — ${PERIOD_LABEL[state.period]}`,
-    'What the lead says they intend to do, over the selected period', idx, 'm', 10);
-  renderTier(idx);
-  renderBudget(idx);
-  renderAge(idx);
-  ordered('#card-edu', 'Education level', 'Highest completed degree, lowest to highest', idx, 'e',
-    ['کمتر از دیپلم', 'دیپلم', 'کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری', 'پسادکتری (Postdoc)']);
-  ordered('#card-lang', 'Language level (self-assessed)', 'IELTS band claimed, weakest to strongest; German and French appear for Europe leads', idx, 'l',
-    ['ضعیف (آیلتس ۴ به پایین)', 'متوسط (آیلتس ۴.۵ تا ۵.۵)', 'خوب (آیلتس ۶ تا ۶.۵)', 'عالی (آیلتس ۷ به بالا)']);
-  simple('#card-field', 'Field of study', 'Free-text degree field, grouped into sectors', idx, 'fg');
-  simple('#card-emp', 'Currently employed', 'Self-reported on the form', idx, 'em');
-  simple('#card-nat', 'Nationality', 'Only asked on some forms, so coverage is partial', idx, 'nat');
-  simple('#card-channel', 'How they say they found us', 'Self-reported answer on the form', idx, 'ch');
-  simple('#card-source', 'Traffic source (UTM)', 'Raw tracking source captured with the submission', idx, 's', 10);
-  simple('#card-medium', 'Traffic medium (UTM)', 'Placement or medium captured with the submission', idx, 'md', 10);
-  simple('#card-campaign', 'Campaign tags', 'UTM campaign, where one was captured', idx, 'cp', 10);
-  simple('#card-content', 'Ad / content tag', 'UTM content — which creative or page drove the form', idx, 'ct', 10);
-  renderRef(idx);
-  renderOdoo(idx);
-  renderIp(idx);
-  renderOutreach(idx);
-  renderFill(idx);
+  // Each card resolves its own window, so one card set to 3 days can come back
+  // empty while the rest of the page stays populated.
+  inPeriod('#card-findings', renderFindings);
+  inPeriod('#card-monthly', renderMonthly);
+  inPeriod('#card-srcmix', renderSrcMix);
+  inPeriod('#card-destq', renderDestQ);
+  inPeriod('#card-form', sub => simple('#card-form', 'Which form they filled',
+    'The assessment form each submission came through', sub, 'f'));
+  inPeriod('#card-dest', renderDest);
+  inPeriod('#card-method', sub => simple('#card-method',
+    `Route they want to pursue — ${PERIOD_LABEL[curPeriod()]}`,
+    'What the lead says they intend to do, over the selected period', sub, 'm', 10));
+  inPeriod('#card-tier', renderTier);
+  inPeriod('#card-budget', renderBudget);
+  inPeriod('#card-age', renderAge);
+  inPeriod('#card-edu', sub => ordered('#card-edu', 'Education level',
+    'Highest completed degree, lowest to highest', sub, 'e',
+    ['کمتر از دیپلم', 'دیپلم', 'کاردانی', 'کارشناسی', 'کارشناسی ارشد', 'دکتری', 'پسادکتری (Postdoc)']));
+  inPeriod('#card-lang', sub => ordered('#card-lang', 'Language level (self-assessed)',
+    'IELTS band claimed, weakest to strongest; German and French appear for Europe leads', sub, 'l',
+    ['ضعیف (آیلتس ۴ به پایین)', 'متوسط (آیلتس ۴.۵ تا ۵.۵)', 'خوب (آیلتس ۶ تا ۶.۵)', 'عالی (آیلتس ۷ به بالا)']));
+  inPeriod('#card-field', sub => simple('#card-field', 'Field of study',
+    'Free-text degree field, grouped into sectors', sub, 'fg'));
+  inPeriod('#card-emp', sub => simple('#card-emp', 'Currently employed',
+    'Self-reported on the form', sub, 'em'));
+  inPeriod('#card-nat', sub => simple('#card-nat', 'Nationality',
+    'Only asked on some forms, so coverage is partial', sub, 'nat'));
+  inPeriod('#card-channel', sub => simple('#card-channel', 'How they say they found us',
+    'Self-reported answer on the form', sub, 'ch'));
+  inPeriod('#card-source', sub => simple('#card-source', 'Traffic source (UTM)',
+    'Raw tracking source captured with the submission', sub, 's', 10));
+  inPeriod('#card-medium', sub => simple('#card-medium', 'Traffic medium (UTM)',
+    'Placement or medium captured with the submission', sub, 'md', 10));
+  inPeriod('#card-campaign', sub => simple('#card-campaign', 'Campaign tags',
+    'UTM campaign, where one was captured', sub, 'cp', 10));
+  inPeriod('#card-content', sub => simple('#card-content', 'Ad / content tag',
+    'UTM content — which creative or page drove the form', sub, 'ct', 10));
+  inPeriod('#card-ref', renderRef);
+  inPeriod('#card-odoo', renderOdoo);
+  inPeriod('#card-ip', renderIp);
+  inPeriod('#card-outreach', renderOutreach);
+  inPeriod('#card-fill', renderFill);
 }
 for (const [id, key] of [['#f-period', 'period'], ['#f-dest', 'dest'], ['#f-src', 'src'],
                          ['#f-acct', 'acct']]) {
   $(id).addEventListener('click', e => {
     const b = e.target.closest('.chip'); if (!b) return;
+    // The filter bar is the master: setting it pulls every card back into line.
+    if (key === 'period') clearCardPeriods();
     state[key] = b.dataset.v;
     for (const ch of $(id).querySelectorAll('.chip')) ch.setAttribute('aria-pressed', String(ch === b));
     renderAll();
