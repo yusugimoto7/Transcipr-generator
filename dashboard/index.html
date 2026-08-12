@@ -1961,10 +1961,15 @@ function socRows(rows, ci) {
   });
 }
 const socSum = (rows, ci, f) => rows.reduce((s, r) => s + socNum(r[ci[f]]), 0);
-function socBucket(dateIso) {
-  const b = timeBucket();
-  if (b === 'day') return dateIso;
-  if (b === 'month') return dateIso.slice(0, 7);
+/* The lead history runs to 19 months while Instagram collection has just begun,
+   so bucketing this section by the lead span would squash a month of daily
+   numbers into one bar. It buckets on how many Instagram days it actually has. */
+function socBucketUnit(dayCount) {
+  return dayCount <= 45 ? 'day' : dayCount <= 210 ? 'week' : 'month';
+}
+function socBucket(dateIso, unit) {
+  if (unit === 'day') return dateIso;
+  if (unit === 'month') return dateIso.slice(0, 7);
   return iso(weekStart(isoDay(dateIso)));
 }
 /**
@@ -1972,18 +1977,19 @@ function socBucket(dateIso) {
  * selecting "WhatsApp" would otherwise zero out the conversion figures while the
  * reach numbers stayed put, which reads as a collapse rather than a filter.
  */
-function socLeadBuckets() {
+function socLeadBuckets(days, unit) {
   const destI = state.dest === 'all' ? -1 : DICT.de.indexOf(state.dest);
   const igI = DICT.sg.indexOf('Instagram');
-  const from = periodStart();
   const m = new Map();
   let total = 0;
   for (let i = 0; i < N; i++) {
     if (COL.sg[i] !== igI) continue;
     if (destI >= 0 && COL.de[i] !== destI) continue;
-    const d = dayOf(i);
-    if (from && d < from) continue;
-    const k = socBucket(iso(d));
+    // Only days with Instagram numbers count. Otherwise "leads per 1k reached"
+    // divides 19 months of leads by however many days of reach exist so far.
+    const d = iso(dayOf(i));
+    if (!days.has(d)) continue;
+    const k = socBucket(d, unit);
     m.set(k, (m.get(k) || 0) + 1);
     total++;
   }
@@ -2073,10 +2079,12 @@ function renderSocial() {
   const daily = socRows(SOC.daily, SOC.di);
   const posts = socRows(SOC.posts, SOC.pi);
   const stories = socRows(SOC.stories, SOC.si);
-  const leads = socLeadBuckets();
-  renderSocSub(daily);
-  renderSocKpi(daily, posts, stories, leads);
-  renderSocReach(daily, leads);
+  const days = new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10)));
+  const unit = socBucketUnit(days.size);
+  const leads = socLeadBuckets(days, unit);
+  renderSocSub(daily, days);
+  renderSocKpi(daily, posts, stories, leads, days);
+  renderSocReach(daily, leads, unit);
   renderSocFunnel(daily, posts, stories, leads);
   renderSocSurface(posts, stories);
   renderSocEngagement(daily);
@@ -2107,23 +2115,24 @@ function renderSocAcctFilter() {
   host.dataset.built = String(SOC.accounts.length);
 }
 
-function renderSocSub(daily) {
-  // distinct dates, not rows: two accounts produce two rows for the same day
-  const days = [...new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10)))].sort();
+function renderSocSub(daily, daySet) {
+  const days = [...daySet].sort();
   const newest = days.length ? days[days.length - 1] : '';
   const gap = newest ? Math.round((todayUTC() - isoDay(newest)) / DAY) : null;
   const scope = state.period === 'all'
     ? `all ${fmt(days.length)} collected day${days.length === 1 ? '' : 's'}`
     : PERIOD_LABEL[state.period];
   let txt = `Straight from the Instagram Graph API, following the Period filter — currently ${scope}. `
-    + `Meta revises these numbers for up to 48 hours, so the last two days move. `;
+    + `Collection started recently, so this window is only as wide as the days already collected — `
+    + `lead figures here are counted over those same days so the two sides stay comparable. `
+    + `Meta revises its numbers for up to 48 hours, so the last two days move. `;
   txt += newest
     ? `Newest collected day: ${fmtDay(isoDay(newest))}${gap > 2 ? ` — ${gap} days ago, so the collector may have stopped` : ''}.`
     : 'No days collected in this window.';
   $('#socSub').textContent = txt;
 }
 
-function renderSocKpi(daily, posts, stories, leads) {
+function renderSocKpi(daily, posts, stories, leads, daySet) {
   // this card is tiles only, so the Table toggle card() adds has nothing to show
   const { chart } = card('#card-soc-kpi', 'Instagram at a glance',
     'Account totals for the selected period. Reach is unique accounts per day, so summing days counts a person once per day they saw something — treat it as exposure, not audience size.');
@@ -2152,16 +2161,21 @@ function renderSocKpi(daily, posts, stories, leads) {
   const followersNow = marks.reduce((s, e) => s + e.last, 0);
   const netF = followersNow - marks.reduce((s, e) => s + e.first, 0);
   const grew = marks.some(e => e.firstD !== e.lastD);
-  const dayCount = new Set(daily.map(r => String(r[SOC.di.d]).slice(0, 10))).size;
+  // The API gives no follower history, so the delta only spans the days already
+  // collected — which is shorter than the window until a month has passed.
+  const fSpan = marks.reduce((n, e) => Math.max(n,
+    Math.round((isoDay(e.lastD) - isoDay(e.firstD)) / DAY)), 0);
+  const dayCount = daySet.size;
   const items = [
     ['Accounts reached', kfmt(reach), `${fmt(reach)} over ${fmt(dayCount)} day${dayCount === 1 ? '' : 's'}`],
     ['Views', kfmt(views), reach ? `${(views / reach).toFixed(1)} views per account reached` : 'no reach recorded'],
     ['Interactions', kfmt(inter), `${pct1(inter, reach)} of reach engaged`],
     ['Followers', followersNow ? fmt(followersNow) : '—',
-      grew ? `${netF > 0 ? '+' : ''}${fmt(netF)} over the window · ${fmt(gained)} followed, ${fmt(lost)} left`
-           : `${fmt(gained)} followed, ${fmt(lost)} left in the window`],
+      grew ? `${netF > 0 ? '+' : ''}${fmt(netF)} over ${fSpan} day${fSpan === 1 ? '' : 's'} of counts · `
+             + `${fmt(gained)} followed over ${fmt(dayCount)}`
+           : `${fmt(gained)} followed, ${fmt(lost)} left over ${fmt(dayCount)} days`],
     ['Profile visits', kfmt(visits), `from post and story insights · ${fmt(taps + clicks)} link and contact taps`],
-    ['Instagram leads', fmt(leads.total), 'form submissions tagged Instagram, same window'],
+    ['Instagram leads', fmt(leads.total), `tagged Instagram, on the ${fmt(dayCount)} days with Instagram data`],
     ['Leads per 1k reached', reach ? (1000 * leads.total / reach).toFixed(2) : '—',
       reach ? `${fmt(leads.total)} leads from ${kfmt(reach)} reached` : 'needs reach data'],
     ['Reach per day', dayCount ? kfmt(Math.round(reach / dayCount)) : '—',
@@ -2180,14 +2194,14 @@ function renderSocKpi(daily, posts, stories, leads) {
   if (btn) btn.remove();
 }
 
-function renderSocReach(daily, leads) {
-  const noun = BUCKET_NOUN[timeBucket()];
+function renderSocReach(daily, leads, unit) {
+  const noun = BUCKET_NOUN[unit];
   const { chart, table } = card('#card-soc-reach', `Reach and views per ${noun}`,
     `Accounts reached next to total views, bucketed by ${noun} like the lead volume chart. Instagram-sourced leads for the same buckets are in the table.`
     + (noun === 'day' ? '' : ` The first and last ${noun} can be partial, so a short bar at either end is a clipped ${noun} rather than a drop.`));
   const m = new Map();
   for (const r of daily) {
-    const k = socBucket(String(r[SOC.di.d]).slice(0, 10));
+    const k = socBucket(String(r[SOC.di.d]).slice(0, 10), unit);
     const b = m.get(k) || { reach: 0, views: 0 };
     b.reach += socNum(r[SOC.di.reach]);
     b.views += socNum(r[SOC.di.views]);
@@ -2196,7 +2210,7 @@ function renderSocReach(daily, leads) {
   const keys = [...m.keys()].sort();
   if (!keys.length) { chart.appendChild(el('p', 'rempty', 'No Instagram days in this window.')); return; }
   const groups = keys.map(k => ({
-    label: BUCKET_LABEL[timeBucket()](k), short: BUCKET_SHORT[timeBucket()](k), v: m.get(k)
+    label: BUCKET_LABEL[unit](k), short: BUCKET_SHORT[unit](k), v: m.get(k)
   }));
   socPairCols(chart, groups, [
     { key: 'reach', label: 'Accounts reached', color: 'var(--s1)', unit: 'accounts' },
@@ -2204,7 +2218,7 @@ function renderSocReach(daily, leads) {
   ], { height: '190px' });
   table.appendChild(socTable(keys.map(k => {
     const b = m.get(k), ld = leads.byBucket.get(k) || 0;
-    return [BUCKET_LABEL[timeBucket()](k), fmt(b.reach), fmt(b.views), fmt(ld),
+    return [BUCKET_LABEL[unit](k), fmt(b.reach), fmt(b.views), fmt(ld),
       b.reach ? (1000 * ld / b.reach).toFixed(2) : '—'];
   }), [noun.replace(/^./, c => c.toUpperCase()), 'Reached', 'Views', 'IG leads', 'Leads/1k']));
 }

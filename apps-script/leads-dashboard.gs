@@ -395,11 +395,18 @@ function buildSocial() {
     var d = dayText(r.date);
     if (d && d > audDate) audDate = d;
   });
+  // A demographic bucket is one measurement, so repeated rows for the same bucket
+  // must replace each other rather than add up — summing them would report an
+  // audience several times larger than the follower count.
   var audCols = ['a', 'audience', 'dim', 'key', 'value'];
-  var audRows = [];
+  var audSeen = {}, audRows = [], audDupes = 0;
   audience.forEach(function (r) {
     if (dayText(r.date) !== audDate) return;
-    audRows.push([acct(r.account), txt(r.audience), txt(r.dimension), txt(r.key), num(r.value)]);
+    var row = [acct(r.account), txt(r.audience), txt(r.dimension), txt(r.key), num(r.value)];
+    var k = row.slice(0, 4).join('|');
+    if (k in audSeen) { audRows[audSeen[k]] = row; audDupes++; return; }
+    audSeen[k] = audRows.length;
+    audRows.push(row);
   });
 
   return {
@@ -407,7 +414,7 @@ function buildSocial() {
     dailyCols: dailyCols, daily: dailyRows,
     postCols: postCols, posts: postRows,
     storyCols: storyCols, stories: storyRows,
-    audCols: audCols, audience: audRows, audDate: audDate,
+    audCols: audCols, audience: audRows, audDate: audDate, audDupes: audDupes,
     lastRun: txt(PropertiesService.getScriptProperties().getProperty('IG_LAST_RUN') || ''),
     generatedAt: new Date().toISOString()
   };
@@ -498,7 +505,9 @@ function testBuild() {
              pack.meta.rawRows, pack.meta.dupes, pack.meta.testRows);
   Logger.log('people: %s, payload KB: %s', pack.meta.people, Math.round(payload.length / 1024));
   if (pack.social) {
-    Logger.log('social: %s account(s), %s day(s), %s post(s), %s story-day(s), audience %s',
+    Logger.log('social: %s account(s), %s day(s), %s post(s), %s story-day(s), audience %s' +
+      (pack.social.audDupes ? ' (' + pack.social.audDupes + ' duplicate audience rows collapsed — ' +
+       'the IG Audience tab has repeats worth deleting)' : ''),
       pack.social.accounts.length, pack.social.daily.length, pack.social.posts.length,
       pack.social.stories.length, pack.social.audDate || 'none');
   } else {

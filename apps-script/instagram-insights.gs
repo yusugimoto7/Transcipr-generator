@@ -67,7 +67,10 @@ var IG_DAILY_GROUPS = [
 /* Media metrics differ by surface; asking for a story metric on a reel errors. */
 var IG_MEDIA_METRICS = {
   FEED: ['reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'profile_visits', 'follows'],
-  REELS: ['reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'ig_reels_avg_watch_time'],
+  // profile_visits and follows are asked for on reels too. If Meta does not serve
+  // them for that surface the per-metric fallback records the name and skips it.
+  REELS: ['reach', 'views', 'likes', 'comments', 'saved', 'shares', 'total_interactions',
+    'ig_reels_avg_watch_time', 'profile_visits', 'follows'],
   STORY: ['reach', 'views', 'replies', 'shares', 'total_interactions', 'profile_visits', 'follows', 'link_clicks']
 };
 
