@@ -40,7 +40,7 @@ var AB_URL = 'https://www.alberta.ca/alberta-advantage-immigration-program-expre
 function doGet(e) {
   var payload = {
     updatedAt: new Date().toISOString(),
-    rounds: safe_(getExpressEntryRounds_, []),
+    rounds: cachedRounds_(),
     pnpDraws: {
       ON:  province_('Ontario (OINP)', ON_URL, getOINP_),
       BC:  province_('British Columbia (BCPNP)', BC_URL, getBCSkills_),
@@ -61,12 +61,90 @@ function doGet(e) {
 // A province with no parser yet. Honest emptiness, not invented data.
 function noParserYet_() { return []; }
 
+// ── Response cache ──────────────────────────────────────────────────────────
+// Every call re-scraped six government sites in series, so one request took
+// anywhere from 7 to 300+ seconds depending on how slow the slowest site
+// happened to be that minute. n8n gave up at 60s until the timeout was raised,
+// and Apps Script serialises concurrent executions, so two consumers arriving
+// together made each other worse.
+//
+// FRESH_SECONDS — how long a parsed result is reused without re-fetching.
+//   Draws are announced a few times a week; half an hour of staleness costs
+//   nothing and makes almost every call return instantly.
+// GOOD_SECONDS — how long the last SUCCESSFUL result is kept as a fallback.
+//   21600 is the CacheService maximum.
+var FRESH_SECONDS = 1800;
+var GOOD_SECONDS = 21600;
+
+function cacheKey_(prefix, name) {
+  return prefix + ':' + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, String(name)));
+}
+
 // One broken province must never take down the whole endpoint.
 function province_(sourceName, url, fn) {
+  var cache = CacheService.getScriptCache();
+  var freshKey = cacheKey_('p-fresh', sourceName);
+  var goodKey = cacheKey_('p-good', sourceName);
+
+  var fresh = cache.get(freshKey);
+  if (fresh) { try { return JSON.parse(fresh); } catch (e) {} }
+
   var draws = [];
+  var failed = false;
   try { draws = fn() || []; }
-  catch (err) { Logger.log(sourceName + ' failed: ' + err); draws = []; }
-  return { source: sourceName, url: url, stale: isStale_(draws), draws: draws };
+  catch (err) { Logger.log(sourceName + ' failed: ' + err); failed = true; }
+
+  // A source that has published before and now returns nothing means the fetch
+  // or the parser broke, not that the province stopped drawing. Serving the
+  // last good copy beats serving an empty province, which downstream reads as
+  // "hide this card" and "nothing to post" — indistinguishable from a genuinely
+  // quiet province, which is how Manitoba stayed invisible for a day.
+  if (failed || !draws.length) {
+    var lastGood = cache.get(goodKey);
+    if (lastGood) { try { return JSON.parse(lastGood); } catch (e) {} }
+  }
+
+  var out = { source: sourceName, url: url, stale: isStale_(draws), draws: draws };
+  var json = JSON.stringify(out);
+  try {
+    cache.put(freshKey, json, FRESH_SECONDS);
+    if (draws.length) cache.put(goodKey, json, GOOD_SECONDS);
+  } catch (e) {
+    // Values over 100KB are rejected. A province result is far smaller, but a
+    // failed put must never break the response.
+    Logger.log('cache put failed for ' + sourceName + ': ' + e);
+  }
+  return out;
+}
+
+// Express Entry, cached the same way.
+//
+// EE_KEEP trims the history to the newest 40 rounds. The full list is 435
+// entries and roughly 80KB — most of the response body, for data no consumer
+// reads: the website page shows 15 and the social workflow reads 1. Trimming
+// also keeps the cached value clear of the 100KB CacheService ceiling.
+var EE_KEEP = 40;
+
+function cachedRounds_() {
+  var cache = CacheService.getScriptCache();
+  var fresh = cache.get('ee-fresh');
+  if (fresh) { try { return JSON.parse(fresh); } catch (e) {} }
+
+  var rounds = safe_(getExpressEntryRounds_, []).slice(0, EE_KEEP);
+  if (!rounds.length) {
+    var lastGood = cache.get('ee-good');
+    if (lastGood) { try { return JSON.parse(lastGood); } catch (e) {} }
+  }
+
+  var json = JSON.stringify(rounds);
+  try {
+    cache.put('ee-fresh', json, FRESH_SECONDS);
+    if (rounds.length) cache.put('ee-good', json, GOOD_SECONDS);
+  } catch (e) {
+    Logger.log('cache put failed for rounds: ' + e);
+  }
+  return rounds;
 }
 
 // Stale when: nothing parsed, no parseable date, or the newest is too old.
