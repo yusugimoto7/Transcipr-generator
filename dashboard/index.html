@@ -224,7 +224,11 @@
   .colstack > i { display: block; min-height: 2px; }
   .colstack > i:last-child { border-radius: 4px 4px 0 0; }
   .coltop { position: absolute; left: 50%; transform: translateX(-50%); font-size: 11px;
-    color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* many bars in one card: shrink the value labels so neighbours cannot touch */
+  .cols.dense .coltop { font-size: 9.5px; }
+  /* Labels that will not fit are hidden by declutter() after layout, since how many
+     fit depends on the width of the numbers themselves, not on the bar count. */
   .colx { display: flex; gap: 5px; margin-top: 6px; }
   .colx .xlab { flex: 1 1 0; text-align: center; font-size: 10.5px; color: var(--muted);
     overflow: hidden; white-space: nowrap; min-width: 0; }
@@ -824,9 +828,20 @@ function stackedCols(mount, groups, series, opts = {}) {
   cols.style.height = opts.height || '170px';
   const totals = groups.map(g => series.reduce((s, sd) => s + (g.v[sd.key] || 0), 0));
   const max = Math.max(...totals, 1);
+  // Totals sit above each stack. Every one is drawn and declutter() then drops the
+  // ones that will not fit, so the peak and the latest bar always keep theirs.
+  const peak = totals.indexOf(Math.max(...totals));
+  if (groups.length > 16) cols.classList.add('dense');
   groups.forEach((g, gi) => {
     const slot = el('div', 'colslot'), st = el('div', 'colstack');
-    st.style.height = Math.max(1.5, 100 * totals[gi] / max) + '%';
+    const h = Math.max(1.5, 100 * totals[gi] / max);
+    st.style.height = h + '%';
+    const notable = gi === peak || gi === groups.length - 1;
+    if (totals[gi]) {
+      const top = el('div', 'coltop' + (notable ? ' keep' : ''), fmt(totals[gi]));
+      top.style.bottom = `calc(${h}% + 3px)`;
+      slot.appendChild(top);
+    }
     for (const sd of series) {
       const n = g.v[sd.key] || 0;
       if (!n) continue;
@@ -839,6 +854,7 @@ function stackedCols(mount, groups, series, opts = {}) {
     const xl = el('div', 'xlab', g.short || g.label); xl.title = g.label; xrow.appendChild(xl);
   });
   wrap.appendChild(cols); wrap.appendChild(xrow); mount.appendChild(wrap);
+  declutter(cols);
   const lg = el('div', 'legend');
   for (const sd of series) {
     const it = el('span', 'lg'), sw = el('span', 'sw');
@@ -847,6 +863,37 @@ function stackedCols(mount, groups, series, opts = {}) {
   }
   mount.appendChild(lg);
 }
+/**
+ * Hides value labels that would collide with the one to their left. Whether a
+ * number fits depends on how many digits it has and how wide the card is, so this
+ * measures the rendered labels rather than guessing from the bar count. Labels
+ * marked .keep — the tallest bar and the most recent one — win any collision.
+ */
+function declutter(cols) {
+  const labels = [...cols.querySelectorAll('.coltop')];
+  for (const n of labels) n.hidden = false;
+  // A card switched to its table view has no width to measure; leave it as built.
+  if (!labels.length || !cols.getBoundingClientRect().width) return;
+  let lastRight = -Infinity, lastNode = null;
+  for (const n of labels) {
+    const r = n.getBoundingClientRect();
+    if (r.left < lastRight + 3) {
+      if (!n.classList.contains('keep')) { n.hidden = true; continue; }
+      if (lastNode && !lastNode.classList.contains('keep')) lastNode.hidden = true;
+      else { n.hidden = true; continue; }
+    }
+    lastRight = r.right; lastNode = n;
+  }
+}
+// Labels are placed against a measured width, so a resized window has to re-decide
+// which of them fit. Re-running the pass is far cheaper than re-rendering.
+let declutterT = null;
+addEventListener('resize', () => {
+  clearTimeout(declutterT);
+  declutterT = setTimeout(() => {
+    for (const c of document.querySelectorAll('.cols')) declutter(c);
+  }, 120);
+});
 function stackRows(mount, rows, series) {
   const box = el('div', 'stacks'), trows = [];
   for (const r of rows) {
