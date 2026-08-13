@@ -1,0 +1,351 @@
+<title>The Almanac</title>
+<style>
+  :root {
+    --ground: #EFF2ED;
+    --paper: #FAFBF8;
+    --ink: #2C3327;
+    --soft: #64705C;
+    --rule: #D2DACC;
+    --plum: #6B4A5C;
+    --plum-wash: #E7DDE2;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    --sans: "Gill Sans", "Gill Sans MT", Optima, "Segoe UI", Helvetica, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #191D18;
+      --paper: #212620;
+      --ink: #E4E9E0;
+      --soft: #9AA694;
+      --rule: #333B31;
+      --plum: #C79EB2;
+      --plum-wash: #2E2530;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #191D18;
+    --paper: #212620;
+    --ink: #E4E9E0;
+    --soft: #9AA694;
+    --rule: #333B31;
+    --plum: #C79EB2;
+    --plum-wash: #2E2530;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.72;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 30px; }
+
+  .marker {
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--soft);
+  }
+
+  /* ---------- opening ---------- */
+  .opening {
+    text-align: center;
+    padding: 96px 0 76px;
+  }
+  .sprig {
+    display: block;
+    margin: 0 auto 26px;
+    color: var(--plum);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: clamp(44px, 7.5vw, 88px);
+    line-height: 1.06;
+    margin: 0 0 20px;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .opening p {
+    max-width: 50ch;
+    margin: 0 auto;
+    color: var(--soft);
+    font-size: 18px;
+  }
+  .rule-ornament {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    justify-content: center;
+    margin: 46px 0;
+    color: var(--rule);
+  }
+  .rule-ornament::before,
+  .rule-ornament::after {
+    content: "";
+    height: 1px;
+    background: var(--rule);
+    flex: 1;
+    max-width: 220px;
+  }
+  .rule-ornament span { color: var(--plum); font-size: 13px; letter-spacing: 0.3em; }
+
+  /* ---------- pressed photos ---------- */
+  .press {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 12px 12px 44px;
+    box-shadow: 0 1px 0 var(--rule);
+    position: relative;
+  }
+  .press .plate {
+    aspect-ratio: 4 / 5;
+    background:
+      radial-gradient(120% 90% at 30% 10%, var(--plum-wash), transparent 65%),
+      var(--ground);
+    display: grid;
+    place-items: center;
+  }
+  .press .plate::after {
+    content: "your photo";
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--soft);
+  }
+  .press figcaption {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    right: 14px;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--soft);
+    text-align: center;
+  }
+  .press.tilt-l { transform: rotate(-1.2deg); }
+  .press.tilt-r { transform: rotate(1deg); }
+
+  /* ---------- seasons ---------- */
+  section { padding: 70px 0; }
+  .season { border-top: 1px solid var(--rule); padding-top: 34px; margin-top: 46px; }
+  .season:first-of-type { border-top: none; margin-top: 0; }
+  .season-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 30px;
+  }
+  .season-head h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 30px;
+    margin: 0;
+  }
+  .season-head .yr {
+    font-family: var(--serif);
+    font-size: 30px;
+    color: var(--plum);
+  }
+  .season-head .line { flex: 1; height: 1px; background: var(--rule); }
+
+  .entries {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 44px;
+    align-items: start;
+  }
+  .entry { margin-bottom: 26px; }
+  .entry:last-child { margin-bottom: 0; }
+  .entry h3 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 22px;
+    margin: 0 0 4px;
+  }
+  .entry .date {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--plum);
+    margin-bottom: 8px;
+  }
+  .entry p { margin: 0; color: var(--soft); max-width: 56ch; }
+
+  /* ---------- letter ---------- */
+  .letter {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 56px clamp(28px, 6vw, 72px);
+    max-width: 68ch;
+    margin: 0 auto;
+  }
+  .letter p {
+    font-family: var(--serif);
+    font-size: 19px;
+    line-height: 1.78;
+    margin: 0 0 1.3em;
+  }
+  .letter .salutation {
+    font-style: italic;
+    font-size: 24px;
+    color: var(--plum);
+    margin-bottom: 1em;
+  }
+  .letter .sign {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 22px;
+    text-align: right;
+    color: var(--plum);
+    margin: 0;
+  }
+
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; }
+
+  footer {
+    text-align: center;
+    padding: 60px 0 80px;
+  }
+  footer .marker { display: block; margin-top: 10px; }
+  footer h4 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 28px;
+    margin: 0;
+  }
+
+  @media (max-width: 800px) {
+    .entries, .pair { grid-template-columns: 1fr; }
+    .press.tilt-l, .press.tilt-r { transform: none; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="opening">
+    <svg class="sprig" width="46" height="46" viewBox="0 0 46 46" fill="none" aria-hidden="true">
+      <path d="M23 44V8" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M23 16c-7 0-11-4-12-10 7-1 11 3 12 10Z" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M23 16c7 0 11-4 12-10-7-1-11 3-12 10Z" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M23 28c-6 0-9-3-10-8 6-1 9 2 10 8Z" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M23 28c6 0 9-3 10-8-6-1-9 2-10 8Z" stroke="currentColor" stroke-width="1.2"/>
+    </svg>
+    <div class="marker">An almanac of ten years</div>
+    <h1>Ren &amp; Aoi,<br>season by season</h1>
+    <p>Not a highlight reel &mdash; a record of what grew, and when. Kept the way you'd keep a garden journal: by the weather, by the year, by what was in bloom.</p>
+  </header>
+
+  <div class="pair">
+    <figure class="press tilt-l">
+      <div class="plate"></div>
+      <figcaption>the first spring</figcaption>
+    </figure>
+    <figure class="press tilt-r">
+      <div class="plate"></div>
+      <figcaption>and the tenth</figcaption>
+    </figure>
+  </div>
+
+  <div class="rule-ornament"><span>&#10086;</span></div>
+
+  <section>
+    <div class="season">
+      <div class="season-head"><h2>Spring</h2><span class="yr">2016</span><span class="line"></span></div>
+      <div class="entries">
+        <div>
+          <div class="entry">
+            <div class="date">March</div>
+            <h3>The wrong train</h3>
+            <p>You took the express by mistake and I followed you on so I wouldn't have to stop talking. Nine stops past where either of us was going, and neither of us mentioned it.</p>
+          </div>
+          <div class="entry">
+            <div class="date">May</div>
+            <h3>The first thing we grew</h3>
+            <p>Basil, on a windowsill, in a cup. It died in three weeks. We bought another one the same afternoon.</p>
+          </div>
+        </div>
+        <figure class="press"><div class="plate"></div><figcaption>Yokohama, March</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="season">
+      <div class="season-head"><h2>Winter</h2><span class="yr">2017</span><span class="line"></span></div>
+      <div class="entries">
+        <div>
+          <div class="entry">
+            <div class="date">November</div>
+            <h3>Coats indoors</h3>
+            <p>Two rooms, one window, and a radiator that only worked if you hit it. We wore coats indoors all winter and called it camping.</p>
+          </div>
+        </div>
+        <figure class="press"><div class="plate"></div><figcaption>Nakameguro, first flat</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="season">
+      <div class="season-head"><h2>Summer</h2><span class="yr">2019</span><span class="line"></span></div>
+      <div class="entries">
+        <div>
+          <div class="entry">
+            <div class="date">June</div>
+            <h3>Yes, in the rain</h3>
+            <p>I had a speech. The rain took it. You said yes before I found the ring, which is the part I tell people, because it's the part that matters.</p>
+          </div>
+        </div>
+        <figure class="press"><div class="plate"></div><figcaption>Kamakura, in the rain</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="season">
+      <div class="season-head"><h2>Autumn</h2><span class="yr">2020</span><span class="line"></span></div>
+      <div class="entries">
+        <div>
+          <div class="entry">
+            <div class="date">October</div>
+            <h3>Forty-one people, one long table</h3>
+            <p>Half the guest list couldn't come. The half that did stayed until two in the morning. Your father made a toast in English he had practiced for a month.</p>
+          </div>
+        </div>
+        <figure class="press"><div class="plate"></div><figcaption>Hakone, the long table</figcaption></figure>
+      </div>
+    </div>
+
+    <div class="season">
+      <div class="season-head"><h2>Spring</h2><span class="yr">2024</span><span class="line"></span></div>
+      <div class="entries">
+        <div>
+          <div class="entry">
+            <div class="date">April</div>
+            <h3>Four lemons a year</h3>
+            <p>The house came with a tree that produces exactly four lemons a year. We keep them on the counter until they go bad, because throwing them out feels rude.</p>
+          </div>
+        </div>
+        <figure class="press"><div class="plate"></div><figcaption>Setagaya, the lemon tree</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <div class="rule-ornament"><span>&#10086;</span></div>
+
+  <section>
+    <div class="letter">
+      <p class="salutation">Aoi,</p>
+      <p>People ask how we met and I always give them the train, because it's short. The longer answer is that I met you four times before I noticed: at a friend's birthday, where you argued with me about a film neither of us had finished; twice in the lobby of a building where we both worked; and once in a photograph I didn't know you were in.</p>
+      <p>What I did not know at twenty-six is that a marriage is mostly logistics, and that logistics can be a love language. You learned how I take my coffee before I told you. I learned which of your silences need company and which need a closed door.</p>
+      <p>Ten years, and the thing I'd put in the almanac isn't a single day. It's that nothing here needed to be remarkable to be worth writing down.</p>
+      <p class="sign">&mdash; Ren</p>
+    </div>
+  </section>
+
+  <footer>
+    <h4>Happy tenth</h4>
+    <span class="marker">2016 &mdash; 2026</span>
+  </footer>
+</div>

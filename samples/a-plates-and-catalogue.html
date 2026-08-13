@@ -1,0 +1,332 @@
+<title>Plates &amp; Catalogue</title>
+<style>
+  :root {
+    --ground: #EDECE8;
+    --surface: #F6F5F2;
+    --ink: #1B1D22;
+    --slate: #565C66;
+    --rule: #C9C7C0;
+    --accent: #3E6B62;
+    --accent-soft: #DDE6E2;
+    --serif: "Didot", "Bodoni MT", "Playfair Display", Georgia, "Times New Roman", serif;
+    --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #14161A;
+      --surface: #1B1E23;
+      --ink: #E8E7E2;
+      --slate: #9AA0A8;
+      --rule: #333840;
+      --accent: #86B8AB;
+      --accent-soft: #22302E;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #14161A;
+    --surface: #1B1E23;
+    --ink: #E8E7E2;
+    --slate: #9AA0A8;
+    --rule: #333840;
+    --accent: #86B8AB;
+    --accent-soft: #22302E;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 32px; }
+
+  .label {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--slate);
+    font-weight: 600;
+  }
+
+  /* ---------- masthead ---------- */
+  header.masthead {
+    border-bottom: 1px solid var(--rule);
+    padding: 28px 0 0;
+  }
+  .masthead-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 24px;
+    padding-bottom: 22px;
+  }
+  .hero {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 56px;
+    align-items: end;
+    padding: 72px 0 64px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(56px, 9vw, 116px);
+    line-height: 0.94;
+    letter-spacing: -0.015em;
+    margin: 0 0 22px;
+    text-wrap: balance;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+  .dek {
+    max-width: 46ch;
+    color: var(--slate);
+    font-size: 18px;
+    margin: 0;
+  }
+  .stats {
+    display: flex;
+    gap: 40px;
+    margin-top: 34px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat b {
+    display: block;
+    font-family: var(--serif);
+    font-size: 40px;
+    font-weight: 400;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  /* ---------- photo frames ---------- */
+  .frame {
+    position: relative;
+    background:
+      linear-gradient(145deg, var(--accent-soft), var(--surface) 60%),
+      var(--surface);
+    border: 1px solid var(--rule);
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+  }
+  .frame::after {
+    content: attr(data-caption);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--slate);
+  }
+  .frame.wide { aspect-ratio: 3 / 2; }
+
+  /* ---------- catalogue / timeline ---------- */
+  section { padding: 76px 0; border-top: 1px solid var(--rule); }
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 24px;
+    margin-bottom: 46px;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(28px, 4vw, 40px);
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .plate {
+    display: grid;
+    grid-template-columns: 84px 1fr 300px;
+    gap: 36px;
+    padding: 36px 0;
+    border-top: 1px solid var(--rule);
+    align-items: start;
+  }
+  .plate:first-of-type { border-top: none; }
+  .plate-no {
+    font-family: var(--serif);
+    font-size: 15px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    padding-top: 6px;
+  }
+  .plate h3 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 27px;
+    margin: 0 0 4px;
+    line-height: 1.2;
+  }
+  .plate .when {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--slate);
+    margin-bottom: 14px;
+  }
+  .plate p { margin: 0; max-width: 58ch; color: var(--slate); }
+
+  /* ---------- essay ---------- */
+  .essay {
+    max-width: 64ch;
+    margin: 0 auto;
+    font-size: 19px;
+  }
+  .essay p { margin: 0 0 1.4em; }
+  .essay p:first-of-type::first-letter {
+    font-family: var(--serif);
+    float: left;
+    font-size: 76px;
+    line-height: 0.78;
+    padding: 6px 12px 0 0;
+    color: var(--accent);
+  }
+  .pull {
+    font-family: var(--serif);
+    font-size: 30px;
+    line-height: 1.35;
+    font-style: italic;
+    color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding-left: 26px;
+    margin: 44px 0;
+  }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding: 44px 0 64px;
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    align-items: baseline;
+  }
+
+  @media (max-width: 820px) {
+    .wrap { padding: 0 20px; }
+    .hero, .plate { grid-template-columns: 1fr; gap: 28px; }
+    .plate-no { padding-top: 0; }
+    .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="masthead-bar">
+      <span class="label">Ren &amp; Aoi &middot; Est. 2016</span>
+      <span class="label">Ten Years, Catalogued</span>
+    </div>
+    <div class="hero">
+      <div>
+        <h1>A permanent collection of <em>ordinary</em> days.</h1>
+        <p class="dek">Ten years of a marriage, arranged the way a museum would arrange it: every plate dated, every object kept because someone loved it first.</p>
+        <div class="stats">
+          <div class="stat"><b>10</b><span class="label">Years</span></div>
+          <div class="stat"><b>3,652</b><span class="label">Mornings</span></div>
+          <div class="stat"><b>14</b><span class="label">Addresses</span></div>
+        </div>
+      </div>
+      <div class="frame" data-caption="Plate I &mdash; your photo"></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <h2>The Catalogue</h2>
+      <span class="label">Plates I&ndash;V &middot; chronological</span>
+    </div>
+
+    <article class="plate">
+      <div class="plate-no">Plate I</div>
+      <div>
+        <h3>The wrong train</h3>
+        <div class="when">March 2016 &middot; Yokohama</div>
+        <p>You took the express by mistake and I followed you on so I wouldn't have to stop talking. We rode nine stops past where either of us was going, and neither of us mentioned it.</p>
+      </div>
+      <div class="frame wide" data-caption="your photo"></div>
+    </article>
+
+    <article class="plate">
+      <div class="plate-no">Plate II</div>
+      <div>
+        <h3>The apartment with the bad radiator</h3>
+        <div class="when">November 2017 &middot; Nakameguro</div>
+        <p>Two rooms, one window, and a heater that only worked if you hit it. We wore coats indoors all winter and called it camping.</p>
+      </div>
+      <div class="frame wide" data-caption="your photo"></div>
+    </article>
+
+    <article class="plate">
+      <div class="plate-no">Plate III</div>
+      <div>
+        <h3>Yes, in the rain</h3>
+        <div class="when">June 2019 &middot; Kamakura</div>
+        <p>I had a speech. The rain took it. You said yes before I found the ring, which is the part I tell people, because it's the part that matters.</p>
+      </div>
+      <div class="frame wide" data-caption="your photo"></div>
+    </article>
+
+    <article class="plate">
+      <div class="plate-no">Plate IV</div>
+      <div>
+        <h3>Forty-one people, one long table</h3>
+        <div class="when">October 2020 &middot; Hakone</div>
+        <p>Half the guest list couldn't come. The half that did stayed until two in the morning. Your father made a toast in English he had practiced for a month.</p>
+      </div>
+      <div class="frame wide" data-caption="your photo"></div>
+    </article>
+
+    <article class="plate">
+      <div class="plate-no">Plate V</div>
+      <div>
+        <h3>The house with the lemon tree</h3>
+        <div class="when">April 2024 &middot; Setagaya</div>
+        <p>It came with a tree that produces exactly four lemons a year. We keep them on the counter until they go bad, because throwing them out feels rude.</p>
+      </div>
+      <div class="frame wide" data-caption="your photo"></div>
+    </article>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="essay">
+      <p>People ask how we met and I always give them the train, because it's short. The longer answer is that I met you four times before I noticed: once at a friend's birthday where you argued with me about a film neither of us had finished, twice in the lobby of a building where we both worked, and once in a photograph I didn't know you were in.</p>
+      <div class="pull">Ten years in, the story isn't the proposal. It's the fourteen thousand small decisions to keep choosing the same person.</div>
+      <p>What I did not know at twenty-six is that a marriage is mostly logistics, and that logistics can be a love language. You learned how I take my coffee before I told you. I learned which of your silences need company and which need a closed door.</p>
+      <p>This page exists because a decade deserves more than a folder on a hard drive. Everything here is yours. I just put it in order.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <h2>Unsorted</h2>
+      <span class="label">Recent acquisitions</span>
+    </div>
+    <div class="grid-3">
+      <div class="frame" data-caption="your photo"></div>
+      <div class="frame" data-caption="your photo"></div>
+      <div class="frame" data-caption="your photo"></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap" style="display:flex; justify-content:space-between; width:100%; gap:24px;">
+    <span class="label">Happy Anniversary</span>
+    <span class="label">Ren &amp; Aoi &middot; 2016&ndash;2026</span>
+  </div>
+</footer>
