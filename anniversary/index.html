@@ -184,6 +184,44 @@ section.block { padding:90px 0 40px; }
 .lb .next { right:3vw; top:50%; transform:translateY(-50%); }
 .lb .close { top:22px; right:3vw; font-size:15px; }
 
+
+/* ---------- music ---------- */
+.music { position:fixed; right:56px; bottom:22px; z-index:60; display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+.music-btn {
+  display:inline-flex; align-items:center; gap:9px;
+  background:rgba(24,18,9,.92); color:var(--cream);
+  border:1px solid var(--gold); border-radius:99px;
+  padding:10px 18px 10px 14px; cursor:pointer;
+  font-family:var(--sans); font-size:11.5px; letter-spacing:.2em; text-transform:uppercase;
+  backdrop-filter:blur(6px); transition:background .3s, color .3s, transform .3s;
+}
+.music-btn:hover, .music-btn:focus-visible { background:var(--gold); color:var(--bg); transform:translateY(-2px); outline:none; }
+.music-btn:hover .eq i, .music-btn:focus-visible .eq i { background:var(--bg); }
+.eq { display:inline-flex; align-items:flex-end; gap:2px; height:13px; }
+.eq i { width:2.5px; height:5px; background:var(--gold); border-radius:1px; transition:background .3s; }
+.music.playing .eq i { animation:eqb .9s ease-in-out infinite; }
+.music.playing .eq i:nth-child(2) { animation-delay:.18s; }
+.music.playing .eq i:nth-child(3) { animation-delay:.36s; }
+@keyframes eqb { 0%,100% { height:4px; } 50% { height:13px; } }
+.music-panel {
+  width:min(330px, calc(100vw - 96px));
+  background:rgba(24,18,9,.97); border:1px solid var(--line); border-radius:6px;
+  padding:16px 16px 12px; box-shadow:0 18px 50px rgba(0,0,0,.6);
+  animation:mpIn .35s cubic-bezier(.2,.7,.2,1);
+}
+@keyframes mpIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+.mp-title { font-family:var(--script); color:var(--orange); font-size:23px; line-height:1.2; }
+.mp-artist { font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--dim); margin:2px 0 12px; }
+.mp-note { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin-top:9px; text-align:center; }
+.music-panel iframe { border:0; border-radius:4px; display:block; }
+.sc-out {
+  display:block; text-align:center; padding:11px 14px; border:1px solid var(--gold);
+  border-radius:99px; color:var(--gold); text-decoration:none; font-size:12px; letter-spacing:.12em;
+}
+.sc-out:hover, .sc-out:focus-visible { background:var(--gold); color:var(--bg); outline:none; }
+@media (max-width:900px) { .music { right:14px; bottom:14px; } }
+@media (prefers-reduced-motion:reduce) { .music.playing .eq i { animation:none; } .music-panel { animation:none; } }
+
 /* ---------- letter + footer ---------- */
 .letter { max-width:640px; margin:0 auto; text-align:center; padding:20px 0 30px; }
 .letter p { color:var(--dim); font-size:17.5px; }
@@ -368,6 +406,20 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
   <span class="spark" style="top:34px;right:24%;animation-delay:1.4s">✦</span>
 </footer>
 
+
+<div class="music" id="music">
+  <div class="music-panel" id="music-panel" hidden>
+    <div class="mp-title">Porteghal-e Man</div>
+    <div class="mp-artist">Marjan Farsad</div>
+    <iframe id="sc-frame" title="SoundCloud player" width="100%" height="120" frameborder="no" scrolling="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https://soundcloud.com/marjan-farsad/08-porteghale-man&color=%23EA6A32&inverse=true&auto_play=false&show_user=true&hide_related=true&show_comments=false&show_reposts=false&show_teaser=false&visual=false"></iframe>
+    <div class="mp-note">Streamed from SoundCloud &middot; press play</div>
+  </div>
+  <button class="music-btn" id="music-btn" aria-expanded="false" aria-controls="music-panel">
+    <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="music-label">Our song</span>
+  </button>
+</div>
+
 <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer">
   <button class="close" aria-label="Close">✕</button>
   <button class="prev" aria-label="Previous photo">‹</button>
@@ -376,6 +428,7 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
   <div class="lb-cap" id="lb-cap"></div>
 </div>
 
+<script src="https://w.soundcloud.com/player/api.js"></script>
 <script>
 const ITEMS = [{"src": "images/ph0/IMG_1517824714_m.jpg", "cap": "The First Days \u00b7 Feb 2018"}, {"src": "images/ph0/IMG_1518431348_m.jpg", "cap": "The First Days \u00b7 Feb 2018"}, {"src": "images/ph0/IMG_0426_m.jpg", "cap": "The First Days \u00b7 Feb 2020"}, {"src": "images/ph0/IMG_4009_m.jpg", "cap": "The First Days \u00b7 Mar 2020"}, {"src": "images/ph0/IMG_4158_m.jpg", "cap": "The First Days \u00b7 Mar 2020"}, {"src": "images/ph0/9F59E8AD-A1BD-4E34-A463-59501575436C_m.jpg", "cap": "The First Days \u00b7 Mar 2020"}, {"src": "images/ph0/IMG_5116_m.jpg", "cap": "The First Days \u00b7 Apr 2020"}, {"src": "images/ph0/IMG_3279_m.jpg", "cap": "The First Days \u00b7 May 2020"}, {"src": "images/ph0/IMG_1530521120_m.jpg", "cap": "The First Days"}, {"src": "images/ph0/IMG_1530521125_m.jpg", "cap": "The First Days"}, {"src": "images/ph0/IMG_1530534126_m.jpg", "cap": "The First Days"}, {"src": "images/ph0/PHOTO-2018-11-03-01-11-48_m.jpg", "cap": "The First Days"}, {"src": "images/ph1/IMG_5625_m.jpg", "cap": "The Wedding \u00b7 Jul 2020"}, {"src": "images/ph1/IMG_5690_m.jpg", "cap": "The Wedding \u00b7 Jul 2020"}, {"src": "images/ph1/IMG_8068_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/IMG_3038_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/IMG_6143_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/IMG_3168_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/92AC41F7-2BD3-4616-8643-CF63EB409BF6_m.jpg", "cap": "The Wedding \u00b7 May 2021"}, {"src": "images/ph1/DJI_20210701_124734_734_m.jpg", "cap": "The Wedding \u00b7 Jul 2021"}, {"src": "images/ph1/20AB01BB-64BA-49F2-B368-42C4935A0076_m.jpg", "cap": "The Wedding \u00b7 Jul 2021"}, {"src": "images/ph1/IMG_2135_m.jpg", "cap": "The Wedding \u00b7 Aug 2021"}, {"src": "images/ph1/IMG_4739_m.jpg", "cap": "The Wedding \u00b7 Sep 2021"}, {"src": "images/ph2/IMG_4870_m.jpg", "cap": "Just the Two of Us \u00b7 Dec 2021"}, {"src": "images/ph2/IMG_4989_m.jpg", "cap": "Just the Two of Us \u00b7 Jan 2022"}, {"src": "images/ph2/IMG_5426_m.jpg", "cap": "Just the Two of Us \u00b7 Jan 2022"}, {"src": "images/ph2/IMG_6701_m.jpg", "cap": "Just the Two of Us \u00b7 Feb 2022"}, {"src": "images/ph2/IMG_7643_m.jpg", "cap": "Just the Two of Us \u00b7 Mar 2022"}, {"src": "images/ph2/IMG_1007_m.jpg", "cap": "Just the Two of Us \u00b7 May 2022"}, {"src": "images/ph2/IMG_1615_m.jpg", "cap": "Just the Two of Us \u00b7 Jun 2022"}, {"src": "images/ph2/IMG_1892_m.jpg", "cap": "Just the Two of Us \u00b7 Jun 2022"}, {"src": "images/ph2/IMG_2599_m.jpg", "cap": "Just the Two of Us \u00b7 Jul 2022"}, {"src": "images/ph2/IMG_5414_m.jpg", "cap": "Just the Two of Us \u00b7 Sep 2022"}, {"src": "images/ph2/IMG_0545_m.jpg", "cap": "Just the Two of Us \u00b7 Apr 2023"}, {"src": "images/ph2/IMG_0646_m.jpg", "cap": "Just the Two of Us \u00b7 Apr 2023"}, {"src": "images/ph3/IMG_3035_m.jpg", "cap": "Liam \u00b7 Jan 2024"}, {"src": "images/ph3/IMG_3099_m.jpg", "cap": "Liam \u00b7 Jan 2024"}, {"src": "images/ph3/IMG_4342_m.jpg", "cap": "Liam \u00b7 Feb 2024"}, {"src": "images/ph3/IMG_3806_m.jpg", "cap": "Liam \u00b7 Feb 2024"}, {"src": "images/ph3/IMG_6145_m.jpg", "cap": "Liam \u00b7 Apr 2024"}, {"src": "images/ph3/IMG_6485_m.jpg", "cap": "Liam \u00b7 Apr 2024"}, {"src": "images/ph3/IMG_8969_m.jpg", "cap": "Liam \u00b7 Jun 2024"}, {"src": "images/ph3/dji_mimo_20240616_151706_20240616151706_1718574239557_photo_m.jpg", "cap": "Liam \u00b7 Jun 2024"}, {"src": "images/ph3/IMG_0218_m.jpg", "cap": "Liam \u00b7 Jun 2024"}, {"src": "images/ph4/IMG_7052_m.jpg", "cap": "Leo \u00b7 Apr 2024"}, {"src": "images/ph4/IMG_6752_m.jpg", "cap": "Leo \u00b7 Dec 2024"}, {"src": "images/ph4/IMG_0470_m.jpg", "cap": "Leo \u00b7 Mar 2025"}, {"src": "images/ph4/IMG_0487_m.jpg", "cap": "Leo \u00b7 Mar 2025"}, {"src": "images/ph4/IMG_4998_m.jpg", "cap": "Leo \u00b7 Jun 2025"}, {"src": "images/ph4/IMG_6401_m.jpg", "cap": "Leo \u00b7 Aug 2025"}, {"src": "images/ph4/IMG_7163_m.jpg", "cap": "Leo \u00b7 Aug 2025"}, {"src": "images/ph4/1112121222_m.jpg", "cap": "Leo"}, {"src": "images/ph4/IMG_6895_m.jpg", "cap": "Leo"}];
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -489,5 +542,26 @@ function elapsed() {
     if (e.key === 'ArrowLeft') show(cur - 1);
     if (e.key === 'ArrowRight') show(cur + 1);
   });
+})();
+
+// ---- music: toggle the panel, animate the equalizer while it plays ----
+(function() {
+  const wrap = document.getElementById('music');
+  const btn = document.getElementById('music-btn');
+  const panel = document.getElementById('music-panel');
+  btn.addEventListener('click', () => {
+    const open = panel.hasAttribute('hidden');
+    if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+    btn.setAttribute('aria-expanded', String(open));
+  });
+  // Drive the equalizer from the real SoundCloud player when it is present.
+  const frame = document.getElementById('sc-frame');
+  if (!frame || typeof SC === 'undefined' || !SC.Widget) return;
+  try {
+    const w = SC.Widget(frame);
+    w.bind(SC.Widget.Events.PLAY, () => wrap.classList.add('playing'));
+    w.bind(SC.Widget.Events.PAUSE, () => wrap.classList.remove('playing'));
+    w.bind(SC.Widget.Events.FINISH, () => wrap.classList.remove('playing'));
+  } catch (e) { /* player not ready; button still opens the panel */ }
 })();
 </script>
