@@ -190,12 +190,21 @@ failure publishes under an RCIC's name.
 Any future change to key composition must keep `code::dateISO` as the first two
 segments, or the guard silently stops working.
 
-## Story card: multi-draw dates show the breakdown
+## Story card: multi-draw dates show ONLY the breakdown
 
-A date with several streams replaces the decorative bar chart with the actual
-per-stream list — name, invitations, cut-off — under the totals. The chart was
-decoration sitting exactly where the information belonged. Single-draw cards are
-the original locked design, untouched.
+A date with several streams drops both the decorative bar chart and the two big
+headline figures, and gives the whole card to the per-stream list — name,
+invitations, cut-off. The headline total and cut-off range were a summary of a
+table printed directly beneath them: the same facts twice, once rounded
+("500+", "68-102") and once exactly.
+
+The totals stay in the TEXT posts, where X carries no breakdown at all and needs
+them. Single-draw cards are the original locked design, untouched.
+
+The list is centred vertically rather than anchored to a fixed top, so a
+two-stream day does not sit in the corner of an empty card. Eight rows maximum,
+then «+N استریم دیگر». Names clip at 24 characters — they share the line with
+the figures.
 
 Card figures stay raw (`<5`), not the Persian wording: the list is drawn in an
 LTR English font where `<5` renders correctly.
