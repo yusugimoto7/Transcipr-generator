@@ -45,12 +45,29 @@ img { max-width:100%; display:block; }
 /* ---------- sparkles ---------- */
 .spark { position:absolute; color:var(--gold); opacity:.7; animation:tw 3.2s ease-in-out infinite; pointer-events:none; }
 @keyframes tw { 0%,100% { opacity:.15; transform:scale(.8);} 50% { opacity:.8; transform:scale(1.15);} }
-@media (prefers-reduced-motion:reduce) { .spark { animation:none; } .rise { opacity:1!important; transform:none!important; animation:none!important; } }
+/* ---------- scroll reveals ---------- */
+.reveal { opacity:0; transform:translateY(26px); }
+.reveal.in { opacity:1; transform:none; transition:opacity .85s cubic-bezier(.2,.7,.2,1), transform .85s cubic-bezier(.2,.7,.2,1); }
+.reveal-l { opacity:0; transform:translateX(-34px); }
+.reveal-l.in { opacity:1; transform:none; transition:opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
+.reveal-r { opacity:0; transform:translateX(34px); }
+.reveal-r.in { opacity:1; transform:none; transition:opacity .9s cubic-bezier(.2,.7,.2,1), transform .9s cubic-bezier(.2,.7,.2,1); }
+.zoom-in img { transform:scale(1.09); transition:transform 1.5s cubic-bezier(.2,.7,.2,1); }
+.zoom-in.in img { transform:scale(1); }
+.count b { transition:transform .5s cubic-bezier(.2,.7,.2,1); }
+.count.pop b { transform:scale(1.12); }
+.story-bg { will-change:transform; }
+@media (prefers-reduced-motion:reduce) {
+  .spark { animation:none; }
+  .rise, .reveal, .reveal-l, .reveal-r { opacity:1!important; transform:none!important; animation:none!important; transition:none!important; }
+  .zoom-in img { transform:none!important; transition:none!important; }
+  html { scroll-behavior:auto; }
+}
 
 /* ---------- hero ---------- */
 .hero { position:relative; min-height:100svh; display:grid; place-items:center; overflow:hidden; }
 .hero-bg { position:absolute; inset:0; }
-.hero-bg img { width:100%; height:100%; object-fit:cover; object-position:50% 30%; }
+.hero-bg img { width:100%; height:100%; object-fit:cover; object-position:48.4% 31.9%; will-change:transform; }
 .hero-bg::after {
   content:""; position:absolute; inset:0;
   background:linear-gradient(180deg, rgba(24,18,9,.62) 0%, rgba(24,18,9,.18) 40%, rgba(31,24,17,.94) 92%, var(--bg) 100%);
@@ -112,7 +129,7 @@ section.block { padding:90px 0 40px; }
 .head-sub { text-align:center; color:var(--dim); font-size:13px; letter-spacing:.25em; text-transform:uppercase; margin-bottom:60px; }
 
 /* ---------- chapters ---------- */
-.chapter { display:grid; grid-template-columns:5fr 7fr; gap:clamp(26px,5vw,60px); align-items:center; padding:46px 0; border-top:1px dotted var(--line); }
+.chapter { display:grid; grid-template-columns:4.6fr 7.4fr; gap:clamp(26px,5vw,60px); align-items:center; padding:46px 0; border-top:1px dotted var(--line); }
 .chapter:first-of-type { border-top:none; }
 .chapter.flip .ch-text { order:2; }
 .chapter.solo { grid-template-columns:1fr; max-width:620px; margin:0 auto; text-align:center; }
@@ -120,13 +137,19 @@ section.block { padding:90px 0 40px; }
 .ch-script { font-family:var(--script); color:var(--orange); font-size:clamp(24px,3.4vw,32px); margin:6px 0 2px; }
 .ch-text h3 { font-size:clamp(20px,2.6vw,26px); font-weight:600; margin:6px 0 12px; line-height:1.35; text-wrap:balance; }
 .ch-text p { margin:0; color:var(--dim); font-size:16.5px; }
-.ch-photos { display:grid; gap:14px; }
-.ch-photos.n2 { grid-template-columns:1fr 1fr; }
-.ch-photos.n3 { grid-template-columns:1fr 1fr; }
-.ch-photos.n3 .ch-ph:first-child { grid-column:1/-1; }
-.ch-ph { margin:0; position:relative; }
-.ch-ph img { width:100%; height:100%; object-fit:cover; aspect-ratio:4/3.1; border:1px solid var(--line); border-radius:3px; }
-.ch-photos.n3 .ch-ph:first-child img { aspect-ratio:16/9.5; }
+/* Justified row — every photo keeps its own aspect ratio, so no face is ever cut. */
+.ch-photos { display:flex; gap:12px; align-items:stretch; max-height:420px; }
+@media (max-width:760px) {
+  .ch-photos { flex-wrap:wrap; max-height:none; }
+  .ch-ph { flex:1 1 calc(50% - 6px) !important; }
+}
+@media (max-width:520px) {
+  .ch-ph { flex:1 1 100% !important; }
+  .ch-ph img { max-height:62vh; object-fit:contain; background:var(--bg2); }
+}
+.ch-ph { margin:0; position:relative; min-width:0; overflow:hidden; border-radius:3px; }
+.ch-ph img { width:100%; height:100%; object-fit:cover; border:1px solid var(--line); border-radius:3px; transition:transform .7s cubic-bezier(.2,.7,.2,1); }
+.ch-ph:hover img { transform:scale(1.035); }
 .ch-ph figcaption { position:absolute; left:0; right:0; bottom:0; padding:26px 12px 8px; font-size:11.5px; letter-spacing:.06em; color:var(--cream); background:linear-gradient(180deg,transparent,rgba(15,11,6,.85)); border-radius:0 0 3px 3px; }
 @media (max-width:760px) {
   .chapter { grid-template-columns:1fr; }
@@ -198,141 +221,141 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
   <div class="count"><b id="c-d">0</b><span>Days</span></div>
   <div class="count"><b id="c-t">2,191</b><span>Days married</span></div>
 </div>
-<div class="count-note">…and counting, every single day.</div>
+<div class="count-note reveal">…and counting, every single day.</div>
 
 <section class="story" id="story">
   <div class="story-bg" aria-hidden="true"><img src="images/ph0/IMG_1517824714_t.jpg" alt="" loading="lazy"><img src="images/ph1/IMG_8068_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_4870_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_3035_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_6752_t.jpg" alt="" loading="lazy"><img src="images/ph0/IMG_5116_t.jpg" alt="" loading="lazy"><img src="images/ph1/IMG_6143_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_6701_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_8969_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_0487_t.jpg" alt="" loading="lazy"><img src="images/ph0/IMG_4009_t.jpg" alt="" loading="lazy"><img src="images/ph1/DJI_20210701_124734_734_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_1007_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_4342_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_4998_t.jpg" alt="" loading="lazy"><img src="images/ph0/IMG_4158_t.jpg" alt="" loading="lazy"><img src="images/ph1/IMG_5625_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_5426_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_6485_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_7163_t.jpg" alt="" loading="lazy"></div>
-  <div class="story-text">
+  <div class="story-text reveal">
     <p>&mdash; He found her on Facebook, fifteen years ago. It took five years to meet, and one heartbeat to know. He crossed the world; she followed. The world locked its doors, so they married in a garden while it held its breath. Then there were three. Then there were four.</p>
   </div>
-  <div class="story-big">hamed + yasi<br><em>+ liam + leo</em></div>
+  <div class="story-big reveal-l">hamed + yasi<br><em>+ liam + leo</em></div>
 </section>
 
 <section class="block" id="timeline">
   <div class="wrap">
-    <h2 class="script-head">How we got here</h2>
-    <div class="head-sub">2011 &mdash; today &middot; the whole story</div>
+    <h2 class="script-head reveal">How we got here</h2>
+    <div class="head-sub reveal">2011 &mdash; today &middot; the whole story</div>
     
 <article class="chapter solo">
   <div class="ch-text">
-    <div class="ch-year">2011</div>
-    <div class="ch-script">A friend request</div>
-    <h3>It started on Facebook</h3>
-    <p>Fifteen years ago, long before any of this, a friend request crossed the distance between two strangers in Iran. Comments became messages. Messages became a friendship neither of us wanted to log out of.</p>
+    <div class="ch-year reveal">2011</div>
+    <div class="ch-script reveal">A friend request</div>
+    <h3 class="reveal">It started on Facebook</h3>
+    <p class="reveal">Fifteen years ago, long before any of this, a friend request crossed the distance between two strangers in Iran. Comments became messages. Messages became a friendship neither of us wanted to log out of.</p>
   </div>
   
 </article>
 
 <article class="chapter flip">
   <div class="ch-text">
-    <div class="ch-year">2016</div>
-    <div class="ch-script">First hello</div>
-    <h3>Five years of words, then a heartbeat</h3>
-    <p>Ten years ago we finally stood in the same room, and the internet-friendship excuse stopped working. That was the day this actually began — and we never looked back.</p>
+    <div class="ch-year reveal">2016</div>
+    <div class="ch-script reveal">First hello</div>
+    <h3 class="reveal">Five years of words, then a heartbeat</h3>
+    <p class="reveal">Ten years ago we finally stood in the same room, and the internet-friendship excuse stopped working. That was the day this actually began — and we never looked back.</p>
   </div>
-  <div class="ch-photos n2"><figure class="ch-ph"><img src="images/ph0/IMG_1517824714_m.jpg" alt="Together in Tehran" loading="lazy"><figcaption>Together in Tehran</figcaption></figure><figure class="ch-ph"><img src="images/ph0/IMG_1518431348_m.jpg" alt="The early days" loading="lazy"><figcaption>The early days</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:0.7510 1 0; aspect-ratio:0.7510;"><img src="images/ph0/IMG_1517824714_m.jpg" alt="Together in Tehran" loading="lazy" style="object-position:46.1% 42.5%"><figcaption>Together in Tehran</figcaption></figure><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph0/IMG_1518431348_m.jpg" alt="The early days" loading="lazy" style="object-position:37.5% 42.3%"><figcaption>The early days</figcaption></figure></div>
 </article>
 
 <article class="chapter">
   <div class="ch-text">
-    <div class="ch-year">2018</div>
-    <div class="ch-script">A one-way ticket</div>
-    <h3>Tehran → Canada</h3>
-    <p>Late 2018, Hamed boarded a plane with two suitcases and a promise. The love became long-distance: time zones, phone calls at strange hours, and a plan that refused to die.</p>
+    <div class="ch-year reveal">2018</div>
+    <div class="ch-script reveal">A one-way ticket</div>
+    <h3 class="reveal">Tehran → Canada</h3>
+    <p class="reveal">Late 2018, Hamed boarded a plane with two suitcases and a promise. The love became long-distance: time zones, phone calls at strange hours, and a plan that refused to die.</p>
   </div>
-  <div class="ch-photos n1"><figure class="ch-ph"><img src="images/ph0/PHOTO-2018-11-03-01-11-48_m.jpg" alt="Before the flight" loading="lazy"><figcaption>Before the flight</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph0/PHOTO-2018-11-03-01-11-48_m.jpg" alt="Before the flight" loading="lazy" style="object-position:45.6% 25.4%"><figcaption>Before the flight</figcaption></figure></div>
 </article>
 
 <article class="chapter flip">
   <div class="ch-text">
-    <div class="ch-year">Feb 2020</div>
-    <div class="ch-script">She landed</div>
-    <h3>Yasi comes to Canada</h3>
-    <p>In February 2020 the waiting finally ended — Yasi landed in Canada just weeks before the world closed its doors. Terrible timing for a planet. Perfect timing for us: quarantined together, exactly where we wanted to be.</p>
+    <div class="ch-year reveal">Feb 2020</div>
+    <div class="ch-script reveal">She landed</div>
+    <h3 class="reveal">Yasi comes to Canada</h3>
+    <p class="reveal">In February 2020 the waiting finally ended — Yasi landed in Canada just weeks before the world closed its doors. Terrible timing for a planet. Perfect timing for us: quarantined together, exactly where we wanted to be.</p>
   </div>
-  <div class="ch-photos n2"><figure class="ch-ph"><img src="images/ph0/IMG_0426_m.jpg" alt="February 2020 — reunited" loading="lazy"><figcaption>February 2020 — reunited</figcaption></figure><figure class="ch-ph"><img src="images/ph0/IMG_4009_m.jpg" alt="Our first Canadian spring" loading="lazy"><figcaption>Our first Canadian spring</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph0/IMG_0426_m.jpg" alt="February 2020 — reunited" loading="lazy" style="object-position:33.8% 33.2%"><figcaption>February 2020 — reunited</figcaption></figure><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph0/IMG_4009_m.jpg" alt="Our first Canadian spring" loading="lazy" style="object-position:47.7% 44.9%"><figcaption>Our first Canadian spring</figcaption></figure></div>
 </article>
 
 <article class="chapter">
   <div class="ch-text">
-    <div class="ch-year">Aug 15, 2020</div>
-    <div class="ch-script">We do</div>
-    <h3>A small wedding, an enormous yes</h3>
-    <p>On August 15, 2020 — in a summer when the whole world stood still — we got married. A backyard, a bouquet, a blue suit, and the two people this story was always about. Six years ago tomorrow felt impossible. Now it’s our favourite date on the calendar.</p>
+    <div class="ch-year reveal">Aug 15, 2020</div>
+    <div class="ch-script reveal">We do</div>
+    <h3 class="reveal">A small wedding, an enormous yes</h3>
+    <p class="reveal">On August 15, 2020 — in a summer when the whole world stood still — we got married. A backyard, a bouquet, a blue suit, and the two people this story was always about. Six years ago tomorrow felt impossible. Now it’s our favourite date on the calendar.</p>
   </div>
-  <div class="ch-photos n3"><figure class="ch-ph"><img src="images/ph1/IMG_8068_m.jpg" alt="On the way — Aug 15, 2020" loading="lazy"><figcaption>On the way — Aug 15, 2020</figcaption></figure><figure class="ch-ph"><img src="images/ph1/IMG_3038_m.jpg" alt="Mr. & Mrs." loading="lazy"><figcaption>Mr. & Mrs.</figcaption></figure><figure class="ch-ph"><img src="images/ph1/IMG_6143_m.jpg" alt="Just married" loading="lazy"><figcaption>Just married</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph1/IMG_8068_m.jpg" alt="On the way — Aug 15, 2020" loading="lazy" style="object-position:45.2% 24.5%"><figcaption>On the way — Aug 15, 2020</figcaption></figure><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph1/IMG_3038_m.jpg" alt="Mr. & Mrs." loading="lazy" style="object-position:48.4% 31.9%"><figcaption>Mr. & Mrs.</figcaption></figure><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph1/IMG_6143_m.jpg" alt="Just married" loading="lazy" style="object-position:33.1% 33.4%"><figcaption>Just married</figcaption></figure></div>
 </article>
 
 <article class="chapter flip">
   <div class="ch-text">
-    <div class="ch-year">2021–2022</div>
-    <div class="ch-script">Just us</div>
-    <h3>Building a life for two</h3>
-    <p>First anniversaries, new-year kisses, road trips and drone shots from above — the quiet years where a marriage becomes a home.</p>
+    <div class="ch-year reveal">2021–2022</div>
+    <div class="ch-script reveal">Just us</div>
+    <h3 class="reveal">Building a life for two</h3>
+    <p class="reveal">First anniversaries, new-year kisses, road trips and drone shots from above — the quiet years where a marriage becomes a home.</p>
   </div>
-  <div class="ch-photos n3"><figure class="ch-ph"><img src="images/ph1/DJI_20210701_124734_734_m.jpg" alt="First-anniversary summer" loading="lazy"><figcaption>First-anniversary summer</figcaption></figure><figure class="ch-ph"><img src="images/ph2/IMG_4870_m.jpg" alt="New Year’s Eve" loading="lazy"><figcaption>New Year’s Eve</figcaption></figure><figure class="ch-ph"><img src="images/ph2/IMG_6701_m.jpg" alt="Valentine’s, 2022" loading="lazy"><figcaption>Valentine’s, 2022</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph1/DJI_20210701_124734_734_m.jpg" alt="First-anniversary summer" loading="lazy" style="object-position:75.2% 58.4%"><figcaption>First-anniversary summer</figcaption></figure><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph2/IMG_4870_m.jpg" alt="New Year’s Eve" loading="lazy" style="object-position:56.7% 34.0%"><figcaption>New Year’s Eve</figcaption></figure><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph2/IMG_6701_m.jpg" alt="Valentine’s, 2022" loading="lazy" style="object-position:54.8% 29.3%"><figcaption>Valentine’s, 2022</figcaption></figure></div>
 </article>
 
 <article class="chapter">
   <div class="ch-text">
-    <div class="ch-year">Apr 6, 2023</div>
-    <div class="ch-script">Then there were three</div>
-    <h3>Liam</h3>
-    <p>On April 6, 2023, at seven in the morning, everything we thought we knew about love got rewritten by a seven-pound editor named Liam.</p>
+    <div class="ch-year reveal">Apr 6, 2023</div>
+    <div class="ch-script reveal">Then there were three</div>
+    <h3 class="reveal">Liam</h3>
+    <p class="reveal">On April 6, 2023, at seven in the morning, everything we thought we knew about love got rewritten by a seven-pound editor named Liam.</p>
   </div>
-  <div class="ch-photos n3"><figure class="ch-ph"><img src="images/ph2/IMG_0545_m.jpg" alt="The last days of two" loading="lazy"><figcaption>The last days of two</figcaption></figure><figure class="ch-ph"><img src="images/ph2/IMG_0646_m.jpg" alt="April 6, 2023 — hello, Liam" loading="lazy"><figcaption>April 6, 2023 — hello, Liam</figcaption></figure><figure class="ch-ph"><img src="images/ph3/IMG_6145_m.jpg" alt="Tulip season with our boy" loading="lazy"><figcaption>Tulip season with our boy</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph2/IMG_0545_m.jpg" alt="The last days of two" loading="lazy" style="object-position:54.4% 23.4%"><figcaption>The last days of two</figcaption></figure><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph2/IMG_0646_m.jpg" alt="April 6, 2023 — hello, Liam" loading="lazy" style="object-position:53.9% 42.1%"><figcaption>April 6, 2023 — hello, Liam</figcaption></figure><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph3/IMG_6145_m.jpg" alt="Tulip season with our boy" loading="lazy" style="object-position:50% 42%"><figcaption>Tulip season with our boy</figcaption></figure></div>
 </article>
 
 <article class="chapter flip">
   <div class="ch-text">
-    <div class="ch-year">Oct 19, 2024</div>
-    <div class="ch-script">Then there were four</div>
-    <h3>Leo</h3>
-    <p>On October 19, 2024, Leo arrived — and Liam became a big brother. The house got louder, the nights got shorter, and our hearts somehow doubled again.</p>
+    <div class="ch-year reveal">Oct 19, 2024</div>
+    <div class="ch-script reveal">Then there were four</div>
+    <h3 class="reveal">Leo</h3>
+    <p class="reveal">On October 19, 2024, Leo arrived — and Liam became a big brother. The house got louder, the nights got shorter, and our hearts somehow doubled again.</p>
   </div>
-  <div class="ch-photos n3"><figure class="ch-ph"><img src="images/ph4/IMG_6752_m.jpg" alt="First New Year’s as four" loading="lazy"><figcaption>First New Year’s as four</figcaption></figure><figure class="ch-ph"><img src="images/ph4/IMG_0470_m.jpg" alt="The whole crew" loading="lazy"><figcaption>The whole crew</figcaption></figure><figure class="ch-ph"><img src="images/ph4/IMG_4998_m.jpg" alt="Summer, 2025" loading="lazy"><figcaption>Summer, 2025</figcaption></figure></div>
+  <div class="ch-photos"><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph4/IMG_6752_m.jpg" alt="First New Year’s as four" loading="lazy" style="object-position:51.4% 40.5%"><figcaption>First New Year’s as four</figcaption></figure><figure class="ch-ph reveal" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph4/IMG_0470_m.jpg" alt="The whole crew" loading="lazy" style="object-position:38.6% 36.3%"><figcaption>The whole crew</figcaption></figure><figure class="ch-ph reveal" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph4/IMG_4998_m.jpg" alt="Summer, 2025" loading="lazy" style="object-position:57.6% 31.4%"><figcaption>Summer, 2025</figcaption></figure></div>
 </article>
   </div>
 </section>
 
 <section class="block" id="gallery">
   <div class="wrap">
-    <svg class="g-illust" viewBox="0 0 80 44" fill="none" aria-hidden="true">
+    <svg class="g-illust reveal" viewBox="0 0 80 44" fill="none" aria-hidden="true">
       <path d="M40 40 C18 26 8 16 12 9 C15 3.5 24 3 29 8 L40 18 L51 8 C56 3 65 3.5 68 9 C72 16 62 26 40 40Z" stroke="currentColor" stroke-width="2"/>
     </svg>
-    <h2 class="script-head">Some of our favourite photos</h2>
-    <div class="head-sub">Tap any photo to expand</div>
+    <h2 class="script-head reveal">Some of our favourite photos</h2>
+    <div class="head-sub reveal">Tap any photo to expand</div>
     
 <section class="g-phase">
-  <h4 class="g-head"><span>The First Days</span></h4>
-  <div class="masonry"><figure class="g-tile" data-i="0"><img src="images/ph0/IMG_1517824714_t.jpg" alt="The First Days — Feb 2018" loading="lazy"><span class="g-tap">Feb 2018</span></figure><figure class="g-tile" data-i="1"><img src="images/ph0/IMG_1518431348_t.jpg" alt="The First Days — Feb 2018" loading="lazy"><span class="g-tap">Feb 2018</span></figure><figure class="g-tile" data-i="2"><img src="images/ph0/IMG_0426_t.jpg" alt="The First Days — Feb 2020" loading="lazy"><span class="g-tap">Feb 2020</span></figure><figure class="g-tile" data-i="3"><img src="images/ph0/IMG_4009_t.jpg" alt="The First Days — Mar 2020" loading="lazy"><span class="g-tap">Mar 2020</span></figure><figure class="g-tile" data-i="4"><img src="images/ph0/IMG_4158_t.jpg" alt="The First Days — Mar 2020" loading="lazy"><span class="g-tap">Mar 2020</span></figure><figure class="g-tile" data-i="5"><img src="images/ph0/9F59E8AD-A1BD-4E34-A463-59501575436C_t.jpg" alt="The First Days — Mar 2020" loading="lazy"><span class="g-tap">Mar 2020</span></figure><figure class="g-tile" data-i="6"><img src="images/ph0/IMG_5116_t.jpg" alt="The First Days — Apr 2020" loading="lazy"><span class="g-tap">Apr 2020</span></figure><figure class="g-tile" data-i="7"><img src="images/ph0/IMG_3279_t.jpg" alt="The First Days — May 2020" loading="lazy"><span class="g-tap">May 2020</span></figure><figure class="g-tile" data-i="8"><img src="images/ph0/IMG_1530521120_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure><figure class="g-tile" data-i="9"><img src="images/ph0/IMG_1530521125_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure><figure class="g-tile" data-i="10"><img src="images/ph0/IMG_1530534126_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure><figure class="g-tile" data-i="11"><img src="images/ph0/PHOTO-2018-11-03-01-11-48_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure></div>
+  <h4 class="g-head reveal"><span>The First Days</span></h4>
+  <div class="masonry"><figure class="g-tile reveal" data-i="0"><img src="images/ph0/IMG_1517824714_t.jpg" alt="The First Days — Feb 2018" loading="lazy"><span class="g-tap">Feb 2018</span></figure><figure class="g-tile reveal" data-i="1"><img src="images/ph0/IMG_1518431348_t.jpg" alt="The First Days — Feb 2018" loading="lazy"><span class="g-tap">Feb 2018</span></figure><figure class="g-tile reveal" data-i="2"><img src="images/ph0/IMG_0426_t.jpg" alt="The First Days — Feb 2020" loading="lazy"><span class="g-tap">Feb 2020</span></figure><figure class="g-tile reveal" data-i="3"><img src="images/ph0/IMG_4009_t.jpg" alt="The First Days — Mar 2020" loading="lazy"><span class="g-tap">Mar 2020</span></figure><figure class="g-tile reveal" data-i="4"><img src="images/ph0/IMG_4158_t.jpg" alt="The First Days — Mar 2020" loading="lazy"><span class="g-tap">Mar 2020</span></figure><figure class="g-tile reveal" data-i="5"><img src="images/ph0/9F59E8AD-A1BD-4E34-A463-59501575436C_t.jpg" alt="The First Days — Mar 2020" loading="lazy"><span class="g-tap">Mar 2020</span></figure><figure class="g-tile reveal" data-i="6"><img src="images/ph0/IMG_5116_t.jpg" alt="The First Days — Apr 2020" loading="lazy"><span class="g-tap">Apr 2020</span></figure><figure class="g-tile reveal" data-i="7"><img src="images/ph0/IMG_3279_t.jpg" alt="The First Days — May 2020" loading="lazy"><span class="g-tap">May 2020</span></figure><figure class="g-tile reveal" data-i="8"><img src="images/ph0/IMG_1530521120_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure><figure class="g-tile reveal" data-i="9"><img src="images/ph0/IMG_1530521125_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure><figure class="g-tile reveal" data-i="10"><img src="images/ph0/IMG_1530534126_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure><figure class="g-tile reveal" data-i="11"><img src="images/ph0/PHOTO-2018-11-03-01-11-48_t.jpg" alt="The First Days — The First Days" loading="lazy"><span class="g-tap">The First Days</span></figure></div>
 </section>
 
 <section class="g-phase">
-  <h4 class="g-head"><span>The Wedding</span></h4>
-  <div class="masonry"><figure class="g-tile" data-i="12"><img src="images/ph1/IMG_5625_t.jpg" alt="The Wedding — Jul 2020" loading="lazy"><span class="g-tap">Jul 2020</span></figure><figure class="g-tile" data-i="13"><img src="images/ph1/IMG_5690_t.jpg" alt="The Wedding — Jul 2020" loading="lazy"><span class="g-tap">Jul 2020</span></figure><figure class="g-tile" data-i="14"><img src="images/ph1/IMG_8068_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile" data-i="15"><img src="images/ph1/IMG_3038_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile" data-i="16"><img src="images/ph1/IMG_6143_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile" data-i="17"><img src="images/ph1/IMG_3168_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile" data-i="18"><img src="images/ph1/92AC41F7-2BD3-4616-8643-CF63EB409BF6_t.jpg" alt="The Wedding — May 2021" loading="lazy"><span class="g-tap">May 2021</span></figure><figure class="g-tile" data-i="19"><img src="images/ph1/DJI_20210701_124734_734_t.jpg" alt="The Wedding — Jul 2021" loading="lazy"><span class="g-tap">Jul 2021</span></figure><figure class="g-tile" data-i="20"><img src="images/ph1/20AB01BB-64BA-49F2-B368-42C4935A0076_t.jpg" alt="The Wedding — Jul 2021" loading="lazy"><span class="g-tap">Jul 2021</span></figure><figure class="g-tile" data-i="21"><img src="images/ph1/IMG_2135_t.jpg" alt="The Wedding — Aug 2021" loading="lazy"><span class="g-tap">Aug 2021</span></figure><figure class="g-tile" data-i="22"><img src="images/ph1/IMG_4739_t.jpg" alt="The Wedding — Sep 2021" loading="lazy"><span class="g-tap">Sep 2021</span></figure></div>
+  <h4 class="g-head reveal"><span>The Wedding</span></h4>
+  <div class="masonry"><figure class="g-tile reveal" data-i="12"><img src="images/ph1/IMG_5625_t.jpg" alt="The Wedding — Jul 2020" loading="lazy"><span class="g-tap">Jul 2020</span></figure><figure class="g-tile reveal" data-i="13"><img src="images/ph1/IMG_5690_t.jpg" alt="The Wedding — Jul 2020" loading="lazy"><span class="g-tap">Jul 2020</span></figure><figure class="g-tile reveal" data-i="14"><img src="images/ph1/IMG_8068_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile reveal" data-i="15"><img src="images/ph1/IMG_3038_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile reveal" data-i="16"><img src="images/ph1/IMG_6143_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile reveal" data-i="17"><img src="images/ph1/IMG_3168_t.jpg" alt="The Wedding — Aug 2020" loading="lazy"><span class="g-tap">Aug 2020</span></figure><figure class="g-tile reveal" data-i="18"><img src="images/ph1/92AC41F7-2BD3-4616-8643-CF63EB409BF6_t.jpg" alt="The Wedding — May 2021" loading="lazy"><span class="g-tap">May 2021</span></figure><figure class="g-tile reveal" data-i="19"><img src="images/ph1/DJI_20210701_124734_734_t.jpg" alt="The Wedding — Jul 2021" loading="lazy"><span class="g-tap">Jul 2021</span></figure><figure class="g-tile reveal" data-i="20"><img src="images/ph1/20AB01BB-64BA-49F2-B368-42C4935A0076_t.jpg" alt="The Wedding — Jul 2021" loading="lazy"><span class="g-tap">Jul 2021</span></figure><figure class="g-tile reveal" data-i="21"><img src="images/ph1/IMG_2135_t.jpg" alt="The Wedding — Aug 2021" loading="lazy"><span class="g-tap">Aug 2021</span></figure><figure class="g-tile reveal" data-i="22"><img src="images/ph1/IMG_4739_t.jpg" alt="The Wedding — Sep 2021" loading="lazy"><span class="g-tap">Sep 2021</span></figure></div>
 </section>
 
 <section class="g-phase">
-  <h4 class="g-head"><span>Just the Two of Us</span></h4>
-  <div class="masonry"><figure class="g-tile" data-i="23"><img src="images/ph2/IMG_4870_t.jpg" alt="Just the Two of Us — Dec 2021" loading="lazy"><span class="g-tap">Dec 2021</span></figure><figure class="g-tile" data-i="24"><img src="images/ph2/IMG_4989_t.jpg" alt="Just the Two of Us — Jan 2022" loading="lazy"><span class="g-tap">Jan 2022</span></figure><figure class="g-tile" data-i="25"><img src="images/ph2/IMG_5426_t.jpg" alt="Just the Two of Us — Jan 2022" loading="lazy"><span class="g-tap">Jan 2022</span></figure><figure class="g-tile" data-i="26"><img src="images/ph2/IMG_6701_t.jpg" alt="Just the Two of Us — Feb 2022" loading="lazy"><span class="g-tap">Feb 2022</span></figure><figure class="g-tile" data-i="27"><img src="images/ph2/IMG_7643_t.jpg" alt="Just the Two of Us — Mar 2022" loading="lazy"><span class="g-tap">Mar 2022</span></figure><figure class="g-tile" data-i="28"><img src="images/ph2/IMG_1007_t.jpg" alt="Just the Two of Us — May 2022" loading="lazy"><span class="g-tap">May 2022</span></figure><figure class="g-tile" data-i="29"><img src="images/ph2/IMG_1615_t.jpg" alt="Just the Two of Us — Jun 2022" loading="lazy"><span class="g-tap">Jun 2022</span></figure><figure class="g-tile" data-i="30"><img src="images/ph2/IMG_1892_t.jpg" alt="Just the Two of Us — Jun 2022" loading="lazy"><span class="g-tap">Jun 2022</span></figure><figure class="g-tile" data-i="31"><img src="images/ph2/IMG_2599_t.jpg" alt="Just the Two of Us — Jul 2022" loading="lazy"><span class="g-tap">Jul 2022</span></figure><figure class="g-tile" data-i="32"><img src="images/ph2/IMG_5414_t.jpg" alt="Just the Two of Us — Sep 2022" loading="lazy"><span class="g-tap">Sep 2022</span></figure><figure class="g-tile" data-i="33"><img src="images/ph2/IMG_0545_t.jpg" alt="Just the Two of Us — Apr 2023" loading="lazy"><span class="g-tap">Apr 2023</span></figure><figure class="g-tile" data-i="34"><img src="images/ph2/IMG_0646_t.jpg" alt="Just the Two of Us — Apr 2023" loading="lazy"><span class="g-tap">Apr 2023</span></figure></div>
+  <h4 class="g-head reveal"><span>Just the Two of Us</span></h4>
+  <div class="masonry"><figure class="g-tile reveal" data-i="23"><img src="images/ph2/IMG_4870_t.jpg" alt="Just the Two of Us — Dec 2021" loading="lazy"><span class="g-tap">Dec 2021</span></figure><figure class="g-tile reveal" data-i="24"><img src="images/ph2/IMG_4989_t.jpg" alt="Just the Two of Us — Jan 2022" loading="lazy"><span class="g-tap">Jan 2022</span></figure><figure class="g-tile reveal" data-i="25"><img src="images/ph2/IMG_5426_t.jpg" alt="Just the Two of Us — Jan 2022" loading="lazy"><span class="g-tap">Jan 2022</span></figure><figure class="g-tile reveal" data-i="26"><img src="images/ph2/IMG_6701_t.jpg" alt="Just the Two of Us — Feb 2022" loading="lazy"><span class="g-tap">Feb 2022</span></figure><figure class="g-tile reveal" data-i="27"><img src="images/ph2/IMG_7643_t.jpg" alt="Just the Two of Us — Mar 2022" loading="lazy"><span class="g-tap">Mar 2022</span></figure><figure class="g-tile reveal" data-i="28"><img src="images/ph2/IMG_1007_t.jpg" alt="Just the Two of Us — May 2022" loading="lazy"><span class="g-tap">May 2022</span></figure><figure class="g-tile reveal" data-i="29"><img src="images/ph2/IMG_1615_t.jpg" alt="Just the Two of Us — Jun 2022" loading="lazy"><span class="g-tap">Jun 2022</span></figure><figure class="g-tile reveal" data-i="30"><img src="images/ph2/IMG_1892_t.jpg" alt="Just the Two of Us — Jun 2022" loading="lazy"><span class="g-tap">Jun 2022</span></figure><figure class="g-tile reveal" data-i="31"><img src="images/ph2/IMG_2599_t.jpg" alt="Just the Two of Us — Jul 2022" loading="lazy"><span class="g-tap">Jul 2022</span></figure><figure class="g-tile reveal" data-i="32"><img src="images/ph2/IMG_5414_t.jpg" alt="Just the Two of Us — Sep 2022" loading="lazy"><span class="g-tap">Sep 2022</span></figure><figure class="g-tile reveal" data-i="33"><img src="images/ph2/IMG_0545_t.jpg" alt="Just the Two of Us — Apr 2023" loading="lazy"><span class="g-tap">Apr 2023</span></figure><figure class="g-tile reveal" data-i="34"><img src="images/ph2/IMG_0646_t.jpg" alt="Just the Two of Us — Apr 2023" loading="lazy"><span class="g-tap">Apr 2023</span></figure></div>
 </section>
 
 <section class="g-phase">
-  <h4 class="g-head"><span>Liam</span></h4>
-  <div class="masonry"><figure class="g-tile" data-i="35"><img src="images/ph3/IMG_3035_t.jpg" alt="Liam — Jan 2024" loading="lazy"><span class="g-tap">Jan 2024</span></figure><figure class="g-tile" data-i="36"><img src="images/ph3/IMG_3099_t.jpg" alt="Liam — Jan 2024" loading="lazy"><span class="g-tap">Jan 2024</span></figure><figure class="g-tile" data-i="37"><img src="images/ph3/IMG_4342_t.jpg" alt="Liam — Feb 2024" loading="lazy"><span class="g-tap">Feb 2024</span></figure><figure class="g-tile" data-i="38"><img src="images/ph3/IMG_3806_t.jpg" alt="Liam — Feb 2024" loading="lazy"><span class="g-tap">Feb 2024</span></figure><figure class="g-tile" data-i="39"><img src="images/ph3/IMG_6145_t.jpg" alt="Liam — Apr 2024" loading="lazy"><span class="g-tap">Apr 2024</span></figure><figure class="g-tile" data-i="40"><img src="images/ph3/IMG_6485_t.jpg" alt="Liam — Apr 2024" loading="lazy"><span class="g-tap">Apr 2024</span></figure><figure class="g-tile" data-i="41"><img src="images/ph3/IMG_8969_t.jpg" alt="Liam — Jun 2024" loading="lazy"><span class="g-tap">Jun 2024</span></figure><figure class="g-tile" data-i="42"><img src="images/ph3/dji_mimo_20240616_151706_20240616151706_1718574239557_photo_t.jpg" alt="Liam — Jun 2024" loading="lazy"><span class="g-tap">Jun 2024</span></figure><figure class="g-tile" data-i="43"><img src="images/ph3/IMG_0218_t.jpg" alt="Liam — Jun 2024" loading="lazy"><span class="g-tap">Jun 2024</span></figure></div>
+  <h4 class="g-head reveal"><span>Liam</span></h4>
+  <div class="masonry"><figure class="g-tile reveal" data-i="35"><img src="images/ph3/IMG_3035_t.jpg" alt="Liam — Jan 2024" loading="lazy"><span class="g-tap">Jan 2024</span></figure><figure class="g-tile reveal" data-i="36"><img src="images/ph3/IMG_3099_t.jpg" alt="Liam — Jan 2024" loading="lazy"><span class="g-tap">Jan 2024</span></figure><figure class="g-tile reveal" data-i="37"><img src="images/ph3/IMG_4342_t.jpg" alt="Liam — Feb 2024" loading="lazy"><span class="g-tap">Feb 2024</span></figure><figure class="g-tile reveal" data-i="38"><img src="images/ph3/IMG_3806_t.jpg" alt="Liam — Feb 2024" loading="lazy"><span class="g-tap">Feb 2024</span></figure><figure class="g-tile reveal" data-i="39"><img src="images/ph3/IMG_6145_t.jpg" alt="Liam — Apr 2024" loading="lazy"><span class="g-tap">Apr 2024</span></figure><figure class="g-tile reveal" data-i="40"><img src="images/ph3/IMG_6485_t.jpg" alt="Liam — Apr 2024" loading="lazy"><span class="g-tap">Apr 2024</span></figure><figure class="g-tile reveal" data-i="41"><img src="images/ph3/IMG_8969_t.jpg" alt="Liam — Jun 2024" loading="lazy"><span class="g-tap">Jun 2024</span></figure><figure class="g-tile reveal" data-i="42"><img src="images/ph3/dji_mimo_20240616_151706_20240616151706_1718574239557_photo_t.jpg" alt="Liam — Jun 2024" loading="lazy"><span class="g-tap">Jun 2024</span></figure><figure class="g-tile reveal" data-i="43"><img src="images/ph3/IMG_0218_t.jpg" alt="Liam — Jun 2024" loading="lazy"><span class="g-tap">Jun 2024</span></figure></div>
 </section>
 
 <section class="g-phase">
-  <h4 class="g-head"><span>Leo</span></h4>
-  <div class="masonry"><figure class="g-tile" data-i="44"><img src="images/ph4/IMG_7052_t.jpg" alt="Leo — Apr 2024" loading="lazy"><span class="g-tap">Apr 2024</span></figure><figure class="g-tile" data-i="45"><img src="images/ph4/IMG_6752_t.jpg" alt="Leo — Dec 2024" loading="lazy"><span class="g-tap">Dec 2024</span></figure><figure class="g-tile" data-i="46"><img src="images/ph4/IMG_0470_t.jpg" alt="Leo — Mar 2025" loading="lazy"><span class="g-tap">Mar 2025</span></figure><figure class="g-tile" data-i="47"><img src="images/ph4/IMG_0487_t.jpg" alt="Leo — Mar 2025" loading="lazy"><span class="g-tap">Mar 2025</span></figure><figure class="g-tile" data-i="48"><img src="images/ph4/IMG_4998_t.jpg" alt="Leo — Jun 2025" loading="lazy"><span class="g-tap">Jun 2025</span></figure><figure class="g-tile" data-i="49"><img src="images/ph4/IMG_6401_t.jpg" alt="Leo — Aug 2025" loading="lazy"><span class="g-tap">Aug 2025</span></figure><figure class="g-tile" data-i="50"><img src="images/ph4/IMG_7163_t.jpg" alt="Leo — Aug 2025" loading="lazy"><span class="g-tap">Aug 2025</span></figure><figure class="g-tile" data-i="51"><img src="images/ph4/1112121222_t.jpg" alt="Leo — Leo" loading="lazy"><span class="g-tap">Leo</span></figure><figure class="g-tile" data-i="52"><img src="images/ph4/IMG_6895_t.jpg" alt="Leo — Leo" loading="lazy"><span class="g-tap">Leo</span></figure></div>
+  <h4 class="g-head reveal"><span>Leo</span></h4>
+  <div class="masonry"><figure class="g-tile reveal" data-i="44"><img src="images/ph4/IMG_7052_t.jpg" alt="Leo — Apr 2024" loading="lazy"><span class="g-tap">Apr 2024</span></figure><figure class="g-tile reveal" data-i="45"><img src="images/ph4/IMG_6752_t.jpg" alt="Leo — Dec 2024" loading="lazy"><span class="g-tap">Dec 2024</span></figure><figure class="g-tile reveal" data-i="46"><img src="images/ph4/IMG_0470_t.jpg" alt="Leo — Mar 2025" loading="lazy"><span class="g-tap">Mar 2025</span></figure><figure class="g-tile reveal" data-i="47"><img src="images/ph4/IMG_0487_t.jpg" alt="Leo — Mar 2025" loading="lazy"><span class="g-tap">Mar 2025</span></figure><figure class="g-tile reveal" data-i="48"><img src="images/ph4/IMG_4998_t.jpg" alt="Leo — Jun 2025" loading="lazy"><span class="g-tap">Jun 2025</span></figure><figure class="g-tile reveal" data-i="49"><img src="images/ph4/IMG_6401_t.jpg" alt="Leo — Aug 2025" loading="lazy"><span class="g-tap">Aug 2025</span></figure><figure class="g-tile reveal" data-i="50"><img src="images/ph4/IMG_7163_t.jpg" alt="Leo — Aug 2025" loading="lazy"><span class="g-tap">Aug 2025</span></figure><figure class="g-tile reveal" data-i="51"><img src="images/ph4/1112121222_t.jpg" alt="Leo — Leo" loading="lazy"><span class="g-tap">Leo</span></figure><figure class="g-tile reveal" data-i="52"><img src="images/ph4/IMG_6895_t.jpg" alt="Leo — Leo" loading="lazy"><span class="g-tap">Leo</span></figure></div>
 </section>
   </div>
 </section>
 
 <section class="block">
   <div class="wrap letter">
-    <h2 class="script-head">Happy anniversary, Yasi joonam</h2>
+    <h2 class="script-head reveal">Happy anniversary, Yasi joonam</h2>
     <p>Six years ago you married me in the middle of a shut-down world, and somehow every year since has been louder, fuller, and better than the one before. Thank you for the fifteen years of talking, the two boys, and the thousand ordinary days in between. I&rsquo;d send that friend request again every time.</p>
     <div class="sig">&mdash; Hamed</div>
   </div>
@@ -355,20 +378,91 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
 
 <script>
 const ITEMS = [{"src": "images/ph0/IMG_1517824714_m.jpg", "cap": "The First Days \u00b7 Feb 2018"}, {"src": "images/ph0/IMG_1518431348_m.jpg", "cap": "The First Days \u00b7 Feb 2018"}, {"src": "images/ph0/IMG_0426_m.jpg", "cap": "The First Days \u00b7 Feb 2020"}, {"src": "images/ph0/IMG_4009_m.jpg", "cap": "The First Days \u00b7 Mar 2020"}, {"src": "images/ph0/IMG_4158_m.jpg", "cap": "The First Days \u00b7 Mar 2020"}, {"src": "images/ph0/9F59E8AD-A1BD-4E34-A463-59501575436C_m.jpg", "cap": "The First Days \u00b7 Mar 2020"}, {"src": "images/ph0/IMG_5116_m.jpg", "cap": "The First Days \u00b7 Apr 2020"}, {"src": "images/ph0/IMG_3279_m.jpg", "cap": "The First Days \u00b7 May 2020"}, {"src": "images/ph0/IMG_1530521120_m.jpg", "cap": "The First Days"}, {"src": "images/ph0/IMG_1530521125_m.jpg", "cap": "The First Days"}, {"src": "images/ph0/IMG_1530534126_m.jpg", "cap": "The First Days"}, {"src": "images/ph0/PHOTO-2018-11-03-01-11-48_m.jpg", "cap": "The First Days"}, {"src": "images/ph1/IMG_5625_m.jpg", "cap": "The Wedding \u00b7 Jul 2020"}, {"src": "images/ph1/IMG_5690_m.jpg", "cap": "The Wedding \u00b7 Jul 2020"}, {"src": "images/ph1/IMG_8068_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/IMG_3038_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/IMG_6143_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/IMG_3168_m.jpg", "cap": "The Wedding \u00b7 Aug 2020"}, {"src": "images/ph1/92AC41F7-2BD3-4616-8643-CF63EB409BF6_m.jpg", "cap": "The Wedding \u00b7 May 2021"}, {"src": "images/ph1/DJI_20210701_124734_734_m.jpg", "cap": "The Wedding \u00b7 Jul 2021"}, {"src": "images/ph1/20AB01BB-64BA-49F2-B368-42C4935A0076_m.jpg", "cap": "The Wedding \u00b7 Jul 2021"}, {"src": "images/ph1/IMG_2135_m.jpg", "cap": "The Wedding \u00b7 Aug 2021"}, {"src": "images/ph1/IMG_4739_m.jpg", "cap": "The Wedding \u00b7 Sep 2021"}, {"src": "images/ph2/IMG_4870_m.jpg", "cap": "Just the Two of Us \u00b7 Dec 2021"}, {"src": "images/ph2/IMG_4989_m.jpg", "cap": "Just the Two of Us \u00b7 Jan 2022"}, {"src": "images/ph2/IMG_5426_m.jpg", "cap": "Just the Two of Us \u00b7 Jan 2022"}, {"src": "images/ph2/IMG_6701_m.jpg", "cap": "Just the Two of Us \u00b7 Feb 2022"}, {"src": "images/ph2/IMG_7643_m.jpg", "cap": "Just the Two of Us \u00b7 Mar 2022"}, {"src": "images/ph2/IMG_1007_m.jpg", "cap": "Just the Two of Us \u00b7 May 2022"}, {"src": "images/ph2/IMG_1615_m.jpg", "cap": "Just the Two of Us \u00b7 Jun 2022"}, {"src": "images/ph2/IMG_1892_m.jpg", "cap": "Just the Two of Us \u00b7 Jun 2022"}, {"src": "images/ph2/IMG_2599_m.jpg", "cap": "Just the Two of Us \u00b7 Jul 2022"}, {"src": "images/ph2/IMG_5414_m.jpg", "cap": "Just the Two of Us \u00b7 Sep 2022"}, {"src": "images/ph2/IMG_0545_m.jpg", "cap": "Just the Two of Us \u00b7 Apr 2023"}, {"src": "images/ph2/IMG_0646_m.jpg", "cap": "Just the Two of Us \u00b7 Apr 2023"}, {"src": "images/ph3/IMG_3035_m.jpg", "cap": "Liam \u00b7 Jan 2024"}, {"src": "images/ph3/IMG_3099_m.jpg", "cap": "Liam \u00b7 Jan 2024"}, {"src": "images/ph3/IMG_4342_m.jpg", "cap": "Liam \u00b7 Feb 2024"}, {"src": "images/ph3/IMG_3806_m.jpg", "cap": "Liam \u00b7 Feb 2024"}, {"src": "images/ph3/IMG_6145_m.jpg", "cap": "Liam \u00b7 Apr 2024"}, {"src": "images/ph3/IMG_6485_m.jpg", "cap": "Liam \u00b7 Apr 2024"}, {"src": "images/ph3/IMG_8969_m.jpg", "cap": "Liam \u00b7 Jun 2024"}, {"src": "images/ph3/dji_mimo_20240616_151706_20240616151706_1718574239557_photo_m.jpg", "cap": "Liam \u00b7 Jun 2024"}, {"src": "images/ph3/IMG_0218_m.jpg", "cap": "Liam \u00b7 Jun 2024"}, {"src": "images/ph4/IMG_7052_m.jpg", "cap": "Leo \u00b7 Apr 2024"}, {"src": "images/ph4/IMG_6752_m.jpg", "cap": "Leo \u00b7 Dec 2024"}, {"src": "images/ph4/IMG_0470_m.jpg", "cap": "Leo \u00b7 Mar 2025"}, {"src": "images/ph4/IMG_0487_m.jpg", "cap": "Leo \u00b7 Mar 2025"}, {"src": "images/ph4/IMG_4998_m.jpg", "cap": "Leo \u00b7 Jun 2025"}, {"src": "images/ph4/IMG_6401_m.jpg", "cap": "Leo \u00b7 Aug 2025"}, {"src": "images/ph4/IMG_7163_m.jpg", "cap": "Leo \u00b7 Aug 2025"}, {"src": "images/ph4/1112121222_m.jpg", "cap": "Leo"}, {"src": "images/ph4/IMG_6895_m.jpg", "cap": "Leo"}];
-// live counter since Aug 15 2020 (local time)
-(function() {
-  const start = new Date(2020, 7, 15);
-  const now = new Date();
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---- time married, counted from Aug 15 2020 (local) ----
+function elapsed() {
+  const start = new Date(2020, 7, 15), now = new Date();
   let y = now.getFullYear() - start.getFullYear();
   let m = now.getMonth() - start.getMonth();
   let d = now.getDate() - start.getDate();
   if (d < 0) { m -= 1; d += new Date(now.getFullYear(), now.getMonth(), 0).getDate(); }
   if (m < 0) { y -= 1; m += 12; }
-  const days = Math.floor((now - start) / 86400000);
-  document.getElementById('c-y').textContent = y;
-  document.getElementById('c-m').textContent = m;
-  document.getElementById('c-d').textContent = d;
-  document.getElementById('c-t').textContent = days.toLocaleString();
+  return { y, m, d, days: Math.floor((now - start) / 86400000) };
+}
+
+// ---- scroll reveals, staggered per group ----
+(function() {
+  const els = document.querySelectorAll('.reveal, .reveal-l, .reveal-r, .zoom-in');
+  if (REDUCED || !('IntersectionObserver' in window)) {
+    els.forEach(e => e.classList.add('in'));
+    return;
+  }
+  const io = new IntersectionObserver((entries, obs) => {
+    const hits = entries.filter(e => e.isIntersecting);
+    hits.forEach((entry, i) => {
+      setTimeout(() => entry.target.classList.add('in'), Math.min(i, 6) * 85);
+      obs.unobserve(entry.target);
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  els.forEach(e => io.observe(e));
+})();
+
+// ---- counter animates up when it scrolls into view ----
+(function() {
+  const strip = document.querySelector('.count-strip');
+  const e = elapsed();
+  const targets = [['c-y', e.y], ['c-m', e.m], ['c-d', e.d], ['c-t', e.days]];
+  const paint = (id, v) => document.getElementById(id).textContent = v.toLocaleString();
+  if (REDUCED || !('IntersectionObserver' in window)) {
+    targets.forEach(([id, v]) => paint(id, v));
+    return;
+  }
+  targets.forEach(([id]) => paint(id, 0));
+  const run = () => {
+    const dur = 1500, t0 = performance.now();
+    (function step(now) {
+      const p = Math.min((now - t0) / dur, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      targets.forEach(([id, v]) => paint(id, Math.round(v * eased)));
+      if (p < 1) requestAnimationFrame(step);
+      else document.querySelectorAll('.count').forEach((c, i) => {
+        setTimeout(() => { c.classList.add('pop'); setTimeout(() => c.classList.remove('pop'), 320); }, i * 90);
+      });
+    })(t0);
+  };
+  const io = new IntersectionObserver((en, obs) => {
+    if (en[0].isIntersecting) { run(); obs.disconnect(); }
+  }, { threshold: 0.5 });
+  io.observe(strip);
+})();
+
+// ---- hero parallax + collage drift ----
+(function() {
+  if (REDUCED) return;
+  const heroImg = document.querySelector('.hero-bg img');
+  const heroInner = document.querySelector('.hero-inner');
+  const collage = document.querySelector('.story-bg');
+  const story = document.querySelector('.story');
+  let ticking = false;
+  function frame() {
+    const y = window.scrollY;
+    if (y < window.innerHeight * 1.2) {
+      heroImg.style.transform = 'translate3d(0,' + (y * 0.22).toFixed(1) + 'px,0) scale(1.06)';
+      heroInner.style.transform = 'translate3d(0,' + (y * 0.12).toFixed(1) + 'px,0)';
+      heroInner.style.opacity = Math.max(0, 1 - y / (window.innerHeight * 0.72));
+    }
+    const r = story.getBoundingClientRect();
+    if (r.top < window.innerHeight && r.bottom > 0) {
+      const p = (window.innerHeight - r.top) / (window.innerHeight + r.height);
+      collage.style.transform = 'rotate(-8deg) translate3d(0,' + ((0.5 - p) * 90).toFixed(1) + 'px,0)';
+    }
+    ticking = false;
+  }
+  window.addEventListener('scroll', () => {
+    if (!ticking) { ticking = true; requestAnimationFrame(frame); }
+  }, { passive: true });
+  frame();
 })();
 // lightbox
 (function() {
