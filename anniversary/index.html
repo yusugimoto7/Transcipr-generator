@@ -105,11 +105,15 @@ nav a:hover, nav a:focus-visible { color:var(--gold); opacity:1; outline:none; }
 /* ---------- story collage ---------- */
 .story { position:relative; overflow:hidden; padding:130px 24px; }
 .story-bg {
-  position:absolute; inset:-14%;
-  display:grid; grid-template-columns:repeat(5,1fr); gap:14px;
-  transform:rotate(-8deg); opacity:.6;
+  position:absolute; inset:-20% -10%;
+  display:flex; flex-direction:column; justify-content:center; gap:14px;
+  transform:rotate(-8deg); opacity:.6; overflow:hidden;
 }
-.story-bg img { width:100%; height:100%; object-fit:cover; aspect-ratio:1; border-radius:2px; }
+.sb-row { display:flex; gap:14px; will-change:transform; }
+.sb-row img {
+  flex:0 0 auto; width:190px; height:190px; object-fit:cover; border-radius:2px;
+}
+@media (max-width:760px) { .sb-row img { width:132px; height:132px; } .sb-row { gap:10px; } }
 .story::after { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center, rgba(31,24,17,.55) 0%, rgba(31,24,17,.92) 75%); }
 .story-text {
   position:relative; z-index:2; max-width:720px; margin:0 auto; text-align:center;
@@ -272,7 +276,7 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
 <div class="count-note reveal">…and counting, every single day.</div>
 
 <section class="story" id="story">
-  <div class="story-bg" aria-hidden="true"><img src="images/ph0/IMG_1517824714_t.jpg" alt="" loading="lazy"><img src="images/ph1/IMG_8068_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_4870_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_3035_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_6752_t.jpg" alt="" loading="lazy"><img src="images/ph0/IMG_5116_t.jpg" alt="" loading="lazy"><img src="images/ph1/IMG_6143_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_6701_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_8969_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_0487_t.jpg" alt="" loading="lazy"><img src="images/ph0/IMG_4009_t.jpg" alt="" loading="lazy"><img src="images/ph1/DJI_20210701_124734_734_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_1007_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_4342_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_4998_t.jpg" alt="" loading="lazy"><img src="images/ph0/IMG_4158_t.jpg" alt="" loading="lazy"><img src="images/ph1/IMG_5625_t.jpg" alt="" loading="lazy"><img src="images/ph2/IMG_5426_t.jpg" alt="" loading="lazy"><img src="images/ph3/IMG_6485_t.jpg" alt="" loading="lazy"><img src="images/ph4/IMG_7163_t.jpg" alt="" loading="lazy"></div>
+  <div class="story-bg" aria-hidden="true"><div class="sb-row" data-dir="-1"><img src="images/collage/ph0_IMG_1517824714.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_8068.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_4870.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_3035.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_6752.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_1517824714.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_8068.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_4870.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_3035.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_6752.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_1517824714.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_8068.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_4870.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_3035.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_6752.jpg" alt="" loading="lazy"></div><div class="sb-row" data-dir="1"><img src="images/collage/ph0_IMG_5116.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_6143.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_6701.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_8969.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_0487.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_5116.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_6143.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_6701.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_8969.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_0487.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_5116.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_6143.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_6701.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_8969.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_0487.jpg" alt="" loading="lazy"></div><div class="sb-row" data-dir="-1"><img src="images/collage/ph0_IMG_4009.jpg" alt="" loading="lazy"><img src="images/collage/ph1_DJI_20210701_124734_734.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_1007.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_4342.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_4998.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_4009.jpg" alt="" loading="lazy"><img src="images/collage/ph1_DJI_20210701_124734_734.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_1007.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_4342.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_4998.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_4009.jpg" alt="" loading="lazy"><img src="images/collage/ph1_DJI_20210701_124734_734.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_1007.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_4342.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_4998.jpg" alt="" loading="lazy"></div><div class="sb-row" data-dir="1"><img src="images/collage/ph0_IMG_4158.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_5625.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_5426.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_6485.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_7163.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_4158.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_5625.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_5426.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_6485.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_7163.jpg" alt="" loading="lazy"><img src="images/collage/ph0_IMG_4158.jpg" alt="" loading="lazy"><img src="images/collage/ph1_IMG_5625.jpg" alt="" loading="lazy"><img src="images/collage/ph2_IMG_5426.jpg" alt="" loading="lazy"><img src="images/collage/ph3_IMG_6485.jpg" alt="" loading="lazy"><img src="images/collage/ph4_IMG_7163.jpg" alt="" loading="lazy"></div></div>
   <div class="story-text reveal">
     <p>&mdash; He found her on Facebook, fifteen years ago. It took five years to meet, and one heartbeat to know. He crossed the world; she followed. The world locked its doors, so they married in a garden while it held its breath. Then there were three. Then there were four.</p>
   </div>
@@ -511,6 +515,15 @@ function elapsed() {
   const heroInner = document.querySelector('.hero-inner');
   const collage = document.querySelector('.story-bg');
   const story = document.querySelector('.story');
+  const rows = Array.from(document.querySelectorAll('.sb-row'));
+  let rowBase = [];
+  const measure = () => {
+    rowBase = rows.map(row => -(row.scrollWidth - collage.clientWidth) / 2);
+  };
+  measure();
+  window.addEventListener('resize', () => { measure(); frame(); }, { passive: true });
+  // tiles load lazily; re-measure once they have real widths
+  window.addEventListener('load', () => { measure(); frame(); });
   let ticking = false;
   function frame() {
     const y = window.scrollY;
@@ -521,8 +534,16 @@ function elapsed() {
     }
     const r = story.getBoundingClientRect();
     if (r.top < window.innerHeight && r.bottom > 0) {
+      // 0 as the section enters the viewport, 1 as it leaves
       const p = (window.innerHeight - r.top) / (window.innerHeight + r.height);
-      collage.style.transform = 'rotate(-8deg) translate3d(0,' + ((0.5 - p) * 90).toFixed(1) + 'px,0)';
+      collage.style.transform = 'rotate(-8deg) translate3d(0,' + ((0.5 - p) * 60).toFixed(1) + 'px,0)';
+      // rows slide apart: odd rows travel right, even rows left
+      const amp = window.innerWidth < 760 ? 130 : 300;
+      rows.forEach((row, i) => {
+        const dir = +row.dataset.dir;
+        const x = rowBase[i] + dir * (p - 0.5) * 2 * amp;
+        row.style.transform = 'translate3d(' + x.toFixed(1) + 'px,0,0)';
+      });
     }
     ticking = false;
   }
