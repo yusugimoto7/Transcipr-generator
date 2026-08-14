@@ -175,6 +175,31 @@ instead: `countFa()` turns `<5` into «کمتر از 5». The story card keeps t
 Dedup keys use the raw figure, never the Persian wording, so rewording the text
 can never make an already-published draw look new.
 
+## Never let a key change republish an old draw
+
+A six-day-old BC draw went out to the test channel because the dedup key format
+changed from `bc::2026-08-06::Care: Childcare::183` to `bc::2026-08-06::5::500+`.
+The old rows no longer matched, so already-published content looked brand new.
+
+`Drop already posted` now matches on the **province+date prefix**, not the whole
+key: once a province has been announced for a date, it stays announced whatever
+the key looks like afterwards. MAX_AGE_DAYS also dropped from 10 to 5 so nothing
+historical is eligible in the first place. Two independent locks, because this
+failure publishes under an RCIC's name.
+
+Any future change to key composition must keep `code::dateISO` as the first two
+segments, or the guard silently stops working.
+
+## Story card: multi-draw dates show the breakdown
+
+A date with several streams replaces the decorative bar chart with the actual
+per-stream list — name, invitations, cut-off — under the totals. The chart was
+decoration sitting exactly where the information belonged. Single-draw cards are
+the original locked design, untouched.
+
+Card figures stay raw (`<5`), not the Persian wording: the list is drawn in an
+LTR English font where `<5` renders correctly.
+
 ## Proven as of 2026-08-06
 
 All four channels have posted successfully at least once, and the duplicate
