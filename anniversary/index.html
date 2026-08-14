@@ -167,6 +167,17 @@ nav a:hover, nav a:focus-visible { color:var(--gold); opacity:1; outline:none; }
   .ch-ph figcaption { font-size:10px; padding:18px 8px 6px; }
 }
 
+/* ---------- the rest of the chapter, small ---------- */
+.ch-extra { position:relative; z-index:3; }
+.ch-strip { display:grid; grid-template-columns:repeat(auto-fill, minmax(92px,1fr)); gap:8px; margin-top:26px; }
+.chip { padding:0; border:1px solid var(--line); border-radius:3px; overflow:hidden; background:none;
+  cursor:pointer; aspect-ratio:1; transition:transform .35s, border-color .35s, filter .35s; filter:saturate(.92); }
+.chip img { width:100%; height:100%; object-fit:cover; }
+.chip:hover, .chip:focus-visible { transform:translateY(-3px); border-color:var(--gold); filter:none; outline:none; }
+@media (max-width:760px) {
+  .ch-strip { grid-template-columns:repeat(auto-fill, minmax(64px,1fr)); gap:6px; margin-top:18px; }
+}
+
 /* ---------- flight map ---------- */
 .map { position:relative; z-index:3; margin:34px auto 0; color:var(--gold); text-align:center; }
 .map svg { width:100%; max-width:620px; height:auto; overflow:visible; }
@@ -209,7 +220,10 @@ nav a:hover, nav a:focus-visible { color:var(--gold); opacity:1; outline:none; }
 .music.playing .eq i:nth-child(3) { animation-delay:.36s; }
 @keyframes eqb { 0%,100% { height:4px; } 50% { height:13px; } }
 .music-panel { width:min(330px, calc(100vw - 96px)); background:rgba(24,18,9,.97); border:1px solid var(--line);
-  border-radius:6px; padding:16px 16px 12px; box-shadow:0 18px 50px rgba(0,0,0,.6); }
+  border-radius:6px; padding:16px 16px 12px; box-shadow:0 18px 50px rgba(0,0,0,.6);
+  transition:opacity .3s, max-height .4s, padding .3s; max-height:400px; overflow:hidden; }
+/* collapsed, but still rendered — an iframe inside display:none cannot play */
+.music-panel.closed { max-height:0; opacity:0; padding-top:0; padding-bottom:0; border-width:0; pointer-events:none; }
 .mp-title { font-family:var(--script); color:var(--orange); font-size:23px; line-height:1.2; }
 .mp-artist { font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:var(--dim); margin:2px 0 12px; }
 .mp-note { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim); margin-top:9px; text-align:center; }
@@ -292,6 +306,7 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
     </div>
     
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="0" aria-label="Open photo, Feb 2018"><img src="images/chip/ph0_IMG_1517824714.jpg" alt="" loading="lazy"></button><button class="chip" data-i="1" aria-label="Open photo, Feb 2018"><img src="images/chip/ph0_IMG_1518431348.jpg" alt="" loading="lazy"></button><button class="chip" data-i="2" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530521120.jpg" alt="" loading="lazy"></button><button class="chip" data-i="3" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530521125.jpg" alt="" loading="lazy"></button><button class="chip" data-i="4" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530534126.jpg" alt="" loading="lazy"></button><button class="chip" data-i="5" aria-label="Open photo, undated"><img src="images/chip/ph0_PHOTO-2018-11-03-01-11-48.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -303,10 +318,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">First hello</div>
       <h3 class="reveal">Five years of words, then a heartbeat</h3>
       <p class="reveal">Ten years ago we finally stood in the same room, and the internet-friendship excuse stopped working. That was the day this actually began — and we never looked back.</p>
-      <div class="ch-hint reveal">6 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">6 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="0" style="flex:0.7510 1 0; aspect-ratio:0.7510;"><img src="images/ph0/IMG_1517824714_m.jpg" alt="Together in Tehran" loading="lazy" style="object-position:46.1% 42.5%"><figcaption>Together in Tehran</figcaption></figure><figure class="ch-ph reveal" data-i="1" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph0/IMG_1518431348_m.jpg" alt="The early days" loading="lazy" style="object-position:37.5% 42.3%"><figcaption>The early days</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="2" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530521120.jpg" alt="" loading="lazy"></button><button class="chip" data-i="3" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530521125.jpg" alt="" loading="lazy"></button><button class="chip" data-i="4" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530534126.jpg" alt="" loading="lazy"></button><button class="chip" data-i="5" aria-label="Open photo, undated"><img src="images/chip/ph0_PHOTO-2018-11-03-01-11-48.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -318,10 +334,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">A one-way ticket</div>
       <h3 class="reveal">Tehran → Vancouver</h3>
       <p class="reveal">Late 2018, Hamed boarded a plane with two suitcases and a promise — ten thousand kilometres in one direction. The love became long-distance: time zones, phone calls at strange hours, and a plan that refused to die.</p>
-      <div class="ch-hint reveal">6 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">6 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="5" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph0/PHOTO-2018-11-03-01-11-48_m.jpg" alt="Before the flight" loading="lazy" style="object-position:45.6% 25.4%"><figcaption>Before the flight</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="0" aria-label="Open photo, Feb 2018"><img src="images/chip/ph0_IMG_1517824714.jpg" alt="" loading="lazy"></button><button class="chip" data-i="1" aria-label="Open photo, Feb 2018"><img src="images/chip/ph0_IMG_1518431348.jpg" alt="" loading="lazy"></button><button class="chip" data-i="2" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530521120.jpg" alt="" loading="lazy"></button><button class="chip" data-i="3" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530521125.jpg" alt="" loading="lazy"></button><button class="chip" data-i="4" aria-label="Open photo, undated"><img src="images/chip/ph0_IMG_1530534126.jpg" alt="" loading="lazy"></button></div></div>
   
 <div class="map reveal wrap" aria-label="Flight from Tehran to Vancouver">
   <svg viewBox="0 0 600 210" role="img">
@@ -357,10 +374,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">She landed</div>
       <h3 class="reveal">Yasi comes to Canada</h3>
       <p class="reveal">In February 2020 the waiting finally ended — Yasi landed in Canada just weeks before the world closed its doors. Terrible timing for a planet. Perfect timing for us: quarantined together, exactly where we wanted to be.</p>
-      <div class="ch-hint reveal">6 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">6 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="6" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph0/IMG_0426_m.jpg" alt="February 2020 — reunited" loading="lazy" style="object-position:33.8% 33.2%"><figcaption>February 2020 — reunited</figcaption></figure><figure class="ch-ph reveal" data-i="7" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph0/IMG_4009_m.jpg" alt="Our first Canadian spring" loading="lazy" style="object-position:47.7% 44.9%"><figcaption>Our first Canadian spring</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="8" aria-label="Open photo, Mar 2020"><img src="images/chip/ph0_IMG_4158.jpg" alt="" loading="lazy"></button><button class="chip" data-i="9" aria-label="Open photo, Mar 2020"><img src="images/chip/ph0_9F59E8AD-A1BD-4E34-A463-59501575436C.jpg" alt="" loading="lazy"></button><button class="chip" data-i="10" aria-label="Open photo, Apr 2020"><img src="images/chip/ph0_IMG_5116.jpg" alt="" loading="lazy"></button><button class="chip" data-i="11" aria-label="Open photo, May 2020"><img src="images/chip/ph0_IMG_3279.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -372,10 +390,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">We do</div>
       <h3 class="reveal">A small wedding, an enormous yes</h3>
       <p class="reveal">On August 15, 2020 — in a summer when the whole world stood still — we got married. A backyard, a bouquet, a blue suit, and the two people this story was always about. Six years ago it felt impossible. Now it is our favourite date on the calendar.</p>
-      <div class="ch-hint reveal">6 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">6 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="14" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph1/IMG_8068_m.jpg" alt="On the way — Aug 15, 2020" loading="lazy" style="object-position:45.2% 24.5%"><figcaption>On the way — Aug 15, 2020</figcaption></figure><figure class="ch-ph reveal" data-i="15" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph1/IMG_3038_m.jpg" alt="Mr. &amp; Mrs." loading="lazy" style="object-position:48.4% 31.9%"><figcaption>Mr. &amp; Mrs.</figcaption></figure><figure class="ch-ph reveal" data-i="16" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph1/IMG_6143_m.jpg" alt="Just married" loading="lazy" style="object-position:33.1% 33.4%"><figcaption>Just married</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="12" aria-label="Open photo, Jul 2020"><img src="images/chip/ph1_IMG_5625.jpg" alt="" loading="lazy"></button><button class="chip" data-i="13" aria-label="Open photo, Jul 2020"><img src="images/chip/ph1_IMG_5690.jpg" alt="" loading="lazy"></button><button class="chip" data-i="17" aria-label="Open photo, Aug 2020"><img src="images/chip/ph1_IMG_3168.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -387,10 +406,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">Just us</div>
       <h3 class="reveal">Building a life for two</h3>
       <p class="reveal">First anniversaries, new-year kisses, road trips and drone shots from above — the quiet years where a marriage becomes a home.</p>
-      <div class="ch-hint reveal">15 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">15 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="19" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph1/DJI_20210701_124734_734_m.jpg" alt="First-anniversary summer" loading="lazy" style="object-position:75.2% 58.4%"><figcaption>First-anniversary summer</figcaption></figure><figure class="ch-ph reveal" data-i="23" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph2/IMG_4870_m.jpg" alt="New Year’s Eve" loading="lazy" style="object-position:56.7% 34.0%"><figcaption>New Year’s Eve</figcaption></figure><figure class="ch-ph reveal" data-i="26" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph2/IMG_6701_m.jpg" alt="Valentine’s, 2022" loading="lazy" style="object-position:54.8% 29.3%"><figcaption>Valentine’s, 2022</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="18" aria-label="Open photo, May 2021"><img src="images/chip/ph1_92AC41F7-2BD3-4616-8643-CF63EB409BF6.jpg" alt="" loading="lazy"></button><button class="chip" data-i="20" aria-label="Open photo, Jul 2021"><img src="images/chip/ph1_20AB01BB-64BA-49F2-B368-42C4935A0076.jpg" alt="" loading="lazy"></button><button class="chip" data-i="21" aria-label="Open photo, Aug 2021"><img src="images/chip/ph1_IMG_2135.jpg" alt="" loading="lazy"></button><button class="chip" data-i="22" aria-label="Open photo, Sep 2021"><img src="images/chip/ph1_IMG_4739.jpg" alt="" loading="lazy"></button><button class="chip" data-i="24" aria-label="Open photo, Jan 2022"><img src="images/chip/ph2_IMG_4989.jpg" alt="" loading="lazy"></button><button class="chip" data-i="25" aria-label="Open photo, Jan 2022"><img src="images/chip/ph2_IMG_5426.jpg" alt="" loading="lazy"></button><button class="chip" data-i="27" aria-label="Open photo, Mar 2022"><img src="images/chip/ph2_IMG_7643.jpg" alt="" loading="lazy"></button><button class="chip" data-i="28" aria-label="Open photo, May 2022"><img src="images/chip/ph2_IMG_1007.jpg" alt="" loading="lazy"></button><button class="chip" data-i="29" aria-label="Open photo, Jun 2022"><img src="images/chip/ph2_IMG_1615.jpg" alt="" loading="lazy"></button><button class="chip" data-i="30" aria-label="Open photo, Jun 2022"><img src="images/chip/ph2_IMG_1892.jpg" alt="" loading="lazy"></button><button class="chip" data-i="31" aria-label="Open photo, Jul 2022"><img src="images/chip/ph2_IMG_2599.jpg" alt="" loading="lazy"></button><button class="chip" data-i="32" aria-label="Open photo, Sep 2022"><img src="images/chip/ph2_IMG_5414.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -402,10 +422,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">Then there were three</div>
       <h3 class="reveal">Liam</h3>
       <p class="reveal">On April 6, 2023, at seven in the morning, everything we thought we knew about love got rewritten by a seven-pound editor named Liam.</p>
-      <div class="ch-hint reveal">11 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">11 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="33" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph2/IMG_0545_m.jpg" alt="The last days of two" loading="lazy" style="object-position:54.4% 23.4%"><figcaption>The last days of two</figcaption></figure><figure class="ch-ph reveal" data-i="34" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph2/IMG_0646_m.jpg" alt="April 6, 2023 — hello, Liam" loading="lazy" style="object-position:53.9% 42.1%"><figcaption>April 6, 2023 — hello, Liam</figcaption></figure><figure class="ch-ph reveal" data-i="39" style="flex:1.3333 1 0; aspect-ratio:1.3333;"><img src="images/ph3/IMG_6145_m.jpg" alt="Tulip season with our boy" loading="lazy" style="object-position:50% 42%"><figcaption>Tulip season with our boy</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="35" aria-label="Open photo, Jan 2024"><img src="images/chip/ph3_IMG_3035.jpg" alt="" loading="lazy"></button><button class="chip" data-i="36" aria-label="Open photo, Jan 2024"><img src="images/chip/ph3_IMG_3099.jpg" alt="" loading="lazy"></button><button class="chip" data-i="37" aria-label="Open photo, Feb 2024"><img src="images/chip/ph3_IMG_4342.jpg" alt="" loading="lazy"></button><button class="chip" data-i="38" aria-label="Open photo, Feb 2024"><img src="images/chip/ph3_IMG_3806.jpg" alt="" loading="lazy"></button><button class="chip" data-i="40" aria-label="Open photo, Apr 2024"><img src="images/chip/ph3_IMG_6485.jpg" alt="" loading="lazy"></button><button class="chip" data-i="41" aria-label="Open photo, Jun 2024"><img src="images/chip/ph3_IMG_8969.jpg" alt="" loading="lazy"></button><button class="chip" data-i="42" aria-label="Open photo, Jun 2024"><img src="images/chip/ph3_dji_mimo_20240616_151706_20240616151706_1718574239557_photo.jpg" alt="" loading="lazy"></button><button class="chip" data-i="43" aria-label="Open photo, Jun 2024"><img src="images/chip/ph3_IMG_0218.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -417,10 +438,11 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
       <div class="ch-script reveal">Then there were four</div>
       <h3 class="reveal">Leo</h3>
       <p class="reveal">It started with a room full of balloons and a question. On October 19, 2024, Leo answered it — and Liam became a big brother. The house got louder, the nights got shorter, and our hearts somehow doubled again.</p>
-      <div class="ch-hint reveal">9 photos from this chapter &middot; tap one to open them all</div>
+      <div class="ch-hint reveal">9 photos from this chapter &middot; tap any to open them full size</div>
     </div>
     <div class="ch-photos"><figure class="ch-ph reveal" data-i="44" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph4/IMG_7052_m.jpg" alt="The reveal — spring 2024" loading="lazy" style="object-position:43.7% 53.8%"><figcaption>The reveal — spring 2024</figcaption></figure><figure class="ch-ph reveal" data-i="45" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph4/IMG_6752_m.jpg" alt="Our newest one" loading="lazy" style="object-position:51.4% 40.5%"><figcaption>Our newest one</figcaption></figure><figure class="ch-ph reveal" data-i="46" style="flex:0.7500 1 0; aspect-ratio:0.7500;"><img src="images/ph4/IMG_0470_m.jpg" alt="All four of us" loading="lazy" style="object-position:38.6% 36.3%"><figcaption>All four of us</figcaption></figure></div>
   </div>
+  <div class="ch-extra wrap"><div class="ch-strip reveal"><button class="chip" data-i="47" aria-label="Open photo, Mar 2025"><img src="images/chip/ph4_IMG_0487.jpg" alt="" loading="lazy"></button><button class="chip" data-i="48" aria-label="Open photo, Jun 2025"><img src="images/chip/ph4_IMG_4998.jpg" alt="" loading="lazy"></button><button class="chip" data-i="49" aria-label="Open photo, Aug 2025"><img src="images/chip/ph4_IMG_6401.jpg" alt="" loading="lazy"></button><button class="chip" data-i="50" aria-label="Open photo, Aug 2025"><img src="images/chip/ph4_IMG_7163.jpg" alt="" loading="lazy"></button><button class="chip" data-i="51" aria-label="Open photo, undated"><img src="images/chip/ph4_1112121222.jpg" alt="" loading="lazy"></button><button class="chip" data-i="52" aria-label="Open photo, undated"><img src="images/chip/ph4_IMG_6895.jpg" alt="" loading="lazy"></button></div></div>
   
 </article>
 
@@ -443,7 +465,7 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
 
 <audio id="song" src="audio/our-song.mp3" loop preload="auto"></audio>
 <div class="music" id="music">
-  <div class="music-panel" id="music-panel" hidden>
+  <div class="music-panel closed" id="music-panel">
     <div class="mp-title">Porteghal-e Man</div>
     <div class="mp-artist">Marjan Farsad</div>
     <iframe id="sc-frame" title="SoundCloud player" width="100%" height="120" frameborder="no" scrolling="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https://soundcloud.com/marjan-farsad/08-porteghale-man&color=%23EA6A32&inverse=true&auto_play=false&show_user=true&hide_related=true&show_comments=false&show_reposts=false&show_teaser=false"></iframe>
@@ -566,7 +588,7 @@ function elapsed() {
     cur = (i + ITEMS.length) % ITEMS.length;
     img.src = ITEMS[cur].src; img.alt = ITEMS[cur].cap; cap.textContent = ITEMS[cur].cap;
   };
-  document.querySelectorAll('.ch-ph').forEach(t => {
+  document.querySelectorAll('.ch-ph, .chip').forEach(t => {
     t.tabIndex = 0;
     const open = () => { show(+t.dataset.i); lb.classList.add('open'); document.body.style.overflow = 'hidden'; };
     t.addEventListener('click', open);
@@ -594,8 +616,7 @@ function elapsed() {
   const panel = document.getElementById('music-panel');
   const song = document.getElementById('song');
   const openPanel = () => {
-    const open = panel.hasAttribute('hidden');
-    if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
+    const open = panel.classList.toggle('closed') === false;
     more.setAttribute('aria-expanded', String(open));
   };
   more.addEventListener('click', openPanel);
@@ -638,11 +659,22 @@ function elapsed() {
   if (!frame || typeof SC === 'undefined' || !SC.Widget) return;
   try {
     const w = SC.Widget(frame);
+    let ready = false, wanted = false, playing = false;
+    const go = () => { try { w.setVolume(65); w.play(); } catch (e) {} };
+    w.bind(SC.Widget.Events.READY, () => { ready = true; if (wanted) go(); });
+    w.bind(SC.Widget.Events.PLAY, () => { playing = true; wrap.classList.add('playing'); label.textContent = 'Our song'; });
+    w.bind(SC.Widget.Events.PAUSE, () => { playing = false; wrap.classList.remove('playing'); });
+    w.bind(SC.Widget.Events.FINISH, () => { playing = false; wrap.classList.remove('playing'); });
     // the iframe carries allow="autoplay", so the entry tap's activation reaches it
-    window.__startSong = () => { try { w.play(); } catch (e) {} return Promise.resolve(true); };
-    w.bind(SC.Widget.Events.PLAY, () => wrap.classList.add('playing'));
-    w.bind(SC.Widget.Events.PAUSE, () => wrap.classList.remove('playing'));
-    w.bind(SC.Widget.Events.FINISH, () => wrap.classList.remove('playing'));
+    window.__startSong = () => {
+      wanted = true;
+      if (ready) go();
+      // if the embed still has not started, open the panel so the play button is reachable
+      setTimeout(() => { if (!playing) { panel.classList.remove('closed'); label.textContent = 'Press play'; } }, 2600);
+      return Promise.resolve(true);
+    };
+    btn.removeEventListener('click', openPanel);
+    btn.addEventListener('click', () => { if (playing) { w.pause(); } else { wanted = true; ready ? go() : openPanel(); } });
   } catch (e) {}
 })();
 
