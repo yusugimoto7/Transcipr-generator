@@ -87,7 +87,9 @@ nav a:hover, nav a:focus-visible { color:var(--gold); opacity:1; outline:none; }
   text-shadow:0 4px 30px rgba(0,0,0,.55); margin:0;
 }
 .hero-names .amp { font-family:var(--vibes); color:var(--orange); font-size:.9em; padding:0 .08em; }
-.hero-sub { font-size:14px; letter-spacing:.3em; text-transform:uppercase; color:var(--cream); opacity:.9; margin-top:18px; }
+.hero-sub { font-size:13.5px; letter-spacing:.28em; text-transform:uppercase; color:var(--cream); opacity:.92; margin-top:22px; line-height:2.15; }
+.hero-sub .hs-soft { color:var(--gold); }
+@media (max-width:600px) { .hero-sub { font-size:11.5px; letter-spacing:.2em; line-height:2.05; } }
 .hero-date { font-family:var(--script); color:var(--gold); font-size:clamp(20px,3vw,28px); margin-top:10px; }
 .rise { opacity:0; transform:translateY(16px); animation:rise 1s cubic-bezier(.2,.7,.2,1) forwards; }
 .d1{animation-delay:.1s} .d2{animation-delay:.4s} .d3{animation-delay:.7s} .d4{animation-delay:1s}
@@ -244,7 +246,7 @@ footer .yrs { margin-top:10px; font-size:11px; letter-spacing:.3em; text-transfo
   </nav>
   <div class="hero-inner">
     <h1 class="hero-names rise d2">Hamed <span class="amp">&amp;</span> Yasi</h1>
-    <div class="hero-sub rise d3">Six years married &middot; a lifetime in the making</div>
+    <div class="hero-sub rise d3">Ten years being together<br>Six years married,<br><span class="hs-soft">a lifetime in the making</span></div>
     <div class="hero-date rise d4">August 15, 2020 &mdash; forever</div>
   </div>
   <div class="scroll-cue">Scroll ↓</div>
