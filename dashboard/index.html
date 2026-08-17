@@ -188,6 +188,53 @@
 
   h2.section { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
     font-weight: 650; margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--grid); }
+
+  /* ---- section colour bands ----
+     Each section gets one accent so the page reads as distinct chapters rather than
+     one endless column — Instagram in particular is a different kind of data and
+     should not look like the lead sections around it.
+     These are wayfinding colours, not data encodings: nothing in a chart is coloured
+     by them, so they only need to differ from their neighbours. Each accent is a
+     mid-tone that holds up on both the light and dark ground, so one definition
+     serves both themes; only the tint alpha is nudged for dark. */
+  .sec { --accent: #2a78d6; --tint: rgba(42,120,214,0.045);
+    background: var(--tint); border-radius: 14px; padding: 2px 16px 18px;
+    margin: 0 -16px 10px; }
+  .sec > h2.section { margin-top: 18px; border-bottom-color: var(--accent); }
+  /* the accent marker, so the section is identifiable without relying on hue alone */
+  .sec > h2.section::before { content: ''; display: inline-block; width: 3px; height: 11px;
+    background: var(--accent); border-radius: 2px; margin-right: 8px; vertical-align: -1px; }
+  .sec[data-sec="recent"]  { --accent: #2a78d6; --tint: rgba(42,120,214,0.045); }
+  .sec[data-sec="period"]  { --accent: #4a55c8; --tint: rgba(74,85,200,0.045); }
+  .sec[data-sec="compare"] { --accent: #7b52c4; --tint: rgba(123,82,196,0.045); }
+  .sec[data-sec="volume"]  { --accent: #0f8f86; --tint: rgba(15,143,134,0.05); }
+  .sec[data-sec="social"]  { --accent: #c1348a; --tint: rgba(193,52,138,0.055); }
+  .sec[data-sec="dest"]    { --accent: #2a78d6; --tint: rgba(42,120,214,0.045); }
+  .sec[data-sec="money"]   { --accent: #a97400; --tint: rgba(169,116,0,0.055); }
+  .sec[data-sec="people"]  { --accent: #7b52c4; --tint: rgba(123,82,196,0.045); }
+  .sec[data-sec="acq"]     { --accent: #0f8f86; --tint: rgba(15,143,134,0.05); }
+  .sec[data-sec="ops"]     { --accent: #5d6b7a; --tint: rgba(93,107,122,0.05); }
+  .sec[data-sec="quality"] { --accent: #c0522b; --tint: rgba(192,82,43,0.05); }
+  .sec[data-sec="read"]    { --accent: #52514e; --tint: rgba(82,81,78,0.045); }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .sec { --tint: rgba(255,255,255,0.022); }
+    :root:where(:not([data-theme="light"])) .sec[data-sec="social"] { --tint: rgba(193,52,138,0.075); }
+    :root:where(:not([data-theme="light"])) .sec[data-sec="volume"] { --tint: rgba(15,143,134,0.075); }
+    :root:where(:not([data-theme="light"])) .sec[data-sec="money"] { --tint: rgba(169,116,0,0.08); }
+    :root:where(:not([data-theme="light"])) .sec[data-sec="quality"] { --tint: rgba(192,82,43,0.075); }
+    :root:where(:not([data-theme="light"])) .sec[data-sec="compare"],
+    :root:where(:not([data-theme="light"])) .sec[data-sec="people"] { --tint: rgba(123,82,196,0.08); }
+  }
+  :root[data-theme="dark"] .sec { --tint: rgba(255,255,255,0.022); }
+  :root[data-theme="dark"] .sec[data-sec="social"] { --tint: rgba(193,52,138,0.075); }
+  :root[data-theme="dark"] .sec[data-sec="volume"] { --tint: rgba(15,143,134,0.075); }
+  :root[data-theme="dark"] .sec[data-sec="money"] { --tint: rgba(169,116,0,0.08); }
+  :root[data-theme="dark"] .sec[data-sec="quality"] { --tint: rgba(192,82,43,0.075); }
+  :root[data-theme="dark"] .sec[data-sec="compare"],
+  :root[data-theme="dark"] .sec[data-sec="people"] { --tint: rgba(123,82,196,0.08); }
+  /* the card keeps its own surface, with a hairline of the section accent on top */
+  .sec .card { border-top: 2px solid var(--accent); }
+  @media (max-width: 560px) { .sec { margin: 0 -10px 8px; padding: 2px 10px 14px; border-radius: 10px; } }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px;
     padding: 16px 18px 14px; min-width: 0; }
@@ -314,6 +361,7 @@
     <p class="sub" id="hsub"></p>
   </header>
 
+  <section class="sec" data-sec="recent">
   <h2 class="section">Recent activity — new leads, budget mix and sources</h2>
   <p class="csub" style="margin:-4px 0 12px">Windows are measured from today, so the Period filter below does not apply here —
     Destination and Channel do. Budget is shown as the normalised tier because the form asks in toman for most of the
@@ -351,10 +399,14 @@
   <p class="csub" style="margin:-8px 0 0">Period scopes every section below. Destination and Channel scope those too, and
     additionally re-slice the four cards above.</p>
 
+  </section>
+  <section class="sec" data-sec="period">
   <h2 class="section" id="hAll"></h2>
   <div id="notePeriod"></div>
   <div class="kpis" id="kpis"></div>
 
+  </section>
+  <section class="sec" data-sec="compare">
   <h2 class="section">Compare two periods</h2>
   <p class="csub" style="margin:-4px 0 12px">Pick any two date ranges and any field to break down by. Shares are of each
     period's own total, so ranges of different lengths stay comparable — the leads-per-day row covers absolute volume.
@@ -388,6 +440,8 @@
     <div class="card wide" id="card-cmp-dim"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="volume">
   <h2 class="section">Volume over time</h2>
   <div class="grid">
     <div class="card wide" id="card-weekly"></div>
@@ -396,10 +450,11 @@
     <div class="card" id="card-destq"></div>
     <div class="card" id="card-form"></div>
   </div>
+  </section>
 
   <!-- Populated from the Instagram insights tabs. Hidden entirely when the collector
        has not run yet, so the page still works with lead data alone. -->
-  <div id="social" hidden>
+  <section class="sec" data-sec="social" id="social" hidden>
     <h2 class="section">Instagram performance</h2>
     <p class="csub" id="socSub" style="margin:-4px 0 12px"></p>
     <div class="filters" id="f-acct" role="group" aria-label="Instagram account" hidden></div>
@@ -413,8 +468,42 @@
       <div class="card" id="card-soc-country"></div>
       <div class="card" id="card-soc-demo"></div>
     </div>
-  </div>
 
+    <h2 class="section">Compare two periods — Instagram</h2>
+    <p class="csub" style="margin:-4px 0 12px">Pick any two date ranges. Totals are also shown per day, because
+      Instagram collection started recently and two ranges rarely hold the same number of collected days — the
+      per-day rows are the fair comparison. Lead figures count only days that have Instagram data. The Account
+      filter applies; the Period filter does not.</p>
+    <div class="cmp-bar" id="soc-cmp-bar">
+      <div class="fgroup">
+        <span class="flabel">Quick compare</span>
+        <button class="chip" data-soccmp="7" aria-pressed="true">7 vs prev 7</button>
+        <button class="chip" data-soccmp="14">14 vs prev 14</button>
+        <button class="chip" data-soccmp="30">30 vs prev 30</button>
+        <button class="chip" data-soccmp="month">This vs last month</button>
+      </div>
+      <div class="fgroup">
+        <span class="flabel" style="color:var(--s2)">Period A</span>
+        <input type="date" id="sa-from" aria-label="Instagram period A start"><span class="arrow">→</span>
+        <input type="date" id="sa-to" aria-label="Instagram period A end">
+      </div>
+      <div class="fgroup">
+        <span class="flabel" style="color:var(--s1)">Period B</span>
+        <input type="date" id="sb-from" aria-label="Instagram period B start"><span class="arrow">→</span>
+        <input type="date" id="sb-to" aria-label="Instagram period B end">
+      </div>
+      <div class="fgroup">
+        <span class="flabel">Break down by</span>
+        <select id="soccmp-dim" aria-label="Instagram dimension to break down by"></select>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card wide" id="card-soccmp-summary"></div>
+      <div class="card wide" id="card-soccmp-dim"></div>
+    </div>
+  </section>
+
+  <section class="sec" data-sec="dest">
   <h2 class="section">Destination &amp; intent</h2>
   <div class="grid">
     <div class="card" id="card-method-ca"></div>
@@ -423,12 +512,16 @@
     <div class="card" id="card-method"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="money">
   <h2 class="section">Budget &amp; lead value</h2>
   <div class="grid">
     <div class="card" id="card-tier"></div>
     <div class="card" id="card-budget"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="people">
   <h2 class="section">Who these leads are</h2>
   <div class="grid">
     <div class="card" id="card-age"></div>
@@ -439,6 +532,8 @@
     <div class="card" id="card-nat"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="acq">
   <h2 class="section">How they found us</h2>
   <div class="grid">
     <div class="card" id="card-channel"></div>
@@ -449,6 +544,8 @@
     <div class="card" id="card-ref"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="ops">
   <h2 class="section">Operations &amp; follow-up</h2>
   <div class="grid">
     <div class="card wide" id="card-odoo"></div>
@@ -456,15 +553,20 @@
     <div class="card" id="card-outreach"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="quality">
   <h2 class="section">Data quality</h2>
   <div class="grid">
     <div class="card wide" id="card-quality"></div>
     <div class="card wide" id="card-fill"></div>
   </div>
 
+  </section>
+  <section class="sec" data-sec="read">
   <h2 class="section">What the numbers say</h2>
   <div class="grid"><div class="card wide" id="card-findings"></div></div>
 
+  </section>
   <footer>
     <strong>How this dataset was built</strong>
     <ul>
@@ -2233,6 +2335,8 @@ function renderSocial() {
   run('#card-soc-eng', renderSocEngagement);
   run('#card-soc-posts', renderSocPosts);
   renderSocAudience();                    // a lifetime snapshot: no period applies
+  initSocCompare();                       // needs SOC loaded, so not at page start
+  renderSocCompare();                     // its own ranges, independent of the filters
 }
 
 function renderSocAcctFilter() {
@@ -2487,6 +2591,281 @@ function renderSocPosts(ctx) {
   }), ['Post', 'Format', 'Reach', 'Views', 'Interactions', 'Eng. rate', 'Profile visits', 'Follows', 'Avg watch']));
   const cells = table.querySelectorAll('tr td:first-child');
   for (const c of cells) c.className = 'cap';
+}
+
+/* ---------- Instagram: two-period comparison ---------- */
+/**
+ * The same A-vs-B idea as the lead comparison, over Instagram metrics. Two things
+ * make it different: a range can contain days the collector never covered, so
+ * every total is also shown per collected day; and the breakdowns mix Instagram
+ * data (formats, interaction types) with lead data (which placement and which
+ * budget tier the Instagram leads came from).
+ */
+const SOCCMP_DIMS = [
+  ['surface', 'Format — share of reach'],
+  ['interaction', 'Interaction type'],
+  ['leadmedium', 'Instagram lead placement (UTM medium)'],
+  ['leadtier', 'Instagram lead budget tier']
+];
+const soccmp = { dim: 'surface', a: null, b: null };
+const inDay = (d, r) => !!r && d >= r[0] && d <= r[1];
+
+/** Every Instagram figure for one date range, under the current Account filter. */
+function socRange(r) {
+  const ai = SOC.accounts.indexOf(state.acct);
+  const mine = (row, ci) => state.acct === 'all' || row[ci.a] === ai;
+  const daily = SOC.daily.filter(row => mine(row, SOC.di) && inDay(String(row[SOC.di.d]).slice(0, 10), r));
+  const posts = SOC.posts.filter(row => mine(row, SOC.pi) && inDay(String(row[SOC.pi.d]).slice(0, 10), r));
+  const stories = SOC.stories.filter(row => mine(row, SOC.si) && inDay(String(row[SOC.si.d]).slice(0, 10), r));
+  const days = new Set(daily.map(row => String(row[SOC.di.d]).slice(0, 10)));
+  // Leads are counted only on days with Instagram numbers, so leads-per-reach is
+  // not a lead total divided by a partial reach total.
+  const destI = state.dest === 'all' ? -1 : DICT.de.indexOf(state.dest);
+  const igI = DICT.sg.indexOf('Instagram');
+  const leadIdx = [];
+  for (let i = 0; i < N; i++) {
+    if (COL.sg[i] !== igI) continue;
+    if (destI >= 0 && COL.de[i] !== destI) continue;
+    if (days.has(iso(dayOf(i)))) leadIdx.push(i);
+  }
+  const sum = (rows, ci, f) => rows.reduce((t, row) => t + socNum(row[ci[f]]), 0);
+  return {
+    days: days.size, calendar: spanDays(r), daily, posts, stories, leadIdx,
+    reach: sum(daily, SOC.di, 'reach'),
+    views: sum(daily, SOC.di, 'views'),
+    inter: sum(daily, SOC.di, 'inter'),
+    taps: sum(daily, SOC.di, 'taps') + sum(stories, SOC.si, 'clicks'),
+    visits: sum(posts, SOC.pi, 'visits'),
+    gained: sum(daily, SOC.di, 'follows') - sum(daily, SOC.di, 'unfollows'),
+    published: posts.length + stories.reduce((t, row) => t + socNum(row[SOC.si.n]), 0),
+    leads: leadIdx.length
+  };
+}
+
+function socCmpPresets(kind) {
+  return cmpPresetRanges(kind);   // same shapes as the lead comparison
+}
+
+function renderSocCmpSummary(A, B) {
+  const c = $('#card-soccmp-summary'); c.replaceChildren();
+  CARD_TITLE['#card-soccmp-summary'] = 'Instagram — Period A vs Period B';
+  c.appendChild(el('h3', null, 'Instagram — Period A vs Period B'));
+  const sub = el('p', 'csub');
+  sub.textContent = `A: ${fmtDay(isoDay(soccmp.a[0]))} – ${fmtDay(isoDay(soccmp.a[1]))} `
+    + `(${A.days} of ${A.calendar} days collected) · B: ${fmtDay(isoDay(soccmp.b[0]))} – `
+    + `${fmtDay(isoDay(soccmp.b[1]))} (${B.days} of ${B.calendar} days collected)`;
+  c.appendChild(sub);
+  if (!A.days && !B.days) {
+    c.appendChild(el('p', 'rempty', 'Neither range contains a day the collector has covered. '
+      + 'Instagram history only starts when the collector first ran, so try a recent range.'));
+    return;
+  }
+  if (!A.days || !B.days) {
+    const nb = el('div', 'note');
+    nb.style.margin = '0 0 12px';
+    nb.innerHTML = `<strong>${!A.days ? 'Period A' : 'Period B'} has no collected Instagram days.</strong> `
+      + `Everything below reads as a fall to zero, which is a gap in collection rather than in performance.`;
+    c.appendChild(nb);
+  }
+  const t = el('table', 'cmp'), hr = el('tr');
+  ['Metric', 'Period A', 'Period B', 'Change'].forEach(x => hr.appendChild(el('th', null, x)));
+  t.appendChild(hr);
+  const row = (label, aTxt, bTxt, chg, note) => {
+    const tr_ = el('tr');
+    const first = el('td', null, label);
+    if (note) first.appendChild(el('span', 'sub', note));
+    tr_.appendChild(first);
+    tr_.appendChild(el('td', null, aTxt));
+    tr_.appendChild(el('td', null, bTxt));
+    tr_.appendChild(chg);
+    t.appendChild(tr_);
+  };
+  const per = (v, d) => d ? v / d : null;
+  const rate = (n, d) => d ? 100 * n / d : null;
+  row('Days collected', fmt(A.days), fmt(B.days), chgCell(B.days, A.days, 'abs'),
+      'the denominator for every per-day row');
+  row('Accounts reached', kfmt(A.reach), kfmt(B.reach), chgCell(B.reach, A.reach, 'pct'));
+  row('Reached per day', A.days ? kfmt(Math.round(per(A.reach, A.days))) : '—',
+      B.days ? kfmt(Math.round(per(B.reach, B.days))) : '—',
+      chgCell(per(B.reach, B.days), per(A.reach, A.days), 'pct'),
+      'the fair comparison when the ranges hold different numbers of days');
+  row('Views', kfmt(A.views), kfmt(B.views), chgCell(B.views, A.views, 'pct'));
+  row('Views per account reached', A.reach ? (A.views / A.reach).toFixed(1) : '—',
+      B.reach ? (B.views / B.reach).toFixed(1) : '—',
+      chgCell(per(B.views, B.reach), per(A.views, A.reach), 'abs'));
+  row('Interactions', kfmt(A.inter), kfmt(B.inter), chgCell(B.inter, A.inter, 'pct'));
+  row('Engagement rate', A.reach ? pct1(A.inter, A.reach) : '—', B.reach ? pct1(B.inter, B.reach) : '—',
+      chgCell(rate(B.inter, B.reach), rate(A.inter, A.reach), 'pp'), 'interactions per account reached');
+  row('Followers gained, net', fmt(A.gained), fmt(B.gained), chgCell(B.gained, A.gained, 'pct'));
+  row('Profile visits', kfmt(A.visits), kfmt(B.visits), chgCell(B.visits, A.visits, 'pct'),
+      'from post and story insights, so posts older than the collector are missing');
+  row('Link and contact taps', fmt(A.taps), fmt(B.taps), chgCell(B.taps, A.taps, 'pct'));
+  row('Posts, reels and stories', fmt(A.published), fmt(B.published),
+      chgCell(B.published, A.published, 'abs'));
+  row('Reach per piece published', A.published ? kfmt(Math.round(A.reach / A.published)) : '—',
+      B.published ? kfmt(Math.round(B.reach / B.published)) : '—',
+      chgCell(per(B.reach, B.published), per(A.reach, A.published), 'pct'));
+  row('Instagram leads', fmt(A.leads), fmt(B.leads), chgCell(B.leads, A.leads, 'pct'),
+      'on collected days only');
+  row('Leads per 1k reached', A.reach ? (1000 * A.leads / A.reach).toFixed(2) : '—',
+      B.reach ? (1000 * B.leads / B.reach).toFixed(2) : '—',
+      chgCell(A.reach && B.reach ? 1000 * B.leads / B.reach : null,
+              A.reach ? 1000 * A.leads / A.reach : null, 'abs'),
+      'the one number that ties reach to revenue');
+  c.appendChild(el('div', 'tscroll')).appendChild(t);
+}
+
+/** Buckets for the chosen breakdown, as label → count, plus that range's total. */
+function socCmpTally(R) {
+  const m = new Map();
+  const add = (k, n) => { if (n) m.set(k, (m.get(k) || 0) + n); };
+  if (soccmp.dim === 'surface') {
+    for (const s of SOC_SURFACES) {
+      if (s.key === 'STORY') continue;
+      add(s.label, R.posts.filter(row => String(row[SOC.pi.surface]).toUpperCase() === s.key)
+        .reduce((t, row) => t + socNum(row[SOC.pi.reach]), 0));
+    }
+    add('Stories', R.stories.reduce((t, row) => t + socNum(row[SOC.si.reach]), 0));
+  } else if (soccmp.dim === 'interaction') {
+    for (const s of SOC_INTERACTIONS) {
+      add(s.label, R.daily.reduce((t, row) => t + socNum(row[SOC.di[s.f]]), 0));
+    }
+  } else {
+    const field = soccmp.dim === 'leadmedium' ? 'md' : 't';
+    for (const i of R.leadIdx) {
+      const raw = val(field, i);
+      add(field === 't' ? cmpLabel('t', raw) : (raw === '' ? NONE : tr(field, raw)), 1);
+    }
+  }
+  let total = 0;
+  for (const v of m.values()) total += v;
+  return { m, total };
+}
+
+function renderSocCmpDim(A, B) {
+  const dimName = (SOCCMP_DIMS.find(d => d[0] === soccmp.dim) || [, soccmp.dim])[1];
+  const unit = soccmp.dim === 'surface' ? 'accounts reached'
+    : soccmp.dim === 'interaction' ? 'interactions' : 'leads';
+  const { chart, table } = card('#card-soccmp-dim', `${dimName} — A vs B`,
+    `Each row is one category: the dot marks its share of that period's ${unit}, the connector the gap between them.`);
+  const ta = socCmpTally(A), tb = socCmpTally(B);
+  if (!ta.total || !tb.total) {
+    chart.appendChild(el('p', 'rempty',
+      'Both ranges need data for this breakdown. Pick ranges the collector has covered, or another breakdown.'));
+    return;
+  }
+  const rows = [...new Set([...ta.m.keys(), ...tb.m.keys()])].map(label => {
+    const na = ta.m.get(label) || 0, nb = tb.m.get(label) || 0;
+    return { label, na, nb, pa: 100 * na / ta.total, pb: 100 * nb / tb.total };
+  }).sort((x, y) => y.pb - x.pb || y.pa - x.pa).slice(0, 12);
+  const max = Math.max(...rows.map(r => Math.max(r.pa, r.pb)), 1);
+  const box = el('div', 'db');
+  for (const r of rows) {
+    const line = el('div', 'dbrow');
+    const lab = el('div', 'dblabel', r.label); lab.title = r.label;
+    line.appendChild(lab);
+    const track = el('div', 'dbtrack');
+    track.appendChild(el('div', 'axis'));
+    const xa = 100 * r.pa / max, xb = 100 * r.pb / max;
+    const conn = el('div', 'conn');
+    conn.style.left = Math.min(xa, xb) + '%';
+    conn.style.width = Math.abs(xb - xa) + '%';
+    track.appendChild(conn);
+    for (const [x, n, pp_, color, name] of [[xa, r.na, r.pa, CMP_A, 'Period A'],
+                                            [xb, r.nb, r.pb, CMP_B, 'Period B']]) {
+      const dot = el('div', 'dot');
+      dot.style.left = x + '%'; dot.style.background = color;
+      bindTip(dot, () => [`${pp_.toFixed(1)}% · ${fmt(n)} ${unit}`, `${r.label} — ${name}`]);
+      track.appendChild(dot);
+    }
+    line.appendChild(track);
+    const d = el('div', 'dbdelta');
+    d.appendChild(el('span', 'pair', `${r.pa.toFixed(0)}% → ${r.pb.toFixed(0)}%  `));
+    const pp = Math.round(r.pb - r.pa);
+    d.appendChild(el('span', pp > 0 ? 'up' : pp < 0 ? 'down' : 'flat', (pp > 0 ? '+' : '') + pp + 'pp'));
+    line.appendChild(d);
+    box.appendChild(line);
+  }
+  chart.appendChild(box);
+  const lg = el('div', 'cmp-legend');
+  for (const [color, name, r] of [[CMP_A, 'Period A', soccmp.a], [CMP_B, 'Period B', soccmp.b]]) {
+    const it = el('span', 'lg');
+    const sw = el('span', 'sw'); sw.style.background = color; sw.style.borderRadius = '50%';
+    it.appendChild(sw);
+    it.appendChild(el('span', null, `${name} · ${fmtDay(isoDay(r[0]))} – ${fmtDay(isoDay(r[1]))}`));
+    lg.appendChild(it);
+  }
+  chart.appendChild(lg);
+  const t = el('table', 'cmp'), hr = el('tr');
+  ['Category', 'A', 'A share', 'B', 'B share', 'Change'].forEach(x => hr.appendChild(el('th', null, x)));
+  t.appendChild(hr);
+  for (const r of rows) {
+    const tr_ = el('tr');
+    tr_.appendChild(el('td', null, r.label));
+    tr_.appendChild(el('td', null, fmt(r.na)));
+    tr_.appendChild(el('td', null, r.pa.toFixed(1) + '%'));
+    tr_.appendChild(el('td', null, fmt(r.nb)));
+    tr_.appendChild(el('td', null, r.pb.toFixed(1) + '%'));
+    tr_.appendChild(chgCell(r.pb, r.pa, 'pp'));
+    t.appendChild(tr_);
+  }
+  table.appendChild(t);
+}
+
+function renderSocCompare() {
+  const A = socRange(soccmp.a), B = socRange(soccmp.b);
+  renderSocCmpSummary(A, B);
+  renderSocCmpDim(A, B);
+}
+function syncSocCmpInputs() {
+  $('#sa-from').value = soccmp.a[0]; $('#sa-to').value = soccmp.a[1];
+  $('#sb-from').value = soccmp.b[0]; $('#sb-to').value = soccmp.b[1];
+}
+let socCmpReady = false;
+function initSocCompare() {
+  if (socCmpReady) return;
+  socCmpReady = true;
+  const sel = $('#soccmp-dim');
+  for (const [k, label] of SOCCMP_DIMS) {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = label;
+    if (k === soccmp.dim) o.selected = true;
+    sel.appendChild(o);
+  }
+  // The default is 7 vs 7: on a fresh install only a month of history exists, so a
+  // 90-day preset would compare one empty range against a partial one.
+  const pre = socCmpPresets('7');
+  soccmp.a = pre.a; soccmp.b = pre.b;
+  const days = SOC.daily.map(r => String(r[SOC.di.d]).slice(0, 10)).sort();
+  const lo = days[0] || iso(D0), hi = iso(todayUTC());
+  for (const id of ['#sa-from', '#sa-to', '#sb-from', '#sb-to']) {
+    const inp = $(id); inp.min = lo; inp.max = hi;
+  }
+  syncSocCmpInputs();
+  sel.addEventListener('change', () => { soccmp.dim = sel.value; renderSocCompare(); });
+  $('#soc-cmp-bar').addEventListener('click', e => {
+    const btn = e.target.closest('.chip[data-soccmp]');
+    if (!btn) return;
+    const r = socCmpPresets(btn.dataset.soccmp);
+    soccmp.a = r.a; soccmp.b = r.b;
+    for (const ch of $('#soc-cmp-bar').querySelectorAll('.chip[data-soccmp]')) {
+      ch.setAttribute('aria-pressed', String(ch === btn));
+    }
+    syncSocCmpInputs(); renderSocCompare();
+  });
+  for (const [id, slot, ix] of [['#sa-from', 'a', 0], ['#sa-to', 'a', 1],
+                                ['#sb-from', 'b', 0], ['#sb-to', 'b', 1]]) {
+    $(id).addEventListener('change', () => {
+      const v = $(id).value;
+      if (!v) return;
+      soccmp[slot][ix] = v;
+      if (soccmp[slot][0] > soccmp[slot][1]) soccmp[slot] = [soccmp[slot][1], soccmp[slot][0]];
+      for (const ch of $('#soc-cmp-bar').querySelectorAll('.chip[data-soccmp]')) {
+        ch.setAttribute('aria-pressed', 'false');
+      }
+      syncSocCmpInputs(); renderSocCompare();
+    });
+  }
 }
 
 /** Demographics are lifetime snapshots from Meta, so they ignore the Period filter. */
