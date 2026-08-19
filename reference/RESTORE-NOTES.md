@@ -215,3 +215,22 @@ All four channels have posted successfully at least once, and the duplicate
 guard held across four runs. Recording the draw BEFORE publishing is what
 makes a channel failure cost one missed post instead of an endless loop —
 do not move that node back behind the channels.
+
+## LIVE — 2026-08-14
+
+Telegram switched from `@testchannel_draws` to `@sugimotovisa` on explicit
+approval. Instagram, LinkedIn and X were always pointed at the real accounts;
+Telegram was the only channel held back.
+
+Nothing currently in the source is eligible to post: the newest Express Entry
+round (7 August) and the BC draws (6 August) are all outside the 5-day window
+and already recorded. The first live post will be a genuinely new draw.
+
+Both guards matter more now than they did in testing:
+  - `Drop already posted` matches province+date, so no key change can
+    republish an announced draw.
+  - `MAX_AGE_DAYS = 5` keeps anything historical out of the candidate list.
+  - `One per run` caps a burst at one post per hour.
+
+To pull it back: set the Telegram node's chatId to `@testchannel_draws` and
+publish, or unpublish the workflow entirely.
