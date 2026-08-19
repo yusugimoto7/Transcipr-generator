@@ -410,7 +410,8 @@
   <h2 class="section">Compare two periods</h2>
   <p class="csub" style="margin:-4px 0 12px">Pick any two date ranges and any field to break down by. Shares are of each
     period's own total, so ranges of different lengths stay comparable — the leads-per-day row covers absolute volume.
-    The Destination and Channel filters above apply; the Period filter does not.</p>
+    Source narrows both periods to one raw utm_source and belongs to this section alone. The Destination and Channel
+    filters above apply; the Period filter does not.</p>
   <div class="cmp-bar">
     <div class="fgroup">
       <span class="flabel">Quick compare</span>
@@ -429,6 +430,10 @@
       <span class="flabel" style="color:var(--s1)">Period B</span>
       <input type="date" id="b-from" aria-label="Period B start"><span class="arrow">→</span>
       <input type="date" id="b-to" aria-label="Period B end">
+    </div>
+    <div class="fgroup">
+      <span class="flabel">Source</span>
+      <select id="cmp-src" aria-label="Limit both periods to one traffic source"></select>
     </div>
     <div class="fgroup">
       <span class="flabel">Break down by</span>
@@ -1728,7 +1733,7 @@ const CMP_DIMS = [
 const AGE_BANDS = [['<20',0,19],['20–24',20,24],['25–29',25,29],['30–34',30,34],['35–39',35,39],
                    ['40–44',40,44],['45–49',45,49],['50–54',50,54],['55+',55,200]];
 const BOOL_LABEL = { ip: { '1': 'Yes', '0': 'No' }, od: { '1': 'Flag set', '0': 'Flag empty' } };
-const cmp = { dim: 'sg', a: null, b: null };
+const cmp = { dim: 'sg', src: 'all', a: null, b: null };
 
 const iso = d => d.toISOString().slice(0, 10);
 const addDays = (d, n) => new Date(d.getTime() + n * DAY);
@@ -1803,10 +1808,14 @@ function renderCmpSummary(A, B) {
   c.appendChild(el('h3', null, 'Period A vs Period B'));
   const sub = el('p', 'csub');
   sub.textContent = `A: ${fmtDay(isoDay(cmp.a[0]))} – ${fmtDay(isoDay(cmp.a[1]))} (${spanDays(cmp.a)} days) `
-    + `· B: ${fmtDay(isoDay(cmp.b[0]))} – ${fmtDay(isoDay(cmp.b[1]))} (${spanDays(cmp.b)} days)`;
+    + `· B: ${fmtDay(isoDay(cmp.b[0]))} – ${fmtDay(isoDay(cmp.b[1]))} (${spanDays(cmp.b)} days)`
+    + (cmp.src === 'all' ? '' : ` · source: ${cmpSrcLabel()} only`);
   c.appendChild(sub);
   if (!A.length && !B.length) {
-    c.appendChild(el('p', 'rempty', 'Neither period contains any leads under the current filters.'));
+    c.appendChild(el('p', 'rempty', cmp.src === 'all'
+      ? 'Neither period contains any leads under the current filters.'
+      : `Neither period contains a lead from ${cmpSrcLabel()}. `
+        + 'That source may predate or postdate both ranges — set Source back to all to check.'));
     return;
   }
   const sa = cmpStats(A), sb = cmpStats(B);
@@ -1848,11 +1857,14 @@ function renderCmpSummary(A, B) {
 }
 function renderCmpDim(A, B) {
   const dimName = (CMP_DIMS.find(d => d[0] === cmp.dim) || [, cmp.dim])[1];
-  const { chart, table } = card('#card-cmp-dim', `${dimName} — A vs B`,
-    'Each row is one category: the dot marks its share of that period, the connector the gap between them.');
+  const { chart, table } = card('#card-cmp-dim',
+    `${dimName} — A vs B${cmp.src === 'all' ? '' : ` · ${cmpSrcLabel()}`}`,
+    'Each row is one category: the dot marks its share of that period, the connector the gap between them.'
+    + (cmp.src === 'all' ? '' : ` Limited to leads from ${cmpSrcLabel()}.`));
   if (!A.length || !B.length) {
     chart.appendChild(el('p', 'rempty',
-      'Both periods need at least one lead to compare. Widen a range or clear a filter.'));
+      'Both periods need at least one lead to compare. Widen a range or clear a filter'
+      + (cmp.src === 'all' ? '.' : `, including the ${cmpSrcLabel()} source filter.`)));
     return;
   }
   const tally2 = idx => {
@@ -1948,8 +1960,45 @@ function renderCmpDim(A, B) {
   }
   table.appendChild(t);
 }
+/**
+ * Raw utm_source rather than the channel group the filter bar already offers, so
+ * instagram_ca can be told apart from instagram_eu and instagram_ad. Ordered by
+ * volume, with counts, because a source holding four leads cannot support a
+ * period-on-period read and the count says so before it is picked.
+ *
+ * Rebuilt whenever the record count changes, since a live pack can bring sources
+ * the embedded snapshot never had.
+ */
+function fillCmpSources() {
+  const src = $('#cmp-src');
+  if (src.dataset.n === String(N)) return;
+  src.dataset.n = String(N);
+  const want = cmp.src;
+  src.replaceChildren();
+  const all = document.createElement('option');
+  all.value = 'all'; all.textContent = `All sources (${fmt(N)})`;
+  src.appendChild(all);
+  for (const row of tally(Array.from({ length: N }, (_, i) => i), 's').sort((a, b) => b.n - a.n)) {
+    const o = document.createElement('option');
+    o.value = row.raw;
+    o.textContent = `${row.raw === '' ? NONE : row.label} (${fmt(row.n)})`;
+    src.appendChild(o);
+  }
+  // keep the pick across a swap, but fall back if that source no longer exists
+  cmp.src = [...src.options].some(o => o.value === want) ? want : 'all';
+  src.value = cmp.src;
+}
+
+// Label for the current Source pick, or '' when it is not narrowing anything.
+function cmpSrcLabel() {
+  if (cmp.src === 'all') return '';
+  return cmp.src === '' ? NONE : tr('s', cmp.src);
+}
 function renderCompare() {
-  const pool = dimIdx();   // destination + channel filters apply; period does not
+  fillCmpSources();
+  // destination + channel filters apply; period does not. Source is this section's own.
+  let pool = dimIdx();
+  if (cmp.src !== 'all') pool = pool.filter(i => val('s', i) === cmp.src);
   const A = pool.filter(i => inRange(i, cmp.a));
   const B = pool.filter(i => inRange(i, cmp.b));
   renderCmpSummary(A, B);
@@ -1967,6 +2016,9 @@ function initCompare() {
     if (k === cmp.dim) o.selected = true;
     sel.appendChild(o);
   }
+  const src = $('#cmp-src');
+  fillCmpSources();
+  src.addEventListener('change', () => { cmp.src = src.value; renderCompare(); });
   const lo = iso(D0), hi = iso(SNAP_DAY);
   for (const id of ['#a-from', '#a-to', '#b-from', '#b-to']) {
     const inp = $(id); inp.min = lo; inp.max = iso(todayUTC()) > hi ? iso(todayUTC()) : hi;
