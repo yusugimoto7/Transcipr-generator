@@ -305,26 +305,107 @@ const ytUpload = node({
   output: [{ uploadId: 'abc' }],
 });
 
-// ---------- TikTok: draft to inbox, TikTok pulls the file ----------
+// ---------- TikTok ----------
+// n8n cannot do TikTok OAuth: TikTok uses `client_key` where OAuth2 uses
+// `client_id`, at both the authorize and token steps. (The community PR that
+// would have fixed this, n8n#15160, was closed unmerged on 2026-08-18.) So we
+// hold the refresh token ourselves and mint a fresh access token per run.
+// TikTok access tokens live 24h; refresh tokens live 365 days and ROTATE on
+// every use, which is why the new one is written straight back.
+const ttGetToken = node({
+  type: 'n8n-nodes-base.dataTable',
+  version: 1.1,
+  config: {
+    name: 'Get TikTok refresh token',
+    position: [1660, 840],
+    alwaysOutputData: true,
+    parameters: {
+      resource: 'row',
+      operation: 'get',
+      dataTableId: { __rl: true, mode: 'id', value: 'RESVy09PNc6IzMv4', cachedResultName: 'tiktok_token' },
+      matchType: 'allConditions',
+      filters: { conditions: [ { keyName: 'account', condition: 'eq', keyValue: 'sugimotovisa' } ] },
+      returnAll: false,
+      limit: 1,
+    },
+  },
+  output: [{ id: 1, account: 'sugimotovisa', refresh_token: 'rft_example' }],
+});
+
+const ttRefresh = node({
+  type: 'n8n-nodes-base.httpRequest',
+  version: 4.4,
+  config: {
+    name: 'Refresh TikTok token',
+    position: [1900, 840],
+    onError: 'continueRegularOutput',
+    parameters: {
+      method: 'POST',
+      url: 'https://open.tiktokapis.com/v2/oauth/token/',
+      authentication: 'genericCredentialType',
+      genericAuthType: 'httpCustomAuth',
+      sendBody: true,
+      contentType: 'form-urlencoded',
+      specifyBody: 'keypair',
+      bodyParameters: { parameters: [
+        { name: 'grant_type', value: 'refresh_token' },
+        { name: 'refresh_token', value: "={{ $json.refresh_token }}" },
+      ] },
+      options: { timeout: 30000 },
+    },
+    credentials: { httpCustomAuth: newCredential('TikTok app (custom auth body: client_key + client_secret)') },
+  },
+  output: [{ access_token: 'act_example', refresh_token: 'rft_new', expires_in: 86400 }],
+});
+
+const ttSaveToken = node({
+  type: 'n8n-nodes-base.dataTable',
+  version: 1.1,
+  config: {
+    name: 'Save rotated TikTok token',
+    position: [2140, 840],
+    onError: 'continueRegularOutput',
+    parameters: {
+      resource: 'row',
+      operation: 'update',
+      dataTableId: { __rl: true, mode: 'id', value: 'RESVy09PNc6IzMv4', cachedResultName: 'tiktok_token' },
+      matchType: 'allConditions',
+      filters: { conditions: [ { keyName: 'account', condition: 'eq', keyValue: 'sugimotovisa' } ] },
+      columns: {
+        mappingMode: 'defineBelow',
+        value: {
+          refresh_token: "={{ $json.refresh_token }}",
+          updated_at: "={{ new Date().toISOString() }}",
+        },
+        matchingColumns: [],
+        schema: [],
+      },
+    },
+  },
+  output: [{ id: 1 }],
+});
+
 const ttInit = node({
   type: 'n8n-nodes-base.httpRequest',
   version: 4.4,
   config: {
     name: 'Send draft to TikTok inbox',
-    position: [1660, 840],
+    position: [2380, 840],
     onError: 'continueRegularOutput',
     parameters: {
       method: 'POST',
       url: 'https://open.tiktokapis.com/v2/post/publish/inbox/video/init/',
-      authentication: 'genericCredentialType',
-      genericAuthType: 'oAuth2Api',
+      sendHeaders: true,
+      specifyHeaders: 'keypair',
+      headerParameters: { parameters: [
+        { name: 'Authorization', value: "=Bearer {{ $('Refresh TikTok token').first().json.access_token }}" },
+      ] },
       sendBody: true,
       contentType: 'json',
       specifyBody: 'json',
       jsonBody: "={{ JSON.stringify({ source_info: { source: 'PULL_FROM_URL', video_url: $('Build job').first().json.video_url } }) }}",
       options: { timeout: 60000 },
     },
-    credentials: { oAuth2Api: newCredential('TikTok OAuth2 (video.upload scope)') },
   },
   output: [{ data: { publish_id: 'p1' } }],
 });
@@ -427,13 +508,13 @@ const deleteMedia = node({
 });
 
 // ---------- Sticky notes ----------
-const setupNote = sticky('## Setup (one time)\n\n1. **WordPress** node: pick your existing WP user + application password (Basic auth). Videos are 200-400 MB, so first check cPanel -> MultiPHP INI Editor and make sure: upload_max_filesize = 512M, post_max_size = 512M, memory_limit = 512M, max_execution_time = 300. If your host will not allow it, swap this node for Cloudflare R2 (free 10 GB, zero egress).\n2. **Instagram** nodes: select the SAME query-auth credential the draws stories use.\n3. **Facebook**: replace YOUR_FACEBOOK_PAGE_ID in the URL and create a query-auth credential (name access_token, value = a Page access token with pages_manage_posts). Own page = Standard Access, no App Review.\n4. **YouTube**: create a Google OAuth2 credential (free). Uploads stay PRIVATE until the free YouTube API audit clears - then change privacyStatus to public. Vertical + under 3 min = a Short automatically.\n5. **TikTok**: free developer app with video.upload scope (draft-to-inbox needs NO audit). Verify the domain sugimotovisa.com in the TikTok app settings so PULL_FROM_URL works.\n6. **Telegram**: replace YOUR_TELEGRAM_CHAT_ID, pick your existing bot credential.\n\nThen open the form URL from the Form Trigger and post your first video.', [180, -80], { width: 560, height: 420 });
+const setupNote = sticky('## Setup (one time)\n\n1. **WordPress** node: pick your existing WP user + application password (Basic auth). Videos are 200-400 MB, so first check cPanel -> MultiPHP INI Editor and make sure: upload_max_filesize = 512M, post_max_size = 512M, memory_limit = 512M, max_execution_time = 300. If your host will not allow it, swap this node for Cloudflare R2 (free 10 GB, zero egress).\n2. **Instagram** nodes: select the SAME query-auth credential the draws stories use.\n3. **Facebook**: replace YOUR_FACEBOOK_PAGE_ID in the URL and create a query-auth credential (name access_token, value = a Page access token with pages_manage_posts). Own page = Standard Access, no App Review.\n4. **YouTube**: create a Google OAuth2 credential (free). Uploads stay PRIVATE until the free YouTube API audit clears - then change privacyStatus to public. Vertical + under 3 min = a Short automatically.\n5. **TikTok**: free dev app with the video.upload scope (draft-to-inbox needs NO audit), and verify sugimotovisa.com as a URL property so PULL_FROM_URL works. Then two things: (a) create a Custom Auth credential holding {\"body\":{\"client_key\":\"YOUR_KEY\",\"client_secret\":\"YOUR_SECRET\"}} and attach it to Refresh TikTok token; (b) seed ONE row in the tiktok_token data table - account = sugimotovisa, refresh_token = the token from your first manual authorisation. It rotates itself after that.\n6. **Telegram**: replace YOUR_TELEGRAM_CHAT_ID, pick your existing bot credential.\n\nThen open the form URL from the Form Trigger and post your first video.', [180, -80], { width: 560, height: 420 });
 
 const trafficNote = sticky('## Traffic per post (300 MB video)\n\nUpload to WordPress: 300 MB in.\nThen Instagram, Facebook and TikTok each fetch the file themselves: about 900 MB out.\nYouTube does NOT re-download - it uses the copy already in this workflow.\n\nSo roughly 1.2 GB per post, for a couple of minutes. Fine on most hosting. The file is deleted again 2 hours later, so your disk and your nightly backups never grow.', [1020, 640], { width: 400, height: 260 });
 
 const igNote = sticky('## Instagram polls, it does not guess\n\nInstagram accepts the container immediately but processes the video in the background. This loop asks every 30 seconds whether it is FINISHED, and gives up after 16 tries (8 minutes) rather than hanging forever.\n\nThat cadence matches what Postiz - a production open-source scheduler - does against the same API.', [1880, -100], { width: 440, height: 240 });
 
-const ttNote = sticky('**TikTok draft path (free, no audit)**: the video lands in your TikTok inbox as a draft - open the app, tap it, publish. TikTok downloads the file in the background, which is why cleanup waits 2 hours. To post fully automatically later, pass the free TikTok Content Posting audit and switch this URL from inbox to direct post.', [1620, 960], { width: 480, height: 120 });
+const ttNote = sticky('## TikTok: we hold the token ourselves\n\nn8n has no working TikTok OAuth - TikTok sends client_key where OAuth2 expects client_id, and the community PR to fix it (n8n#15160) was closed unmerged in Aug 2026. So this branch mints its own access token before every post.\n\nRefresh tokens ROTATE: every refresh returns a new one, so it is written straight back to the tiktok_token table. Miss that write and the next run is locked out.\n\nThe draft lands in your TikTok inbox - open the app and tap publish. No audit needed.', [2320, 960], { width: 520, height: 300 });
 
 export default workflow('video-fanout', 'Video Fan-out — IG + FB + YT + TikTok')
   .add(setupNote)
@@ -453,7 +534,7 @@ export default workflow('video-fanout', 'Video Fan-out — IG + FB + YT + TikTok
   .add(recordJob)
   .to(ytGate.to(ytUpload.to(collect.input(2))))
   .add(recordJob)
-  .to(ttGate.to(ttInit.to(collect.input(3))))
+  .to(ttGate.to(ttGetToken.to(ttRefresh.to(ttSaveToken.to(ttInit.to(collect.input(3)))))))
   .add(collect)
   .to(buildReport)
   .to(tgReport)
