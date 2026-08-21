@@ -1,4 +1,4 @@
-import { workflow, node, trigger, sticky, newCredential, merge } from '@n8n/workflow-sdk';
+import { workflow, node, trigger, sticky, newCredential, merge, ifElse } from '@n8n/workflow-sdk';
 
 const videoForm = trigger({
   type: 'n8n-nodes-base.formTrigger',
@@ -132,18 +132,18 @@ const igGate = node({ type: 'n8n-nodes-base.code', version: 2,
 return job.platforms.includes('Instagram') ? [{ json: job }] : [];` } },
   output: [{ job_id: 'vid-1' }] });
 const fbGate = node({ type: 'n8n-nodes-base.code', version: 2,
-  config: { name: 'Facebook selected?', position: [1400, 340], parameters: { jsCode: `const job = $('Build job').first().json;
+  config: { name: 'Facebook selected?', position: [1400, 400], parameters: { jsCode: `const job = $('Build job').first().json;
 return job.platforms.includes('Facebook') ? [{ json: job }] : [];` } },
   output: [{ job_id: 'vid-1' }] });
 // YouTube carries the binary forward so the file is never downloaded again.
 const ytGate = node({ type: 'n8n-nodes-base.code', version: 2,
-  config: { name: 'YouTube selected?', position: [1400, 560], parameters: { jsCode: `const job = $('Build job').first().json;
+  config: { name: 'YouTube selected?', position: [1400, 620], parameters: { jsCode: `const job = $('Build job').first().json;
 if (!job.platforms.includes('YouTube')) { return []; }
 const src = $('Normalize video binary').first();
 return [{ json: job, binary: src.binary }];` } },
   output: [{ job_id: 'vid-1' }] });
 const ttGate = node({ type: 'n8n-nodes-base.code', version: 2,
-  config: { name: 'TikTok selected?', position: [1400, 780], parameters: { jsCode: `const job = $('Build job').first().json;
+  config: { name: 'TikTok selected?', position: [1400, 840], parameters: { jsCode: `const job = $('Build job').first().json;
 return job.platforms.includes('TikTok') ? [{ json: job }] : [];` } },
   output: [{ job_id: 'vid-1' }] });
 
@@ -153,7 +153,7 @@ const igCreate = node({
   version: 4.4,
   config: {
     name: 'Create IG reel container',
-    position: [1700, 100],
+    position: [1660, 100],
     onError: 'continueRegularOutput',
     parameters: {
       method: 'POST',
@@ -177,8 +177,8 @@ const igCreate = node({
 const igWait = node({
   type: 'n8n-nodes-base.wait',
   version: 1.1,
-  config: { name: 'Wait for IG processing', position: [2000, 100],
-    parameters: { resume: 'timeInterval', amount: 3, unit: 'minutes' } },
+  config: { name: 'Wait 30s', position: [1900, 100],
+    parameters: { resume: 'timeInterval', amount: 30, unit: 'seconds' } },
   output: [{ id: '18000000000000000' }],
 });
 
@@ -187,7 +187,7 @@ const igStatus = node({
   version: 4.4,
   config: {
     name: 'Check IG container status',
-    position: [2300, 100],
+    position: [2140, 100],
     onError: 'continueRegularOutput',
     parameters: {
       method: 'GET',
@@ -204,15 +204,37 @@ const igStatus = node({
   output: [{ status_code: 'FINISHED' }],
 });
 
+// Instagram accepts the container instantly but encodes in the background, so
+// poll rather than guess. 30s cadence, give up after 16 tries (8 minutes) —
+// the same shape Postiz uses in production against this API.
+const igReady = ifElse({
+  version: 2.3,
+  config: {
+    name: 'Reel ready?',
+    position: [2380, 100],
+    parameters: {
+      conditions: {
+        options: { caseSensitive: true, leftValue: '', typeValidation: 'loose' },
+        conditions: [
+          { id: 'finished', leftValue: '={{ $json.status_code }}', operator: { type: 'string', operation: 'equals' }, rightValue: 'FINISHED' },
+          { id: 'giveup', leftValue: '={{ $runIndex }}', operator: { type: 'number', operation: 'gte' }, rightValue: 15 },
+        ],
+        combinator: 'or',
+      },
+      looseTypeValidation: true,
+    },
+  },
+});
+
 const igPublish = node({
   type: 'n8n-nodes-base.httpRequest',
   version: 4.4,
   config: {
     name: 'Publish IG reel',
-    position: [2600, 100],
+    position: [2640, 20],
     onError: 'continueRegularOutput',
     retryOnFail: true,
-    maxTries: 5,
+    maxTries: 3,
     waitBetweenTries: 5000,
     parameters: {
       method: 'POST',
@@ -237,7 +259,7 @@ const fbPost = node({
   version: 4.4,
   config: {
     name: 'Post video to Facebook Page',
-    position: [1700, 340],
+    position: [1660, 400],
     onError: 'continueRegularOutput',
     parameters: {
       method: 'POST',
@@ -263,7 +285,7 @@ const ytUpload = node({
   version: 1,
   config: {
     name: 'Upload YouTube Short',
-    position: [1700, 560],
+    position: [1660, 620],
     onError: 'continueRegularOutput',
     parameters: {
       resource: 'video',
@@ -289,7 +311,7 @@ const ttInit = node({
   version: 4.4,
   config: {
     name: 'Send draft to TikTok inbox',
-    position: [1700, 780],
+    position: [1660, 840],
     onError: 'continueRegularOutput',
     parameters: {
       method: 'POST',
@@ -310,7 +332,7 @@ const ttInit = node({
 // ---------- Collect, report, then clean the hosted copy away ----------
 const collect = merge({
   version: 3.2,
-  config: { name: 'Collect results', position: [2900, 440],
+  config: { name: 'Collect results', position: [2900, 480],
     parameters: { mode: 'append', numberInputs: 4 } },
 });
 
@@ -319,7 +341,7 @@ const buildReport = node({
   version: 2,
   config: {
     name: 'Build report',
-    position: [3180, 440],
+    position: [3180, 480],
     executeOnce: true,
     parameters: {
       jsCode: `function grab(name) { try { const it = $(name).first(); return it ? it.json : null; } catch (e) { return null; } }
@@ -358,7 +380,7 @@ const tgReport = node({
   version: 1.2,
   config: {
     name: 'Telegram report',
-    position: [3460, 440],
+    position: [3460, 480],
     onError: 'continueRegularOutput',
     parameters: {
       resource: 'message',
@@ -377,7 +399,7 @@ const tgReport = node({
 const cleanupWait = node({
   type: 'n8n-nodes-base.wait',
   version: 1.1,
-  config: { name: 'Wait 2h, then clean up', position: [3740, 440],
+  config: { name: 'Wait 2h, then clean up', position: [3740, 480],
     parameters: { resume: 'timeInterval', amount: 2, unit: 'hours' } },
   output: [{ ok: true }],
 });
@@ -387,7 +409,7 @@ const deleteMedia = node({
   version: 4.4,
   config: {
     name: 'Delete video from WordPress',
-    position: [4020, 440],
+    position: [4020, 480],
     onError: 'continueRegularOutput',
     parameters: {
       method: 'DELETE',
@@ -407,11 +429,11 @@ const deleteMedia = node({
 // ---------- Sticky notes ----------
 const setupNote = sticky('## Setup (one time)\n\n1. **WordPress** node: pick your existing WP user + application password (Basic auth). Videos are 200-400 MB, so first check cPanel -> MultiPHP INI Editor and make sure: upload_max_filesize = 512M, post_max_size = 512M, memory_limit = 512M, max_execution_time = 300. If your host will not allow it, swap this node for Cloudflare R2 (free 10 GB, zero egress).\n2. **Instagram** nodes: select the SAME query-auth credential the draws stories use.\n3. **Facebook**: replace YOUR_FACEBOOK_PAGE_ID in the URL and create a query-auth credential (name access_token, value = a Page access token with pages_manage_posts). Own page = Standard Access, no App Review.\n4. **YouTube**: create a Google OAuth2 credential (free). Uploads stay PRIVATE until the free YouTube API audit clears - then change privacyStatus to public. Vertical + under 3 min = a Short automatically.\n5. **TikTok**: free developer app with video.upload scope (draft-to-inbox needs NO audit). Verify the domain sugimotovisa.com in the TikTok app settings so PULL_FROM_URL works.\n6. **Telegram**: replace YOUR_TELEGRAM_CHAT_ID, pick your existing bot credential.\n\nThen open the form URL from the Form Trigger and post your first video.', [180, -80], { width: 560, height: 420 });
 
-const trafficNote = sticky('## Traffic per post (300 MB video)\n\nUpload to WordPress: 300 MB in.\nThen Instagram, Facebook and TikTok each fetch the file themselves: about 900 MB out.\nYouTube does NOT re-download - it uses the copy already in this workflow.\n\nSo roughly 1.2 GB per post, for a couple of minutes. Fine on most hosting. The file is deleted again 2 hours later, so your disk and your nightly backups never grow.', [1040, 620], { width: 420, height: 260 });
+const trafficNote = sticky('## Traffic per post (300 MB video)\n\nUpload to WordPress: 300 MB in.\nThen Instagram, Facebook and TikTok each fetch the file themselves: about 900 MB out.\nYouTube does NOT re-download - it uses the copy already in this workflow.\n\nSo roughly 1.2 GB per post, for a couple of minutes. Fine on most hosting. The file is deleted again 2 hours later, so your disk and your nightly backups never grow.', [1020, 640], { width: 400, height: 260 });
 
-const igNote = sticky('**Instagram**: same container -> publish flow as your stories, with media_type=REELS. The 3 minute wait covers a 300-400 MB reel. If the report ever says the container was not ready, raise the Wait node.', [1660, -60], { width: 460, height: 120 });
+const igNote = sticky('## Instagram polls, it does not guess\n\nInstagram accepts the container immediately but processes the video in the background. This loop asks every 30 seconds whether it is FINISHED, and gives up after 16 tries (8 minutes) rather than hanging forever.\n\nThat cadence matches what Postiz - a production open-source scheduler - does against the same API.', [1880, -100], { width: 440, height: 240 });
 
-const ttNote = sticky('**TikTok draft path (free, no audit)**: the video lands in your TikTok inbox as a draft - open the app, tap it, publish. TikTok downloads the file in the background, which is why cleanup waits 2 hours. To post fully automatically later, pass the free TikTok Content Posting audit and switch this URL from inbox to direct post.', [1660, 880], { width: 520, height: 150 });
+const ttNote = sticky('**TikTok draft path (free, no audit)**: the video lands in your TikTok inbox as a draft - open the app, tap it, publish. TikTok downloads the file in the background, which is why cleanup waits 2 hours. To post fully automatically later, pass the free TikTok Content Posting audit and switch this URL from inbox to direct post.', [1620, 960], { width: 480, height: 120 });
 
 export default workflow('video-fanout', 'Video Fan-out — IG + FB + YT + TikTok')
   .add(setupNote)
@@ -423,7 +445,9 @@ export default workflow('video-fanout', 'Video Fan-out — IG + FB + YT + TikTok
   .to(wpUpload)
   .to(buildJob)
   .to(recordJob)
-  .to(igGate.to(igCreate.to(igWait.to(igStatus.to(igPublish.to(collect.input(0)))))))
+  .to(igGate.to(igCreate.to(igWait.to(igStatus.to(igReady
+    .onTrue(igPublish.to(collect.input(0)))
+    .onFalse(igWait))))))
   .add(recordJob)
   .to(fbGate.to(fbPost.to(collect.input(1))))
   .add(recordJob)
