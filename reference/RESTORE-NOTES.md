@@ -277,3 +277,31 @@ is labelled by that score, a row without one is labelled «بدون اعلام �
 salary-qualified route is true of BC's Innovate stream specifically, not a fact
 the data carries. It becomes correct to say only once a per-stream lookup exists
 and the stream is in it.
+
+## Selection factors were already in the feed — use them, never a lookup
+
+The wage criteria come from BC's own "Selection factors" column, which
+`getBCSkills_` already captures as `factors`. The workflow was simply ignoring
+the field. No Apps Script change was needed.
+
+    {"invitations":"337","score":"","factors":"Minimum wage of $55/hour and $110,000/year, and NOC 0, 1, 2, or 3"}
+    {"invitations":"265","score":"132","factors":"Points"}
+
+DO NOT build a static per-stream criteria table. The wage moves every draw:
+$55/$110k (20 Aug), $58/$115k (16 Jul), $62/$125k (18 Jun), $59/$120k (14 May).
+A hardcoded table would have kept publishing $55/hour for months after it
+stopped being true — under an RCIC's name.
+
+Route label rule, in order:
+  1. Row has a score        -> «حداقل نمره {score}»
+  2. factors matches BC's wage wording
+     /Minimum wage of \$([\d,.]+)\/hour and \$([\d,]+)\/year/
+                              -> «حداقل حقوق {hour} دلار در ساعت و {year} دلار در سال»
+                                 (year rendered as «N هزار» only when it is a
+                                  whole number of thousands)
+  3. otherwise               -> the factors text verbatim, untranslated
+  4. nothing at all          -> «بدون اعلام حداقل نمره»
+
+Only step 2 translates, and only on an exact pattern match. Anything BC words
+differently passes through in English rather than being paraphrased — a
+paraphrased eligibility rule is advice, and advice must not be generated.
