@@ -260,3 +260,20 @@ Not automatable from the feed: the eligibility text in the reference design
 criteria for the Innovate stream, not a field in the draw data. It would need a
 static per-stream lookup — worth adding for the handful of BC streams, but it
 must never be guessed for a stream that is not in the lookup.
+
+## Same-name rows: combined headline + the routes (chosen 2026-08-20)
+
+Card layout for a date whose rows all share one stream name:
+
+    602 دعوت‌نامه                    <- sum, headline chip
+    Innovate: High Economic Impact   <- stream name, once
+    تفکیک این دراو
+      337 دعوت‌نامه · بدون اعلام حداقل نمره
+      265 دعوت‌نامه · حداقل نمره 132
+
+Route labels are derived ONLY from what the feed contains: a row with a score
+is labelled by that score, a row without one is labelled «بدون اعلام حداقل
+نمره». Do NOT label the scoreless row "واجد شرایط حقوقی" — that it is the
+salary-qualified route is true of BC's Innovate stream specifically, not a fact
+the data carries. It becomes correct to say only once a per-stream lookup exists
+and the stream is in it.
