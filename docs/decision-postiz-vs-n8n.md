@@ -86,3 +86,41 @@ small box, or is n8n Cloud, a server is needed first.
 - **The research does not go to waste.** The platform limits, the audit rules,
   the TikTok token behaviour and the traffic maths all still apply — they are
   properties of the platforms, not of the tool.
+
+## Where Postiz can actually run (checked, August 2026)
+
+| Host | Verdict |
+|---|---|
+| **Existing VPS with 4 GB+ free** | Best option. Costs nothing extra. |
+| Small VPS (Hetzner/Contabo, ~EUR 4-8/mo) | Works well. One host runs all seven containers. |
+| **Oracle Cloud Always Free** | **Does not work.** See below. |
+| Render | Free tier sleeps after 15 min and its Postgres expires at 30 days. Paid is ~USD 105-125/mo because Render bills per service and Postiz is seven of them — roughly 15-20x a small VPS. |
+| Vercel | Architecturally impossible: serverless, no persistent processes or disk, cannot host Temporal or Elasticsearch. |
+
+### Oracle Always Free is ruled out — no ARM image
+
+Oracle's free allowance is Ampere **ARM64** (2 OCPU / 12 GB since June 2026).
+Postiz publishes **no arm64 Docker image**: the request to add multi-arch builds
+([issue #995](https://github.com/gitroomhq/postiz-app/issues/995)) was **closed as
+not planned**. The only routes would be building from source on ARM or running
+under emulation, neither of which is sane for a stack that includes Elasticsearch.
+
+Oracle's free x86 shapes are 1 GB micro instances — far below the 4 GB floor.
+
+**Net: there is no free host that runs Postiz.** It needs either an existing
+server with headroom, or a cheap paid VPS.
+
+## Migrating later is easy, if the domain is set up right
+
+Postiz state is only three things: the PostgreSQL database (accounts, connected
+channels, tokens, scheduled posts), the uploads directory, and `.env`. Moving
+hosts is `pg_dump` + restore, copy the uploads volume, copy `.env`, repoint DNS.
+About an hour.
+
+**The one decision that makes or breaks this: use your own subdomain from day
+one** (e.g. `post.sugimotogroup.org`), never a host-provided URL. `MAIN_URL` is
+the OAuth redirect base registered with Meta, Google and TikTok. Keep the domain
+and a host move is invisible to every platform — no re-approval, no reconnecting
+accounts. Change the domain and every platform app needs its callback updated.
+
+Architecture is not a lock-in either way: x86 VPS to x86 VPS is a lift-and-shift.
