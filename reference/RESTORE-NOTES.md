@@ -234,3 +234,29 @@ Both guards matter more now than they did in testing:
 
 To pull it back: set the Telegram node's chatId to `@testchannel_draws` and
 publish, or unpublish the workflow entirely.
+
+## The 20 August card was wrong — breakdown-only was the wrong default
+
+BC published two rows for 2026-08-20, BOTH named "Innovate: High Economic
+Impact": 337 invitations with no score, and 265 with score 132. That is one
+draw split across two qualifying routes, not two draws.
+
+The card showed two rows reading "Innovate: High Economic…" — identical after
+clipping — and nothing else. The total (602) was absent because totals had just
+been removed from the card entirely.
+
+Removing them unconditionally was the mistake. The totals are redundant when the
+breakdown adds information; they are the ONLY useful figure when it does not.
+
+Rule now:
+  - If every row on a date shares the same stream name, treat it as ONE draw:
+    sum the invitations, show the stream once, show the lowest score.
+    -> "602 دعوت‌نامه" / "Innovate: High Economic Impact" / "حداقل نمره 132"
+  - If the rows have genuinely different stream names, show the breakdown list.
+  - The total appears in both cases.
+
+Not automatable from the feed: the eligibility text in the reference design
+("حداقل حقوق 55 دلار در ساعت و 110 هزار دلار در سال"). That is BC's published
+criteria for the Innovate stream, not a field in the draw data. It would need a
+static per-stream lookup — worth adding for the handful of BC streams, but it
+must never be guessed for a stream that is not in the lookup.
