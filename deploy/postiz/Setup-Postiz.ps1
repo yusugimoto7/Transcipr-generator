@@ -31,24 +31,31 @@ if ($ramGB -lt 7.5) {
 }
 Ok "RAM is $ramGB GB"
 
-foreach ($cmd in @('docker','git')) {
-  if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-    Fail "'$cmd' not found. Install Docker Desktop and Git for Windows first, then re-run this script."
-  }
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+  Fail "'docker' not found. Install Docker Desktop first, then re-run this script."
 }
-Ok "docker and git are installed"
+Ok "docker is installed"
+
 
 try { docker info 2>&1 | Out-Null; if ($LASTEXITCODE -ne 0) { throw } }
 catch { Fail "Docker Desktop is installed but not running. Start it, wait for the whale icon to settle, then re-run." }
 Ok "Docker Desktop is running"
 
 Write-Host "`n=== Fetching Postiz ===" -ForegroundColor White
-if (Test-Path $ProjectDir) {
-  Info "Already downloaded, updating"
-  Push-Location $ProjectDir; git pull --ff-only 2>&1 | Out-Null; Pop-Location
+# Downloaded as a zip rather than cloned, so Git is not a prerequisite.
+if (Test-Path (Join-Path $ProjectDir 'docker-compose.yaml')) {
+  Info "Already downloaded, leaving it in place"
 } else {
-  New-Item -ItemType Directory -Force -Path (Split-Path $ProjectDir) | Out-Null
-  git clone --depth 1 https://github.com/gitroomhq/postiz-app.git $ProjectDir 2>&1 | Out-Null
+  $parent = Split-Path $ProjectDir
+  New-Item -ItemType Directory -Force -Path $parent | Out-Null
+  $zip = Join-Path $parent 'postiz.zip'
+  Info "Downloading (about 100 MB)"
+  Invoke-WebRequest -Uri 'https://github.com/gitroomhq/postiz-app/archive/refs/heads/main.zip' -OutFile $zip
+  Info "Extracting"
+  Expand-Archive -Path $zip -DestinationPath $parent -Force
+  if (Test-Path $ProjectDir) { Remove-Item $ProjectDir -Recurse -Force }
+  Rename-Item (Join-Path $parent 'postiz-app-main') $ProjectDir
+  Remove-Item $zip -Force
 }
 Ok "Postiz is in $ProjectDir"
 

@@ -9,9 +9,10 @@ generated secret, trims three unnecessary containers, and starts everything.
 Two installers, both point-and-click, both required first:
 
 1. **WSL2** — open PowerShell **as administrator**, run `wsl --install`, reboot.
-2. **Docker Desktop** (AMD64, keep the WSL2 option ticked) and **Git for
-   Windows**, both with default options. Start Docker Desktop and wait for the
-   whale icon to settle.
+2. **Docker Desktop** (AMD64, keep the WSL2 option ticked), default options.
+   Start it and wait for the whale icon to settle.
+
+Git is **not** required — the script downloads Postiz as a zip.
 
 ## Running it
 
