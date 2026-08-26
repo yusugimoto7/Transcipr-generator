@@ -25,13 +25,15 @@
  *     access to CRM is the safer arrangement once this is running.
  *  2. Add this file to the same Apps Script project as leads-dashboard.gs. Every
  *     name in here is odoo-prefixed, so nothing collides.
- *  3. Project Settings -> Script properties:
- *       ODOO_KEY  the API key from step 1        (required, never put it in code)
- *       ODOO_DB   the database name              (required — see below)
- *     If the database name is not to hand, set nothing else and run
- *     `odooListDatabases`: it asks the server and reports what it finds.
- *     ODOO_URL and ODOO_LOGIN below can also be overridden by properties of the
- *     same name, which is how you would point this at a different server.
+ *  3. Supply the database name and the API key, either way round:
+ *       - Project Settings -> Script properties -> ODOO_DB and ODOO_KEY, then
+ *         press "Save script properties" (typing alone stores nothing), or
+ *       - fill in ODOO_DB_DEFAULT and ODOO_KEY_DEFAULT below, in the editor only.
+ *     Run `odooCheckProps` to see which values are actually in force.
+ *     If the database name is not to hand, run `odooListDatabases`: it asks the
+ *     server and reports what it finds.
+ *     ODOO_URL and ODOO_LOGIN can be overridden the same way, which is how you
+ *     would point this at a different server or user.
  *  4. Run `odooSetup` and read every line of the log. It reports the server
  *     version, whether the login worked, how many leads it can see, and which
  *     fields this Odoo actually has — names moved between Odoo versions, so it
@@ -47,10 +49,17 @@
  *  rather than addresses. Names, notes and chatter are never read.
  */
 
-// Filled in so setup needs only the API key and the database name. Both are
-// overridable with script properties of the same name.
+// Filled in so setup needs only the API key and the database name. Each is
+// overridable with a script property of the same name.
 var ODOO_URL_DEFAULT = 'https://odoo.sugimotogroup.org';
 var ODOO_LOGIN_DEFAULT = 'yusugimoto7@gmail.com';
+var ODOO_DB_DEFAULT = '';        // e.g. 'sugimoto-production'
+// A key pasted here works, and is the simpler path if the Script Properties form
+// keeps catching you out. It must stay empty in the repository copy: a committed
+// key is a published key, and git remembers it even after it is deleted. Fill it
+// in only in the Apps Script editor, or leave it blank and set ODOO_KEY as a
+// script property instead.
+var ODOO_KEY_DEFAULT = '';
 
 var ODOO_TAB_LEADS = 'CRM Leads';
 var ODOO_TAB_STAGES = 'CRM Stage Daily';
@@ -82,9 +91,9 @@ function odooConfig() {
   var p = odooProps();
   var cfg = {
     url: (p.getProperty('ODOO_URL') || ODOO_URL_DEFAULT).trim().replace(/\/+$/, ''),
-    db: (p.getProperty('ODOO_DB') || '').trim(),
+    db: (p.getProperty('ODOO_DB') || ODOO_DB_DEFAULT).trim(),
     login: (p.getProperty('ODOO_LOGIN') || ODOO_LOGIN_DEFAULT).trim(),
-    key: (p.getProperty('ODOO_KEY') || '').trim(),
+    key: (p.getProperty('ODOO_KEY') || ODOO_KEY_DEFAULT).trim(),
     sheetId: (p.getProperty('ODOO_SHEET_ID') || ODOO_SHEET_FALLBACK).trim()
   };
   var missing = ['url', 'db', 'login', 'key'].filter(function (k) { return !cfg[k]; });
@@ -482,8 +491,8 @@ function odooCheckProps() {
   };
   show('ODOO_URL', ODOO_URL_DEFAULT, false);
   show('ODOO_LOGIN', ODOO_LOGIN_DEFAULT, false);
-  show('ODOO_DB', '', false);
-  show('ODOO_KEY', '', true);
+  show('ODOO_DB', ODOO_DB_DEFAULT, false);
+  show('ODOO_KEY', ODOO_KEY_DEFAULT, true);
   var cursor = p.getProperty('ODOO_CURSOR');
   Logger.log('sync cursor: %s · last run: %s',
     cursor || 'none yet, so the next run reads every lead',
