@@ -36,6 +36,7 @@ import xmlrpc.client
 from dotenv import load_dotenv
 
 import render
+from custom_fields import CustomFieldSync
 from odoo_client import Odoo, OdooError
 from trello_client import Trello, TrelloError
 
@@ -61,6 +62,7 @@ class Migrator:
         self.odoo = odoo
         self.args = args
         self.user_map = load_user_map()
+        self.cfields = None if getattr(args, "no_custom_fields", False) else CustomFieldSync(odoo)
         self._odoo_user_cache = {}
         self.report = {}
 
@@ -120,17 +122,20 @@ class Migrator:
             "lists": self.trello.lists(board_id),
             "labels": self.trello.labels(board_id),
             "members": self.trello.members(board_id),
+            "custom_fields": self.trello.custom_fields(board_id),
             "cards": self.trello.cards(board_id),
         }
         data["comments"] = self.trello.comments(board_id)
+        data["activity"] = self.trello.activity(board_id) if self.args.include_activity else {}
 
         stats = {
             "board": board["name"],
             "cards_in_trello": len(data["cards"]),
             "comments_in_trello": sum(len(v) for v in data["comments"].values()),
             "tasks_created": 0, "tasks_existing": 0,
-            "subtasks_created": 0, "comments_created": 0,
+            "subtasks_created": 0, "comments_created": 0, "activity_created": 0,
             "attachments_created": 0, "attachments_skipped": [],
+            "custom_fields": len(data["custom_fields"]),
             "unmapped_members": set(),
         }
         self.report[board_id] = stats
@@ -140,6 +145,9 @@ class Migrator:
             return
 
         project_id = self.ensure_project(board)
+        if self.cfields:
+            self.cfields.ensure(data["custom_fields"])
+            self.cfields.install_view()
         stage_ids = self.ensure_stages(project_id, data["lists"])
         tag_ids = self.ensure_tags(data["labels"])
         members_by_id = {m["id"]: m for m in data["members"]}
@@ -154,6 +162,8 @@ class Migrator:
                 self.ensure_subtasks(card, task_id, project_id, stats)
             self.ensure_comments(card, task_id, data["comments"].get(card["id"], []),
                                  members_by_id, stats)
+            if self.args.include_activity:
+                self.ensure_activity(card, task_id, data["activity"].get(card["id"], []), stats)
             if not self.args.no_attachments:
                 self.ensure_attachments(card, task_id, stats)
             if (index + 1) % 25 == 0:
@@ -177,6 +187,8 @@ class Migrator:
                  len(data["cards"]), already, len(data["cards"]) - already)
         log.info("  archived cards: %d", sum(1 for c in data["cards"] if c.get("closed")))
         log.info("  comments: %d", stats["comments_in_trello"])
+        log.info("  custom fields -> Odoo fields on project.task: %d",
+                 len(data["custom_fields"]))
         log.info("  attachments: %d",
                  sum(len(c.get("attachments") or []) for c in data["cards"]))
         if unmapped:
@@ -248,11 +260,13 @@ class Migrator:
                     stats["unmapped_members"].add(member["username"])
 
         _, link_attachments = split_attachments(card)
-        body = "\n".join(part for part in (
+        field_rows = self.cfields.labelled(card) if self.cfields else []
+        body = render.rtl_safe("\n".join(part for part in (
+            render.custom_fields_table(field_rows),
             render.markdown(card.get("desc")),
             render.checklists(card.get("checklists")),
             render.footer(card, unmapped, link_attachments),
-        ) if part)
+        ) if part))
 
         vals = {
             "name": card.get("name") or "(untitled Trello card)",
@@ -283,6 +297,8 @@ class Migrator:
                 )
         if card.get("dueComplete") and self.done_value:
             vals["state"] = self.done_value
+        if self.cfields:
+            vals.update(self.cfields.values(card))
         return vals
 
     def ensure_task(self, card, project_id, stage_ids, tag_ids, members_by_id, sequence, stats):
@@ -322,7 +338,9 @@ class Migrator:
             resolved = self.odoo_user(author.get("id"), members_by_id)
             text = render.markdown((action.get("data") or {}).get("text") or "")
             byline = render.escape(author.get("fullName") or author.get("username") or "Trello user")
-            body = f'<p><em>Trello comment by {byline} on {action.get("date", "")[:10]}</em></p>\n{text}'
+            body = render.rtl_safe(
+                f'<p><em>Trello comment by {byline} on {action.get("date", "")[:10]}</em></p>\n{text}'
+            )
 
             kwargs = {
                 "body": body,
@@ -349,6 +367,38 @@ class Migrator:
                 log.debug("could not backdate message %s: %s", message_id, exc)
             self.odoo.stamp("comment", action["id"], "mail.message", message_id)
             stats["comments_created"] += 1
+
+    def ensure_activity(self, card, task_id, actions, stats):
+        """Card creations and list moves, as dated log notes on the task."""
+        for action in actions:
+            if self.odoo.ref("act", action["id"]):
+                continue
+            data = action.get("data") or {}
+            who = (action.get("memberCreator") or {}).get("fullName") or "Someone"
+            when = (action.get("date") or "")[:10]
+            if action["type"] == "updateCard":
+                text = (f'moved this card from {render.escape(data["listBefore"]["name"])} '
+                        f'to {render.escape(data["listAfter"]["name"])}'
+                        if "listBefore" in data
+                        else f'moved this card to {render.escape(data["listAfter"]["name"])}')
+            else:
+                list_name = (data.get("list") or {}).get("name", "")
+                text = f"added this card to {render.escape(list_name)}"
+            message_id = self.odoo.execute(
+                "project.task", "message_post", [task_id],
+                context=self.odoo.write_context(),
+                body=f"<p><em>{render.escape(who)} {text} on {when} (Trello)</em></p>",
+                message_type="comment", subtype_xmlid="mail.mt_note",
+            )
+            if not message_id:
+                continue
+            try:
+                self.odoo.write("mail.message", [message_id],
+                                {"date": (action.get("date") or "").replace("T", " ").split(".")[0]})
+            except OdooError:
+                pass
+            self.odoo.stamp("act", action["id"], "mail.message", message_id)
+            stats["activity_created"] += 1
 
     def ensure_attachments(self, card, task_id, stats):
         file_attachments, _ = split_attachments(card)
@@ -504,6 +554,19 @@ def cmd_run(args, env):
     log.info("Report written to %s", REPORT)
 
 
+def cmd_fields(args, env):
+    trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    syncer = CustomFieldSync(odoo)
+    for board_id in args.boards:
+        definitions = trello.custom_fields(board_id)
+        log.info("board %s: %d custom fields", board_id, len(definitions))
+        syncer.ensure(definitions)
+    syncer.install_view()
+    print(f"{len(syncer.by_trello_id)} Trello custom fields are now Odoo fields on project.task.")
+
+
 def cmd_verify(args, env):
     trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
@@ -541,6 +604,12 @@ def build_parser():
                           "(default: leave already-migrated records untouched)")
     run.add_argument("--checklist-subtasks", action="store_true",
                      help="also create a child task per checklist item")
+    run.add_argument("--include-activity", action="store_true",
+                     help="also migrate card history (created / moved between lists) as "
+                          "dated log notes")
+    run.add_argument("--no-custom-fields", action="store_true",
+                     help="do not create Odoo fields for Trello custom fields (their values "
+                          "still appear in the task description)")
     run.add_argument("--no-attachments", action="store_true",
                      help="skip file attachments (much faster; links still land in the description)")
     run.add_argument("--max-attachment-mb", type=float, default=25.0,
@@ -549,6 +618,9 @@ def build_parser():
                      help="post comments as internal log notes (default; avoids mass email)")
     run.add_argument("--comments-as-messages", dest="comments_as_notes", action="store_false",
                      help="post comments as real messages — notifies every follower by email")
+
+    with_boards(sub.add_parser(
+        "fields", help="create the Odoo fields for Trello custom fields, without migrating cards"))
 
     verify = with_boards(sub.add_parser("verify", help="compare Trello and Odoo counts"))
     verify.add_argument("--max-attachment-mb", type=float, default=25.0,
@@ -571,7 +643,7 @@ def main():
 
     handlers = {
         "probe": cmd_probe, "auth-url": cmd_auth_url, "boards": cmd_boards,
-        "users": cmd_users, "run": cmd_run, "verify": cmd_verify,
+        "users": cmd_users, "fields": cmd_fields, "run": cmd_run, "verify": cmd_verify,
     }
     try:
         handlers[args.command](args, env)

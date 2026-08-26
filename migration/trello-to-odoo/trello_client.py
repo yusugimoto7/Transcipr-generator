@@ -94,6 +94,10 @@ class Trello:
     def members(self, board_id):
         return self.get(f"boards/{board_id}/members", fields="id,username,fullName")
 
+    def custom_fields(self, board_id):
+        """Custom field definitions, including dropdown options."""
+        return self.get(f"boards/{board_id}/customFields")
+
     def cards(self, board_id):
         """Every card on the board, archived ones included, fully expanded."""
         cards = self.get(
@@ -109,6 +113,7 @@ class Trello:
             # which are the whole point of pulling checklists.
             checkItem_fields="id,name,state,pos",
             checkItemStates="true",
+            customFieldItems="true",
         )
         log.info("  fetched %d cards", len(cards))
         return cards
@@ -143,6 +148,36 @@ class Trello:
         for actions in by_card.values():
             actions.reverse()  # Trello returns newest first
         log.info("  fetched %d comments", total)
+        return by_card
+
+    def activity(self, board_id):
+        """Card-level history worth keeping: creations and list moves."""
+        by_card = {}
+        before = None
+        while True:
+            batch = self.get(
+                f"boards/{board_id}/actions",
+                filter="createCard,copyCard,updateCard",
+                limit=1000,
+                before=before,
+                memberCreator_fields="id,username,fullName",
+            )
+            if not batch:
+                break
+            for action in batch:
+                data = action.get("data") or {}
+                # updateCard fires for every edit; only list moves carry listAfter.
+                if action["type"] == "updateCard" and "listAfter" not in data:
+                    continue
+                card_id = (data.get("card") or {}).get("id")
+                if card_id:
+                    by_card.setdefault(card_id, []).append(action)
+            if len(batch) < 1000:
+                break
+            before = batch[-1]["id"]
+        for actions in by_card.values():
+            actions.reverse()
+        log.info("  fetched %d history entries", sum(len(v) for v in by_card.values()))
         return by_card
 
     def download(self, url):

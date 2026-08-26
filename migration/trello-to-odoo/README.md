@@ -13,6 +13,7 @@ Target instance: `https://odoo.sugimotogroup.org`
 | Board | `project.project` |
 | List | `project.task.type` (a stage scoped to that project) |
 | Card | `project.task` |
+| Custom field | a real Odoo field on `project.task` (`x_trello_*`), shown in a **Trello data** tab |
 | Archived card | task with `active = False` (visible under Filters → Archived) |
 | Label | `project.tags`, colour carried across |
 | Member | assignee, via `users.json` |
@@ -21,9 +22,41 @@ Target instance: `https://odoo.sugimotogroup.org`
 | Comment | log note on the task, original author and timestamp preserved |
 | File attachment | `ir.attachment` on the task |
 | Link attachment | link in the task description |
+| Card history | optional dated log notes ("moved from X to Y"), with `--include-activity` |
 
 Card order inside a list is preserved through `sequence`. Every task
-description ends with a link back to its original Trello card.
+description ends with a link back to its original Trello card. Farsi and other
+right-to-left text is rendered with `dir="auto"`, so mixed Farsi/English cards
+read correctly in Odoo.
+
+## Custom fields
+
+The visa boards keep most of their real data in custom fields — passport
+number, deadlines, priority, spouse age. Odoo has no equivalent out of the box,
+so the tool creates a genuine Odoo field per Trello custom field:
+
+| Trello type | Odoo field |
+| --- | --- |
+| Text | `char` |
+| Number | `float` |
+| Date | `date` |
+| Checkbox | `boolean` |
+| Dropdown | `char` holding the selected option's text |
+
+Fields are named `x_trello_<label>` and grouped into a **Trello data** tab on
+the task form. Being real fields, they are filterable, groupable and usable in
+Odoo reports — which is most of the point of leaving Trello. The values are
+*also* written into the task description as a table, so nothing is lost if you
+later remove the fields or the tab.
+
+Create them ahead of the migration to review them first:
+
+```bash
+python migrate.py fields --boards ID1,ID2,ID3,ID4,ID5
+```
+
+`--no-custom-fields` skips field creation entirely and keeps only the
+description table.
 
 ## Reruns are safe
 
@@ -153,10 +186,20 @@ and takes its attachments with it.
 | --- | --- |
 | `--dry-run` | Report only, no writes |
 | `--checklist-subtasks` | Also create a child task per checklist item |
+| `--include-activity` | Also migrate card history (created / moved between lists) as log notes |
+| `--no-custom-fields` | Do not create Odoo fields for Trello custom fields |
 | `--update` | On a rerun, refresh already-migrated tasks from Trello. Off by default so edits made in Odoo are not overwritten |
 | `--no-attachments` | Skip file downloads — much faster for a trial run |
 | `--max-attachment-mb N` | Skip files larger than N MB (default 25) and list them in `report.json` |
 | `--comments-as-messages` | Post comments as real messages instead of log notes |
+
+## Think twice about `--checklist-subtasks` on the visa boards
+
+Those cards carry document checklists with a hundred-plus items each. Turning
+every item into a sub-task would produce tens of thousands of tasks and make
+the project unusable. The default — checklists rendered into the description as
+a ✔/☐ list, progress included — is the right choice for these boards. Use
+sub-tasks only on boards with short, genuinely actionable checklists.
 
 ## Two things worth knowing
 

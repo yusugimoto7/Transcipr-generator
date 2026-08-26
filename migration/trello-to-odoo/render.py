@@ -73,6 +73,27 @@ def escape(text):
     return html.escape(text or "")
 
 
+def rtl_safe(body):
+    """Wrap rendered HTML so Farsi/Arabic runs display right-to-left.
+
+    dir="auto" lets the browser pick direction per block from its first strong
+    character, so mixed Farsi/English cards read correctly either way.
+    """
+    return f'<div dir="auto">{body}</div>' if body else ""
+
+
+def custom_fields_table(rows):
+    """Trello custom field values as a table, so they read at a glance."""
+    if not rows:
+        return ""
+    cells = "".join(
+        f'<tr><td style="padding:2px 12px 2px 0"><strong>{escape(label)}</strong></td>'
+        f'<td style="padding:2px 0">{escape(value)}</td></tr>'
+        for label, value in rows
+    )
+    return f"<p><strong>Trello fields</strong></p><table>{cells}</table>"
+
+
 def checklists(card_checklists):
     """Render Trello checklists as a static checkbox list."""
     blocks = []
