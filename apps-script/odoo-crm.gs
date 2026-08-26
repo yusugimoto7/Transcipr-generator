@@ -478,16 +478,16 @@ function odooSetup() {
  */
 function odooCheckProps() {
   var p = odooProps();
+  // Masking has to apply wherever the value came from. Execution logs are kept and
+  // are visible to everyone with access to the project, so a key printed in full
+  // here outlives the run that printed it.
+  var mask = function (v) { return v.slice(0, 4) + '…' + v.slice(-2) + ' [' + v.length + ' chars]'; };
   var show = function (name, fallback, secret) {
     var v = p.getProperty(name);
-    if (v) {
-      Logger.log('%s = %s  (from script properties)', name,
-        secret ? v.slice(0, 4) + '…' + v.slice(-2) + ' [' + v.length + ' chars]' : v);
-    } else if (fallback) {
-      Logger.log('%s = %s  (built-in default, no property set)', name, fallback);
-    } else {
-      Logger.log('%s is NOT SET — this is what is stopping the run', name);
-    }
+    if (v) Logger.log('%s = %s  (from script properties)', name, secret ? mask(v) : v);
+    else if (fallback) Logger.log('%s = %s  (built-in default, no property set)', name,
+      secret ? mask(fallback) : fallback);
+    else Logger.log('%s is NOT SET — this is what is stopping the run', name);
   };
   show('ODOO_URL', ODOO_URL_DEFAULT, false);
   show('ODOO_LOGIN', ODOO_LOGIN_DEFAULT, false);
