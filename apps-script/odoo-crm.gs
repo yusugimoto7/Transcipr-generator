@@ -462,6 +462,35 @@ function odooSetup() {
 }
 
 /**
+ * Reports which script properties are actually stored, and where each value is
+ * coming from. Filling the Script Properties form without pressing "Save script
+ * properties" leaves nothing stored, and the resulting error looks identical to
+ * never having typed anything — so this says which it is.
+ */
+function odooCheckProps() {
+  var p = odooProps();
+  var show = function (name, fallback, secret) {
+    var v = p.getProperty(name);
+    if (v) {
+      Logger.log('%s = %s  (from script properties)', name,
+        secret ? v.slice(0, 4) + '…' + v.slice(-2) + ' [' + v.length + ' chars]' : v);
+    } else if (fallback) {
+      Logger.log('%s = %s  (built-in default, no property set)', name, fallback);
+    } else {
+      Logger.log('%s is NOT SET — this is what is stopping the run', name);
+    }
+  };
+  show('ODOO_URL', ODOO_URL_DEFAULT, false);
+  show('ODOO_LOGIN', ODOO_LOGIN_DEFAULT, false);
+  show('ODOO_DB', '', false);
+  show('ODOO_KEY', '', true);
+  var cursor = p.getProperty('ODOO_CURSOR');
+  Logger.log('sync cursor: %s · last run: %s',
+    cursor || 'none yet, so the next run reads every lead',
+    p.getProperty('ODOO_LAST_RUN') || 'never');
+}
+
+/**
  * Asks the server which databases it has. Only ODOO_URL needs to be set to run
  * this, so it is the way out of not knowing what to put in ODOO_DB. Many servers
  * ship with list_db = False, which hides the list — a deliberate hardening rather
