@@ -280,11 +280,14 @@ Setup:
    this integration only ever reads.
 2. Add `apps-script/odoo-crm.gs` to the same Apps Script project. Every name in
    it is `odoo`-prefixed, so it cannot collide with the other two files.
-3. **Project Settings → Script properties**:
-   - `ODOO_URL` — the Odoo server root, e.g. `https://sugimotogroup.org`
-   - `ODOO_DB` — the database name
-   - `ODOO_LOGIN` — the integration user's login
-   - `ODOO_KEY` — the API key from step 1
+3. **Project Settings → Script properties** — the server and login are already
+   filled in at the top of the file, so only two are needed:
+   - `ODOO_KEY` — the API key from step 1. Never put this in code.
+   - `ODOO_DB` — the database name. If it is not to hand, set nothing else and
+     run **`odooListDatabases`**, which asks the server and reports what it finds.
+
+   `ODOO_URL` and `ODOO_LOGIN` are overridable with properties of the same name,
+   which is how you would point this at a different server or user.
 4. Run **`odooSetup`** and read the log: server version, whether the login
    worked, how many leads are visible, the stage list, and which fields this
    Odoo actually has.

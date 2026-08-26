@@ -17,16 +17,21 @@
  *  recoverable at any time and are re-read whenever a record changes.
  *
  * SETUP
- *  1. In Odoo, as a user that may read CRM, open Preferences -> Account Security
- *     -> New API Key and copy it. Prefer a dedicated integration user with read
- *     access to CRM over an administrator.
+ *  The server and login are filled in below, so only two values are needed.
+ *
+ *  1. In Odoo, open Preferences -> Account Security -> New API Key and copy it.
+ *     The key inherits that user's permissions, so a key made from an admin
+ *     account can do everything that account can. A dedicated user with read
+ *     access to CRM is the safer arrangement once this is running.
  *  2. Add this file to the same Apps Script project as leads-dashboard.gs. Every
  *     name in here is odoo-prefixed, so nothing collides.
  *  3. Project Settings -> Script properties:
- *       ODOO_URL    https://sugimotogroup.org      (server root, no trailing slash)
- *       ODOO_DB     the database name
- *       ODOO_LOGIN  the integration user's login, usually their email
- *       ODOO_KEY    the API key from step 1
+ *       ODOO_KEY  the API key from step 1        (required, never put it in code)
+ *       ODOO_DB   the database name              (required — see below)
+ *     If the database name is not to hand, set nothing else and run
+ *     `odooListDatabases`: it asks the server and reports what it finds.
+ *     ODOO_URL and ODOO_LOGIN below can also be overridden by properties of the
+ *     same name, which is how you would point this at a different server.
  *  4. Run `odooSetup` and read every line of the log. It reports the server
  *     version, whether the login worked, how many leads it can see, and which
  *     fields this Odoo actually has — names moved between Odoo versions, so it
@@ -41,6 +46,11 @@
  *  addresses on the lead tabs, and the dashboard endpoint emits match counts
  *  rather than addresses. Names, notes and chatter are never read.
  */
+
+// Filled in so setup needs only the API key and the database name. Both are
+// overridable with script properties of the same name.
+var ODOO_URL_DEFAULT = 'https://odoo.sugimotogroup.org';
+var ODOO_LOGIN_DEFAULT = 'yusugimoto7@gmail.com';
 
 var ODOO_TAB_LEADS = 'CRM Leads';
 var ODOO_TAB_STAGES = 'CRM Stage Daily';
@@ -71,16 +81,19 @@ function odooProps() { return PropertiesService.getScriptProperties(); }
 function odooConfig() {
   var p = odooProps();
   var cfg = {
-    url: (p.getProperty('ODOO_URL') || '').trim().replace(/\/+$/, ''),
+    url: (p.getProperty('ODOO_URL') || ODOO_URL_DEFAULT).trim().replace(/\/+$/, ''),
     db: (p.getProperty('ODOO_DB') || '').trim(),
-    login: (p.getProperty('ODOO_LOGIN') || '').trim(),
+    login: (p.getProperty('ODOO_LOGIN') || ODOO_LOGIN_DEFAULT).trim(),
     key: (p.getProperty('ODOO_KEY') || '').trim(),
     sheetId: (p.getProperty('ODOO_SHEET_ID') || ODOO_SHEET_FALLBACK).trim()
   };
   var missing = ['url', 'db', 'login', 'key'].filter(function (k) { return !cfg[k]; });
   if (missing.length) {
-    throw new Error('missing script propert' + (missing.length === 1 ? 'y' : 'ies') + ': ' +
-      missing.map(function (k) { return 'ODOO_' + k.toUpperCase(); }).join(', '));
+    var names = missing.map(function (k) { return 'ODOO_' + k.toUpperCase(); }).join(', ');
+    var extra = missing.indexOf('db') !== -1
+      ? ' Run odooListDatabases to have the server report its database names.' : '';
+    throw new Error('missing script propert' + (missing.length === 1 ? 'y' : 'ies') +
+      ': ' + names + '.' + extra);
   }
   return cfg;
 }
@@ -455,8 +468,9 @@ function odooSetup() {
  * than a fault, and the log says so instead of failing.
  */
 function odooListDatabases() {
-  var url = (odooProps().getProperty('ODOO_URL') || '').trim().replace(/\/+$/, '');
+  var url = (odooProps().getProperty('ODOO_URL') || ODOO_URL_DEFAULT).trim().replace(/\/+$/, '');
   if (!url) { Logger.log('set ODOO_URL first'); return; }
+  Logger.log('asking %s', url + '/jsonrpc');
   try {
     var names = odooRpc({ url: url }, 'db', 'list', []);
     if (names && names.length) {
