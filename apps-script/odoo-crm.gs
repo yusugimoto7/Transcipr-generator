@@ -130,8 +130,13 @@ function odooUid(cfg) {
   if (odooUidCache) return odooUidCache;
   var uid = odooRpc(cfg, 'common', 'authenticate', [cfg.db, cfg.login, cfg.key, {}]);
   if (!uid) {
+    var hint = '';
+    try {
+      var names = odooRpc(cfg, 'db', 'list', []);
+      if (names && names.length) hint = ' This server reports these databases: ' + names.join(', ') + '.';
+    } catch (err) { /* list_db is often disabled; carry on without the hint */ }
     throw new Error('Odoo rejected the login. Check ODOO_DB, ODOO_LOGIN and ODOO_KEY — the key ' +
-      'must be an API key from Preferences -> Account Security, not the account password.');
+      'must be an API key from Preferences -> Account Security, not the account password.' + hint);
   }
   odooUidCache = uid;
   return uid;
@@ -441,6 +446,32 @@ function odooSetup() {
   Logger.log('tabs ready in "%s": %s', ss.getName(),
     ss.getSheets().map(function (s) { return s.getName(); }).join(', '));
   Logger.log('next: run odooCollectAll, repeating while it reports running out of time, then odooInstallTrigger.');
+}
+
+/**
+ * Asks the server which databases it has. Only ODOO_URL needs to be set to run
+ * this, so it is the way out of not knowing what to put in ODOO_DB. Many servers
+ * ship with list_db = False, which hides the list — a deliberate hardening rather
+ * than a fault, and the log says so instead of failing.
+ */
+function odooListDatabases() {
+  var url = (odooProps().getProperty('ODOO_URL') || '').trim().replace(/\/+$/, '');
+  if (!url) { Logger.log('set ODOO_URL first'); return; }
+  try {
+    var names = odooRpc({ url: url }, 'db', 'list', []);
+    if (names && names.length) {
+      Logger.log('databases on this server: %s', names.join(', '));
+      Logger.log(names.length === 1
+        ? 'one database, so ODOO_DB = ' + names[0]
+        : 'pick the one your team logs into and put it in ODOO_DB');
+    } else {
+      Logger.log('the server answered but listed no databases');
+    }
+  } catch (err) {
+    Logger.log('could not list databases: %s', String(err.message || err));
+    Logger.log('That is normal on a hardened server (list_db = False in odoo.conf). ' +
+      'Find the name in odoo.conf under db_name, or ask whoever set the server up.');
+  }
 }
 
 /** Forget the incremental cursor so the next run re-reads every lead. */
