@@ -260,6 +260,54 @@ Notes:
 - Keep the IG tabs **after** the three lead tabs. The endpoint reads the first
   three tabs as leads.
 
+### Odoo CRM on the dashboard
+
+`apps-script/odoo-crm.gs` pulls `crm.lead` out of the self-hosted Odoo over
+JSON-RPC and writes two tabs — `CRM Leads` and `CRM Stage Daily` — which the live
+endpoint joins back onto the form submissions to produce a **CRM & pipeline**
+section: coverage, pipeline by stage, outcome by channel and budget tier, won
+revenue per channel, lost reasons, and time to win.
+
+**It answers the question the sheet cannot.** `added_to_odoo` is the sheet's own
+flag, written by whatever pushes leads across, so a blank cannot be told apart
+from a push that succeeded without the flag being written. Matching against Odoo
+itself settles it, and the dashboard shows both numbers side by side.
+
+Setup:
+
+1. In Odoo, as a user that may read CRM: Preferences → **Account Security** →
+   **New API Key**. Prefer a dedicated integration user over an administrator —
+   this integration only ever reads.
+2. Add `apps-script/odoo-crm.gs` to the same Apps Script project. Every name in
+   it is `odoo`-prefixed, so it cannot collide with the other two files.
+3. **Project Settings → Script properties**:
+   - `ODOO_URL` — the Odoo server root, e.g. `https://sugimotogroup.org`
+   - `ODOO_DB` — the database name
+   - `ODOO_LOGIN` — the integration user's login
+   - `ODOO_KEY` — the API key from step 1
+4. Run **`odooSetup`** and read the log: server version, whether the login
+   worked, how many leads are visible, the stage list, and which fields this
+   Odoo actually has.
+5. Run **`odooCollectAll`**, repeating while it reports running out of time, then
+   **`odooInstallTrigger`** for hourly updates.
+
+Notes:
+
+- **JSON-RPC, not XML-RPC.** Apps Script has no XML-RPC client, and Odoo serves
+  the same API at `/jsonrpc` as plain JSON.
+- **Archived records are included deliberately.** A lost lead is an archived
+  lead, and Odoo hides those by default — without `active_test: false` the
+  pipeline would look like it never loses anything.
+- **Field names vary by version**, so the collector asks the server which of the
+  fields it wants exist and requests only those. `won_status` is 17+; older
+  versions get won/lost inferred from the stage's `is_won` flag and the archive.
+- **Matching is on email first, then the last ten digits of the phone.** Odoo
+  tends to hold `+98 912…` where the form captures `0912…`; comparing raw digits
+  misses every one of those.
+- **Sync is incremental** on `write_date`, and the cursor only advances after a
+  clean sweep, so an interrupted run resumes instead of skipping records.
+- `odooResync` clears the cursor and re-reads everything.
+
 ## Project structure
 - `app/page.jsx` — the full swipe deck + script UI (client component)
 - `app/api/topics/route.js` — topic feed (web search → 6 ranked topics)
@@ -277,6 +325,7 @@ Notes:
 - `dashboard/index.html` — the leads + Instagram dashboard (self-contained)
 - `apps-script/leads-dashboard.gs` — live data endpoint for the dashboard
 - `apps-script/instagram-insights.gs` — Instagram Graph API collector
+- `apps-script/odoo-crm.gs` — Odoo CRM collector (JSON-RPC)
 - `scripts/build_dashboard.py` — rebuilds the dashboard's embedded snapshot
 
 ## Notes

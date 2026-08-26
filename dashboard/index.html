@@ -209,6 +209,7 @@
   .sec[data-sec="compare"] { --accent: #7b52c4; --tint: rgba(123,82,196,0.045); }
   .sec[data-sec="volume"]  { --accent: #0f8f86; --tint: rgba(15,143,134,0.05); }
   .sec[data-sec="social"]  { --accent: #c1348a; --tint: rgba(193,52,138,0.055); }
+  .sec[data-sec="crm"]     { --accent: #1f7a45; --tint: rgba(31,122,69,0.05); }
   .sec[data-sec="dest"]    { --accent: #2a78d6; --tint: rgba(42,120,214,0.045); }
   .sec[data-sec="money"]   { --accent: #a97400; --tint: rgba(169,116,0,0.055); }
   .sec[data-sec="people"]  { --accent: #7b52c4; --tint: rgba(123,82,196,0.045); }
@@ -219,6 +220,7 @@
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .sec { --tint: rgba(255,255,255,0.022); }
     :root:where(:not([data-theme="light"])) .sec[data-sec="social"] { --tint: rgba(193,52,138,0.075); }
+    :root:where(:not([data-theme="light"])) .sec[data-sec="crm"] { --tint: rgba(31,122,69,0.08); }
     :root:where(:not([data-theme="light"])) .sec[data-sec="volume"] { --tint: rgba(15,143,134,0.075); }
     :root:where(:not([data-theme="light"])) .sec[data-sec="money"] { --tint: rgba(169,116,0,0.08); }
     :root:where(:not([data-theme="light"])) .sec[data-sec="quality"] { --tint: rgba(192,82,43,0.075); }
@@ -227,6 +229,7 @@
   }
   :root[data-theme="dark"] .sec { --tint: rgba(255,255,255,0.022); }
   :root[data-theme="dark"] .sec[data-sec="social"] { --tint: rgba(193,52,138,0.075); }
+  :root[data-theme="dark"] .sec[data-sec="crm"] { --tint: rgba(31,122,69,0.08); }
   :root[data-theme="dark"] .sec[data-sec="volume"] { --tint: rgba(15,143,134,0.075); }
   :root[data-theme="dark"] .sec[data-sec="money"] { --tint: rgba(169,116,0,0.08); }
   :root[data-theme="dark"] .sec[data-sec="quality"] { --tint: rgba(192,82,43,0.075); }
@@ -505,6 +508,21 @@
     <div class="grid">
       <div class="card wide" id="card-soccmp-summary"></div>
       <div class="card wide" id="card-soccmp-dim"></div>
+    </div>
+  </section>
+
+  <!-- Populated from the Odoo CRM tabs. Hidden until the collector has run. -->
+  <section class="sec" data-sec="crm" id="crm" hidden>
+    <h2 class="section">CRM &amp; pipeline</h2>
+    <p class="csub" id="crmSub" style="margin:-4px 0 12px"></p>
+    <div class="grid">
+      <div class="card wide" id="card-crm-kpi"></div>
+      <div class="card wide" id="card-crm-funnel"></div>
+      <div class="card" id="card-crm-outcome"></div>
+      <div class="card" id="card-crm-tier"></div>
+      <div class="card wide" id="card-crm-revenue"></div>
+      <div class="card" id="card-crm-lost"></div>
+      <div class="card" id="card-crm-speed"></div>
     </div>
   </section>
 
@@ -2167,7 +2185,9 @@ const PERIOD_SCOPED = new Set(['#card-findings', '#card-monthly', '#card-srcmix'
   '#card-source', '#card-medium', '#card-campaign', '#card-content', '#card-ref', '#card-odoo',
   '#card-ip', '#card-outreach', '#card-fill',
   '#card-soc-kpi', '#card-soc-reach', '#card-soc-funnel', '#card-soc-surface',
-  '#card-soc-eng', '#card-soc-posts']);
+  '#card-soc-eng', '#card-soc-posts',
+  '#card-crm-kpi', '#card-crm-funnel', '#card-crm-outcome', '#card-crm-tier',
+  '#card-crm-revenue', '#card-crm-lost', '#card-crm-speed']);
 
 /**
  * Renders one card under its own period, so an empty window blanks only that
@@ -2990,6 +3010,265 @@ function renderSocAudience() {
   }
 }
 
+/* ---------- CRM & pipeline ---------- */
+/**
+ * Odoo outcomes ride on the lead records themselves — cst, cs, clr, cu are
+ * dictionary columns and rvk (revenue in thousands) and dtc (days to close, offset
+ * by one so 0 can mean "still open") are plain numbers. So every CRM chart is just
+ * another slice of the same index the rest of the page uses, and the filter bar
+ * applies to it without any extra plumbing.
+ */
+const CRM_STATUS = [
+  { key: 'Won', color: 'var(--s3)' },
+  { key: 'Open', color: 'var(--s1)' },
+  { key: 'Lost', color: 'var(--s2)' }
+];
+const hasCrm = () => !!(PACK.crm && DICT.cm && DICT.cm.indexOf('In CRM') > 0);
+const inCrm = i => val('cm', i) === 'In CRM';
+const crmStatusOf = i => val('cst', i);
+const crmRev = i => (COL.rvk ? COL.rvk[i] : 0) * 1000;
+const crmDays = i => (COL.dtc && COL.dtc[i]) ? COL.dtc[i] - 1 : null;
+const money = n => n >= 1e9 ? (n / 1e9).toFixed(2) + 'B'
+  : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : fmt(Math.round(n));
+
+/** won / open / lost counts over an index, plus revenue and the win rate base. */
+function crmTally(idx) {
+  const t = { won: 0, open: 0, lost: 0, matched: 0, revenue: 0, days: [] };
+  for (const i of idx) {
+    if (!inCrm(i)) continue;
+    t.matched++;
+    const st = crmStatusOf(i);
+    if (st === 'Won') { t.won++; t.revenue += crmRev(i); }
+    else if (st === 'Lost') t.lost++;
+    else t.open++;
+    const d = crmDays(i);
+    if (st === 'Won' && d !== null) t.days.push(d);
+  }
+  t.decided = t.won + t.lost;
+  return t;
+}
+const median = a => a.length ? a.slice().sort((x, y) => x - y)[Math.floor(a.length / 2)] : null;
+
+function renderCrmSub() {
+  const c = PACK.crm;
+  $('#crmSub').textContent =
+    `Straight from Odoo over its JSON-RPC API, matched back to form submissions on email and phone. `
+    + `${fmt(c.records)} CRM records, ${fmt(c.matched)} of them traceable to a submission. `
+    + `${fmt(c.unmatchedCrm)} Odoo record${c.unmatchedCrm === 1 ? '' : 's'} came from somewhere other `
+    + `than the form. Revenue is whatever Odoo holds as the expected amount. `
+    + `Follows the Period filter, which scopes leads by when they were submitted, not when they closed.`;
+}
+
+function renderCrmKpi(idx) {
+  const { chart } = card('#card-crm-kpi', 'Where these leads ended up',
+    'Every figure is over the leads in the current filter, judged against Odoo itself rather than the '
+    + "sheet's own added_to_odoo flag. A lead with no CRM record is counted as not reached, not as lost.");
+  const t = crmTally(idx);
+  const flagged = idx.filter(i => val('od', i) === '1').length;
+  const items = [
+    ['Reached the CRM', pct(t.matched, idx.length),
+      `${fmt(t.matched)} of ${fmt(idx.length)} · the sheet's own flag claims ${pct(flagged, idx.length)}`],
+    ['Won', fmt(t.won), t.matched ? `${pct(t.won, t.matched)} of the leads that reached Odoo` : '—'],
+    ['Still open', fmt(t.open), t.matched ? `${pct(t.open, t.matched)} of those in the CRM` : '—'],
+    ['Lost', fmt(t.lost), t.matched ? `${pct(t.lost, t.matched)} of those in the CRM` : '—'],
+    ['Win rate', t.decided ? pct(t.won, t.decided) : '—',
+      `${fmt(t.won)} won of ${fmt(t.decided)} decided · open deals are left out`],
+    ['Won revenue', t.revenue ? money(t.revenue) : '—',
+      t.won ? `${money(t.revenue / t.won)} per won deal` : 'nothing won in this window'],
+    ['Revenue per lead', idx.length ? money(t.revenue / idx.length) : '—',
+      'won revenue spread over every lead in the filter, reached or not'],
+    ['Median days to win', median(t.days) === null ? '—' : fmt(median(t.days)),
+      t.days.length ? `over ${fmt(t.days.length)} won deals with a close date` : 'no close dates yet']
+  ];
+  const box = el('div', 'soc-kpis');
+  for (const [l, v, note] of items) {
+    const tile = el('div', 'soc-k');
+    tile.appendChild(el('div', 'klabel', l));
+    tile.appendChild(el('div', 'kvalue', v));
+    tile.appendChild(el('div', 'knote', note));
+    box.appendChild(tile);
+  }
+  chart.appendChild(box);
+  const btn = $('#card-crm-kpi .tbl-btn');
+  if (btn) btn.remove();
+}
+
+function renderCrmFunnel(idx) {
+  const { chart, table } = card('#card-crm-funnel', 'Pipeline by stage',
+    'Where the leads in this filter sit in Odoo right now. Stages are in Odoo’s own order, and a lost '
+    + 'lead keeps the stage it died in — which is the useful part: it says where deals go to die.');
+  const seq = {}, order = [];
+  for (const st of (PACK.crm.stages || [])) { seq[st.name] = st.seq; order.push(st.name); }
+  const rows = new Map();
+  for (const i of idx) {
+    if (!inCrm(i)) continue;
+    const stage = val('cs', i) || '(no stage)';
+    const r = rows.get(stage) || { label: stage, v: { Won: 0, Open: 0, Lost: 0 } };
+    r.v[crmStatusOf(i) || 'Open']++;
+    rows.set(stage, r);
+  }
+  if (!rows.size) { chart.appendChild(el('p', 'rempty', 'No leads in this filter reached the CRM.')); return; }
+  const list = [...rows.values()].sort((a, b) =>
+    (seq[a.label] === undefined ? 999 : seq[a.label]) - (seq[b.label] === undefined ? 999 : seq[b.label]));
+  // Open leads this card: the question of a stage is how much is still live in it.
+  const series = ['Open', 'Won', 'Lost'].map(k => {
+    const s = CRM_STATUS.find(x => x.key === k);
+    return { key: k, label: k, color: s.color };
+  });
+  const trows = stackRows(chart, list, series);
+  table.appendChild(dataTable(trows, trows.reduce((n, r) => n + r.n, 0), ['Stage & outcome', 'Leads', 'Share']));
+}
+
+/** Outcome split across any dictionary column, sorted by volume. */
+function crmByDim(mount, idx, field, title, sub, limit) {
+  const { chart, table } = card(mount, title, sub);
+  const m = new Map();
+  for (const i of idx) {
+    if (!inCrm(i)) continue;
+    const k = val(field, i);
+    const label = field === 't' ? (k === '0' || k === '' ? 'Unscored' : 'Tier ' + k) : (k === '' ? NONE : tr(field, k));
+    const r = m.get(label) || { label, v: { Won: 0, Open: 0, Lost: 0 }, n: 0 };
+    r.v[crmStatusOf(i) || 'Open']++; r.n++;
+    m.set(label, r);
+  }
+  if (!m.size) { chart.appendChild(el('p', 'rempty', 'No leads in this filter reached the CRM.')); return; }
+  const list = [...m.values()].sort((a, b) => b.n - a.n).slice(0, limit || 10);
+  const trows = stackRows(chart, list, CRM_STATUS.map(s => ({ key: s.key, label: s.key, color: s.color })));
+  const t = el('table', 'dt'), hr = el('tr');
+  ['Category', 'In CRM', 'Won', 'Lost', 'Win rate'].forEach((h, i) => hr.appendChild(el('th', i ? 'num' : null, h)));
+  t.appendChild(hr);
+  for (const r of list) {
+    const decided = r.v.Won + r.v.Lost, tr_ = el('tr');
+    tr_.appendChild(el('td', null, r.label));
+    tr_.appendChild(el('td', 'num', fmt(r.n)));
+    tr_.appendChild(el('td', 'num', fmt(r.v.Won)));
+    tr_.appendChild(el('td', 'num', fmt(r.v.Lost)));
+    tr_.appendChild(el('td', 'num', decided ? pct1(r.v.Won, decided) : '—'));
+    t.appendChild(tr_);
+  }
+  table.appendChild(t);
+}
+
+function renderCrmRevenue(idx) {
+  const { chart, table } = card('#card-crm-revenue', 'What each channel is worth',
+    'Won revenue and win rate by channel, over the leads in this filter. Win rate counts decided deals '
+    + 'only, so a channel with a long sales cycle is not punished for having deals still open.');
+  const m = new Map();
+  for (const i of idx) {
+    const k = val('sg', i) || NONE;
+    const r = m.get(k) || { label: k, leads: 0, matched: 0, won: 0, lost: 0, revenue: 0 };
+    r.leads++;
+    if (inCrm(i)) {
+      r.matched++;
+      const st = crmStatusOf(i);
+      if (st === 'Won') { r.won++; r.revenue += crmRev(i); }
+      else if (st === 'Lost') r.lost++;
+    }
+    m.set(k, r);
+  }
+  const list = [...m.values()].filter(r => r.matched).sort((a, b) => b.revenue - a.revenue || b.won - a.won);
+  if (!list.length) { chart.appendChild(el('p', 'rempty', 'No leads in this filter reached the CRM.')); return; }
+  const total = list.reduce((n, r) => n + r.revenue, 0);
+  socBars(chart, list.map(r => ({
+    label: r.label, n: Math.round(r.revenue), unit: 'in won revenue', color: 'var(--s3)',
+    note: (r.won + r.lost) ? pct(r.won, r.won + r.lost) + ' win rate' : 'nothing decided'
+  })), { noShare: true, total });
+  const t = el('table', 'dt'), hr = el('tr');
+  ['Channel', 'Leads', 'In CRM', 'Won', 'Win rate', 'Won revenue', 'Revenue per lead']
+    .forEach((h, i) => hr.appendChild(el('th', i ? 'num' : null, h)));
+  t.appendChild(hr);
+  for (const r of list) {
+    const decided = r.won + r.lost, tr_ = el('tr');
+    tr_.appendChild(el('td', null, r.label));
+    tr_.appendChild(el('td', 'num', fmt(r.leads)));
+    tr_.appendChild(el('td', 'num', pct(r.matched, r.leads)));
+    tr_.appendChild(el('td', 'num', fmt(r.won)));
+    tr_.appendChild(el('td', 'num', decided ? pct1(r.won, decided) : '—'));
+    tr_.appendChild(el('td', 'num', money(r.revenue)));
+    tr_.appendChild(el('td', 'num', money(r.revenue / r.leads)));
+    t.appendChild(tr_);
+  }
+  table.appendChild(t);
+}
+
+function renderCrmLost(idx) {
+  const { chart, table } = card('#card-crm-lost', 'Why deals are lost',
+    "Odoo's own lost reason, for the leads in this filter. Blank reasons are deals marked lost without one.");
+  const m = new Map();
+  let lost = 0;
+  for (const i of idx) {
+    if (!inCrm(i) || crmStatusOf(i) !== 'Lost') continue;
+    lost++;
+    const k = val('clr', i) || 'No reason recorded';
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  if (!lost) { chart.appendChild(el('p', 'rempty', 'Nothing in this filter is marked lost.')); return; }
+  const list = [...m].map(([label, n]) => ({ label, n })).sort((a, b) => b.n - a.n).slice(0, 10);
+  socBars(chart, list.map(r => ({ ...r, unit: 'lost deals', color: 'var(--s2)' })),
+    { unit: 'lost deals', total: lost });
+  table.appendChild(dataTable(list, lost, ['Lost reason', 'Deals', 'Share']));
+}
+
+function renderCrmSpeed(idx) {
+  const { chart, table } = card('#card-crm-speed', 'How long a win takes',
+    'Days from form submission to the deal closing, for won deals only. The bands are cumulative in the '
+    + 'table, so you can read what share closes inside a month.');
+  const BANDS = [['Same week', 0, 7], ['1–2 weeks', 8, 14], ['2–4 weeks', 15, 30],
+    ['1–2 months', 31, 60], ['2–3 months', 61, 90], ['Over 3 months', 91, 100000]];
+  const counts = BANDS.map(() => 0);
+  const days = [];
+  for (const i of idx) {
+    if (!inCrm(i) || crmStatusOf(i) !== 'Won') continue;
+    const d = crmDays(i);
+    if (d === null) continue;
+    days.push(d);
+    const at = BANDS.findIndex(([, lo, hi]) => d >= lo && d <= hi);
+    if (at >= 0) counts[at]++;
+  }
+  if (!days.length) {
+    chart.appendChild(el('p', 'rempty', 'No won deals in this filter carry a close date.'));
+    return;
+  }
+  socBars(chart, BANDS.map(([label], k) => ({ label, n: counts[k], unit: 'won deals', color: 'var(--s3)' })),
+    { unit: 'won deals', total: days.length });
+  let run = 0;
+  const rows = BANDS.map(([label], k) => {
+    run += counts[k];
+    return [label, fmt(counts[k]), pct1(counts[k], days.length), pct1(run, days.length)];
+  });
+  const t = el('table', 'dt'), hr = el('tr');
+  ['Time to win', 'Deals', 'Share', 'Cumulative'].forEach((h, i) => hr.appendChild(el('th', i ? 'num' : null, h)));
+  t.appendChild(hr);
+  for (const r of rows) {
+    const tr_ = el('tr');
+    r.forEach((cell, i) => tr_.appendChild(el('td', i ? 'num' : null, cell)));
+    t.appendChild(tr_);
+  }
+  table.appendChild(t);
+  const cap = el('p', 'csub');
+  cap.style.marginTop = '10px';
+  cap.textContent = `Median ${fmt(median(days))} days · fastest ${fmt(Math.min(...days))} · `
+    + `slowest ${fmt(Math.max(...days))}.`;
+  chart.appendChild(cap);
+}
+
+function renderCrm() {
+  const host = $('#crm');
+  if (!hasCrm()) { host.hidden = true; return; }
+  host.hidden = false;
+  renderCrmSub();
+  inPeriod('#card-crm-kpi', renderCrmKpi);
+  inPeriod('#card-crm-funnel', renderCrmFunnel);
+  inPeriod('#card-crm-outcome', sub => crmByDim('#card-crm-outcome', sub, 'sg',
+    'Outcome by channel', 'How each acquisition channel resolves once it reaches the CRM.'));
+  inPeriod('#card-crm-tier', sub => crmByDim('#card-crm-tier', sub, 't',
+    'Outcome by budget tier',
+    'Whether the budget answer on the form predicts anything. Tier is the sheet’s own band.'));
+  inPeriod('#card-crm-revenue', renderCrmRevenue);
+  inPeriod('#card-crm-lost', renderCrmLost);
+  inPeriod('#card-crm-speed', renderCrmSpeed);
+}
+
 /* ---------- render ---------- */
 function renderAll() {
   const idx = activeIdx();
@@ -3014,6 +3293,7 @@ function renderAll() {
   renderQuality();
   renderCompare();
   renderSocial();
+  renderCrm();
 
   renderKpis('#kpis', idx);
   renderPeriodNote(idx);

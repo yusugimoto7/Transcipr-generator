@@ -45,6 +45,16 @@ const SOCIAL_TABS = { daily: 'IG Daily', posts: 'IG Posts', audience: 'IG Audien
 const SOCIAL_DAYS = 400;      // history sent to the page; older rows stay in the sheet
 const SOCIAL_POST_DAYS = 120;
 
+// Odoo CRM, written into these tabs by odoo-crm.gs. Absent tabs are not an error:
+// the dashboard hides its CRM section and every lead reads as unmatched.
+const CRM_TABS = { leads: 'CRM Leads', stages: 'CRM Stage Daily' };
+const CRM_HEADERS = ['id', 'email_norm', 'phone_digits', 'kind', 'status', 'stage',
+  'stage_seq', 'probability', 'revenue', 'created', 'closed', 'days_to_close',
+  'salesperson', 'team', 'source', 'medium', 'campaign', 'lost_reason', 'country',
+  'write_date', 'updated_at'];
+const CRM_STAGE_HEADERS = ['date', 'stage', 'stage_seq', 'open', 'won', 'lost',
+  'open_revenue', 'won_revenue', 'updated_at'];
+
 /* ------------------------------------------------------------------ columns */
 var C = {
   name: 'Name & Surname', date: 'Created At', age: 'سن شما',
@@ -123,6 +133,67 @@ function referrerOf(v) {
   return (key === 'mahdis-sultani' || key === 'mahdis-soltani') ? 'mahdis-soltani' : v;
 }
 
+/* ---------------------------------------------------------------------- crm */
+/**
+ * Email and phone lookups into the CRM tab. A person can hold several Odoo
+ * records — duplicates, or a lead and the opportunity it became — so the best
+ * one wins: a win outranks an open pipeline, which outranks a loss, and the
+ * newest breaks a tie. Anything less would report someone as lost while their
+ * won deal sat in the next row.
+ */
+var CRM_RANK = { won: 3, open: 2, lost: 1 };
+/**
+ * The last ten digits of a phone number. Odoo tends to hold the international
+ * form (+98 912 100 0000) while the form captures the national one
+ * (0912 100 0000) — the same phone, and a plain digit comparison misses every
+ * one of them. Ten digits is the national number for both Iran and Canada.
+ */
+function phoneKey(v) {
+  var d = String(v || '').replace(/\D/g, '');
+  return d.length >= 9 ? d.slice(-10) : '';
+}
+var CRM_IDX = null;
+function buildCrmIndex() {
+  var rows = readTab(CRM_TABS.leads);
+  if (!rows.length) return null;
+  var byEmail = {}, byPhone = {}, kept = 0;
+  var better = function (a, b) {
+    if (!b) return true;
+    var ra = CRM_RANK[a.status] || 0, rb = CRM_RANK[b.status] || 0;
+    if (ra !== rb) return ra > rb;
+    return String(a.created) > String(b.created);
+  };
+  rows.forEach(function (r) {
+    var rec = {
+      status: txt(r.status) || 'open',
+      stage: txt(r.stage),
+      revenue: num(r.revenue) || 0,
+      created: dayText(r.created),
+      closed: dayText(r.closed),
+      days: num(r.days_to_close),
+      salesperson: txt(r.salesperson),
+      lostReason: txt(r.lost_reason),
+      source: txt(r.source)
+    };
+    var email = txt(r.email_norm).toLowerCase();
+    var phone = phoneKey(r.phone_digits);
+    if (email && better(rec, byEmail[email])) byEmail[email] = rec;
+    if (phone && better(rec, byPhone[phone])) byPhone[phone] = rec;
+    kept++;
+  });
+  return { byEmail: byEmail, byPhone: byPhone, rows: rows, count: kept };
+}
+
+/** The CRM record for one sheet row, or null. Email first: phones are messier. */
+function crmFor(r) {
+  if (!CRM_IDX) return null;
+  var email = (r[C.email] || '').trim().toLowerCase();
+  if (email && CRM_IDX.byEmail[email]) return CRM_IDX.byEmail[email];
+  var phone = phoneKey(r[C.mobile]);
+  if (phone && CRM_IDX.byPhone[phone]) return CRM_IDX.byPhone[phone];
+  return null;
+}
+
 /* ------------------------------------------------------------------ pipeline */
 var _book = null;
 function book() {
@@ -185,6 +256,9 @@ function encodeCol(nums) {
   return { w: w, s: parts.join('') };
 }
 
+// Columns held as plain numbers rather than dictionary codes.
+var RAW_NUM_COLS = { dt: 1, a: 1, rvk: 1, dtc: 1 };
+
 function buildPack(recs, tabs, rawCount, testCount, dupeCount, uniqueCount, usTextDates) {
   var day0 = recs[0]._date;
   var base = Date.UTC(+day0.slice(0, 4), +day0.slice(5, 7) - 1, +day0.slice(8, 10));
@@ -192,7 +266,7 @@ function buildPack(recs, tabs, rawCount, testCount, dupeCount, uniqueCount, usTe
 
   function col(name, fn, foldAbove) {
     var vals = recs.map(fn);
-    if (name === 'dt' || name === 'a') { cols[name] = vals; return; }
+    if (RAW_NUM_COLS[name]) { cols[name] = vals; return; }
     var counts = {};
     vals.forEach(function (v) { if (v !== '') counts[v] = (counts[v] || 0) + 1; });
     var keys = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
@@ -244,6 +318,29 @@ function buildPack(recs, tabs, rawCount, testCount, dupeCount, uniqueCount, usTe
   col('od', function (r) { return g(r, C.odoo) ? '1' : '0'; });
   col('se', function (r) { return g(r, C.sentEmail) ? '1' : '0'; });
   col('ss', function (r) { return g(r, C.sentSms) ? '1' : '0'; });
+
+  // Odoo outcome, joined on to each submission. Blank throughout when the CRM
+  // collector has not run, which is what keeps the dashboard's CRM section hidden.
+  col('cm', function (r) { return crmFor(r) ? 'In CRM' : 'Not in CRM'; });
+  col('cst', function (r) {
+    var m = crmFor(r);
+    return m ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : '';
+  });
+  col('cs', function (r) { var m = crmFor(r); return m ? m.stage : ''; }, 24);
+  col('clr', function (r) { var m = crmFor(r); return m ? m.lostReason : ''; }, 20);
+  col('cu', function (r) { var m = crmFor(r); return m ? m.salesperson : ''; }, 24);
+  // Revenue in thousands: three fewer digits per record across 11k rows, and the
+  // nearest thousand is finer than any decision made from this page.
+  col('rvk', function (r) {
+    var m = crmFor(r);
+    return m && m.revenue ? Math.round(m.revenue / 1000) : 0;
+  });
+  // Days from submission to close, offset by one so 0 can mean "not closed" and
+  // 1 can mean "closed the same day".
+  col('dtc', function (r) {
+    var m = crmFor(r);
+    return (m && m.days !== null && m.days !== '' && m.closed) ? Math.max(0, Number(m.days)) + 1 : 0;
+  });
 
   var pack = { n: recs.length, d0: day0, cols: {} };
   for (var name in cols) {
@@ -420,6 +517,59 @@ function buildSocial() {
   };
 }
 
+/**
+ * The pipeline as it stands, plus whatever daily history has accumulated. The
+ * per-lead join lives in the pack's own columns; this block carries what has no
+ * matching submission — Odoo records created outside the form, and the stage
+ * snapshots that Odoo itself cannot reconstruct.
+ */
+function buildCrm(matched, total) {
+  if (!CRM_IDX) return null;
+  var rows = CRM_IDX.rows;
+  var stages = {}, byStatus = { won: 0, lost: 0, open: 0 };
+  var revenue = { won: 0, open: 0 }, closedDays = [];
+  rows.forEach(function (r) {
+    var st = txt(r.status) || 'open';
+    if (byStatus[st] === undefined) byStatus[st] = 0;
+    byStatus[st]++;
+    var name = txt(r.stage) || '(no stage)';
+    var seq = num(r.stage_seq);
+    var b = stages[name] || (stages[name] = { name: name, seq: seq === null ? 999 : seq,
+      won: 0, lost: 0, open: 0, revenue: 0 });
+    b[st === 'won' || st === 'lost' ? st : 'open']++;
+    var rev = num(r.revenue) || 0;
+    b.revenue += rev;
+    if (st === 'won') revenue.won += rev;
+    else if (st !== 'lost') revenue.open += rev;
+    var d = num(r.days_to_close);
+    if (st === 'won' && d !== null && d >= 0) closedDays.push(d);
+  });
+  closedDays.sort(function (a, b) { return a - b; });
+
+  var history = readTab(CRM_TABS.stages).map(function (r) {
+    return [dayText(r.date), txt(r.stage), num(r.open) || 0, num(r.won) || 0, num(r.lost) || 0,
+      Math.round(num(r.won_revenue) || 0)];
+  }).filter(function (r) { return r[0]; })
+    .sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+
+  return {
+    stages: Object.keys(stages).map(function (k) { return stages[k]; })
+      .sort(function (a, b) { return a.seq - b.seq; }),
+    status: byStatus,
+    revenue: { won: Math.round(revenue.won), open: Math.round(revenue.open) },
+    medianDaysToWin: closedDays.length ? closedDays[Math.floor(closedDays.length / 2)] : null,
+    records: rows.length,
+    // The whole point of the join: how many submissions actually reached Odoo,
+    // measured against Odoo itself rather than against the sheet's own flag.
+    matched: matched, submissions: total,
+    unmatchedCrm: Math.max(0, rows.length - matched),
+    historyCols: ['d', 'stage', 'open', 'won', 'lost', 'wonRevenue'],
+    history: history,
+    lastRun: txt(PropertiesService.getScriptProperties().getProperty('ODOO_LAST_RUN') || ''),
+    generatedAt: new Date().toISOString()
+  };
+}
+
 function buildPayload() {
   var read = readRows();
   var raw = read.rows;
@@ -431,6 +581,13 @@ function buildPayload() {
   var dated = recs.filter(function (r) { return r._date; })
                   .sort(function (a, b) { return a._date < b._date ? -1 : a._date > b._date ? 1 : 0; });
 
+  // Built before the pack, because the pack's CRM columns read from it.
+  try {
+    CRM_IDX = buildCrmIndex();
+  } catch (err) {
+    CRM_IDX = null;
+    var crmErr = String(err && err.message || err).slice(0, 200);
+  }
   var pack = buildPack(dated, read.tabs, raw.length, raw.length - live.length,
                        live.length - recs.length, recs.length, usTextDates);
   var ppl = peopleStats(recs);
@@ -443,6 +600,17 @@ function buildPayload() {
     if (social) pack.social = social;
   } catch (err) {
     pack.meta.socialError = String(err && err.message || err).slice(0, 200);
+  }
+  if (crmErr) pack.meta.crmError = crmErr;
+  try {
+    if (CRM_IDX) {
+      var matched = 0;
+      for (var i = 0; i < dated.length; i++) if (crmFor(dated[i])) matched++;
+      var crm = buildCrm(matched, dated.length);
+      if (crm) pack.crm = crm;
+    }
+  } catch (err2) {
+    pack.meta.crmError = String(err2 && err2.message || err2).slice(0, 200);
   }
   return JSON.stringify(pack);
 }
@@ -513,5 +681,16 @@ function testBuild() {
   } else {
     Logger.log('social: no IG tabs yet%s',
       pack.meta.socialError ? ' (error: ' + pack.meta.socialError + ')' : '');
+  }
+  if (pack.crm) {
+    Logger.log('crm: %s Odoo records, %s of %s submissions matched (%s%%), %s won / %s open / %s lost, ' +
+      '%s day(s) of stage history',
+      pack.crm.records, pack.crm.matched, pack.crm.submissions,
+      Math.round(100 * pack.crm.matched / (pack.crm.submissions || 1)),
+      pack.crm.status.won || 0, pack.crm.status.open || 0, pack.crm.status.lost || 0,
+      pack.crm.history.length);
+  } else {
+    Logger.log('crm: no Odoo tabs yet%s',
+      pack.meta.crmError ? ' (error: ' + pack.meta.crmError + ')' : '');
   }
 }
