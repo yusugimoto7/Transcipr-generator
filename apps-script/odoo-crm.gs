@@ -218,13 +218,25 @@ function odooDigits(v) { return odooStr(v).replace(/\D/g, ''); }
 
 /* ------------------------------------------------------------------- stages */
 var odooStageCache = null;
+/**
+ * Stage order comes from the number the stage names are prefixed with — "0- New
+ * Card", "3- First Meeting Held", "20- Contract Signed". Odoo's own `sequence`
+ * field has drifted out of step with those prefixes, so ordering by it alone
+ * draws the funnel in an order nobody working the pipeline would recognise.
+ * Stages with no prefix keep their Odoo sequence and sort after the numbered
+ * ones, since they are the strays rather than the spine of the pipeline.
+ */
+function odooStageOrder(name, sequence) {
+  var m = /^\s*(\d+)\s*[-–.)]/.exec(String(name || ''));
+  return m ? Number(m[1]) : 1000 + (Number(sequence) || 0);
+}
 function odooStages(cfg) {
   if (odooStageCache) return odooStageCache;
   var rows = odooCall(cfg, 'crm.stage', 'search_read', [[]],
     { fields: ['id', 'name', 'sequence', 'is_won'], context: odooCtx() }) || [];
   var byId = {};
   rows.forEach(function (r) {
-    byId[r.id] = { name: odooStr(r.name), seq: Number(r.sequence) || 0, won: !!r.is_won };
+    byId[r.id] = { name: odooStr(r.name), seq: odooStageOrder(r.name, r.sequence), won: !!r.is_won };
   });
   odooStageCache = byId;
   return byId;
@@ -304,27 +316,48 @@ function odooRead(sh, headers) {
   });
 }
 
-/** Replaces rows sharing a key and appends the rest, so re-runs correct rather than duplicate. */
-function odooUpsert(sh, headers, keyFn, rows) {
-  if (!rows.length) return { updated: 0, added: 0 };
+/**
+ * Writes rows in batches against a key index built once, replacing rows that
+ * share a key and appending the rest. Rebuilding the index per batch would mean
+ * re-reading the whole tab on every flush — quadratic, and at 15k records that
+ * alone would exhaust the run before the sync got anywhere.
+ */
+function odooWriter(sh, headers, keyFn) {
   var index = {};
   odooRead(sh, headers).forEach(function (rec) {
     var k = keyFn(rec);
     if (k) index[k] = rec._row;
   });
-  var appends = [], updated = 0;
-  rows.forEach(function (obj) {
-    var line = headers.map(function (h) {
-      return obj[h] === undefined || obj[h] === null ? '' : obj[h];
-    });
-    var row = index[keyFn(obj)];
-    if (row) { sh.getRange(row, 1, 1, headers.length).setValues([line]); updated++; }
-    else appends.push(line);
-  });
-  if (appends.length) {
-    sh.getRange(sh.getLastRow() + 1, 1, appends.length, headers.length).setValues(appends);
-  }
-  return { updated: updated, added: appends.length };
+  var next = Math.max(sh.getLastRow() + 1, 2);
+  var updated = 0, added = 0;
+  return {
+    write: function (rows) {
+      if (!rows.length) return;
+      var appends = [], keys = [];
+      rows.forEach(function (obj) {
+        var line = headers.map(function (h) {
+          return obj[h] === undefined || obj[h] === null ? '' : obj[h];
+        });
+        var k = keyFn(obj), at = index[k];
+        if (at) { sh.getRange(at, 1, 1, headers.length).setValues([line]); updated++; }
+        else { appends.push(line); keys.push(k); }
+      });
+      if (appends.length) {
+        sh.getRange(next, 1, appends.length, headers.length).setValues(appends);
+        keys.forEach(function (k, i) { if (k) index[k] = next + i; });
+        next += appends.length;
+        added += appends.length;
+      }
+    },
+    stats: function () { return { updated: updated, added: added }; }
+  };
+}
+
+/** One-shot form of the above, for the small tabs. */
+function odooUpsert(sh, headers, keyFn, rows) {
+  var w = odooWriter(sh, headers, keyFn);
+  w.write(rows);
+  return w.stats();
 }
 
 /* ------------------------------------------------------------------ collect */
@@ -340,12 +373,11 @@ function odooCollectLeads() {
   var domain = cursor ? [['write_date', '>', cursor]] : [];
   var total = odooCall(cfg, 'crm.lead', 'search_count', [domain], { context: odooCtx() });
   var offset = Number(odooProps().getProperty('ODOO_OFFSET') || 0);
-  var rows = [], written = { updated: 0, added: 0 }, ranOut = false, newest = cursor;
-
+  var rows = [], ranOut = false, newest = cursor;
+  var writer = odooWriter(sh, ODOO_HEADERS, function (x) { return String(x.id); });
   var flush = function () {
     if (!rows.length) return;
-    var r = odooUpsert(sh, ODOO_HEADERS, function (x) { return String(x.id); }, rows);
-    written.updated += r.updated; written.added += r.added;
+    writer.write(rows);
     rows = [];
   };
 
@@ -373,6 +405,7 @@ function odooCollectLeads() {
     odooProps().deleteProperty('ODOO_OFFSET');
     if (newest) odooProps().setProperty('ODOO_CURSOR', newest);
   }
+  var written = writer.stats();
   Logger.log('CRM Leads -> %s updated, %s added, %s of %s swept%s',
     written.updated, written.added, offset, total, ranOut ? ' — ' + ODOO_LATE : '');
   return written;
