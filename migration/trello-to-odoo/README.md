@@ -72,6 +72,10 @@ cd migration/trello-to-odoo
 ./run.sh
 ```
 
+On **Windows**, run it from **Git Bash** (installed with Git for Windows —
+right-click the folder → "Git Bash Here"), or from PowerShell as `bash run.sh`.
+It is a shell script; PowerShell cannot run it directly.
+
 It sets up Python, asks for the credentials it needs (they go into a local
 `.env` with 0600 permissions and nowhere else), lists your boards, pauses while
 you map people, does a dry run, asks for confirmation, migrates and verifies.

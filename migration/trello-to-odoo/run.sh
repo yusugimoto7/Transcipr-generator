@@ -18,14 +18,29 @@ step() { printf '\n\033[1;34m==> %s\033[0m\n' "$1"; }
 warn() { printf '\033[33m%s\033[0m\n' "$1"; }
 die()  { printf '\033[31merror: %s\033[0m\n' "$1" >&2; exit 1; }
 
-command -v python3 >/dev/null || die "python3 is not installed."
+# Windows (Git Bash) ships "python", Linux and macOS ship "python3".
+PY=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 8))' 2>/dev/null; then
+    PY="$candidate"; break
+  fi
+done
+[ -n "$PY" ] || die "Python 3.8+ is not installed, or not on PATH. Get it from https://python.org/downloads (tick 'Add python.exe to PATH')."
 
 step "Setting up"
 if [ ! -d .venv ]; then
-  python3 -m venv .venv || die "could not create a virtualenv (on Debian/Ubuntu: apt install python3-venv)"
+  "$PY" -m venv .venv || die "could not create a virtualenv (on Debian/Ubuntu: apt install python3-venv)"
 fi
-# shellcheck disable=SC1091
-source .venv/bin/activate
+# A virtualenv puts its programs in bin/ on Unix and Scripts/ on Windows.
+if [ -f .venv/bin/activate ]; then
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+elif [ -f .venv/Scripts/activate ]; then
+  # shellcheck disable=SC1091
+  source .venv/Scripts/activate
+else
+  die "the virtualenv in .venv looks broken — delete it and re-run."
+fi
 pip install --quiet --disable-pip-version-check -r requirements.txt
 echo "Python environment ready."
 
