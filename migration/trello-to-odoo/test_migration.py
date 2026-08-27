@@ -97,6 +97,7 @@ class FakeOdoo:
         self.records["res.users"] = {1: {"id": 1, "login": "yu@sugimotogroup.org", "partner_id": [7, "Yu"]}}
 
     def login(self): return 2
+    def preload(self): return {}
     def write_context(self): return {"tracking_disable": True}
     def fields(self, m): return self.FIELDS.get(m, {})
     def has_field(self, m, f): return f in self.fields(m)
@@ -254,5 +255,45 @@ moved = [n for n in notes if "moved this card" in n]
 assert moved and "Settled JR files" in moved[0] and "Request Letter Received" in moved[0]
 print("history note:", moved[0])
 assert s2["activity_created"] == 0, "history must not duplicate on rerun"
+
+
+# --- regression: fields_get must ask for selection values -------------------
+# Without "selection" in the requested attributes, every selection probe reads
+# as empty and "due complete" cards silently never get marked done.
+import inspect, odoo_client
+assert '"selection"' in inspect.getsource(odoo_client.Odoo.fields), \
+    "fields_get must request the selection attribute"
+
+# --- the real Odoo external-id cache ---------------------------------------
+class StubOdoo(odoo_client.Odoo):
+    def __init__(self):
+        super().__init__("http://x", "db", "u", "p")
+        self.uid = 1
+        self.created = []
+        self.rows = [
+            {"name": "card_c1", "model": "project.task", "res_id": 11},
+            {"name": "card_c2", "model": "project.task", "res_id": 12},   # deleted in Odoo
+            {"name": "att_a1", "model": "ir.attachment", "res_id": 21},
+        ]
+    def search_read(self, model, domain, fields, **kw):
+        return self.rows if model == "ir.model.data" else []
+    def execute(self, model, method, *args, **kw):
+        if method == "exists":
+            return [i for i in args[0] if i != 12]      # 12 was deleted
+        if method == "create":
+            self.created.append((model, args[0])); return 99
+        raise AssertionError(f"unexpected {model}.{method}")
+
+stub = StubOdoo()
+stub.preload()
+assert stub.ref("card", "c1") == 11
+assert stub.ref("card", "c2") is None, "a record deleted in Odoo must not be reused"
+assert stub.ref("att", "a1") == 21
+assert stub.ref("card", "never-seen") is None
+# a fresh stamp must be visible to the cache immediately, or the same object
+# would be created twice within one run
+stub.stamp("card", "c3", "project.task", 77)
+assert stub.ref("card", "c3") == 77
+print("external-id preload cache OK")
 
 print("\nALL ASSERTIONS PASSED")

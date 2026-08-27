@@ -61,6 +61,7 @@ class Migrator:
         self.trello = trello
         self.odoo = odoo
         self.args = args
+        odoo.preload()
         self.user_map = load_user_map()
         self.cfields = None if getattr(args, "no_custom_fields", False) else CustomFieldSync(odoo)
         self._odoo_user_cache = {}

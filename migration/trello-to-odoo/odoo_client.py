@@ -33,6 +33,7 @@ class Odoo:
         self.models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object", allow_none=True)
         self.uid = None
         self._field_cache = {}
+        self._refs = None  # name -> res_id, filled by preload()
 
     # -- plumbing ----------------------------------------------------------
 
@@ -86,7 +87,7 @@ class Odoo:
     def fields(self, model):
         if model not in self._field_cache:
             self._field_cache[model] = self.execute(
-                model, "fields_get", [], attributes=["type", "string", "required"]
+                model, "fields_get", [], attributes=["type", "string", "required", "selection"]
             )
         return self._field_cache[model]
 
@@ -102,9 +103,43 @@ class Odoo:
     def key(kind, trello_id):
         return f"{kind}_{trello_id}"
 
+    def preload(self):
+        """Load every external id this migration has created, in one pass.
+
+        Without this, each card costs an ir.model.data round trip just to ask
+        "have I migrated you already?" — on boards of several hundred cards
+        that dominates the runtime.
+        """
+        rows = self.search_read(
+            "ir.model.data", [("module", "=", MODULE)], ["name", "model", "res_id"]
+        )
+        by_model = {}
+        for row in rows:
+            by_model.setdefault(row["model"], []).append(row)
+
+        self._refs = {}
+        stale = 0
+        for model, items in by_model.items():
+            # A record may have been deleted in Odoo since it was migrated;
+            # check per model rather than per record.
+            try:
+                alive = set(self.execute(model, "exists", [i["res_id"] for i in items]))
+            except OdooError:
+                alive = {i["res_id"] for i in items}
+            for item in items:
+                if item["res_id"] in alive:
+                    self._refs[item["name"]] = item["res_id"]
+                else:
+                    stale += 1
+        log.info("Loaded %d previously migrated records%s",
+                 len(self._refs), f" ({stale} since deleted in Odoo)" if stale else "")
+        return self._refs
+
     def ref(self, kind, trello_id):
         """Odoo id previously created for this Trello object, or None."""
         name = self.key(kind, trello_id)
+        if self._refs is not None:
+            return self._refs.get(name)
         rows = self.search_read(
             "ir.model.data",
             [("module", "=", MODULE), ("name", "=", name)],
@@ -121,6 +156,8 @@ class Odoo:
         return row["res_id"]
 
     def stamp(self, kind, trello_id, model, res_id):
+        if self._refs is not None:
+            self._refs[self.key(kind, trello_id)] = res_id
         self.execute(
             "ir.model.data",
             "create",
