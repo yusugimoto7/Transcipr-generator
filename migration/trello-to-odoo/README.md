@@ -65,6 +65,21 @@ keyed to its Trello object. Rerunning skips everything already migrated, so an
 interrupted run is resumed by simply running it again. Nothing is ever written
 back to Trello — the tool only issues GETs there.
 
+## The short way
+
+```bash
+cd migration/trello-to-odoo
+./run.sh
+```
+
+It sets up Python, asks for the credentials it needs (they go into a local
+`.env` with 0600 permissions and nowhere else), lists your boards, pauses while
+you map people, does a dry run, asks for confirmation, migrates and verifies.
+Re-running it is safe — it skips what is already done.
+
+The rest of this document is the same process done by hand, and the reference
+for the individual commands.
+
 ## Step by step
 
 ### 1. Install
@@ -217,9 +232,12 @@ Trello members are named in the description. `probe` prints what it found.
 
 | File | Purpose |
 | --- | --- |
+| `run.sh` | Guided end-to-end run — setup, credentials, migrate, verify |
 | `migrate.py` | CLI and migration engine |
 | `trello_client.py` | Read-only Trello API client, rate-limited |
 | `odoo_client.py` | Odoo XML-RPC client and external-id bookkeeping |
 | `render.py` | Trello Markdown → Odoo HTML |
+| `custom_fields.py` | Trello custom fields → Odoo fields on `project.task` |
+| `test_migration.py` | Offline test against fake Trello and Odoo (`python test_migration.py`) |
 | `users.json` | Your Trello → Odoo people map (git-ignored) |
 | `report.json` | Per-board results of the last run (git-ignored) |
