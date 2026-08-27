@@ -1,0 +1,65 @@
+# Hardening overrides for the Postiz stack.
+#
+# Docker Compose loads this automatically when it sits next to
+# docker-compose.yaml, so the upstream file stays untouched and can be
+# updated without losing these changes.
+#
+# Fixes four problems found during the first install:
+#
+#  1. nginx inside the postiz image proxies to "localhost", which resolves
+#     to ::1 first. The Next.js frontend and Nest backend listen on IPv4
+#     only, so every request 502'd. nginx.conf is patched to 127.0.0.1 and
+#     mounted over the baked-in copy.
+#  2. The whole Temporal stack shipped with no restart policy, so after a
+#     host reboot Docker brought back only postiz/postgres/redis and left
+#     Temporal stopped -- silently breaking publishing.
+#  3. temporal's auto-setup raced temporal-postgresql, failed schema setup
+#     ("the database system is starting up"), and exited 1 for good.
+#  4. postiz had no depends_on for temporal, so its backend called
+#     TemporalRegister.onModuleInit before temporal existed, threw
+#     "Name resolution failed for target dns:temporal:7233", and never
+#     reached NestApplication.listen() -- the process stayed alive under
+#     PM2 but never bound port 3000.
+
+services:
+  postiz:
+    environment:
+      # Replace with a unique random secret. Changing it invalidates
+      # existing login sessions (you simply sign in again).
+      JWT_SECRET: 'REPLACE-WITH-YOUR-OWN-RANDOM-SECRET'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  temporal:
+    restart: always
+    depends_on:
+      temporal-postgresql:
+        condition: service_healthy
+      temporal-elasticsearch:
+        condition: service_started
+    healthcheck:
+      test: ['CMD', 'tctl', '--address', 'temporal:7233', 'cluster', 'health']
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  temporal-postgresql:
+    restart: always
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U temporal']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  temporal-elasticsearch:
+    restart: always
+
+  temporal-admin-tools:
+    restart: always
+
+  temporal-ui:
+    restart: always
