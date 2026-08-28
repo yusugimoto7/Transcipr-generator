@@ -36,7 +36,7 @@ import xmlrpc.client
 from dotenv import load_dotenv
 
 import render
-from custom_fields import CustomFieldSync
+from custom_fields import CustomFieldSync, drop_view, merge_duplicate_fields, rebuild_view
 from odoo_client import Odoo, OdooError
 from trello_client import Trello, TrelloError
 
@@ -54,6 +54,32 @@ DONE_LIST_HINTS = ("done", "complete", "completed", "shipped", "archive", "finis
 
 
 # ---------------------------------------------------------------------------
+
+
+def comment_html(action):
+    """The chatter body for one Trello comment."""
+    author = (action.get("memberCreator") or {})
+    text = render.markdown((action.get("data") or {}).get("text") or "")
+    byline = render.escape(author.get("fullName") or author.get("username") or "Trello user")
+    return render.rtl_safe(
+        f'<p><em>Trello comment by {byline} on {action.get("date", "")[:10]}</em></p>\n{text}'
+    )
+
+
+def activity_html(action):
+    """The chatter body for one Trello history entry (create / move)."""
+    data = action.get("data") or {}
+    who = (action.get("memberCreator") or {}).get("fullName") or "Someone"
+    when = (action.get("date") or "")[:10]
+    if action["type"] == "updateCard":
+        text = (f'moved this card from {render.escape(data["listBefore"]["name"])} '
+                f'to {render.escape(data["listAfter"]["name"])}'
+                if "listBefore" in data
+                else f'moved this card to {render.escape(data["listAfter"]["name"])}')
+    else:
+        list_name = (data.get("list") or {}).get("name", "")
+        text = f"added this card to {render.escape(list_name)}"
+    return f"<p><em>{render.escape(who)} {text} on {when} (Trello)</em></p>"
 
 
 class Migrator:
@@ -337,14 +363,13 @@ class Migrator:
                 continue
             author = action.get("memberCreator") or {}
             resolved = self.odoo_user(author.get("id"), members_by_id)
-            text = render.markdown((action.get("data") or {}).get("text") or "")
-            byline = render.escape(author.get("fullName") or author.get("username") or "Trello user")
-            body = render.rtl_safe(
-                f'<p><em>Trello comment by {byline} on {action.get("date", "")[:10]}</em></p>\n{text}'
-            )
+            body = comment_html(action)
 
             kwargs = {
-                "body": body,
+                # message_post HTML-escapes a string body arriving over
+                # XML-RPC, so the real HTML is written onto the message
+                # afterwards; write() stores it verbatim.
+                "body": ".",
                 "message_type": "comment",
                 # A log note, not a comment: comments notify every follower,
                 # which would email the whole team once per migrated comment.
@@ -358,14 +383,12 @@ class Migrator:
             )
             if not message_id:
                 continue
-            # message_post stamps "now"; restore the original Trello timestamp.
-            try:
-                self.odoo.write(
-                    "mail.message", [message_id],
-                    {"date": (action.get("date") or "").replace("T", " ").split(".")[0]},
-                )
-            except OdooError as exc:
-                log.debug("could not backdate message %s: %s", message_id, exc)
+            # Also restore the original Trello timestamp over message_post's "now".
+            self.odoo.write(
+                "mail.message", [message_id],
+                {"body": body,
+                 "date": (action.get("date") or "").replace("T", " ").split(".")[0]},
+            )
             self.odoo.stamp("comment", action["id"], "mail.message", message_id)
             stats["comments_created"] += 1
 
@@ -374,30 +397,16 @@ class Migrator:
         for action in actions:
             if self.odoo.ref("act", action["id"]):
                 continue
-            data = action.get("data") or {}
-            who = (action.get("memberCreator") or {}).get("fullName") or "Someone"
-            when = (action.get("date") or "")[:10]
-            if action["type"] == "updateCard":
-                text = (f'moved this card from {render.escape(data["listBefore"]["name"])} '
-                        f'to {render.escape(data["listAfter"]["name"])}'
-                        if "listBefore" in data
-                        else f'moved this card to {render.escape(data["listAfter"]["name"])}')
-            else:
-                list_name = (data.get("list") or {}).get("name", "")
-                text = f"added this card to {render.escape(list_name)}"
             message_id = self.odoo.execute(
                 "project.task", "message_post", [task_id],
                 context=self.odoo.write_context(),
-                body=f"<p><em>{render.escape(who)} {text} on {when} (Trello)</em></p>",
-                message_type="comment", subtype_xmlid="mail.mt_note",
+                body=".", message_type="comment", subtype_xmlid="mail.mt_note",
             )
             if not message_id:
                 continue
-            try:
-                self.odoo.write("mail.message", [message_id],
-                                {"date": (action.get("date") or "").replace("T", " ").split(".")[0]})
-            except OdooError:
-                pass
+            self.odoo.write("mail.message", [message_id],
+                            {"body": activity_html(action),
+                             "date": (action.get("date") or "").replace("T", " ").split(".")[0]})
             self.odoo.stamp("act", action["id"], "mail.message", message_id)
             stats["activity_created"] += 1
 
@@ -435,6 +444,48 @@ class Migrator:
                 vals["mimetype"] = attachment["mimeType"]
             attachment_id, _ = self.odoo.upsert("att", attachment["id"], "ir.attachment", vals)
             stats["attachments_created"] += 1
+
+    # -- repairs -----------------------------------------------------------
+
+    def fix_board_messages(self, board_id):
+        """Rewrite migrated chatter bodies with proper HTML.
+
+        Repairs messages created before the escaping fix: every migrated
+        comment and history note is stamped with its Trello action id, so the
+        correct body is rebuilt from Trello and written over the stored one.
+        Also (re)sets the author for comments whose writer is mapped in
+        users.json. Safe to rerun.
+        """
+        board = self.trello.board(board_id)
+        log.info("=== %s", board["name"])
+        members_by_id = {m["id"]: m for m in self.trello.members(board_id)}
+        fixed = 0
+
+        def flush(action, kind, build):
+            nonlocal fixed
+            message_id = self.odoo.ref(kind, action["id"])
+            if not message_id:
+                return
+            vals = {"body": build(action),
+                    "date": (action.get("date") or "").replace("T", " ").split(".")[0]}
+            if kind == "comment":
+                resolved = self.odoo_user((action.get("memberCreator") or {}).get("id"),
+                                          members_by_id)
+                if resolved:
+                    vals["author_id"] = resolved[1]
+            self.odoo.write("mail.message", [message_id], vals)
+            fixed += 1
+            if fixed % 500 == 0:
+                log.info("  %d messages fixed", fixed)
+
+        for actions in self.trello.comments(board_id).values():
+            for action in actions:
+                flush(action, "comment", comment_html)
+        for actions in self.trello.activity(board_id).values():
+            for action in actions:
+                flush(action, "act", activity_html)
+        log.info("  %d messages fixed", fixed)
+        return fixed
 
     # -- verify ------------------------------------------------------------
 
@@ -597,6 +648,25 @@ def cmd_fields(args, env):
     print(f"{len(syncer.by_trello_id)} Trello custom fields are now Odoo fields on project.task.")
 
 
+def cmd_merge_fields(args, env):
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    drop_view(odoo)  # the tab references the duplicates, so it goes first
+    merged = merge_duplicate_fields(odoo)
+    rebuild_view(odoo)
+    print(f"Merged {merged} duplicate fields; the Trello data tab now shows "
+          "two columns and hides fields that are empty on a task.")
+
+
+def cmd_fix_comments(args, env):
+    trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    migrator = Migrator(trello, odoo, args)
+    total = sum(migrator.fix_board_messages(board_id) for board_id in args.boards)
+    print(f"Rewrote {total} chatter messages with proper HTML.")
+
+
 def cmd_verify(args, env):
     trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
@@ -652,6 +722,14 @@ def build_parser():
     with_boards(sub.add_parser(
         "fields", help="create the Odoo fields for Trello custom fields, without migrating cards"))
 
+    sub.add_parser("merge-fields",
+                   help="collapse duplicate x_trello_* fields into one per label, move the "
+                        "values across, and rebuild the Trello data tab")
+
+    with_boards(sub.add_parser(
+        "fix-comments",
+        help="rewrite already-migrated comments/history whose HTML was stored escaped"))
+
     verify = with_boards(sub.add_parser("verify", help="compare Trello and Odoo counts"))
     verify.add_argument("--max-attachment-mb", type=float, default=25.0,
                         help="the limit used during `run`, so skipped files are not "
@@ -674,6 +752,7 @@ def main():
     handlers = {
         "probe": cmd_probe, "auth-url": cmd_auth_url, "boards": cmd_boards,
         "users": cmd_users, "fields": cmd_fields, "run": cmd_run, "verify": cmd_verify,
+        "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
     }
     try:
         handlers[args.command](args, env)

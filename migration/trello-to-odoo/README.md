@@ -203,6 +203,26 @@ Keep the Trello boards read-only for a couple of weeks as a safety net —
 close them rather than deleting them. Deleting a Trello board is irreversible
 and takes its attachments with it.
 
+## Repair commands
+
+Two commands exist to repair data migrated by earlier versions of this tool,
+and are safe to rerun:
+
+```bash
+python migrate.py merge-fields          # collapse duplicate x_trello_* fields
+python migrate.py fix-comments --boards ID1,...   # rewrite escaped chatter HTML
+```
+
+`merge-fields` collapses fields that repeat the same label and type into one,
+moves every task's values onto the survivor, repoints the Trello stamps so
+future runs keep writing to it, drops the duplicates, and rebuilds the Trello
+data tab — which now lays fields out in two columns and hides, per task, any
+field that has no value.
+
+`fix-comments` rebuilds every migrated comment and history note from Trello
+and rewrites the stored body, fixing messages saved with escaped HTML by older
+runs; it also sets the comment author for anyone mapped in users.json.
+
 ## Options
 
 | Flag | Effect |

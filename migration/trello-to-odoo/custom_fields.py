@@ -10,8 +10,11 @@ Field values are also written into the task description as a table, so the data
 is readable even if field creation is skipped or the inherited view is removed.
 """
 
+import hashlib
 import logging
 import re
+
+from odoo_client import MODULE
 
 log = logging.getLogger(__name__)
 
@@ -31,8 +34,15 @@ def base_field_name(label):
     Labels that differ only in punctuation or case ("Email Address:" and
     "Email Address") collapse to the same name on purpose — the same field
     defined separately on five boards should be one Odoo field, not five.
+
+    Non-Latin labels (Persian board fields) produce no usable ASCII slug; a
+    hash of the label keeps distinct labels distinct instead of collapsing
+    every one of them onto a single "field" name.
     """
-    slug = re.sub(r"[^a-z0-9]+", "_", (label or "").lower()).strip("_") or "field"
+    text = (label or "").strip()
+    slug = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    if len(slug) < 2:
+        slug = "f_" + hashlib.md5(text.encode()).hexdigest()[:10]
     return f"x_trello_{slug}"[:60].rstrip("_")
 
 
@@ -88,13 +98,22 @@ class CustomFieldSync:
         return self._model_id
 
     def existing_fields(self):
-        """Migration-created fields already on project.task: name -> {id, ttype}."""
+        """Migration-created fields already on project.task.
+
+        Returns (by_name, by_label): the second index lets a Trello field
+        reuse an existing Odoo field whose stored label matches even when the
+        name was minted under an older naming scheme.
+        """
         rows = self.odoo.search_read(
             "ir.model.fields",
             [("model", "=", TASK_MODEL), ("name", "like", "x_trello_")],
-            ["name", "ttype"],
+            ["name", "ttype", "field_description"],
         )
-        return {r["name"]: {"id": r["id"], "ttype": r["ttype"]} for r in rows}
+        by_name = {r["name"]: {"id": r["id"], "ttype": r["ttype"], "name": r["name"]}
+                   for r in rows}
+        by_label = {(base_field_name(r["field_description"]), r["ttype"]):
+                    {"id": r["id"], "ttype": r["ttype"], "name": r["name"]} for r in rows}
+        return by_name, by_label
 
     def ensure(self, definitions):
         """Create or reuse one manual field per distinct Trello field label.
@@ -104,7 +123,7 @@ class CustomFieldSync:
         data is comparable across projects. A label reused for a *different*
         type gets its own suffixed field rather than a type clash.
         """
-        existing = self.existing_fields()
+        existing, by_label = self.existing_fields()
         created, shared = [], 0
         for definition in definitions:
             trello_id = definition["id"]
@@ -124,12 +143,12 @@ class CustomFieldSync:
                     continue
 
             base = base_field_name(definition.get("name"))
-            match = existing.get(base)
+            match = existing.get(base) or by_label.get((base, ttype))
             if match and match["ttype"] == ttype:
                 # Same label, same type: point this Trello field at the field
                 # that already exists instead of making a near-duplicate.
                 self.odoo.stamp("cfield", trello_id, "ir.model.fields", match["id"])
-                self.by_trello_id[trello_id] = (base, definition)
+                self.by_trello_id[trello_id] = (match["name"], definition)
                 shared += 1
                 continue
 
@@ -147,7 +166,8 @@ class CustomFieldSync:
                 },
                 update=False,
             )
-            existing[name] = {"id": field_id, "ttype": ttype}
+            existing[name] = {"id": field_id, "ttype": ttype, "name": name}
+            by_label[(base, ttype)] = existing[name]
             self.by_trello_id[trello_id] = (name, definition)
             created.append((name, definition.get("name"), ttype))
             log.info("  created field %s (%s) for %r", name, ttype, definition.get("name"))
@@ -188,51 +208,136 @@ class CustomFieldSync:
         return rows
 
     def install_view(self):
-        """Add the created fields to the task form via one inherited view."""
-        names = sorted({name for name, _ in self.by_trello_id.values()})
-        if not names:
-            return
-        parent = self._parent_form_view()
-        if not parent:
-            log.warning("Could not find the task form view; fields exist but were not added to "
-                        "the form. Add them as optional columns, or via Studio.")
-            return
-        fields_xml = "".join(f'<field name="{n}"/>' for n in names)
-        arch = (
-            '<xpath expr="//notebook" position="inside">'
-            f'<page string="Trello data"><group>{fields_xml}</group></page>'
-            "</xpath>"
-        )
-        vals = {
-            "name": "project.task.form.trello",
-            "model": TASK_MODEL,
-            "inherit_id": parent,
-            "arch_db": f"<data>{arch}</data>",
-            "priority": 99,
-        }
-        try:
-            view_id = self.odoo.ref("view", VIEW_KEY)
-            if view_id:
-                self.odoo.write("ir.ui.view", [view_id], {"arch_db": vals["arch_db"]})
-            else:
-                self.odoo.upsert("view", VIEW_KEY, "ir.ui.view", vals)
-            log.info("  task form now shows a 'Trello data' tab with %d fields", len(names))
-        except Exception as exc:
-            log.warning("  could not extend the task form view (%s). The fields still exist "
-                        "and hold their data; add them to the form manually if needed.", exc)
+        rebuild_view(self.odoo)
 
-    def _parent_form_view(self):
-        for module, name in (("project", "view_task_form2"), ("project", "view_task_form")):
-            rows = self.odoo.search_read(
-                "ir.model.data",
-                [("module", "=", module), ("name", "=", name), ("model", "=", "ir.ui.view")],
-                ["res_id"], limit=1,
-            )
-            if rows:
-                return rows[0]["res_id"]
-        rows = self.odoo.search_read(
+
+# ---------------------------------------------------------------------------
+# Standalone maintenance: merge duplicate fields, rebuild the form view.
+
+
+def _all_fields(odoo):
+    return odoo.search_read(
+        "ir.model.fields",
+        [("model", "=", TASK_MODEL), ("name", "like", "x_trello_")],
+        ["name", "field_description", "ttype"],
+        order="id",
+    )
+
+
+def drop_view(odoo):
+    """Remove the Trello data tab so field unlinks aren't blocked by the view."""
+    view_id = odoo.ref("view", VIEW_KEY)
+    if view_id:
+        odoo.execute("ir.ui.view", "unlink", [view_id])
+        stamps = odoo.search_read(
+            "ir.model.data",
+            [("module", "=", MODULE), ("name", "=", odoo.key("view", VIEW_KEY))],
+            ["id"],
+        )
+        if stamps:
+            odoo.execute("ir.model.data", "unlink", [s["id"] for s in stamps])
+
+
+def rebuild_view(odoo):
+    """(Re)create the Trello data tab from whatever x_trello_ fields exist.
+
+    Each field is hidden when it holds no value, so a task shows only the
+    handful of fields its board actually filled in, and the fields flow in
+    two columns instead of one long single-column list.
+    """
+    rows = sorted(_all_fields(odoo), key=lambda r: (r["field_description"] or r["name"]).lower())
+    if not rows:
+        return
+    def cell(r):
+        return f'<field name="{r["name"]}" invisible="not {r["name"]}"/>'
+    left = "".join(cell(r) for r in rows[0::2])
+    right = "".join(cell(r) for r in rows[1::2])
+    arch = (
+        '<xpath expr="//notebook" position="inside">'
+        '<page string="Trello data"><group>'
+        f"<group>{left}</group><group>{right}</group>"
+        "</group></page></xpath>"
+    )
+    parent_rows = odoo.search_read(
+        "ir.model.data",
+        [("module", "=", "project"), ("name", "in", ["view_task_form2", "view_task_form"]),
+         ("model", "=", "ir.ui.view")],
+        ["res_id"], limit=1,
+    )
+    if not parent_rows:
+        parent_rows = odoo.search_read(
             "ir.ui.view",
             [("model", "=", TASK_MODEL), ("type", "=", "form"), ("inherit_id", "=", False)],
             ["id"], limit=1,
         )
-        return rows[0]["id"] if rows else None
+        parent = parent_rows[0]["id"] if parent_rows else None
+    else:
+        parent = parent_rows[0]["res_id"]
+    if not parent:
+        log.warning("task form view not found; fields exist but the tab was not rebuilt")
+        return
+    vals = {
+        "name": "project.task.form.trello",
+        "model": TASK_MODEL,
+        "inherit_id": parent,
+        "arch_db": f"<data>{arch}</data>",
+        "priority": 99,
+    }
+    view_id = odoo.ref("view", VIEW_KEY)
+    if view_id:
+        odoo.write("ir.ui.view", [view_id], {"arch_db": vals["arch_db"]})
+    else:
+        odoo.upsert("view", VIEW_KEY, "ir.ui.view", vals)
+    log.info("Trello data tab rebuilt with %d fields (empty ones hidden per task)", len(rows))
+
+
+def merge_duplicate_fields(odoo):
+    """Collapse x_trello_name_2/_3... into one field per (label, type).
+
+    Values move onto the surviving field, Trello-field stamps are repointed
+    so future runs keep writing to the survivor, and the duplicate columns
+    are dropped. A task whose survivor already holds a different value keeps
+    it (each task came from one board, so this is rare) and the conflict is
+    logged.
+    """
+    groups = {}
+    for row in _all_fields(odoo):
+        key = (base_field_name(row["field_description"]), row["ttype"])
+        groups.setdefault(key, []).append(row)
+
+    merged = conflicts = 0
+    for (base, ttype), members in sorted(groups.items()):
+        if len(members) < 2:
+            continue
+        # Prefer the member carrying the canonical name; else the oldest.
+        members.sort(key=lambda r: (r["name"] != base, r["id"]))
+        canon = members[0]
+        for dup in members[1:]:
+            tasks = odoo.search_read(
+                TASK_MODEL, [(dup["name"], "!=", False)],
+                ["id", dup["name"], canon["name"]],
+                context={"active_test": False},
+            )
+            for task in tasks:
+                value, kept = task[dup["name"]], task[canon["name"]]
+                if not kept:
+                    odoo.write(TASK_MODEL, [task["id"]], {canon["name"]: value})
+                elif kept != value:
+                    conflicts += 1
+                    log.warning("  task %s: %r keeps %r, dropping duplicate value %r",
+                                task["id"], canon["name"], kept, value)
+            stamps = odoo.search_read(
+                "ir.model.data",
+                [("module", "=", MODULE), ("model", "=", "ir.model.fields"),
+                 ("res_id", "=", dup["id"])],
+                ["id"],
+            )
+            if stamps:
+                odoo.write("ir.model.data", [s["id"] for s in stamps], {"res_id": canon["id"]})
+            odoo.execute("ir.model.fields", "unlink", [dup["id"]])
+            merged += 1
+            log.info("  merged %s (%r) -> %s, %d task values moved",
+                     dup["name"], dup["field_description"], canon["name"], len(tasks))
+    if conflicts:
+        log.warning("%d value conflicts kept the surviving field's value", conflicts)
+    return merged

@@ -317,4 +317,80 @@ stub.stamp("card", "c3", "project.task", 77)
 assert stub.ref("card", "c3") == 77
 print("external-id preload cache OK")
 
+
+# --- message bodies must be real HTML, not escaped ---------------------------
+# message_post escapes a str body over XML-RPC, so the code must post a
+# placeholder and write the true HTML afterwards.
+assert msg["body"].startswith('<div dir="auto">'), msg["body"][:60]
+assert "&lt;" not in msg["body"], "comment body must be written, not escaped"
+
+# --- merging duplicate fields ------------------------------------------------
+import custom_fields as cf
+
+class MergeFake:
+    def __init__(self):
+        self.fields = {
+            1: {"id": 1, "name": "x_trello_name", "field_description": "Name", "ttype": "char"},
+            2: {"id": 2, "name": "x_trello_name_2", "field_description": "Name", "ttype": "char"},
+            3: {"id": 3, "name": "x_trello_field", "field_description": "\u06a9\u06cc\u0641\u06cc\u062a \u062c\u0644\u0633\u0647", "ttype": "char"},
+            4: {"id": 4, "name": "x_trello_field_4", "field_description": "\u0622\u062f\u0631\u0633", "ttype": "char"},
+            5: {"id": 5, "name": "x_trello_field_7", "field_description": "\u06a9\u06cc\u0641\u06cc\u062a \u062c\u0644\u0633\u0647", "ttype": "char"},
+            6: {"id": 6, "name": "x_trello_phone", "field_description": "Phone", "ttype": "char"},
+        }
+        self.tasks = {
+            10: {"id": 10, "x_trello_name": False, "x_trello_name_2": "Ali", "x_trello_field": False, "x_trello_field_7": "خوب"},
+            11: {"id": 11, "x_trello_name": "Kept", "x_trello_name_2": "Clash", "x_trello_field": False, "x_trello_field_7": False},
+        }
+        self.stamps = {101: {"id": 101, "res_id": 2}, 102: {"id": 102, "res_id": 5}}
+        self.unlinked = []
+    def search_read(self, model, domain, fields, **kw):
+        if model == "ir.model.fields":
+            return [dict(f) for f in self.fields.values()]
+        if model == "project.task":
+            fname = domain[0][0]
+            return [dict(t) for t in self.tasks.values() if t.get(fname)]
+        if model == "ir.model.data":
+            rid = [c[2] for c in domain if c[0] == "res_id"][0]
+            return [dict(s) for s in self.stamps.values() if s["res_id"] == rid]
+        return []
+    def write(self, model, ids, vals, context=None):
+        store = {"project.task": self.tasks, "ir.model.data": self.stamps}[model]
+        for i in ids: store[i].update(vals)
+    def execute(self, model, method, *args, **kw):
+        if model == "ir.model.fields" and method == "unlink":
+            for i in args[0]: self.fields.pop(i); self.unlinked.append(i)
+            return True
+        raise AssertionError(f"unexpected {model}.{method}")
+
+mf = MergeFake()
+merged = cf.merge_duplicate_fields(mf)
+assert merged == 2, merged
+assert sorted(mf.unlinked) == [2, 5]
+assert mf.tasks[10]["x_trello_name"] == "Ali", "value must move to the survivor"
+assert mf.tasks[10]["x_trello_field"] == "خوب", "Persian duplicates must merge too"
+assert mf.tasks[11]["x_trello_name"] == "Kept", "existing value must win a conflict"
+assert mf.stamps[101]["res_id"] == 1 and mf.stamps[102]["res_id"] == 3, "stamps must repoint"
+assert 4 in mf.fields, "different Persian labels must NOT be merged"
+print("field merge OK: values moved, stamps repointed, Persian labels kept distinct")
+
+# --- the rebuilt view hides empty fields ------------------------------------
+class ViewFake(MergeFake):
+    def __init__(self):
+        super().__init__()
+        self.view = None
+    def ref(self, kind, key): return None
+    def search_read(self, model, domain, fields, **kw):
+        if model == "ir.model.data":
+            return [{"res_id": 500}]
+        return super().search_read(model, domain, fields, **kw)
+    def upsert(self, kind, key, model, vals, **kw):
+        self.view = vals; return 900, True
+
+vf = ViewFake()
+cf.rebuild_view(vf)
+arch = vf.view["arch_db"]
+assert 'invisible="not x_trello_name"' in arch, "empty fields must be hidden"
+assert arch.count("<group>") == 3, "two-column layout expected"
+print("view rebuild OK: per-task hiding + two columns")
+
 print("\nALL ASSERTIONS PASSED")
