@@ -49,8 +49,11 @@ function Get-ContainerState([string]$name) {
 function Test-Backend {
     # Asks Node, from inside the container, whether anything answers on 3000.
     $js = 'fetch("http://127.0.0.1:3000/").then(r=>console.log(r.status)).catch(()=>console.log("DOWN"))'
-    $out = docker compose exec -T postiz node -e $js 2>$null
-    return ($out -match '^\d+$')
+    # Flatten to a single string first: PowerShell's -match against an array
+    # returns the matching ELEMENTS, not a boolean, which silently inverts
+    # the meaning of the test.
+    $out = (docker compose exec -T postiz node -e $js 2>$null | Out-String)
+    return ($out -match '\b\d{3}\b')
 }
 
 function Test-Web {
@@ -95,9 +98,19 @@ for ($pass = 1; $pass -le $MaxPasses; $pass++) {
         Start-Sleep -Seconds $DelaySeconds
         continue
     }
-    $health = docker compose exec -T temporal tctl --address temporal:7233 cluster health 2>&1
-    if ($health -notmatch 'SERVING') {
-        Say 'temporal is running but not serving yet -- waiting' 'Yellow'
+    # Prefer Docker's own healthcheck (the override defines one). Fall back to
+    # tctl only when no healthcheck is configured. tctl writes a deprecation
+    # notice to stderr, so collapse its output to one string before matching --
+    # matching against the raw array tests the wrong thing entirely.
+    $serving = $false
+    if ($temporal.Health -ne 'none') {
+        $serving = ($temporal.Health -eq 'healthy')
+    } else {
+        $probe = (docker compose exec -T temporal tctl --address temporal:7233 cluster health 2>&1 | Out-String)
+        $serving = ($probe -match 'SERVING')
+    }
+    if (-not $serving) {
+        Say "temporal is up but not serving yet (health=$($temporal.Health)) -- waiting" 'Yellow'
         Start-Sleep -Seconds $DelaySeconds
         continue
     }
