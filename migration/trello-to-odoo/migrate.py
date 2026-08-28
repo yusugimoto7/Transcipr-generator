@@ -539,7 +539,36 @@ def cmd_users(args, env):
     USER_MAP.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n")
     print(f"Wrote {USER_MAP} with {len(mapping)} Trello members.")
     print("Fill in each Odoo login (email) — leave blank to skip that person; "
-          "unmapped members are named in the task description instead.")
+          "unmapped members are named in the task description instead.\n")
+
+    filled = {k: v for k, v in mapping.items() if v}
+    if not filled:
+        return
+    # Check the mappings resolve before a long run assigns nobody. An address
+    # in the Employees list is not necessarily an Odoo *user*: an employee
+    # record without a login cannot be assigned a task.
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    print(f"Checking {len(filled)} mapped logins against Odoo users:")
+    missing = []
+    for username, login in sorted(filled.items()):
+        rows = odoo.search_read(
+            "res.users",
+            ["|", ("login", "=", login), ("email", "=", login)],
+            ["id", "login", "active"],
+            limit=1,
+            context={"active_test": False},
+        )
+        if rows:
+            flag = "" if rows[0].get("active", True) else "  (archived user)"
+            print(f"  OK        {username:<26} -> {login}{flag}")
+        else:
+            missing.append((username, login))
+            print(f"  NO USER   {username:<26} -> {login}")
+    if missing:
+        print(f"\n{len(missing)} address(es) match no Odoo user. Those people are named in "
+              "the task description but tasks will not be assigned to them.")
+        print("An entry in Employees is not the same as a login — check Settings > Users.")
 
 
 def cmd_run(args, env):
