@@ -14,7 +14,7 @@ import hashlib
 import logging
 import re
 
-from odoo_client import MODULE
+from odoo_client import MODULE, OdooError
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def value_of(item, definition):
         except (TypeError, ValueError):
             return None
     if kind == "date":
-        return (raw.get("date") or "")[:10] or None
+        return normalize_date((raw.get("date") or "").split("T")[0]) or None
     text = raw.get("text")
     return text if text not in ("", None) else None
 
@@ -291,6 +291,18 @@ def rebuild_view(odoo):
     log.info("Trello data tab rebuilt with %d fields (empty ones hidden per task)", len(rows))
 
 
+_SHORT_YEAR = re.compile(r"^(\d{1,3})-(\d{2})-(\d{2})")
+
+
+def normalize_date(value):
+    """Zero-pad a short year: Odoo stores '975-09-16' but refuses to write it back."""
+    if isinstance(value, str):
+        match = _SHORT_YEAR.match(value)
+        if match:
+            return match.group(1).zfill(4) + value[match.end(1):]
+    return value
+
+
 def merge_duplicate_fields(odoo):
     """Collapse x_trello_name_2/_3... into one field per (label, type).
 
@@ -320,8 +332,20 @@ def merge_duplicate_fields(odoo):
             )
             for task in tasks:
                 value, kept = task[dup["name"]], task[canon["name"]]
+                if ttype == "date":
+                    value = normalize_date(value)
                 if not kept:
-                    odoo.write(TASK_MODEL, [task["id"]], {canon["name"]: value})
+                    # One bad value (a typo'd year Odoo stored but refuses to
+                    # write back) must not abort the merge: the original value
+                    # is still in the task description's Trello fields table.
+                    try:
+                        odoo.write(TASK_MODEL, [task["id"]], {canon["name"]: value})
+                    except OdooError as exc:
+                        conflicts += 1
+                        log.warning("  task %s: could not move %r=%r (%s) — value stays "
+                                    "in the task description only",
+                                    task["id"], canon["name"], value,
+                                    str(exc).strip().splitlines()[-1])
                 elif kept != value:
                     conflicts += 1
                     log.warning("  task %s: %r keeps %r, dropping duplicate value %r",
