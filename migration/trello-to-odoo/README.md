@@ -44,7 +44,11 @@ so the tool creates a genuine Odoo field per Trello custom field:
 | Dropdown | `char` holding the selected option's text |
 
 Fields are named `x_trello_<label>` and grouped into a **Trello data** tab on
-the task form. Being real fields, they are filterable, groupable and usable in
+the task form. One field is created per distinct label, shared across boards:
+"Passport No." defined separately on four boards becomes a single Odoo field,
+so the data is comparable between projects and the form stays readable. Labels
+that differ only in punctuation or case collapse together; a label reused for a
+different type gets its own suffixed field instead of a type clash. Being real fields, they are filterable, groupable and usable in
 Odoo reports — which is most of the point of leaving Trello. The values are
 *also* written into the task description as a table, so nothing is lost if you
 later remove the fields or the tab.

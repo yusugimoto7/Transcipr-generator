@@ -25,18 +25,26 @@ VIEW_KEY = "view_task_form_trello"
 TYPES = {"text": "char", "number": "float", "date": "date", "checkbox": "boolean", "list": "char"}
 
 
-def field_name(label, taken):
-    """Odoo-safe manual field name derived from a Trello field label."""
+def base_field_name(label):
+    """Odoo-safe manual field name derived from a Trello field label.
+
+    Labels that differ only in punctuation or case ("Email Address:" and
+    "Email Address") collapse to the same name on purpose — the same field
+    defined separately on five boards should be one Odoo field, not five.
+    """
     slug = re.sub(r"[^a-z0-9]+", "_", (label or "").lower()).strip("_") or "field"
-    name = f"x_trello_{slug}"[:60].rstrip("_")
-    if name in taken:
-        for suffix in range(2, 100):
-            candidate = f"{name[:57]}_{suffix}"
-            if candidate not in taken:
-                name = candidate
-                break
-    taken.add(name)
-    return name
+    return f"x_trello_{slug}"[:60].rstrip("_")
+
+
+def unique_name(base, taken):
+    """A free variant of base, for a label reused with a different type."""
+    if base not in taken:
+        return base
+    for suffix in range(2, 100):
+        candidate = f"{base[:57]}_{suffix}"
+        if candidate not in taken:
+            return candidate
+    raise RuntimeError(f"cannot find a free field name for {base}")
 
 
 def value_of(item, definition):
@@ -79,18 +87,25 @@ class CustomFieldSync:
             self._model_id = rows[0]["id"]
         return self._model_id
 
-    def existing_names(self):
+    def existing_fields(self):
+        """Migration-created fields already on project.task: name -> {id, ttype}."""
         rows = self.odoo.search_read(
             "ir.model.fields",
             [("model", "=", TASK_MODEL), ("name", "like", "x_trello_")],
-            ["name"],
+            ["name", "ttype"],
         )
-        return {r["name"] for r in rows}
+        return {r["name"]: {"id": r["id"], "ttype": r["ttype"]} for r in rows}
 
     def ensure(self, definitions):
-        """Create a manual field per Trello custom field. Returns names created."""
-        taken = self.existing_names()
-        created = []
+        """Create or reuse one manual field per distinct Trello field label.
+
+        The same field ("Passport No.") defined separately on several boards
+        maps onto a single Odoo field, so the task form stays readable and the
+        data is comparable across projects. A label reused for a *different*
+        type gets its own suffixed field rather than a type clash.
+        """
+        existing = self.existing_fields()
+        created, shared = [], 0
         for definition in definitions:
             trello_id = definition["id"]
             if trello_id in self.by_trello_id:
@@ -101,14 +116,24 @@ class CustomFieldSync:
                             definition.get("name"), definition.get("type"))
                 continue
 
-            existing_id = self.odoo.ref("cfield", trello_id)
-            if existing_id:
-                rows = self.odoo.search_read("ir.model.fields", [("id", "=", existing_id)], ["name"])
+            known = self.odoo.ref("cfield", trello_id)
+            if known:
+                rows = self.odoo.search_read("ir.model.fields", [("id", "=", known)], ["name"])
                 if rows:
                     self.by_trello_id[trello_id] = (rows[0]["name"], definition)
                     continue
 
-            name = field_name(definition.get("name"), taken)
+            base = base_field_name(definition.get("name"))
+            match = existing.get(base)
+            if match and match["ttype"] == ttype:
+                # Same label, same type: point this Trello field at the field
+                # that already exists instead of making a near-duplicate.
+                self.odoo.stamp("cfield", trello_id, "ir.model.fields", match["id"])
+                self.by_trello_id[trello_id] = (base, definition)
+                shared += 1
+                continue
+
+            name = base if not match else unique_name(base, set(existing))
             field_id, _ = self.odoo.upsert(
                 "cfield", trello_id, "ir.model.fields",
                 {
@@ -122,12 +147,15 @@ class CustomFieldSync:
                 },
                 update=False,
             )
+            existing[name] = {"id": field_id, "ttype": ttype}
             self.by_trello_id[trello_id] = (name, definition)
             created.append((name, definition.get("name"), ttype))
             log.info("  created field %s (%s) for %r", name, ttype, definition.get("name"))
         if created:
             # New columns exist now; drop the cached field layout.
             self.odoo._field_cache.pop(TASK_MODEL, None)
+        if shared:
+            log.info("  reused %d existing fields for same-named Trello fields", shared)
         return created
 
     def values(self, card):
@@ -161,7 +189,7 @@ class CustomFieldSync:
 
     def install_view(self):
         """Add the created fields to the task form via one inherited view."""
-        names = sorted(name for name, _ in self.by_trello_id.values())
+        names = sorted({name for name, _ in self.by_trello_id.values()})
         if not names:
             return
         parent = self._parent_form_view()

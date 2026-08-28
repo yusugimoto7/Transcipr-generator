@@ -229,9 +229,12 @@ made = odoo.records.get("ir.model.fields", {})
 names = sorted(f["name"] for f in made.values())
 print("\ncustom fields created:", names)
 assert "x_trello_passport_no" in names
-assert "x_trello_passport_no_2" in names, "duplicate labels must not collide"
+# "Passport No." and "Passport No!" slug identically and are both text, so
+# they share one Odoo field rather than making a near-duplicate.
+assert "x_trello_passport_no_2" not in names, "same label + same type must share one field"
 assert not any("weird" in n for n in names), "unsupported types must be skipped"
-assert len(made) == 6, made
+assert len(made) == 5, made
+assert m.cfields.by_trello_id["cf6"][0] == "x_trello_passport_no"
 assert call["x_trello_passport_no"] == "W310078746"
 assert call["x_trello_1st_prog_deadline"] == "2026-09-30"
 assert call["x_trello_spouse_age"] == 34.0
@@ -256,6 +259,24 @@ assert moved and "Settled JR files" in moved[0] and "Request Letter Received" in
 print("history note:", moved[0])
 assert s2["activity_created"] == 0, "history must not duplicate on rerun"
 
+
+# --- custom fields shared across boards -------------------------------------
+# A second board redefining the same labels must reuse the same Odoo fields.
+before = len(odoo.records["ir.model.fields"])
+board2 = [
+    {"id": "cf20", "name": "Passport No.", "type": "text"},      # same label + type -> share
+    {"id": "cf21", "name": "passport no", "type": "text"},       # same after slugging -> share
+    {"id": "cf22", "name": "Passport No.", "type": "number"},    # same label, other type -> new
+    {"id": "cf23", "name": "Visa Type", "type": "text"},         # genuinely new -> new
+]
+m2.cfields.ensure(board2)
+after = odoo.records["ir.model.fields"]
+assert len(after) == before + 2, f"expected 2 new fields, got {len(after) - before}"
+assert m2.cfields.by_trello_id["cf20"][0] == "x_trello_passport_no"
+assert m2.cfields.by_trello_id["cf21"][0] == "x_trello_passport_no", "slug-equal labels must share"
+assert m2.cfields.by_trello_id["cf22"][0] == "x_trello_passport_no_2", "type clash needs its own field"
+assert m2.cfields.by_trello_id["cf23"][0] == "x_trello_visa_type"
+print("cross-board field dedup OK — 4 Trello fields onto 2 new Odoo fields")
 
 # --- regression: fields_get must ask for selection values -------------------
 # Without "selection" in the requested attributes, every selection probe reads
