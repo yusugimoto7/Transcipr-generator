@@ -26,7 +26,9 @@ export async function GET() {
         : `${r.items} items · ${r.within30d} within 30d · newest ${
             r.newestDays == null ? "undated" : r.newestDays + "d ago"
           }`;
-      return `<tr><td class="i">${icon}</td><td class="n">${esc(r.name)}<div class="u">${esc(
+      const label = r.title ? `${esc(r.name)} — ${esc(r.title)}` : esc(r.name);
+      const origin = r.from ? `<div class="u">from ${esc(r.from)}</div>` : "";
+      return `<tr><td class="i">${icon}</td><td class="n">${label}${origin}<div class="u">${esc(
         r.url.slice(0, 96)
       )}</div></td><td class="d">${detail}</td></tr>`;
     })
