@@ -51,17 +51,33 @@ function underHourlyCap() {
   return lastHour < MAX_GENERATIONS_PER_HOUR && generationTimestamps.length < MAX_GENERATIONS_PER_DAY;
 }
 
-const MAX_AGE_DAYS = 14; // drop any dated news older than this — hard recency guard
+const MAX_AGE_DAYS = 30; // drop any dated news older than this — hard recency guard
+const NEWS_WINDOW_DAYS = 30; // how far back the feed ingest looks
+const POOL_SIZE = 40; // articles shown to the model per generation (token cap)
+const MAX_CARDS = 12; // cards returned per generation
+
+// Why the last generation produced what it did — surfaced in the API response
+// so an empty deck explains itself instead of just saying "no new topics".
+let lastStats = null;
 
 // Belt-and-suspenders: drop any Express Entry topic even if the model ignored
 // the prompt's exclusion (the brand already covers EE draws elsewhere).
 function isExpressEntry(t) {
   const field = String(t.field || "").toLowerCase();
   if (field.includes("express")) return true;
+  // Only drop items that are actually ABOUT a draw. The old rule killed any
+  // topic that merely mentioned Express Entry or CRS in passing — which is a
+  // large share of Canadian immigration coverage, including PNP and policy
+  // stories the brand does want. Matching on draw language instead keeps those.
   const hay = (
     String(t.title_fa || "") + " " + String(t.title_en || "") + " " + String(t.why_now || "")
   ).toLowerCase();
-  return /express\s*entry|\bcrs\b|اکسپرس\s*انتری|اکسپرس‌انتری/.test(hay);
+  return (
+    /(express\s*entry|اکسپرس\s*انتری|اکسپرس‌انتری)[^.]{0,40}(draw|round|قرعه|دراو)/.test(hay) ||
+    /(draw|round of invitations|قرعه‌کشی)[^.]{0,40}(express\s*entry|اکسپرس)/.test(hay) ||
+    /\bcrs\s*(cut[- ]?off|score of|minimum)/.test(hay) ||
+    /latest\s+draw|draw\s+results|نتایج\s+قرعه/.test(hay)
+  );
 }
 
 // Drop duplicate topics WITHIN one batch (same article by URL, or same title).
@@ -153,20 +169,31 @@ async function generate(clientExclude) {
 // Farsi hooks. Real source_url + published date are re-attached server-side
 // from the article the model referenced by id (the model never invents them).
 async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
-  const { items, feedStatus } = await fetchNews({ maxAgeDays: 7, limit: 30, nowMs });
+  // The seen filter is handed to fetchNews so it applies BEFORE the newest-N
+  // cap. Filtering afterwards was the reason the deck ran dry: the newest 30
+  // articles were a fixed window that gradually filled with articles already
+  // used, and nothing older could move up to take their place.
+  const { items, feedStatus, stats } = await fetchNews({
+    maxAgeDays: NEWS_WINDOW_DAYS,
+    limit: 120,
+    nowMs,
+    isSeen: seenUrlSet
+      ? (it) => {
+          const k = normalizeUrl(it.source_url);
+          return !!(k && seenUrlSet.has(k));
+        }
+      : null,
+  });
   const okFeeds = feedStatus.filter((f) => f.ok).map((f) => f.name);
-  console.log(`[topics] feeds ok: ${okFeeds.join(", ") || "none"}; ${items.length} recent items`);
+  lastStats = { ...stats, feedsOkNames: [...new Set(okFeeds)] };
+  console.log(
+    `[topics] feeds ${stats.feedsOk}/${stats.feedsTotal} ok · fetched ${stats.fetched} · ` +
+      `already used ${stats.alreadyUsed} · duplicate stories ${stats.duplicateStories} · ` +
+      `usable ${stats.usable}`
+  );
   if (!items.length) return [];
 
-  // Skip articles already used (by URL) before spending a model call.
-  const fresh = seenUrlSet
-    ? items.filter((it) => {
-        const k = normalizeUrl(it.source_url);
-        return !(k && seenUrlSet.has(k));
-      })
-    : items;
-  const pool = fresh.slice(0, 20); // cap tokens
-  if (!pool.length) return [];
+  const pool = items.slice(0, POOL_SIZE);
 
   const prompt = topicsFromNewsPrompt(pool, today, exclude);
   let text = "";
@@ -175,10 +202,10 @@ async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
       text = await openaiRewrite(prompt);
     } catch (e) {
       if (!process.env.ANTHROPIC_API_KEY) throw e;
-      text = await callClaude([{ role: "user", content: prompt }], false, 3000);
+      text = await callClaude([{ role: "user", content: prompt }], false, 4000);
     }
   } else {
-    text = await callClaude([{ role: "user", content: prompt }], false, 3000);
+    text = await callClaude([{ role: "user", content: prompt }], false, 4000);
   }
 
   const parsed = parseTopics(text) || [];
@@ -202,7 +229,7 @@ async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
     });
   }
   topics.sort((a, b) => (b.score || 0) - (a.score || 0));
-  return topics.slice(0, 7);
+  return topics.slice(0, MAX_CARDS);
 }
 
 // Old path: ask an LLM (OpenAI search model, else Claude web search) to both
@@ -346,10 +373,15 @@ export async function POST(request) {
     const task = generate(exclude); // updates the cache (with provider) itself
     if (!force) inFlight = task.finally(() => { inFlight = null; });
     const parsed = await task;
-    return Response.json({ topics: parsed, cached: false, provider: cache.provider });
+    return Response.json({
+      topics: parsed,
+      cached: false,
+      provider: cache.provider,
+      stats: lastStats,
+    });
   } catch (e) {
     if (String(e?.message || e) === "parse") {
-      return Response.json({ error: "parse" }, { status: 502 });
+      return Response.json({ error: "parse", stats: lastStats }, { status: 502 });
     }
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
   }
