@@ -196,6 +196,14 @@ function checkKeys() {
           : "USE_OPENAI not 'true'",
     },
     {
+      name: "Models in use",
+      ok: true,
+      detail:
+        `article: ${process.env.OPENAI_ARTICLE_MODEL || "gpt-5.6-sol"} · ` +
+        `script: ${process.env.OPENAI_SCRIPT_MODEL || "gpt-5.6-terra"} · ` +
+        `rewrite: ${process.env.OPENAI_REWRITE_MODEL || "gpt-5.6-luna"}`,
+    },
+    {
       name: "Claude fallback",
       ok: !!process.env.ANTHROPIC_API_KEY,
       detail: process.env.ANTHROPIC_API_KEY ? "key set" : "not set (no safety net)",
