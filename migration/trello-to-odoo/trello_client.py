@@ -68,7 +68,9 @@ class Trello:
 
     def auth_url(self):
         return (
-            f"https://trello.com/1/authorize?expiration=1day&scope=read"
+            # 30 days: a 1-day token dies between the structure pass and the
+            # attachment pass of a large migration.
+            f"https://trello.com/1/authorize?expiration=30days&scope=read"
             f"&response_type=token&name=Odoo%20Migration&key={self.key}"
         )
 
