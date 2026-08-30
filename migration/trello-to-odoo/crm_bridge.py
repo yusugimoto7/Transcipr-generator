@@ -94,6 +94,59 @@ def migrated_projects(odoo):
     return {r["id"]: r["name"] for r in rows}
 
 
+def _install_lead_form_field(odoo):
+    """Put Case Type on the lead form.
+
+    Customized forms (Studio tabs and the like) may not contain the stock
+    anchors, so several are tried in order; the first the server accepts
+    wins.
+    """
+    # Not marked required on the form: that would block saving every lead,
+    # including fresh ones. The requirement is enforced exactly where it
+    # matters — the automation refuses the move to the trigger stage.
+    field_tag = f'<field name="{FIELD}"/>'
+    anchors = [
+        ('//field[@name=\'tag_ids\']', "after"),
+        ('//field[@name=\'expected_revenue\']', "after"),
+        ('//field[@name=\'email_from\']', "after"),
+        ('//group[1]', "inside"),
+        ('//sheet', "inside"),
+        ('//form/*[1]', "before"),
+    ]
+    parents = odoo.search_read(
+        "ir.ui.view",
+        [("model", "=", LEAD), ("type", "=", "form"), ("inherit_id", "=", False)],
+        ["id", "name"],
+    )
+    if not parents:
+        log.warning("no lead form view found — add the Case Type field to the form by hand")
+        return
+
+    view_id = odoo.ref("crmview", "lead_case_type")
+    for parent in parents:
+        for xpath, position in anchors:
+            arch = (f'<data><xpath expr="{xpath}" position="{position}">'
+                    f"{field_tag}</xpath></data>")
+            try:
+                if view_id:
+                    odoo.write("ir.ui.view", [view_id], {
+                        "inherit_id": parent["id"], "arch_db": arch,
+                    })
+                else:
+                    view_id, _ = odoo.upsert("crmview", "lead_case_type", "ir.ui.view", {
+                        "name": "crm.lead.form.case.type", "model": LEAD,
+                        "inherit_id": parent["id"], "arch_db": arch, "priority": 99,
+                    })
+                log.info("Case Type added to lead form %r at %s", parent["name"], xpath)
+                return
+            except OdooError as exc:
+                log.debug("anchor %s on view %s rejected: %s", xpath, parent["name"], exc)
+                continue
+    log.warning("no anchor fit any lead form view — the field exists and the automation "
+                "still blocks the stage move; add the field to the form via the UI "
+                "(Settings > Technical > Views, or Studio)")
+
+
 def install(odoo, stage_needle):
     stage = find_stage(odoo, stage_needle)
     projects = migrated_projects(odoo)
@@ -132,27 +185,7 @@ def install(odoo, stage_needle):
         )
         log.info("created the lead marker field on tasks")
 
-    # Show Case Type on the lead form, next to the tags.
-    arch = ('<data><xpath expr="//field[@name=\'tag_ids\']" position="after">'
-            f'<field name="{FIELD}"/></xpath></data>')
-    try:
-        view_id = odoo.ref("crmview", "lead_case_type")
-        if view_id:
-            odoo.write("ir.ui.view", [view_id], {"arch_db": arch})
-        else:
-            parent = odoo.search_read(
-                "ir.ui.view",
-                [("model", "=", LEAD), ("type", "=", "form"), ("inherit_id", "=", False)],
-                ["id"], limit=1,
-            )
-            odoo.upsert("crmview", "lead_case_type", "ir.ui.view", {
-                "name": "crm.lead.form.case.type", "model": LEAD,
-                "inherit_id": parent[0]["id"], "arch_db": arch, "priority": 99,
-            })
-        log.info("Case Type added to the lead form")
-    except OdooError as exc:
-        log.warning("could not add Case Type to the lead form (%s) — add it via the UI; "
-                    "the field itself exists and the automation works regardless", exc)
+    _install_lead_form_field(odoo)
 
     # Server action holding the logic.
     action_vals = {
