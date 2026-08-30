@@ -648,6 +648,16 @@ def cmd_fields(args, env):
     print(f"{len(syncer.by_trello_id)} Trello custom fields are now Odoo fields on project.task.")
 
 
+def cmd_crm_bridge(args, env):
+    import crm_bridge
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    odoo.preload()
+    stage, projects = crm_bridge.install(odoo, args.stage)
+    print(f"Done. Moving a lead into {stage['name']!r} now requires a Case Type and "
+          f"creates a task in the chosen project ({', '.join(projects.values())}).")
+
+
 def cmd_access(args, env):
     """Mirror Trello board membership as per-project access in Odoo.
 
@@ -767,6 +777,14 @@ def build_parser():
     with_boards(sub.add_parser(
         "fields", help="create the Odoo fields for Trello custom fields, without migrating cards"))
 
+    crm = sub.add_parser(
+        "crm-bridge",
+        help="CRM handoff: Case Type field on leads + automation that creates a "
+             "project task when a lead reaches the execution stage")
+    crm.add_argument("--stage", default="execution",
+                     help="part of the CRM stage name that triggers task creation "
+                          "(default: 'execution')")
+
     with_boards(sub.add_parser(
         "access",
         help="restrict each migrated project to the same people as its Trello board"))
@@ -802,7 +820,7 @@ def main():
         "probe": cmd_probe, "auth-url": cmd_auth_url, "boards": cmd_boards,
         "users": cmd_users, "fields": cmd_fields, "run": cmd_run, "verify": cmd_verify,
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
-        "access": cmd_access,
+        "access": cmd_access, "crm-bridge": cmd_crm_bridge,
     }
     try:
         handlers[args.command](args, env)
