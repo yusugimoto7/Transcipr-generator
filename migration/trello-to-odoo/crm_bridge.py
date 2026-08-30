@@ -36,38 +36,44 @@ for record in records:
         continue
 
     parts = []
-    if record.contact_name or record.partner_id:
-        parts.append('<p><strong>Client:</strong> %s</p>' %
-                     (record.contact_name or record.partner_id.display_name))
-    if record.phone:
-        parts.append('<p><strong>Phone:</strong> %s</p>' % record.phone)
-    if record.email_from:
-        parts.append('<p><strong>Email:</strong> %s</p>' % record.email_from)
+    if record.partner_id:
+        parts.append('<p><strong>Client:</strong> %s</p>' % record.partner_id.display_name)
 
-    # Every custom field on the lead (the Extra Information data) with a
-    # value is copied onto the task: readable ones into a table, uploaded
-    # files re-attached to the task below.
+    # Everything on the lead comes across: the standard CRM fields worth
+    # keeping, in a fixed order, then every custom field. Empty ones are
+    # skipped; uploaded files are re-attached to the task below.
+    allf = model.fields_get()
+    standard = [
+        'contact_name', 'partner_name', 'function', 'phone', 'mobile',
+        'email_from', 'email_cc', 'website', 'street', 'street2', 'city',
+        'state_id', 'zip', 'country_id', 'lang_id', 'user_id', 'team_id',
+        'company_id', 'source_id', 'medium_id', 'campaign_id', 'referred',
+        'priority', 'expected_revenue', 'date_deadline', 'create_date',
+    ]
     custom = env['ir.model.fields'].sudo().search(
         [('model', '=', 'crm.lead'), ('name', '=like', 'x_%'), ('store', '=', True)])
-    meta = model.fields_get([f.name for f in custom])
+    names = [n for n in standard if n in allf]
+    for f in custom:
+        if f.name != 'x_case_type' and f.name in allf and f.name not in names:
+            names.append(f.name)
+
     rows = []
     files = []
-    for f in custom:
-        if f.name == 'x_case_type':
-            continue
-        value = record[f.name]
+    for n in names:
+        value = record[n]
         if not value:
             continue
-        label = f.field_description
-        if f.ttype == 'binary':
+        label = allf[n].get('string') or n
+        ttype = allf[n].get('type')
+        if ttype == 'binary':
             files.append((label, value))
             continue
-        if f.ttype == 'selection':
-            options = dict(meta.get(f.name, {}).get('selection') or [])
+        if ttype == 'selection':
+            options = dict(allf[n].get('selection') or [])
             value = options.get(value, value)
-        elif f.ttype == 'many2one':
+        elif ttype == 'many2one':
             value = value.display_name
-        elif f.ttype in ('one2many', 'many2many'):
+        elif ttype in ('one2many', 'many2many'):
             value = ', '.join(value.mapped('display_name'))
         rows.append('<tr><td style="padding:2px 12px 2px 0; vertical-align:top">'
                     '<strong>%s</strong></td><td>%s</td></tr>' % (label, value))
