@@ -32,22 +32,67 @@ for record in records:
         )
     project_id = int(record.x_case_type)
     Task = env['project.task'].sudo()
-    if not Task.search_count([('x_crm_lead_id', '=', record.id)]):
-        parts = []
-        if record.contact_name or record.partner_id:
-            parts.append('<p><strong>Client:</strong> %s</p>' %
-                         (record.contact_name or record.partner_id.display_name))
-        if record.phone:
-            parts.append('<p><strong>Phone:</strong> %s</p>' % record.phone)
-        if record.email_from:
-            parts.append('<p><strong>Email:</strong> %s</p>' % record.email_from)
-        parts.append('<p><a href="/odoo/crm/%d">Original CRM opportunity</a></p>' % record.id)
-        Task.create({
-            'name': record.name,
-            'project_id': project_id,
-            'partner_id': record.partner_id.id or False,
-            'description': ''.join(parts),
-            'x_crm_lead_id': record.id,
+    if Task.search_count([('x_crm_lead_id', '=', record.id)]):
+        continue
+
+    parts = []
+    if record.contact_name or record.partner_id:
+        parts.append('<p><strong>Client:</strong> %s</p>' %
+                     (record.contact_name or record.partner_id.display_name))
+    if record.phone:
+        parts.append('<p><strong>Phone:</strong> %s</p>' % record.phone)
+    if record.email_from:
+        parts.append('<p><strong>Email:</strong> %s</p>' % record.email_from)
+
+    # Every custom field on the lead (the Extra Information data) with a
+    # value is copied onto the task: readable ones into a table, uploaded
+    # files re-attached to the task below.
+    custom = env['ir.model.fields'].sudo().search(
+        [('model', '=', 'crm.lead'), ('name', '=like', 'x_%'), ('store', '=', True)])
+    meta = model.fields_get([f.name for f in custom])
+    rows = []
+    files = []
+    for f in custom:
+        if f.name == 'x_case_type':
+            continue
+        value = record[f.name]
+        if not value:
+            continue
+        label = f.field_description
+        if f.ttype == 'binary':
+            files.append((label, value))
+            continue
+        if f.ttype == 'selection':
+            options = dict(meta.get(f.name, {}).get('selection') or [])
+            value = options.get(value, value)
+        elif f.ttype == 'many2one':
+            value = value.display_name
+        elif f.ttype in ('one2many', 'many2many'):
+            value = ', '.join(value.mapped('display_name'))
+        rows.append('<tr><td style="padding:2px 12px 2px 0; vertical-align:top">'
+                    '<strong>%s</strong></td><td>%s</td></tr>' % (label, value))
+    if rows:
+        parts.append('<p><strong>CRM information</strong></p>'
+                     '<table dir="auto">%s</table>' % ''.join(rows))
+    if record.description:
+        parts.append('<p><strong>CRM notes</strong></p><div dir="auto">%s</div>'
+                     % record.description)
+    parts.append('<p><a href="/odoo/crm/%d">Original CRM opportunity</a></p>' % record.id)
+
+    task = Task.create({
+        'name': record.name,
+        'project_id': project_id,
+        'partner_id': record.partner_id.id or False,
+        'description': ''.join(parts),
+        'x_crm_lead_id': record.id,
+    })
+    for label, data in files:
+        env['ir.attachment'].sudo().create({
+            'name': label,
+            'res_model': 'project.task',
+            'res_id': task.id,
+            'type': 'binary',
+            'datas': data,
         })
 """.strip()
 
