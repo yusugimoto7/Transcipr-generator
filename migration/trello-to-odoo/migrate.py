@@ -648,6 +648,51 @@ def cmd_fields(args, env):
     print(f"{len(syncer.by_trello_id)} Trello custom fields are now Odoo fields on project.task.")
 
 
+def cmd_access(args, env):
+    """Mirror Trello board membership as per-project access in Odoo.
+
+    Each project is set to "Invited internal users only"
+    (privacy_visibility='followers') and the Odoo users mapped from that
+    board's Trello members are subscribed as followers. Users with Project
+    Administrator rights continue to see every project regardless.
+    """
+    trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    migrator = Migrator(trello, odoo, args)
+
+    for board_id in args.boards:
+        board = trello.board(board_id)
+        project_id = odoo.ref("board", board["id"])
+        if not project_id:
+            log.warning("=== %s: not migrated yet, skipped", board["name"])
+            continue
+        members = trello.members(board_id)
+        members_by_id = {m["id"]: m for m in members}
+        partners, mapped, unmapped = [], [], []
+        for member in members:
+            resolved = migrator.odoo_user(member["id"], members_by_id)
+            if resolved:
+                partners.append(resolved[1])
+                mapped.append(member.get("username"))
+            else:
+                unmapped.append(member.get("username"))
+
+        odoo.write("project.project", [project_id], {"privacy_visibility": "followers"})
+        if partners:
+            odoo.execute(
+                "project.project", "message_subscribe", [project_id],
+                partner_ids=sorted(set(partners)),
+                context=odoo.write_context(),
+            )
+        log.info("=== %s: invited-only, %d members subscribed (%s)",
+                 board["name"], len(set(partners)), ", ".join(mapped))
+        if unmapped:
+            log.warning("    no Odoo user (not subscribed): %s", ", ".join(unmapped))
+    print("Done. Each project is visible to its own Trello members plus project "
+          "administrators. Assignees of a task always see that task.")
+
+
 def cmd_merge_fields(args, env):
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
     odoo.login()
@@ -722,6 +767,10 @@ def build_parser():
     with_boards(sub.add_parser(
         "fields", help="create the Odoo fields for Trello custom fields, without migrating cards"))
 
+    with_boards(sub.add_parser(
+        "access",
+        help="restrict each migrated project to the same people as its Trello board"))
+
     sub.add_parser("merge-fields",
                    help="collapse duplicate x_trello_* fields into one per label, move the "
                         "values across, and rebuild the Trello data tab")
@@ -753,6 +802,7 @@ def main():
         "probe": cmd_probe, "auth-url": cmd_auth_url, "boards": cmd_boards,
         "users": cmd_users, "fields": cmd_fields, "run": cmd_run, "verify": cmd_verify,
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
+        "access": cmd_access,
     }
     try:
         handlers[args.command](args, env)

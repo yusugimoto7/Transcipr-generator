@@ -203,6 +203,18 @@ Keep the Trello boards read-only for a couple of weeks as a safety net —
 close them rather than deleting them. Deleting a Trello board is irreversible
 and takes its attachments with it.
 
+## Access
+
+```bash
+python migrate.py access --boards ID1,ID2,ID3,ID4,ID5
+```
+
+Mirrors Trello board membership: each project becomes "Invited internal users
+only" and the Odoo users mapped from that board's Trello members are
+subscribed to it. Members of one board cannot see another board's project.
+Project Administrators keep seeing everything, and a task's assignee always
+sees their task.
+
 ## Repair commands
 
 Two commands exist to repair data migrated by earlier versions of this tool,
