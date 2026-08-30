@@ -94,6 +94,36 @@ for record in records:
             'type': 'binary',
             'datas': data,
         })
+
+    # Lead tags -> project tags with the same name (created if missing).
+    Tag = env['project.tags'].sudo()
+    tag_ids = []
+    for lead_tag in record.tag_ids:
+        existing = Tag.search([('name', '=', lead_tag.name)], limit=1)
+        tag_ids.append(existing.id if existing else Tag.create({'name': lead_tag.name}).id)
+    if tag_ids:
+        task.write({'tag_ids': [(6, 0, tag_ids)]})
+
+    # Files attached to the lead's chatter come along too.
+    for attachment in env['ir.attachment'].sudo().search(
+            [('res_model', '=', 'crm.lead'), ('res_id', '=', record.id)]):
+        attachment.copy({'res_model': 'project.task', 'res_id': task.id})
+
+    # The lead's conversation: comments and emails, original author and
+    # date kept, posted as internal notes so nobody is re-notified.
+    note_subtype = env.ref('mail.mt_note')
+    for msg in reversed(record.message_ids):
+        if msg.message_type not in ('comment', 'email'):
+            continue
+        env['mail.message'].sudo().create({
+            'model': 'project.task',
+            'res_id': task.id,
+            'message_type': 'comment',
+            'subtype_id': note_subtype.id,
+            'body': msg.body,
+            'author_id': msg.author_id.id or False,
+            'date': msg.date,
+        })
 """.strip()
 
 
