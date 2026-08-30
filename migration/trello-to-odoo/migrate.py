@@ -648,6 +648,68 @@ def cmd_fields(args, env):
     print(f"{len(syncer.by_trello_id)} Trello custom fields are now Odoo fields on project.task.")
 
 
+def cmd_audit(args, env):
+    """Who can actually see which migrated project, and why."""
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    odoo.preload()
+
+    # The five projects: name, visibility, follower partners.
+    stamps = odoo.search_read(
+        "ir.model.data",
+        [("module", "=", "__trello__"), ("model", "=", "project.project")],
+        ["res_id"],
+    )
+    projects = odoo.search_read(
+        "project.project",
+        [("id", "in", [s["res_id"] for s in stamps])],
+        ["name", "privacy_visibility", "message_partner_ids"],
+    )
+
+    # The Project Administrator group: anyone in it sees every project.
+    admin_group = odoo.search_read(
+        "ir.model.data",
+        [("module", "=", "project"), ("name", "=", "group_project_manager")],
+        ["res_id"], limit=1,
+    )
+    admin_group_id = admin_group[0]["res_id"] if admin_group else None
+    user_group = odoo.search_read(
+        "ir.model.data",
+        [("module", "=", "project"), ("name", "=", "group_project_user")],
+        ["res_id"], limit=1,
+    )
+    user_group_id = user_group[0]["res_id"] if user_group else None
+
+    users = odoo.search_read(
+        "res.users", [("share", "=", False)],
+        ["name", "login", "partner_id", "groups_id"],
+    )
+
+    print()
+    for project in sorted(projects, key=lambda p: p["name"]):
+        open_to_all = project["privacy_visibility"] != "followers"
+        flag = "  [!] VISIBLE TO ALL INTERNAL USERS" if open_to_all else ""
+        print(f"=== {project['name']} (visibility: {project['privacy_visibility']}){flag}")
+        followers = set(project["message_partner_ids"])
+        for user in sorted(users, key=lambda u: u["name"].lower()):
+            is_admin = admin_group_id in user["groups_id"] if admin_group_id else False
+            is_follower = user["partner_id"][0] in followers
+            has_project_app = is_admin or (user_group_id in user["groups_id"]
+                                           if user_group_id else False)
+            if is_admin:
+                print(f"  sees ALL   {user['name']} <{user['login']}> — Project Administrator")
+            elif open_to_all and has_project_app:
+                print(f"  sees       {user['name']} <{user['login']}> — project is open")
+            elif is_follower and has_project_app:
+                print(f"  sees       {user['name']} <{user['login']}> — invited member")
+            elif is_follower and not has_project_app:
+                print(f"  BLOCKED    {user['name']} <{user['login']}> — invited, but has no "
+                      "Project access right (set Project: User on their account)")
+        print()
+    print("Everyone not listed under a project cannot see it (except a task's own assignee, "
+          "who always sees that single task).")
+
+
 def cmd_crm_bridge(args, env):
     import crm_bridge
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
@@ -777,6 +839,9 @@ def build_parser():
     with_boards(sub.add_parser(
         "fields", help="create the Odoo fields for Trello custom fields, without migrating cards"))
 
+    sub.add_parser("audit",
+                   help="print who can actually see each migrated project, and why")
+
     crm = sub.add_parser(
         "crm-bridge",
         help="CRM handoff: Case Type field on leads + automation that creates a "
@@ -820,7 +885,7 @@ def main():
         "probe": cmd_probe, "auth-url": cmd_auth_url, "boards": cmd_boards,
         "users": cmd_users, "fields": cmd_fields, "run": cmd_run, "verify": cmd_verify,
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
-        "access": cmd_access, "crm-bridge": cmd_crm_bridge,
+        "access": cmd_access, "crm-bridge": cmd_crm_bridge, "audit": cmd_audit,
     }
     try:
         handlers[args.command](args, env)
