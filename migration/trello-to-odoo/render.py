@@ -95,7 +95,14 @@ def custom_fields_table(rows):
 
 
 def checklists(card_checklists):
-    """Render Trello checklists as a static checkbox list."""
+    """Render Trello checklists as Odoo's interactive checklist blocks.
+
+    ul.o_checklist / li.o_checked is the structure Odoo's HTML editor uses
+    for its own checklists: the boxes are clickable when editing the
+    description, and checked items render struck through — the same
+    behaviour the checklists had in Trello. No live counter is rendered,
+    since the state changes with every click.
+    """
     blocks = []
     for checklist in sorted(card_checklists or [], key=lambda c: c.get("pos") or 0):
         items = sorted(checklist.get("checkItems") or [], key=lambda i: i.get("pos") or 0)
@@ -103,15 +110,12 @@ def checklists(card_checklists):
             continue
         rows = []
         for item in items:
-            done = item.get("state") == "complete"
-            mark = "&#9745;" if done else "&#9744;"
             name = _inline(html.escape(item.get("name") or ""))
-            rows.append(f"<li>{mark} {f'<s>{name}</s>' if done else name}</li>")
-        done_count = sum(1 for i in items if i.get("state") == "complete")
+            cls = ' class="o_checked"' if item.get("state") == "complete" else ""
+            rows.append(f"<li{cls}>{name}</li>")
         blocks.append(
-            f"<p><strong>{escape(checklist.get('name'))}</strong> "
-            f"({done_count}/{len(items)})</p>\n"
-            f'<ul style="list-style:none;padding-left:1em">{"".join(rows)}</ul>'
+            f"<p><strong>{escape(checklist.get('name'))}</strong></p>\n"
+            f'<ul class="o_checklist">{"".join(rows)}</ul>'
         )
     return "\n".join(blocks)
 

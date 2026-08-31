@@ -487,6 +487,31 @@ class Migrator:
         log.info("  %d messages fixed", fixed)
         return fixed
 
+    def fix_board_descriptions(self, board_id):
+        """Rewrite migrated task descriptions with the current rendering.
+
+        Rebuilds each description from Trello exactly as the migration
+        would today (interactive checklists included) and writes it over
+        the stored one. Any manual edits made to a description since the
+        migration are overwritten.
+        """
+        board = self.trello.board(board_id)
+        log.info("=== %s", board["name"])
+        members_by_id = {m["id"]: m for m in self.trello.members(board_id)}
+        stats = {"unmapped_members": set()}
+        fixed = 0
+        for card in self.trello.cards(board_id):
+            task_id = self.odoo.ref("card", card["id"])
+            if not task_id:
+                continue
+            vals = self.task_values(card, 0, {}, {}, members_by_id, 0, stats)
+            self.odoo.write("project.task", [task_id], {"description": vals["description"]})
+            fixed += 1
+            if fixed % 200 == 0:
+                log.info("  %d descriptions rewritten", fixed)
+        log.info("  %d descriptions rewritten", fixed)
+        return fixed
+
     # -- verify ------------------------------------------------------------
 
     def verify_board(self, board_id):
@@ -784,6 +809,15 @@ def cmd_fix_comments(args, env):
     print(f"Rewrote {total} chatter messages with proper HTML.")
 
 
+def cmd_fix_descriptions(args, env):
+    trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    migrator = Migrator(trello, odoo, args)
+    total = sum(migrator.fix_board_descriptions(board_id) for board_id in args.boards)
+    print(f"Rewrote {total} task descriptions with interactive checklists.")
+
+
 def cmd_verify(args, env):
     trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
@@ -859,6 +893,11 @@ def build_parser():
                         "values across, and rebuild the Trello data tab")
 
     with_boards(sub.add_parser(
+        "fix-descriptions",
+        help="rewrite migrated task descriptions so checklists become clickable "
+             "Odoo checklists (overwrites manual description edits)"))
+
+    with_boards(sub.add_parser(
         "fix-comments",
         help="rewrite already-migrated comments/history whose HTML was stored escaped"))
 
@@ -885,6 +924,7 @@ def main():
         "probe": cmd_probe, "auth-url": cmd_auth_url, "boards": cmd_boards,
         "users": cmd_users, "fields": cmd_fields, "run": cmd_run, "verify": cmd_verify,
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
+        "fix-descriptions": cmd_fix_descriptions,
         "access": cmd_access, "crm-bridge": cmd_crm_bridge, "audit": cmd_audit,
     }
     try:

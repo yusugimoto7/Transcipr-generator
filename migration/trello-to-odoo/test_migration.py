@@ -204,7 +204,9 @@ assert call["date_deadline"] == "2026-09-01 16:00:00", call["date_deadline"]
 assert call["user_ids"] == [(6, 0, [1])]
 assert "Ghost Member" in call["description"]
 assert "example.com" in call["description"]
-assert "&#9745;" in call["description"] and "&#9744;" in call["description"]
+assert 'class="o_checklist"' in call["description"], "checklists must be interactive"
+assert '<li class="o_checked">verify</li>' in call["description"]
+assert "<li>sign off</li>" in call["description"]
 done_sub = [t for t in tasks.values() if t.get("name") == "verify"][0]
 assert done_sub["state"] == "1_done"
 msg = list(odoo.records["mail.message"].values())[0]
