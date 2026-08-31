@@ -252,8 +252,12 @@ def rebuild_view(odoo):
         return f'<field name="{r["name"]}" invisible="not {r["name"]}"/>'
     left = "".join(cell(r) for r in rows[0::2])
     right = "".join(cell(r) for r in rows[1::2])
+    # The production task form is Studio-customized and dropped the stock
+    # Description page, leaving the migrated card descriptions stored but
+    # invisible. Re-add a Description page ahead of the Trello data tab.
     arch = (
         '<xpath expr="//notebook" position="inside">'
+        '<page string="Description"><field name="description" nolabel="1"/></page>'
         '<page string="Trello data"><group>'
         f"<group>{left}</group><group>{right}</group>"
         "</group></page></xpath>"
