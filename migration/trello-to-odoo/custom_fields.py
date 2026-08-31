@@ -253,15 +253,20 @@ def rebuild_view(odoo):
     left = "".join(cell(r) for r in rows[0::2])
     right = "".join(cell(r) for r in rows[1::2])
     # The production task form is Studio-customized and dropped the stock
-    # Description page, leaving the migrated card descriptions stored but
-    # invisible. Re-add a Description page ahead of the Trello data tab.
-    arch = (
+    # Description page and the Tags field, leaving migrated card content
+    # stored but invisible. Re-add both: a Description page ahead of the
+    # Trello data tab, and Tags next to the assignees.
+    notebook = (
         '<xpath expr="//notebook" position="inside">'
         '<page string="Description"><field name="description" nolabel="1"/></page>'
         '<page string="Trello data"><group>'
         f"<group>{left}</group><group>{right}</group>"
         "</group></page></xpath>"
     )
+    tags = ('<xpath expr="//field[@name=\'user_ids\']" position="after">'
+            '<field name="tag_ids" widget="many2many_tags" '
+            'options="{\'color_field\': \'color\'}"/></xpath>')
+    arch = notebook + tags
     parent_rows = odoo.search_read(
         "ir.model.data",
         [("module", "=", "project"), ("name", "in", ["view_task_form2", "view_task_form"]),
@@ -288,10 +293,20 @@ def rebuild_view(odoo):
         "priority": 99,
     }
     view_id = odoo.ref("view", VIEW_KEY)
-    if view_id:
-        odoo.write("ir.ui.view", [view_id], {"arch_db": vals["arch_db"]})
-    else:
-        odoo.upsert("view", VIEW_KEY, "ir.ui.view", vals)
+    for attempt_arch in (f"<data>{arch}</data>", f"<data>{notebook}</data>"):
+        vals["arch_db"] = attempt_arch
+        try:
+            if view_id:
+                odoo.write("ir.ui.view", [view_id], {"arch_db": attempt_arch})
+            else:
+                view_id, _ = odoo.upsert("view", VIEW_KEY, "ir.ui.view", vals)
+            break
+        except OdooError as exc:
+            if attempt_arch is not f"<data>{notebook}</data>":
+                log.warning("tags anchor rejected (%s) — retrying without the Tags field",
+                            str(exc).strip().splitlines()[-1])
+                continue
+            raise
     log.info("Trello data tab rebuilt with %d fields (empty ones hidden per task)", len(rows))
 
 
