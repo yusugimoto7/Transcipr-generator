@@ -112,11 +112,36 @@ function igConfig() {
   var host = (p.getProperty('IG_HOST') || 'graph.instagram.com').trim();
   return {
     token: token,
+    // With Instagram Login every account carries its own token, so a second page
+    // means a second token. IG_TOKENS holds the extra ones, comma-separated;
+    // each is asked who it is, so no ids need writing down.
+    extraTokens: (p.getProperty('IG_TOKENS') || '').trim(),
     host: host,
     fbLogin: host.indexOf('graph.facebook.com') === 0,
     accounts: (p.getProperty('IG_ACCOUNTS') || '').trim(),
     sheetId: (p.getProperty('IG_SHEET_ID') || IG_SHEET_ID).trim()
   };
+}
+
+function igAllTokens(cfg) {
+  var list = [cfg.token];
+  cfg.extraTokens.split(',').forEach(function (t) {
+    t = t.trim();
+    if (t && list.indexOf(t) === -1) list.push(t);
+  });
+  return list;
+}
+
+/**
+ * The cfg to use for one account's calls. Accounts discovered through an extra
+ * token keep that token; everything else keeps the primary.
+ */
+function igFor(cfg, acct) {
+  if (!acct.token || acct.token === cfg.token) return cfg;
+  var c = {};
+  for (var k in cfg) c[k] = cfg[k];
+  c.token = acct.token;
+  return c;
 }
 
 function igBook() { return SpreadsheetApp.openById(igConfig().sheetId); }
@@ -193,20 +218,27 @@ function igResetBadMetrics() {
 
 /* ----------------------------------------------------------------- accounts */
 /**
- * Resolves the accounts to collect. IG_ACCOUNTS wins when set; otherwise the
- * token is asked what it can see, which differs by login type.
+ * Resolves the accounts to collect. Every token (IG_TOKEN plus each entry in
+ * IG_TOKENS) is asked who it is, and with Facebook Login one token can answer
+ * with several pages. IG_ACCOUNTS still pins labels to ids, but only in
+ * single-token mode — with several tokens each account's identity comes from
+ * its own token and pinning would only mislabel them.
  */
 var igAccountCache = null;
 function igAccounts(cfg) {
   // Four collections per run would otherwise re-resolve and re-profile every account.
   if (igAccountCache) return igAccountCache;
-  var out = [];
-  if (cfg.accounts) {
+  var out = [], seen = {};
+  var add = function (acct) {
+    if (acct.id && !seen[acct.id]) { seen[acct.id] = true; out.push(acct); }
+  };
+  var tokens = igAllTokens(cfg);
+  if (cfg.accounts && tokens.length === 1) {
     cfg.accounts.split(',').forEach(function (pair) {
       var bits = pair.split(':');
       var id = (bits.pop() || '').trim();
       var label = bits.join(':').trim();
-      if (id) out.push({ id: id, label: label || id });
+      if (id) add({ id: id, label: label || id });
     });
   } else if (cfg.fbLogin) {
     var pages = igFetch(cfg, 'me/accounts', {
@@ -214,21 +246,33 @@ function igAccounts(cfg) {
     });
     (pages.data || []).forEach(function (page) {
       var ig = page.instagram_business_account;
-      if (ig && ig.id) out.push({ id: ig.id, label: ig.username || page.name });
+      if (ig) add({ id: String(ig.id), label: ig.username || page.name });
     });
   } else {
-    var me = igFetch(cfg, 'me', { fields: 'user_id,username' });
-    var id = me.user_id || me.id;
-    if (id) out.push({ id: String(id), label: me.username || String(id) });
+    if (cfg.accounts) {
+      Logger.log('IG_ACCOUNTS is ignored while IG_TOKENS is set: each token names its own account');
+    }
+    tokens.forEach(function (tok) {
+      var scoped = tok === cfg.token ? cfg : igFor(cfg, { token: tok });
+      try {
+        var me = igFetch(scoped, 'me', { fields: 'user_id,username' });
+        var id = me.user_id || me.id;
+        if (id) add({ id: String(id), label: me.username || String(id), token: tok });
+      } catch (err) {
+        Logger.log('a token could not identify itself and was skipped: %s',
+          String(err.message || err).slice(0, 140));
+      }
+    });
   }
   if (!out.length) {
-    throw new Error('No Instagram accounts visible to this token. For Facebook Login set ' +
+    throw new Error('No Instagram accounts visible to these tokens. For Facebook Login set ' +
       'IG_HOST=graph.facebook.com; otherwise set IG_ACCOUNTS to label:instagram_user_id.');
   }
   // followers_count is on the account node, not in insights.
   out.forEach(function (acct) {
     try {
-      var prof = igFetch(cfg, acct.id, { fields: 'username,followers_count,follows_count,media_count' });
+      var prof = igFetch(igFor(cfg, acct), acct.id,
+        { fields: 'username,followers_count,follows_count,media_count' });
       acct.label = acct.label || prof.username;
       acct.followers = prof.followers_count;
       acct.following = prof.follows_count;
@@ -407,8 +451,8 @@ function igCollectDaily() {
       if (have[key] && back >= IG_REFRESH_DAYS) continue;
       if (igOutOfTime()) { ranOut = true; break; }
       if (rows.length >= IG_FLUSH_EVERY) flush();
-      var m = igDayMetrics(cfg, acct.id, day);
-      var split = igFollowSplit(cfg, acct.id, day);
+      var m = igDayMetrics(igFor(cfg, acct), acct.id, day);
+      var split = igFollowSplit(igFor(cfg, acct), acct.id, day);
       rows.push({
         date: day,
         account: acct.label,
@@ -542,7 +586,7 @@ function igCollectPosts() {
   accounts.forEach(function (acct) {
     if (ranOut) return;
     var fields = 'id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count';
-    var json = igFetch(cfg, acct.id + '/media', { fields: fields, limit: 50 });
+    var json = igFetch(igFor(cfg, acct), acct.id + '/media', { fields: fields, limit: 50 });
     var count = 0, skipped = 0, pages = 0, done = false;
     while (json && !done) {
       var items = json.data || [];
@@ -555,7 +599,7 @@ function igCollectPosts() {
         // posts most likely to still be moving.
         if (igOutOfTime()) { ranOut = true; done = true; break; }
         if (rows.length >= IG_FLUSH_EVERY) flush();
-        rows.push(igMediaRow(acct, media, igMediaInsights(cfg, media)));
+        rows.push(igMediaRow(acct, media, igMediaInsights(igFor(cfg, acct), media)));
         count++;
       }
       if (done || !json.paging || !json.paging.next || ++pages > 20) break;
@@ -582,12 +626,12 @@ function igCollectStories() {
   var rows = [], log = [];
   accounts.forEach(function (acct) {
     try {
-      var json = igFetch(cfg, acct.id + '/stories', {
+      var json = igFetch(igFor(cfg, acct), acct.id + '/stories', {
         fields: 'id,caption,media_type,media_product_type,permalink,timestamp'
       });
       (json.data || []).forEach(function (media) {
         if (!media.media_product_type) media.media_product_type = 'STORY';
-        rows.push(igMediaRow(acct, media, igMediaInsights(cfg, media)));
+        rows.push(igMediaRow(acct, media, igMediaInsights(igFor(cfg, acct), media)));
       });
       log.push(acct.label + ': ' + (json.data || []).length + ' live story/stories');
     } catch (err) {
@@ -622,7 +666,7 @@ function igCollectAudience() {
   accounts.forEach(function (acct) {
     ['follower_demographics', 'engaged_audience_demographics'].forEach(function (metric) {
       IG_AUDIENCE_DIMS.forEach(function (dim) {
-        var json = igAudienceFetch(cfg, acct.id, metric, dim);
+        var json = igAudienceFetch(igFor(cfg, acct), acct.id, metric, dim);
         if (!json) { return; }
         var entry = ((json && json.data) || [])[0];
         var breakdowns = entry && entry.total_value && entry.total_value.breakdowns;
@@ -699,13 +743,15 @@ function igSetup() {
   var cfg = igConfig();
   igAccountCache = null;
   Logger.log('host: %s  version: %s', cfg.host, IG_VERSION);
+  Logger.log('tokens configured: %s (IG_TOKEN%s)', igAllTokens(cfg).length,
+    cfg.extraTokens ? ' + IG_TOKENS' : ' only');
   var accounts = igAccounts(cfg);
   accounts.forEach(function (acct) {
     Logger.log('account: %s (id %s) followers=%s posts=%s%s', acct.label, acct.id,
       igBlank(acct.followers), igBlank(acct.mediaCount),
       acct.profileError ? ' PROFILE ERROR: ' + acct.profileError : '');
     try {
-      var probe = igFetch(cfg, acct.id + '/insights', {
+      var probe = igFetch(igFor(cfg, acct), acct.id + '/insights', {
         metric: 'reach', period: 'day', metric_type: 'total_value'
       });
       Logger.log('  insights OK, last 24h reach = %s', igMetricValue((probe.data || [])[0]));
