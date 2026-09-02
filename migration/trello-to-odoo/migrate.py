@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import pathlib
+import re
 import sys
 import xmlrpc.client
 
@@ -738,7 +739,12 @@ def cmd_audit(args, env):
 def cmd_phase2(args, env):
     import phase2
     db = args.db or env("ODOO_DB")
-    odoo = Odoo(env("ODOO_URL"), db, env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    # API keys are per-database: a key made on ODOO_DB won't authenticate
+    # against another one named with --db. ODOO_PASSWORD__<DB> (db name
+    # upper-cased, non-alnum -> "_") lets .env carry a key for each database
+    # without touching the default used everywhere else.
+    db_password = env(f"ODOO_PASSWORD__{re.sub(r'[^A-Za-z0-9]', '_', db).upper()}") or env("ODOO_PASSWORD")
+    odoo = Odoo(env("ODOO_URL"), db, env("ODOO_USERNAME"), db_password)
     odoo.login()
     odoo.preload()
     log.info("Phase 2 on database %r", db)
