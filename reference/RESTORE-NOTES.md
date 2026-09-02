@@ -305,3 +305,37 @@ Route label rule, in order:
 Only step 2 translates, and only on an exact pattern match. Anything BC words
 differently passes through in English rather than being paraphrased — a
 paraphrased eligibility rule is advice, and advice must not be generated.
+
+## Telegram silence after going live: the bot was never in the channel
+
+Switching the node's chatId to @sugimotovisa grants the bot nothing. A bot can
+only post to a channel it administers, and @draw_automation_bot was only ever an
+admin of @testchannel_draws.
+
+Proved read-only, without sending anything, via a throwaway workflow using the
+Telegram node's chat:administrators operation:
+
+    @testchannel_draws -> @draw_automation_bot, status "administrator",
+                          can_post_messages: true
+    @sugimotovisa      -> "Bad Request: member list is inaccessible"
+
+That error means the bot is not in the chat at all. Fix is in Telegram, not in
+n8n: add @draw_automation_bot as an administrator of the channel with Post
+Messages.
+
+The credential in n8n is named "Telegram Notifier bot" but the bot behind it is
+@draw_automation_bot — the credential name is not the bot name, so do not use it
+to identify the bot in a channel's admin list.
+
+chat:administrators is the right probe for any "is the bot allowed here" question:
+it needs no message and its failure text names the actual problem.
+
+## Failures are silent by design — add the alert
+
+Every channel node carries onError: continueRegularOutput so one broken channel
+cannot block the others. The cost is that a channel can fail forever without a
+sound: Instagram kept posting while Telegram published nothing, and it took a
+human noticing to surface it.
+
+Add a node that pings a Telegram chat when any channel errors. The old Render
+code had this as DRAWS_ALERT_CHAT_ID; the same idea belongs in the workflow.
