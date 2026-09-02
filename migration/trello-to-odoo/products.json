@@ -1,0 +1,459 @@
+{
+  "_gov": {
+    "GOV-SP": {
+      "name": "Government fee – Study permit",
+      "price": 150
+    },
+    "GOV-WP": {
+      "name": "Government fee – Work permit",
+      "price": 255
+    },
+    "GOV-TRV": {
+      "name": "Government fee – Visitor visa",
+      "price": 100
+    },
+    "GOV-BIO": {
+      "name": "Government fee – Biometrics (per person, max 170/family)",
+      "price": 85
+    },
+    "GOV-LMIA": {
+      "name": "Government fee – LMIA",
+      "price": 1000
+    },
+    "GOV-REST": {
+      "name": "Government fee – Restoration",
+      "price": 239.75
+    }
+  },
+  "EE": {
+    "name": "Express Entry – PR · اکسپرس انتری",
+    "price": 4000,
+    "addons": {
+      "Spouse": 1000,
+      "Child (each)": 500
+    },
+    "gov": [],
+    "terms": "Payment 1: 1,500 CAD at signing. Payment 2: balance after ITA. Or 4 instalments of 1,000 CAD: signing, +1 month, after ITA, before PR submission. Government fees extra.",
+    "template": true
+  },
+  "PNP": {
+    "name": "PNP – non-Express Entry stream · PNP روش مستقیم",
+    "price": 4000,
+    "addons": {
+      "Spouse": 1000,
+      "Child (each)": 500
+    },
+    "gov": [],
+    "terms": "Payment 1: 50% at signing. Payment 2: 50% after provincial nomination. Or 4 instalments of 1,000 CAD. Government fees extra.",
+    "template": true
+  },
+  "PNP-EE": {
+    "name": "PNP – Express Entry stream · PNP روش اکسپرس انتری",
+    "price": 4500,
+    "addons": {
+      "Spouse": 1000,
+      "Child (each)": 500
+    },
+    "gov": [],
+    "terms": "Payment 1: 50% at signing. Payment 2: 50% after provincial nomination. Or 4 instalments: 1,000 / 1,000 / 1,000 / 1,500 CAD. Government fees extra.",
+    "template": true
+  },
+  "SP-ADM": {
+    "name": "Admission + Study permit (college/university) · پذیرش و ویزای تحصیلی",
+    "price": 2200,
+    "addons": {
+      "Spouse open work permit": 800,
+      "Child study permit (each, max 500)": 250
+    },
+    "gov": [
+      "GOV-SP",
+      "GOV-WP",
+      "GOV-BIO"
+    ],
+    "terms": "50% at signing (admission process starts). 50% after the original letter of acceptance. Opening offer 2,200 CAD; floor 1,800 CAD. Government fees extra.",
+    "template": true
+  },
+  "SP-ADM-K12": {
+    "name": "Admission + Study permit (school student) · پذیرش و ویزای تحصیلی دانش آموزی",
+    "price": 2200,
+    "addons": {
+      "Accompanying parent visitor visa": 800
+    },
+    "gov": [
+      "GOV-SP",
+      "GOV-TRV",
+      "GOV-BIO"
+    ],
+    "terms": "50% at signing. 50% after the original letter of acceptance. Government fees extra.",
+    "template": true
+  },
+  "SP-ONLY": {
+    "name": "Study permit only (admission in hand) · فقط ویزای تحصیلی",
+    "price": 1400,
+    "addons": {
+      "Spouse open work permit": 800,
+      "Child visitor visa (each)": 250
+    },
+    "gov": [
+      "GOV-SP",
+      "GOV-WP",
+      "GOV-TRV",
+      "GOV-BIO"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "TRV": {
+    "name": "Visitor visa (TRV) · ویزای ویزیتوری",
+    "price": 1200,
+    "addons": {
+      "Spouse": 300,
+      "Child (each; 3rd child onward free)": 200
+    },
+    "gov": [
+      "GOV-TRV",
+      "GOV-BIO"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "BV": {
+    "name": "Business visitor visa · ویزای بیزنس ویزیتور",
+    "price": 1200,
+    "addons": {
+      "Spouse": 300,
+      "Child (each; 3rd child onward free)": 200,
+      "Event / conference invitation letter": 500
+    },
+    "gov": [
+      "GOV-TRV",
+      "GOV-BIO"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "SUPERVISA": {
+    "name": "Parents' super visa · سوپر ویزای والدین",
+    "price": 1500,
+    "addons": {
+      "Spouse": 500
+    },
+    "gov": [
+      "GOV-TRV",
+      "GOV-BIO"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "OWP-ACC": {
+    "name": "Accompanying work permit (spouse/children of student or worker) · ورک پرمیت همراه",
+    "price": 1400,
+    "addons": {
+      "Child study permit (each)": 200
+    },
+    "gov": [],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "IN-WP": {
+    "name": "In-Canada work permit (2025 update) · ورک پرمیت داخل کانادا",
+    "price": 700,
+    "addons": {
+      "Spouse": 200
+    },
+    "gov": [
+      "GOV-WP"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "IN-TRV": {
+    "name": "In-Canada visitor visa (TRV, permit holders) · ویزای توریستی داخل کانادا",
+    "price": 700,
+    "addons": {
+      "Spouse": 200,
+      "Child (one; further children free)": 200
+    },
+    "gov": [
+      "GOV-TRV"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "VR": {
+    "name": "Visitor record · ویزیتور ریکورد",
+    "price": 700,
+    "addons": {},
+    "gov": [
+      "GOV-TRV"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "SPX": {
+    "name": "Study permit extension · تمدید اجازه تحصیل",
+    "price": 700,
+    "addons": {},
+    "gov": [
+      "GOV-SP"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "PGWP": {
+    "name": "Post-graduation work permit · اجازه کار پس از تحصیل",
+    "price": 800,
+    "addons": {
+      "Spouse": 400
+    },
+    "gov": [
+      "GOV-WP"
+    ],
+    "terms": "Full contract amount plus government fees at signing.",
+    "template": true
+  },
+  "PERMIT-AMEND": {
+    "name": "Permit amendment in Canada · اصلاحیه پرمیت",
+    "price": 500,
+    "addons": {},
+    "gov": [],
+    "terms": "Full contract amount at signing. No government fee.",
+    "template": true
+  },
+  "RESTORE": {
+    "name": "Restoration of status (added to the permit service) · Restoration",
+    "price": 300,
+    "addons": {},
+    "gov": [
+      "GOV-REST"
+    ],
+    "terms": "Full contract amount plus government fee at signing.",
+    "template": true
+  },
+  "CAREGIVER": {
+    "name": "Caregiver – PR · پرستار خانگی",
+    "price": 5000,
+    "addons": {
+      "Spouse": 1000,
+      "Child (each)": 500
+    },
+    "gov": [],
+    "terms": "Stage 1: 2,000 CAD at signing. Stage 2: balance when 2026 details are announced, before PR submission. 50% refund if we cannot submit. 2026 capacity: 5 contracts.",
+    "template": true
+  },
+  "WP-ABROAD": {
+    "name": "Work permit from outside Canada · ورک پرمیت از خارج کانادا",
+    "price": 3000,
+    "addons": {},
+    "gov": [],
+    "terms": "50% at signing, 50% before submission to IRCC.",
+    "template": true
+  },
+  "PRC-RENEW": {
+    "name": "PR card renewal (no issues) · تمدید کارت اقامت دائم",
+    "price": 2000,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "PR-RENOUNCE": {
+    "name": "PR renunciation · PR Renounce",
+    "price": 1500,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "PRC-LOST": {
+    "name": "Replacement of lost PR card · صدور مجدد کارت PR",
+    "price": 1500,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "CIT": {
+    "name": "Citizenship application · درخواست شهروندی",
+    "price": 1500,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "CIT-LEGAL": {
+    "name": "Citizenship application with legal issue · شهروندی با مشکل قانونی",
+    "price": 6000,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "JR": {
+    "name": "Judicial review – refusal handled by us · Judicial Review",
+    "price": 2500,
+    "addons": {},
+    "gov": [],
+    "terms": "Full amount at signing. Federal Court work is done with PAX Law.",
+    "template": true
+  },
+  "JR-REPEAT": {
+    "name": "Judicial review – second time on the same file · Judicial Review دوم",
+    "price": 2000,
+    "addons": {},
+    "gov": [],
+    "terms": "Full amount at signing. Federal Court work is done with PAX Law.",
+    "template": true
+  },
+  "JR-EXT": {
+    "name": "Judicial review – refusal not handled by us · Judicial Review خارجی",
+    "price": 3500,
+    "addons": {},
+    "gov": [],
+    "terms": "Full amount at signing (2,500 PAX Law + 1,000 SugimotoVisa).",
+    "template": true
+  },
+  "MANDAMUS": {
+    "name": "Mandamus (delay litigation) · مانداموس",
+    "price": 2500,
+    "addons": {},
+    "gov": [],
+    "terms": "Stage 1: 750 CAD – demand letter. Stage 2: 1,750 CAD – Federal Court filing.",
+    "template": true
+  },
+  "PR-RO": {
+    "name": "PR residency obligation · PR: Residency Obligation",
+    "price": 6000,
+    "addons": {},
+    "gov": [],
+    "terms": "Full amount at signing.",
+    "template": true
+  },
+  "PFL": {
+    "name": "Procedural fairness letter response · پاسخ به PFL",
+    "price": 2500,
+    "addons": {},
+    "gov": [],
+    "terms": "Full amount at signing. Fixed at 3,000–5,000 CAD after reviewing the letter; payment plan available.",
+    "template": true
+  },
+  "HC": {
+    "name": "Humanitarian & compassionate (in Canada) · روش بشر دوستانه H&C",
+    "price": 6500,
+    "addons": {},
+    "gov": [],
+    "terms": "2,000 CAD at signing, 2,000 CAD after 3 months, 1,500 CAD after 6 months. Delivered by Parsay; coordinate with Mr Hossein.",
+    "template": true
+  },
+  "REF": {
+    "name": "Refugee claim – without hearing · پناهندگی بدون دادگاه",
+    "price": 4500,
+    "addons": {},
+    "gov": [],
+    "terms": "3,000 CAD at signing, 1,500 CAD after submission. Delivered by Parsay.",
+    "template": true
+  },
+  "REF-HEAR": {
+    "name": "Refugee claim – with hearing · پناهندگی با دادگاه",
+    "price": 6500,
+    "addons": {},
+    "gov": [],
+    "terms": "3,000 CAD at signing, 1,500 CAD after submission, 2,000 CAD after the hearing notice. Delivered by Parsay.",
+    "template": true
+  },
+  "LMIA": {
+    "name": "LMIA with employer · قرارداد LMIA",
+    "price": 4000,
+    "addons": {},
+    "gov": [
+      "GOV-LMIA"
+    ],
+    "terms": "Full LMIA amount at signing. Work-permit contract starts after LMIA is issued.",
+    "template": true
+  },
+  "LMIA-WP": {
+    "name": "Work permit under LMIA · ورک پرمیت LMIA",
+    "price": 2500,
+    "addons": {
+      "Spouse work permit": 1000,
+      "Child visitor visa (each)": 500
+    },
+    "gov": [],
+    "terms": "50% at signing, 50% before submission to IRCC. Government fees extra.",
+    "template": true
+  },
+  "SPON-SPOUSE": {
+    "name": "Spousal / common-law sponsorship · اسپانسرشیپ همسر",
+    "price": 4000,
+    "addons": {},
+    "gov": [],
+    "terms": "50% at signing, 50% before submission. Or 4 monthly instalments of 1,000 CAD.",
+    "template": true
+  },
+  "SPON-CHILD": {
+    "name": "Child sponsorship · اسپانسرشیپ فرزند",
+    "price": 4000,
+    "addons": {},
+    "gov": [],
+    "terms": "50% at signing, 50% before submission.",
+    "template": true
+  },
+  "SPON-PARENT": {
+    "name": "Parent sponsorship · اسپانسرشیپ والدین",
+    "price": 5000,
+    "addons": {
+      "Second parent": 2000
+    },
+    "gov": [],
+    "terms": "50% at signing, 50% before submission.",
+    "template": true
+  },
+  "SPON-REFUSED": {
+    "name": "Refused sponsorship · رد شدن اسپانسرشیپ",
+    "price": 10000,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "PROV-CERT": {
+    "name": "Provincial certification – specific occupations · تایید استانی مشاغل خاص",
+    "price": 2000,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "TD-REF": {
+    "name": "Travel document – refugee · تراول داکیومنت Refugee",
+    "price": 2000,
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "TD-PR": {
+    "name": "Travel document – PR · تراول داکیومنت PR",
+    "price": 0,
+    "addons": {},
+    "gov": [],
+    "terms": "Price not set in the price list.",
+    "template": true
+  },
+  "DETENTION": {
+    "name": "Immigration / border detention · بازداشت مهاجرتی",
+    "price": 3000,
+    "addons": {},
+    "gov": [],
+    "terms": "3,000–9,000 CAD depending on the case; quote per file.",
+    "template": true
+  },
+  "PRRA": {
+    "name": "Pre-removal risk assessment · PRRA",
+    "price": 3000,
+    "addons": {},
+    "gov": [],
+    "terms": "3,000–9,000 CAD depending on the case; quote per file.",
+    "template": true
+  }
+}
