@@ -735,6 +735,29 @@ def cmd_audit(args, env):
           "who always sees that single task).")
 
 
+def cmd_phase2(args, env):
+    import phase2
+    db = args.db or env("ODOO_DB")
+    odoo = Odoo(env("ODOO_URL"), db, env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    odoo.preload()
+    log.info("Phase 2 on database %r", db)
+    if args.step == "plan":
+        phase2.plan(odoo)
+    elif args.step == "install":
+        phase2.install(odoo, args.stage)
+        print("\nInstalled. CRM behaviour is unchanged: the automation is switched OFF.\n"
+              "Review products and quotation templates in Sales, test one quotation, then "
+              "run `phase2 activate` when satisfied.")
+    elif args.step == "activate":
+        phase2.set_active(odoo, True)
+        print("Phase 2 automation is ACTIVE: a signed quotation now moves its opportunity "
+              "to the payment stage.")
+    elif args.step == "deactivate":
+        phase2.set_active(odoo, False)
+        print("Phase 2 automation switched off.")
+
+
 def cmd_crm_bridge(args, env):
     import crm_bridge
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
@@ -876,6 +899,16 @@ def build_parser():
     sub.add_parser("audit",
                    help="print who can actually see each migrated project, and why")
 
+    p2 = sub.add_parser("phase2",
+                        help="contracts as quotations: plan / install (CRM untouched, "
+                             "automation off) / activate / deactivate")
+    p2.add_argument("step", choices=["plan", "install", "activate", "deactivate"])
+    p2.add_argument("--db", help="run against another database, e.g. --db test "
+                                 "(default: ODOO_DB from .env)")
+    p2.add_argument("--stage", default="20",
+                    help="part of the CRM stage name a signed quotation moves the lead to "
+                         "(default: '20')")
+
     crm = sub.add_parser(
         "crm-bridge",
         help="CRM handoff: Case Type field on leads + automation that creates a "
@@ -926,6 +959,7 @@ def main():
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
         "fix-descriptions": cmd_fix_descriptions,
         "access": cmd_access, "crm-bridge": cmd_crm_bridge, "audit": cmd_audit,
+        "phase2": cmd_phase2,
     }
     try:
         handlers[args.command](args, env)

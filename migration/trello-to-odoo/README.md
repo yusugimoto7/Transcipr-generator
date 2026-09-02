@@ -215,6 +215,21 @@ subscribed to it. Members of one board cannot see another board's project.
 Project Administrators keep seeing everything, and a task's assignee always
 sees their task.
 
+## Phase 2 — contracts as quotations (CRM untouched until you say so)
+
+```bash
+python migrate.py phase2 plan               # read-only: finds your Contract Types, writes products.json
+python migrate.py phase2 install --db test  # products, quotation templates, signature setting; automation OFF
+python migrate.py phase2 install            # same, on production, once test looks right
+python migrate.py phase2 activate           # switch the CRM automation on — only after checking
+```
+
+`install` creates one service product and one quotation template per contract
+type from `products.json`, turns on online signature for quotations (online
+payment stays off — bookkeeping remains in QuickBooks), and installs the
+"quotation signed → opportunity to payment stage" automation switched off. Until
+`activate`, nothing in CRM behaves differently.
+
 ## Repair commands
 
 Two commands exist to repair data migrated by earlier versions of this tool,
