@@ -339,3 +339,23 @@ human noticing to surface it.
 
 Add a node that pings a Telegram chat when any channel errors. The old Render
 code had this as DRAWS_ALERT_CHAT_ID; the same idea belongs in the workflow.
+
+## Telegram fixed and verified 2026-09-02
+
+@draw_automation_bot added as an administrator of @sugimotovisa. Re-checked
+read-only via chat:administrators — status "administrator",
+can_post_messages: true. No test message was sent to the live channel.
+
+## Three card shapes, chosen by what the province published
+
+  single  — one row.  Original locked design, untouched.
+  routes  — several rows sharing ONE stream name. One draw selected by more
+            than one route: one total, the stream name once, the routes listed
+            with their own counts. BC's Innovate does this every draw.
+  streams — several rows, different stream names. Per-stream breakdown.
+
+Route labels come from routeLabel(score, factors), in order: the score if there
+is one; else BC's own wage wording translated on an exact pattern match; else
+the factors text verbatim in English; else «بدون اعلام حداقل نمره». Only the
+wage pattern is ever translated — anything else passes through untouched,
+because a paraphrased eligibility rule is advice.
