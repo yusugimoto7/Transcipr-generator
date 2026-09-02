@@ -813,6 +813,47 @@ def cmd_access(args, env):
           "administrators. Assignees of a task always see that task.")
 
 
+def cmd_grant(args, env):
+    """Subscribe specific Odoo users to a project as followers, outside of
+
+    Trello membership (e.g. someone who needs access but was never on the
+    Trello board). Does not touch users.json or the Trello-mirrored access
+    set by `access` — rerunning `access` later will not revoke this grant
+    unless the project is also removed from privacy_visibility.
+    """
+    odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
+    odoo.login()
+    projects = odoo.search_read(
+        "project.project", [("name", "ilike", args.project)], ["id", "name"])
+    if not projects:
+        sys.exit(f"error: no project matches {args.project!r}")
+    if len(projects) > 1:
+        sys.exit("error: multiple projects match {!r}: {}".format(
+            args.project, ", ".join(p["name"] for p in projects)))
+    project = projects[0]
+
+    partner_ids = []
+    for email in args.emails:
+        users = odoo.search_read(
+            "res.users", ["|", ("login", "=", email), ("email", "=", email)],
+            ["id", "partner_id"], limit=1, context={"active_test": False})
+        if not users:
+            log.warning("no Odoo user for %s — skipped", email)
+            continue
+        partner_ids.append(users[0]["partner_id"][0])
+
+    if not partner_ids:
+        sys.exit("error: none of the given emails match an Odoo user")
+
+    odoo.write("project.project", [project["id"]], {"privacy_visibility": "followers"})
+    odoo.execute(
+        "project.project", "message_subscribe", [project["id"]],
+        partner_ids=partner_ids,
+        context=odoo.write_context(),
+    )
+    print(f"Subscribed {len(partner_ids)} user(s) to '{project['name']}'.")
+
+
 def cmd_merge_fields(args, env):
     odoo = Odoo(env("ODOO_URL"), env("ODOO_DB"), env("ODOO_USERNAME"), env("ODOO_PASSWORD"))
     odoo.login()
@@ -921,6 +962,16 @@ def build_parser():
         "access",
         help="restrict each migrated project to the same people as its Trello board"))
 
+    grant = sub.add_parser(
+        "grant",
+        help="give specific Odoo users access to one project, outside of Trello "
+             "membership (e.g. someone new who wasn't on the Trello board)")
+    grant.add_argument("--project", required=True,
+                       help="project name or a unique substring of it, e.g. 'SUV-Biz-Team'")
+    grant.add_argument("--emails", required=True,
+                       type=lambda s: [e.strip() for e in s.split(",") if e.strip()],
+                       help="comma-separated Odoo logins/emails to add as followers")
+
     sub.add_parser("merge-fields",
                    help="collapse duplicate x_trello_* fields into one per label, move the "
                         "values across, and rebuild the Trello data tab")
@@ -959,7 +1010,7 @@ def main():
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
         "fix-descriptions": cmd_fix_descriptions,
         "access": cmd_access, "crm-bridge": cmd_crm_bridge, "audit": cmd_audit,
-        "phase2": cmd_phase2,
+        "phase2": cmd_phase2, "grant": cmd_grant,
     }
     try:
         handlers[args.command](args, env)
