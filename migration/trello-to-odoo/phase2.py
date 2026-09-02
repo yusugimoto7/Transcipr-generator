@@ -37,8 +37,12 @@ for order in records:
         order.name,
         ', '.join(order.order_line.mapped('product_id.name')),
         order.currency_id.symbol, order.amount_total))
-    lead.sudo().message_post(body=body, message_type='comment',
-                             subtype_xmlid='mail.mt_note')
+    # mail.message.create keeps the HTML; message_post would escape a str body.
+    env['mail.message'].sudo().create({
+        'model': 'crm.lead', 'res_id': lead.id, 'body': body,
+        'message_type': 'comment', 'subtype_id': env.ref('mail.mt_note').id,
+        'author_id': env.user.partner_id.id,
+    })
     if stage and lead.stage_id != stage:
         lead.sudo().write({'stage_id': stage.id})
 """.strip()
@@ -269,9 +273,12 @@ def install(odoo, stage_needle, currency_check=True):
     if auto_id:
         odoo.write("base.automation", [auto_id], {k: v for k, v in auto_vals.items()
                                                   if k != "active"})
+        state = odoo.search_read("base.automation", [("id", "=", auto_id)], ["active"],
+                                 context={"active_test": False})[0]["active"]
+        log.info("  automation updated, left %s", "ACTIVE" if state else "switched off")
     else:
         odoo.upsert("p2auto", "signed", "base.automation", auto_vals)
-    log.info("  automation installed and SWITCHED OFF (run `phase2 activate` after checking)")
+        log.info("  automation installed and SWITCHED OFF (run `phase2 activate` after checking)")
     return product_ids
 
 

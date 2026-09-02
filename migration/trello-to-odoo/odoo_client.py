@@ -10,7 +10,44 @@ source of truth.
 import logging
 import xmlrpc.client
 
+import requests
+
 log = logging.getLogger(__name__)
+
+
+class _RequestsTransport(xmlrpc.client.Transport):
+    """XML-RPC over requests, so HTTPS_PROXY / REQUESTS_CA_BUNDLE apply.
+
+    The stdlib transport opens sockets directly and ignores proxy settings,
+    which fails inside sandboxes that only allow egress through a proxy.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.session = requests.Session()
+
+    def request(self, host, handler, request_body, verbose=False):
+        scheme = "https" if isinstance(self, xmlrpc.client.SafeTransport) else "http"
+        response = self.session.post(
+            f"{scheme}://{host}{handler}", data=request_body,
+            headers={"Content-Type": "text/xml"}, timeout=600,
+        )
+        if response.status_code != 200:
+            raise xmlrpc.client.ProtocolError(
+                host + handler, response.status_code, response.reason, response.headers)
+        parser, unmarshaller = self.getparser()
+        parser.feed(response.content)
+        parser.close()
+        return unmarshaller.close()
+
+
+class _RequestsSafeTransport(_RequestsTransport, xmlrpc.client.SafeTransport):
+    pass
+
+
+def _server_proxy(url):
+    transport = _RequestsSafeTransport() if url.startswith("https") else _RequestsTransport()
+    return xmlrpc.client.ServerProxy(url, allow_none=True, transport=transport)
 
 MODULE = "__trello__"
 
@@ -29,8 +66,8 @@ class Odoo:
         self.db = db
         self.username = username
         self.password = password
-        self.common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common", allow_none=True)
-        self.models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object", allow_none=True)
+        self.common = _server_proxy(f"{self.url}/xmlrpc/2/common")
+        self.models = _server_proxy(f"{self.url}/xmlrpc/2/object")
         self.uid = None
         self._field_cache = {}
         self._refs = None  # name -> res_id, filled by preload()
