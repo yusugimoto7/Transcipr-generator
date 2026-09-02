@@ -28,7 +28,7 @@ def build():
             entry["components"] = [{"code": c, "name": f"{en} · {fa}", "price": p}
                                    for c, en, fa, p in s["components"]]
         out[key] = entry
-    OUT.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    OUT.write_text(json.dumps(out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {OUT}: {len(out) - 1} services, {len(GOV)} government fees")
 
 

@@ -125,7 +125,7 @@ def plan(odoo):
 
     print()
     if PRODUCTS.exists():
-        catalogue = json.loads(PRODUCTS.read_text())
+        catalogue = json.loads(PRODUCTS.read_text(encoding="utf-8"))
         services = [k for k in catalogue if not k.startswith("_")]
         print(f"{PRODUCTS.name}: {len(services)} services, "
               f"{len(catalogue.get('_gov', {}))} government fees (from the Canada price list). "
@@ -137,7 +137,7 @@ def plan(odoo):
 def install(odoo, stage_needle, currency_check=True):
     if not PRODUCTS.exists():
         raise OdooError("products.json not found — run `phase2 plan` and fill in prices first")
-    products = json.loads(PRODUCTS.read_text())
+    products = json.loads(PRODUCTS.read_text(encoding="utf-8"))
     if not _model_exists(odoo, "sale.order"):
         raise OdooError("the Sales app is not installed (Apps > Sales)")
     has_templates = _model_exists(odoo, "sale.order.template")

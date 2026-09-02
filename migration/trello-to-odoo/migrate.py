@@ -571,7 +571,7 @@ def split_attachments(card):
 def load_user_map():
     if not USER_MAP.exists():
         return {}
-    raw = json.loads(USER_MAP.read_text())
+    raw = json.loads(USER_MAP.read_text(encoding="utf-8"))
     return {k: v for k, v in raw.items() if v}
 
 
@@ -608,11 +608,11 @@ def cmd_boards(args, env):
 
 def cmd_users(args, env):
     trello = Trello(env("TRELLO_API_KEY"), env("TRELLO_TOKEN"))
-    mapping = json.loads(USER_MAP.read_text()) if USER_MAP.exists() else {}
+    mapping = json.loads(USER_MAP.read_text(encoding="utf-8")) if USER_MAP.exists() else {}
     for board_id in args.boards:
         for member in trello.members(board_id):
             mapping.setdefault(member["username"], "")
-    USER_MAP.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n")
+    USER_MAP.write_text(json.dumps(mapping, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"Wrote {USER_MAP} with {len(mapping)} Trello members.")
     print("Fill in each Odoo login (email) — leave blank to skip that person; "
           "unmapped members are named in the task description instead.\n")
@@ -656,7 +656,7 @@ def cmd_run(args, env):
         log.info("DRY RUN — nothing will be written to Odoo")
     for board_id in args.boards:
         migrator.migrate_board(board_id)
-    REPORT.write_text(json.dumps(migrator.report, indent=2, default=list) + "\n")
+    REPORT.write_text(json.dumps(migrator.report, indent=2, default=list) + "\n", encoding="utf-8")
     log.info("Report written to %s", REPORT)
 
 
