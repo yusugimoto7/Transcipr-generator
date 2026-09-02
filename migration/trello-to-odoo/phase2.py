@@ -165,11 +165,22 @@ def install(odoo, stage_needle, currency_check=True):
     for key, spec in products.items():
         if key.startswith("_") or not spec.get("name"):
             continue
-        pid, vid, created = make_product(key, spec["name"], spec.get("price"))
-        product_ids[key], variants[key] = pid, vid
-        log.info("  service  %-12s %-55s %s", key, spec["name"][:55], "created" if created else "ok")
-        if not spec.get("price"):
-            log.warning("    price is 0 for %s — set it in products.json", key)
+        if spec.get("components"):
+            # Combined contract (Sparkbridge + Sugimoto): one product per
+            # component, each becomes its own quotation line.
+            variants[key] = []
+            for comp in spec["components"]:
+                _, cvid, created = make_product(comp["code"], comp["name"], comp["price"])
+                variants[key].append((cvid, comp["name"], comp["price"]))
+                log.info("  component %-12s %-55s %s", comp["code"], comp["name"][:55],
+                         "created" if created else "ok")
+            product_ids[key] = None
+        else:
+            pid, vid, created = make_product(key, spec["name"], spec.get("price"))
+            product_ids[key], variants[key] = pid, vid
+            log.info("  service  %-12s %-55s %s", key, spec["name"][:55], "created" if created else "ok")
+            if not spec.get("price") and key != "CUSTOM":
+                log.warning("    price is 0 for %s — set it in products.json", key)
         addon_variants[key] = []
         for i, (label, price) in enumerate(spec.get("addons", {}).items(), start=1):
             akey = f"{key}-A{i}"
@@ -193,10 +204,15 @@ def install(odoo, stage_needle, currency_check=True):
                 "note": spec.get("terms") or "",
             }
             if not existing:
-                vals["sale_order_template_line_ids"] = [(0, 0, {
-                    "product_id": variants[key], "product_uom_qty": 1,
-                    "name": spec["name"],
-                })]
+                if isinstance(variants[key], list):
+                    vals["sale_order_template_line_ids"] = [
+                        (0, 0, {"product_id": v, "product_uom_qty": 1, "name": n})
+                        for v, n, _ in variants[key]]
+                else:
+                    vals["sale_order_template_line_ids"] = [(0, 0, {
+                        "product_id": variants[key], "product_uom_qty": 1,
+                        "name": spec["name"],
+                    })]
                 options = [(0, 0, {"product_id": v, "quantity": 1, "name": label})
                            for v, label in addon_variants[key]]
                 options += [(0, 0, {"product_id": gov_variants[g], "quantity": 1,
