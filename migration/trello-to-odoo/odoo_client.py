@@ -45,7 +45,7 @@ class _RequestsSafeTransport(_RequestsTransport, xmlrpc.client.SafeTransport):
     pass
 
 
-def _server_proxy(url):
+def server_proxy(url):
     transport = _RequestsSafeTransport() if url.startswith("https") else _RequestsTransport()
     return xmlrpc.client.ServerProxy(url, allow_none=True, transport=transport)
 
@@ -66,8 +66,8 @@ class Odoo:
         self.db = db
         self.username = username
         self.password = password
-        self.common = _server_proxy(f"{self.url}/xmlrpc/2/common")
-        self.models = _server_proxy(f"{self.url}/xmlrpc/2/object")
+        self.common = server_proxy(f"{self.url}/xmlrpc/2/common")
+        self.models = server_proxy(f"{self.url}/xmlrpc/2/object")
         self.uid = None
         self._field_cache = {}
         self._refs = None  # name -> res_id, filled by preload()

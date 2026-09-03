@@ -38,7 +38,7 @@ from dotenv import load_dotenv
 
 import render
 from custom_fields import CustomFieldSync, drop_view, merge_duplicate_fields, rebuild_view
-from odoo_client import Odoo, OdooError
+from odoo_client import Odoo, OdooError, server_proxy
 from trello_client import Trello, TrelloError
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -580,10 +580,10 @@ def cmd_probe(args, env):
     url = env("ODOO_URL")
     if not url:
         sys.exit("ODOO_URL is not set in .env")
-    common = xmlrpc.client.ServerProxy(f"{url.rstrip('/')}/xmlrpc/2/common", allow_none=True)
+    common = server_proxy(f"{url.rstrip('/')}/xmlrpc/2/common")
     print("Odoo version:", json.dumps(common.version(), indent=2))
     try:
-        db = xmlrpc.client.ServerProxy(f"{url.rstrip('/')}/xmlrpc/2/db", allow_none=True)
+        db = server_proxy(f"{url.rstrip('/')}/xmlrpc/2/db")
         print("Databases:", db.list())
     except Exception as exc:  # db listing is commonly disabled in production
         print("Database list unavailable (normal on hosted Odoo):", exc)
