@@ -57,6 +57,13 @@ for order in records:
     tmpl = lead.x_service if lead else False
     if not tmpl or order.order_line:
         continue
+    # Pricelist by the service's currency: EUR-tagged products -> EUR list.
+    is_eur = any(t.name == 'EUR' for t in tmpl.sale_order_template_line_ids.mapped('product_id.product_tmpl_id.product_tag_ids'))
+    cur = 'EUR' if is_eur else 'CAD'
+    plist = (env['product.pricelist'].sudo().search([('currency_id.name', '=', cur), ('company_id', '=', False)], limit=1)
+             or env['product.pricelist'].sudo().search([('currency_id.name', '=', cur), ('company_id', '=', order.company_id.id)], limit=1))
+    if plist:
+        order.write({'pricelist_id': plist.id})
     lines = []
     for line in tmpl.sale_order_template_line_ids:
         if line.product_id:
@@ -138,6 +145,41 @@ def plan(odoo):
         print(f"{PRODUCTS.name} missing — run build_catalogue.py to create it from the price list.")
 
 
+def _enable_setting(odoo, field):
+    """Tick one checkbox in Sales/Inventory settings (idempotent)."""
+    sid = odoo.execute("res.config.settings", "create", {field: True})
+    odoo.execute("res.config.settings", "execute", [sid])
+
+
+def _ensure_pricelists(odoo):
+    """One pricelist per selling currency, shared by both companies.
+
+    Product list prices are in the company currency (CAD). EUR services get
+    a fixed EUR price on the EUR pricelist, so no exchange-rate conversion
+    ever touches a contract amount.
+    """
+    _enable_setting(odoo, "group_product_pricelist")
+    _enable_setting(odoo, "group_sale_order_template")
+    lists = {}
+    for code in ("CAD", "EUR"):
+        cur = odoo.search_read("res.currency", [("name", "=", code)], ["id", "active"],
+                               context={"active_test": False})
+        if not cur:
+            raise OdooError(f"currency {code} does not exist in this database")
+        if not cur[0]["active"]:
+            odoo.write("res.currency", [cur[0]["id"]], {"active": True})
+        lists[code], created = odoo.upsert("p2plist", code, "product.pricelist", {
+            "name": code, "currency_id": cur[0]["id"], "company_id": False,
+        })
+        log.info("  pricelist %s %s", code, "created" if created else "ok")
+    return lists
+
+
+def _ensure_tag(odoo, name):
+    tag_id, _ = odoo.upsert("p2tag", name, "product.tag", {"name": name})
+    return tag_id
+
+
 def install(odoo, stage_needle, currency_check=True):
     if not PRODUCTS.exists():
         raise OdooError("products.json not found — run `phase2 plan` and fill in prices first")
@@ -145,6 +187,17 @@ def install(odoo, stage_needle, currency_check=True):
     if not _model_exists(odoo, "sale.order"):
         raise OdooError("the Sales app is not installed (Apps > Sales)")
     has_templates = _model_exists(odoo, "sale.order.template")
+    pricelists = _ensure_pricelists(odoo)
+    eur_tag = _ensure_tag(odoo, "EUR")
+
+    def price_in(code, pid, currency, price):
+        """Fixed price on the currency's pricelist; tag EUR products."""
+        if currency == "EUR":
+            odoo.write("product.template", [pid], {"product_tag_ids": [(4, eur_tag)]})
+        odoo.upsert("p2pli", f"{currency}-{code}", "product.pricelist.item", {
+            "pricelist_id": pricelists[currency], "applied_on": "1_product",
+            "product_tmpl_id": pid, "compute_price": "fixed", "fixed_price": float(price or 0),
+        })
 
     # 1. Products: shared government fees, then per service a principal
     #    product and one add-on product per priced component.
@@ -182,13 +235,15 @@ def install(odoo, stage_needle, currency_check=True):
         else:
             pid, vid, created = make_product(key, spec["name"], spec.get("price"))
             product_ids[key], variants[key] = pid, vid
+            price_in(key, pid, spec.get("currency", "CAD"), spec.get("price"))
             log.info("  service  %-12s %-55s %s", key, spec["name"][:55], "created" if created else "ok")
             if not spec.get("price") and key != "CUSTOM":
                 log.warning("    price is 0 for %s — set it in products.json", key)
         addon_variants[key] = []
         for i, (label, price) in enumerate(spec.get("addons", {}).items(), start=1):
             akey = f"{key}-A{i}"
-            _, avid, _ = make_product(akey, f"{spec['name'].split(' · ')[0]} – {label}", price)
+            apid, avid, _ = make_product(akey, f"{spec['name'].split(' · ')[0]} – {label}", price)
+            price_in(akey, apid, spec.get("currency", "CAD"), price)
             addon_variants[key].append((avid, label))
 
     # 2. One quotation template per service: the principal as the line,

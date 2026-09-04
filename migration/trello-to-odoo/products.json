@@ -52,6 +52,7 @@
   "EE": {
     "name": "Express Entry – PR · اکسپرس انتری – اقامت دائم",
     "price": 4000,
+    "currency": "CAD",
     "addons": {
       "Spouse": 1000,
       "Child (each)": 500
@@ -63,6 +64,7 @@
   "PNP": {
     "name": "PNP – non-Express Entry stream · PNP – روش مستقیم",
     "price": 4000,
+    "currency": "CAD",
     "addons": {
       "Spouse": 1000,
       "Child (each)": 500
@@ -74,6 +76,7 @@
   "PNP-EE": {
     "name": "PNP – Express Entry stream · PNP – روش اکسپرس انتری",
     "price": 4500,
+    "currency": "CAD",
     "addons": {
       "Spouse": 1000,
       "Child (each)": 500
@@ -85,6 +88,7 @@
   "CAREGIVER": {
     "name": "Caregiver – PR · پرستار خانگی – اقامت دائم",
     "price": 5000,
+    "currency": "CAD",
     "addons": {
       "Spouse": 1000,
       "Child (each)": 500
@@ -96,6 +100,7 @@
   "PRC-RENEW": {
     "name": "PR card renewal (no issues) · تمدید کارت اقامت دائم",
     "price": 2000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -104,6 +109,7 @@
   "PRC-LOST": {
     "name": "Replacement of lost PR card · صدور مجدد کارت PR گمشده",
     "price": 1500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -112,6 +118,7 @@
   "PR-RENOUNCE": {
     "name": "PR renunciation · انصراف از اقامت دائم",
     "price": 1500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -120,6 +127,7 @@
   "PR-RO": {
     "name": "PR residency obligation · تعهد اقامتی PR",
     "price": 6000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing.\nکل مبلغ همراه با امضا.",
@@ -128,6 +136,7 @@
   "CIT": {
     "name": "Citizenship application · درخواست شهروندی",
     "price": 1500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -136,6 +145,7 @@
   "CIT-LEGAL": {
     "name": "Citizenship – with legal issue · شهروندی – با مشکل قانونی",
     "price": 6000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -144,6 +154,7 @@
   "TD-PR": {
     "name": "Travel document – PR · تراول داکیومنت PR",
     "price": 0,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -152,6 +163,7 @@
   "SP-ADM": {
     "name": "Admission + Study permit (college / university) · پذیرش و ویزای تحصیلی",
     "price": 2200,
+    "currency": "CAD",
     "addons": {
       "Spouse open work permit": 800,
       "Child study permit (each, max 500)": 250
@@ -167,6 +179,7 @@
   "SP-ADM-K12": {
     "name": "Admission + Study permit (school student) · پذیرش و ویزای تحصیلی دانش‌آموزی",
     "price": 2200,
+    "currency": "CAD",
     "addons": {
       "Accompanying parent visitor visa": 800
     },
@@ -181,6 +194,7 @@
   "SP-ONLY": {
     "name": "Study permit only (admission in hand) · فقط ویزای تحصیلی (با پذیرش)",
     "price": 1400,
+    "currency": "CAD",
     "addons": {
       "Spouse open work permit": 800,
       "Child visitor visa (each)": 250
@@ -197,6 +211,7 @@
   "SPX": {
     "name": "Study permit extension · تمدید مجوز تحصیل",
     "price": 700,
+    "currency": "CAD",
     "addons": {},
     "gov": [
       "GOV-SP"
@@ -207,6 +222,7 @@
   "PGWP": {
     "name": "Post-graduation work permit · مجوز کار پس از تحصیل (PGWP)",
     "price": 800,
+    "currency": "CAD",
     "addons": {
       "Spouse": 400
     },
@@ -219,6 +235,7 @@
   "TRV": {
     "name": "Visitor visa (TRV) · ویزای ویزیتوری (توریستی)",
     "price": 1200,
+    "currency": "CAD",
     "addons": {
       "Spouse": 300,
       "Child (each; 3rd onward free)": 200
@@ -233,6 +250,7 @@
   "BV": {
     "name": "Business visitor visa · ویزای بیزنس ویزیتور",
     "price": 1200,
+    "currency": "CAD",
     "addons": {
       "Spouse": 300,
       "Child (each; 3rd onward free)": 200,
@@ -248,6 +266,7 @@
   "SUPERVISA": {
     "name": "Parents' super visa · سوپر ویزای والدین",
     "price": 1500,
+    "currency": "CAD",
     "addons": {
       "Spouse": 500
     },
@@ -261,6 +280,7 @@
   "IN-WP": {
     "name": "In-Canada work permit (2025 update) · ورک پرمیت داخل کانادا",
     "price": 700,
+    "currency": "CAD",
     "addons": {
       "Spouse": 200
     },
@@ -273,6 +293,7 @@
   "IN-TRV": {
     "name": "In-Canada visitor visa (permit holders) · ویزای توریستی داخل کانادا",
     "price": 700,
+    "currency": "CAD",
     "addons": {
       "Spouse": 200,
       "Child (one; further free)": 200
@@ -286,6 +307,7 @@
   "VR": {
     "name": "Visitor record · ویزیتور ریکورد",
     "price": 700,
+    "currency": "CAD",
     "addons": {},
     "gov": [
       "GOV-TRV"
@@ -296,6 +318,7 @@
   "PERMIT-AMEND": {
     "name": "Permit amendment (e.g. remove a condition) · اصلاحیه پرمیت",
     "price": 500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing; no government fee.\nکل مبلغ همراه با امضا؛ هزینه دولتی ندارد.",
@@ -304,6 +327,7 @@
   "RESTORE": {
     "name": "Restoration of status (added to the permit service) · Restoration",
     "price": 300,
+    "currency": "CAD",
     "addons": {},
     "gov": [
       "GOV-REST"
@@ -314,6 +338,7 @@
   "WP-ABROAD": {
     "name": "Work permit from outside Canada · ورک پرمیت از خارج کانادا",
     "price": 3000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission to IRCC.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت در سایت اداره مهاجرت.",
@@ -322,6 +347,7 @@
   "OWP-ACC": {
     "name": "Accompanying work permit (spouse / children of student or worker) · ورک پرمیت همراه دانشجو یا نیروی کار",
     "price": 1400,
+    "currency": "CAD",
     "addons": {
       "Child study permit (each)": 200
     },
@@ -332,6 +358,7 @@
   "LMIA": {
     "name": "LMIA with employer · قرارداد LMIA با کارفرما",
     "price": 4000,
+    "currency": "CAD",
     "addons": {},
     "gov": [
       "GOV-LMIA"
@@ -342,6 +369,7 @@
   "LMIA-WP": {
     "name": "Work permit under LMIA · ورک پرمیت نیروی کار LMIA",
     "price": 2500,
+    "currency": "CAD",
     "addons": {
       "Spouse work permit": 1000,
       "Child visitor visa (each)": 500
@@ -353,6 +381,7 @@
   "SPON-SPOUSE": {
     "name": "Spousal / common-law sponsorship · اسپانسرشیپ همسر / کامن‌لا",
     "price": 4000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission. Or 4 monthly instalments of 1,000 CAD.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت. یا چهار قسط ماهانه ۱٬۰۰۰ دلاری.",
@@ -361,6 +390,7 @@
   "SPON-CHILD": {
     "name": "Child sponsorship · اسپانسرشیپ فرزند",
     "price": 4000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت.",
@@ -369,6 +399,7 @@
   "SPON-PARENT": {
     "name": "Parent sponsorship · اسپانسرشیپ والدین",
     "price": 5000,
+    "currency": "CAD",
     "addons": {
       "Second parent": 2000
     },
@@ -379,6 +410,7 @@
   "SPON-REFUSED": {
     "name": "Refused sponsorship · رد شدن اسپانسرشیپ",
     "price": 10000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -387,6 +419,7 @@
   "AB-ENT": {
     "name": "Alberta entrepreneur stream – Sparkbridge + Sugimoto · کارآفرینی آلبرتا – اسپارک‌بریج + سوگیموتو",
     "price": 40000,
+    "currency": "CAD",
     "addons": {},
     "gov": [
       "GOV-AB-EOI",
@@ -412,6 +445,7 @@
   "BC-ENT": {
     "name": "BC PNP entrepreneur – Sparkbridge + Sugimoto · کارآفرینی BC PNP – اسپارک‌بریج + سوگیموتو",
     "price": 38000,
+    "currency": "CAD",
     "addons": {},
     "gov": [
       "GOV-BC-REG",
@@ -437,6 +471,7 @@
   "PROV-CERT": {
     "name": "Provincial certification – specific occupations · تأیید استانی مشاغل خاص",
     "price": 2000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -445,6 +480,7 @@
   "JR": {
     "name": "Judicial review – refusal handled by us · دادگاه فدرال – ریجکت شده با ما",
     "price": 2500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing. Done with PAX Law; cheaper than contracting PAX Law directly.\nکل مبلغ همراه با امضا. با مجموعه PAX Law؛ ارزان‌تر از قرارداد مستقیم با PAX Law.",
@@ -453,6 +489,7 @@
   "JR-REPEAT": {
     "name": "Judicial review – second time on the same file · دادگاه فدرال – بار دوم همان پرونده",
     "price": 2000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing.\nکل مبلغ همراه با امضا.",
@@ -461,6 +498,7 @@
   "JR-EXT": {
     "name": "Judicial review – refusal not handled by us · دادگاه فدرال – ریجکت خارج از ما",
     "price": 3500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing (2,500 PAX Law + 1,000 SugimotoVisa).\nکل مبلغ همراه با امضا (۲٬۵۰۰ PAX Law + ۱٬۰۰۰ سوگیموتو ویزا).",
@@ -469,6 +507,7 @@
   "MANDAMUS": {
     "name": "Mandamus (processing-delay litigation) · مانداموس (تسریع پرونده)",
     "price": 2500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "750 CAD – demand letter (about 30% succeed; 2–4 weeks). 1,750 CAD – Federal Court filing (2–12 months).\n۷۵۰ دلار – ارسال Demand Letter (حدود ۳۰٪ موفق؛ ۲ تا ۴ هفته). ۱٬۷۵۰ دلار – ثبت در فدرال کورت (۲ ماه تا ۱ سال).",
@@ -477,6 +516,7 @@
   "PFL": {
     "name": "Procedural fairness letter response · پاسخ به نامه PFL",
     "price": 2500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing. Fixed at 3,000–5,000 CAD after reviewing the letter; payment plan available.\nکل مبلغ همراه با امضا. مبلغ ثابت ۳٬۰۰۰ تا ۵٬۰۰۰ دلار پس از بررسی نامه؛ امکان پرداخت اقساطی.",
@@ -485,6 +525,7 @@
   "HC": {
     "name": "Humanitarian & compassionate (in Canada) · روش بشردوستانه H&C (داخل کانادا)",
     "price": 6500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "2,000 at signing; 2,000 after 3 months; 1,500 after 6 months.\n۲٬۰۰۰ همراه با امضا؛ ۲٬۰۰۰ بعد از سه ماه؛ ۱٬۵۰۰ بعد از شش ماه.",
@@ -493,6 +534,7 @@
   "REF": {
     "name": "Refugee claim – without hearing · پناهندگی – بدون جلسه دادگاه",
     "price": 4500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "3,000 at signing; 1,500 after the submission.\n۳٬۰۰۰ همراه با امضا؛ ۱٬۵۰۰ بعد از ارسال لایحه.",
@@ -501,6 +543,7 @@
   "REF-HEAR": {
     "name": "Refugee claim – with hearing · پناهندگی – با جلسه دادگاه",
     "price": 6500,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "3,000 at signing; 1,500 after the submission; 2,000 after the hearing notice.\n۳٬۰۰۰ همراه با امضا؛ ۱٬۵۰۰ بعد از لایحه؛ ۲٬۰۰۰ بعد از نامه جلسه Hearing.",
@@ -509,6 +552,7 @@
   "DETENTION": {
     "name": "Immigration / border detention · بازداشت مهاجرتی و مرزبانی",
     "price": 3000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -517,6 +561,7 @@
   "PRRA": {
     "name": "Pre-removal risk assessment · ارزیابی خطر پیش از اخراج (PRRA)",
     "price": 3000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -525,6 +570,7 @@
   "TD-REF": {
     "name": "Travel document – refugee · تراول داکیومنت پناهنده",
     "price": 2000,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -533,9 +579,61 @@
   "CUSTOM": {
     "name": "Custom / negotiated service · خدمت سفارشی / توافقی",
     "price": 0,
+    "currency": "CAD",
     "addons": {},
     "gov": [],
     "terms": "Price and payment plan set on the quotation by the agent.\nقیمت و شرایط پرداخت توسط کارشناس روی پیش‌فاکتور تعیین می‌شود.",
+    "template": true
+  },
+  "EU-SUV": {
+    "name": "Start-up visa – Netherlands / Finland / Denmark / Lithuania / Estonia · استارتاپ ویزا اروپا",
+    "price": 20000,
+    "currency": "EUR",
+    "addons": {},
+    "gov": [],
+    "terms": "5,000 at signing; 10,000 after facilitator approval; 5,000 after visa filing. Facilitator fee (5,000–10,000) paid by the client. Netherlands 25,000; Lithuania/Estonia/Denmark 15,000; UK 20,000 GBP.\n۵٬۰۰۰ زمان عقد قرارداد؛ ۱۰٬۰۰۰ بعد از تأیید طرح توسط سازمان حامی؛ ۵٬۰۰۰ بعد از ثبت ویزا. هزینه سازمان حامی (۵ تا ۱۰ هزار) با کلاینت. هلند ۲۵٬۰۰۰؛ لیتوانی/استونی/دانمارک ۱۵٬۰۰۰؛ انگلستان ۲۰٬۰۰۰ پوند.",
+    "template": true
+  },
+  "EU-STUDY": {
+    "name": "Admission + study visa – Europe · پذیرش و ویزای تحصیلی اروپا",
+    "price": 2150,
+    "currency": "EUR",
+    "addons": {
+      "Accompanying spouse visa": 1000,
+      "Child visa (each)": 250
+    },
+    "gov": [],
+    "terms": "50% at signing (admission process starts); 50% after the letter of acceptance. Two spouses studying together: 3,500. Embassy and application fees paid by the client.\n۵۰٪ زمان امضا و شروع پذیرش؛ ۵۰٪ بعد از نامه پذیرش. دو نفر همزمان (همسر): ۳٬۵۰۰. هزینه سفارت و اپلیکیشن فی با متقاضی.",
+    "template": true
+  },
+  "EU-LANG": {
+    "name": "Admission + study visa – language course (Hungary EN / France FR) · پذیرش و ویزای دوره زبان (مجارستان انگلیسی / فرانسه فرانسوی)",
+    "price": 1500,
+    "currency": "EUR",
+    "addons": {
+      "Accompanying spouse visa": 1000,
+      "Child visa (each)": 250
+    },
+    "gov": [],
+    "terms": "50% at signing; 50% after the letter of acceptance.\n۵۰٪ زمان امضا؛ ۵۰٪ بعد از نامه پذیرش.",
+    "template": true
+  },
+  "EU-ADM-ONLY": {
+    "name": "Admission only – Europe · فقط پذیرش تحصیلی اروپا",
+    "price": 1000,
+    "currency": "EUR",
+    "addons": {},
+    "gov": [],
+    "terms": "",
+    "template": true
+  },
+  "EU-VISA-ONLY": {
+    "name": "Study visa only – Europe · فقط ویزای تحصیلی اروپا",
+    "price": 1500,
+    "currency": "EUR",
+    "addons": {},
+    "gov": [],
+    "terms": "",
     "template": true
   }
 }
