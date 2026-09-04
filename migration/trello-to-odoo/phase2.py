@@ -327,6 +327,39 @@ def _install_service_dropdown(odoo):
     log.warning("  could not place the Service dropdown on the lead form — add it via the UI")
 
 
+def _install_quote_button(odoo):
+    """Put Odoo's "New Quotation" button back on the lead form.
+
+    Studio-customised lead forms often drop it; the button is what turns a
+    card with a Service into a pre-filled quotation (it asks for the
+    customer first when the card has none).
+    """
+    parents = odoo.search_read(
+        "ir.ui.view",
+        [("model", "=", "crm.lead"), ("type", "=", "form"), ("inherit_id", "=", False)],
+        ["id"],
+    )
+    view_id = odoo.ref("p2view", "lead_quote_button")
+    arch = ('<data><xpath expr="//header" position="inside">'
+            '<button name="action_sale_quotations_new" type="object" string="New Quotation" '
+            'class="btn-primary" invisible="not active"/>'
+            "</xpath></data>")
+    for parent in parents:
+        try:
+            if view_id:
+                odoo.write("ir.ui.view", [view_id], {"inherit_id": parent["id"], "arch_db": arch})
+            else:
+                view_id, _ = odoo.upsert("p2view", "lead_quote_button", "ir.ui.view", {
+                    "name": "crm.lead.form.new_quotation", "model": "crm.lead",
+                    "inherit_id": parent["id"], "arch_db": arch, "priority": 99,
+                })
+            log.info("  New Quotation button placed on the lead form")
+            return
+        except OdooError:
+            continue
+    log.warning("  could not place the New Quotation button — add it via Studio")
+
+
 def _install_prefill_automation(odoo):
     action_vals = {
         "name": "Quotation from opportunity -> pre-fill from the picked Service",
@@ -365,6 +398,7 @@ def set_active(odoo, active):
         # The CRM-facing pieces: the Service dropdown and the quotation
         # pre-fill only exist once you activate.
         _install_service_dropdown(odoo)
+        _install_quote_button(odoo)
         _install_prefill_automation(odoo)
     else:
         prefill = odoo.ref("p2auto", "prefill")
