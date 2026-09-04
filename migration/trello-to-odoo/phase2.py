@@ -80,6 +80,30 @@ for order in records:
     order.write(vals)
 """.strip()
 
+# Server action behind the "New Quotation" button on the CRM card: makes the
+# quotation right away (customer from the card, lines from the Service) and
+# opens it, instead of Odoo's empty form + customer popup.
+NEW_QUOTE_ACTION_CODE = """
+lead = record
+partner = lead.partner_id
+if not partner:
+    partner = env['res.partner'].sudo().create({
+        'name': lead.contact_name or lead.partner_name or lead.name,
+        'email': lead.email_from or False,
+        'phone': lead.phone or False,
+        'mobile': lead.mobile or False,
+        'company_id': False,
+    })
+    lead.sudo().write({'partner_id': partner.id})
+vals = {'partner_id': partner.id, 'opportunity_id': lead.id, 'origin': lead.name,
+        'company_id': lead.company_id.id or env.company.id,
+        'team_id': lead.team_id.id or False, 'user_id': lead.user_id.id or env.user.id}
+order = env['sale.order'].with_company(vals['company_id']).create(vals)
+action = {'type': 'ir.actions.act_window', 'res_model': 'sale.order',
+          'res_id': order.id, 'view_mode': 'form', 'views': [[False, 'form']],
+          'target': 'current'}
+""".strip()
+
 SERVICE_FIELD = "x_service"
 
 
@@ -172,6 +196,11 @@ def _ensure_pricelists(odoo):
             "name": code, "currency_id": cur[0]["id"], "company_id": False,
         })
         log.info("  pricelist %s %s", code, "created" if created else "ok")
+    # Odoo makes a "Default <currency> pricelist" per company when pricelists
+    # are switched on; hide them so agents only ever see CAD and EUR.
+    auto = odoo.search_read("product.pricelist", [("name", "ilike", "Default %pricelist")], ["id"])
+    if auto:
+        odoo.write("product.pricelist", [a["id"] for a in auto], {"active": False})
     return lists
 
 
@@ -394,9 +423,18 @@ def _install_quote_button(odoo):
         [("model", "=", "crm.lead"), ("type", "=", "form"), ("inherit_id", "=", False)],
         ["id"],
     )
+    action_vals = {
+        "name": "New Quotation from card", "model_id": _model_id(odoo, "crm.lead"),
+        "binding_model_id": False, "state": "code", "code": NEW_QUOTE_ACTION_CODE,
+    }
+    action_id = odoo.ref("p2action", "new_quote")
+    if action_id:
+        odoo.write("ir.actions.server", [action_id], action_vals)
+    else:
+        action_id, _ = odoo.upsert("p2action", "new_quote", "ir.actions.server", action_vals)
     view_id = odoo.ref("p2view", "lead_quote_button")
     arch = ('<data><xpath expr="//header" position="inside">'
-            '<button name="action_sale_quotations_new" type="object" string="New Quotation" '
+            f'<button name="{action_id}" type="action" string="New Quotation" '
             'class="btn-primary" invisible="not active"/>'
             "</xpath></data>")
     for parent in parents:
