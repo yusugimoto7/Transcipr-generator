@@ -139,9 +139,8 @@ partner = order.partner_id
 if not partner.email:
     raise UserError("The customer has no e-mail address. Add it on the customer, then send again.")
 rcic_email = env['ir.config_parameter'].sudo().get_param('phase2.rcic_email') or ''
-rcic = env['res.partner'].sudo().search([('email', '=ilike', rcic_email)], limit=1) if rcic_email else env['res.partner']
-if not rcic:
-    rcic = env.user.partner_id
+rcic_user = env['res.users'].sudo().search(['|', ('login', '=ilike', rcic_email), ('email', '=ilike', rcic_email)], limit=1) if rcic_email else env['res.users']
+rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
 
 # TR or PR contract, from the tags on the quotation's products.
 tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
@@ -199,10 +198,12 @@ values = {
 request = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
     'template_id': template.id,
     'reference': '%s – Retainer Agreement – %s' % (order.client_order_ref or order.name, partner.name),
-    'subject': 'Your retainer agreement with Sugimoto Visa',
+    'subject': 'Retainer agreement with Sugimoto Visa – please review and sign',
+    # The RCIC signs first: their view shows the pre-filled values (still
+    # editable), and once they sign the client sees them filled and locked.
     'request_item_ids': [
-        (0, 0, {'partner_id': partner.id, 'role_id': 1, 'mail_sent_order': 1}),
-        (0, 0, {'partner_id': rcic.id, 'role_id': 2, 'mail_sent_order': 2}),
+        (0, 0, {'partner_id': rcic.id, 'role_id': 2, 'mail_sent_order': 1}),
+        (0, 0, {'partner_id': partner.id, 'role_id': 1, 'mail_sent_order': 2}),
     ],
 })
 company_item = request.request_item_ids.filtered(lambda r: r.role_id.id == 2)
@@ -218,7 +219,7 @@ for item in template.sign_item_ids:
                           'sign_request_item_id': company_item.id, 'value': val})
 request.send_signature_accesses()
 order.write({'x_sign_request_id': request.id})
-order.message_post(body='Retainer agreement (%s) sent for signature: %s' % (kind, request.reference),
+order.message_post(body='Retainer agreement (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s' % (kind, rcic.name, request.reference),
                    message_type='comment', subtype_xmlid='mail.mt_note')
 if lead:
     lead.sudo().message_post(body='Retainer agreement sent for signature: %s' % request.reference,
