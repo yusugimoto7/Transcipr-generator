@@ -109,6 +109,8 @@ def install_templates(odoo):
         tmpl_id = odoo.ref("signtmpl", kind)
         if tmpl_id:
             odoo.write("sign.template", [tmpl_id], {"attachment_id": att_id})
+            # The viewer fetches the PDF through the attachment: it must belong to the template.
+            odoo.write("ir.attachment", [att_id], {"res_model": "sign.template", "res_id": tmpl_id})
             old = odoo.search_read("sign.item", [("template_id", "=", tmpl_id)], ["id"])
             if old:
                 odoo.execute("sign.item", "unlink", [o["id"] for o in old])
@@ -119,6 +121,7 @@ def install_templates(odoo):
                          "PR": "Retainer Agreement – PR (EN)"}[kind],
                 "active": True,
             })
+            odoo.write("ir.attachment", [att_id], {"res_model": "sign.template", "res_id": tmpl_id})
         for item in _items(doc, doc["W"], doc["H"]):
             item["template_id"] = tmpl_id
             odoo.execute("sign.item", "create", item)
