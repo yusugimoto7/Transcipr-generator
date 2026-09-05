@@ -98,6 +98,8 @@ class Odoo:
                 self.db, self.uid, self.password, model, method, list(args), kwargs
             )
         except xmlrpc.client.Fault as exc:
+            if "cannot marshal None" in (exc.faultString or ""):
+                return None  # the method ran and returned nothing; XML-RPC just cannot say so
             raise OdooError(f"{model}.{method} failed: {exc.faultString}") from exc
 
     def search_read(self, model, domain, fields, **kwargs):
