@@ -18,6 +18,7 @@ def build():
             "name": f"{s['en']} · {s['fa']}",
             "price": s.get("price", 0),
             "currency": s.get("currency", "CAD"),
+            "contract": "PR" if s.get("cat") in ("pr", "spon", "biz") else "TR",
             "addons": {label.split("|")[0]: price for label, price in s.get("addons", {}).items()},
             "gov": s.get("gov", []),
             "terms": "\n".join(t for t in (s.get("terms_en"), s.get("terms_fa")) if t),

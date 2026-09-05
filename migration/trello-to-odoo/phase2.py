@@ -218,11 +218,14 @@ def install(odoo, stage_needle, currency_check=True):
     has_templates = _model_exists(odoo, "sale.order.template")
     pricelists = _ensure_pricelists(odoo)
     eur_tag = _ensure_tag(odoo, "EUR")
+    kind_tags = {k: _ensure_tag(odoo, k) for k in ("TR", "PR")}
 
-    def price_in(code, pid, currency, price):
+    def price_in(code, pid, currency, price, kind="TR"):
         """Fixed price on the currency's pricelist; tag EUR products."""
+        tags = [(4, kind_tags[kind])]
         if currency == "EUR":
-            odoo.write("product.template", [pid], {"product_tag_ids": [(4, eur_tag)]})
+            tags.append((4, eur_tag))
+        odoo.write("product.template", [pid], {"product_tag_ids": tags})
         odoo.upsert("p2pli", f"{currency}-{code}", "product.pricelist.item", {
             "pricelist_id": pricelists[currency], "applied_on": "1_product",
             "product_tmpl_id": pid, "compute_price": "fixed", "fixed_price": float(price or 0),
@@ -264,7 +267,7 @@ def install(odoo, stage_needle, currency_check=True):
         else:
             pid, vid, created = make_product(key, spec["name"], spec.get("price"))
             product_ids[key], variants[key] = pid, vid
-            price_in(key, pid, spec.get("currency", "CAD"), spec.get("price"))
+            price_in(key, pid, spec.get("currency", "CAD"), spec.get("price"), spec.get("contract", "TR"))
             log.info("  service  %-12s %-55s %s", key, spec["name"][:55], "created" if created else "ok")
             if not spec.get("price") and key != "CUSTOM":
                 log.warning("    price is 0 for %s — set it in products.json", key)
@@ -272,7 +275,7 @@ def install(odoo, stage_needle, currency_check=True):
         for i, (label, price) in enumerate(spec.get("addons", {}).items(), start=1):
             akey = f"{key}-A{i}"
             apid, avid, _ = make_product(akey, f"{spec['name'].split(' · ')[0]} – {label}", price)
-            price_in(akey, apid, spec.get("currency", "CAD"), price)
+            price_in(akey, apid, spec.get("currency", "CAD"), price, spec.get("contract", "TR"))
             addon_variants[key].append((avid, label))
 
     # 2. One quotation template per service: the principal as the line,
