@@ -366,6 +366,11 @@ values = {
     'ADDR2': address, 'PHONE': partner.phone or partner.mobile or '', 'EMAIL': partner.email or '',
 }
 
+# Re-sending: the previous agreement, unless already signed, is cancelled so
+# only the newest one is open for signature.
+previous = order.x_sign_request_id
+if previous and previous.state not in ('signed', 'canceled'):
+    previous.sudo().cancel()
 request = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
     'template_id': template.id,
     'reference': '%s – Retainer Agreement – %s' % (order.client_order_ref or order.name, partner.name),
@@ -392,7 +397,7 @@ request.send_signature_accesses()
 order.write({'x_sign_request_id': request.id})
 summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees excluded). Payment plan: %s' % (
     money(pro), money(disc), money(tax), money(total), '; '.join(plan_en))
-order.message_post(body='Retainer agreement (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s. %s' % (kind, rcic.name, request.reference, summary),
+order.message_post(body=('Updated retainer agreement' if previous else 'Retainer agreement') + ' (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s. %s' % (kind, rcic.name, request.reference, summary),
                    message_type='comment', subtype_xmlid='mail.mt_note')
 if lead:
     lead.sudo().message_post(body='Retainer agreement sent for signature: %s' % request.reference,
@@ -497,7 +502,10 @@ def install_send_button(odoo, rcic_email):
     arch = ('<data>'
             '<xpath expr="//header" position="inside">'
             f'<button name="{act_id}" type="action" string="Send Contract" class="btn-primary" '
-            'invisible="x_sign_request_id or state not in (\'draft\', \'sent\')"/>'
+            'invisible="x_sign_request_id or state == \'cancel\'"/>'
+            f'<button name="{act_id}" type="action" string="Resend Contract" class="btn-secondary" '
+            'invisible="not x_sign_request_id or state == \'cancel\'" '
+            'confirm="This sends a new agreement built from the current quotation. The previous one is cancelled unless it was already signed. Continue?"/>'
             '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
             '<field name="x_sign_request_id" readonly="1"/>'
