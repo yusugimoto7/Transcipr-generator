@@ -230,6 +230,43 @@ payment stays off — bookkeeping remains in QuickBooks), and installs the
 "quotation signed → opportunity to payment stage" automation switched off. Until
 `activate`, nothing in CRM behaves differently.
 
+### Retainer agreements, taxes and the payment plan
+
+```bash
+python migrate.py phase2 taxes              # GST/HST/QST by province, none outside Canada
+python migrate.py phase2 contracts          # Sign templates + "Send Contract" + Payment plan tab (runs taxes too)
+```
+
+`taxes` gives every service product GST 5% and installs auto-applied fiscal
+positions: the customer's province swaps it for HST 13% (ON), 15% (NB/NL/PE),
+14% (NS) or GST + QST (QC); a customer outside Canada pays no tax. Government
+fee products never carry tax. Rates live in `taxes.py` — confirm them with the
+accountant and rerun to change them.
+
+`contracts` uploads the TR (EN/FA) and PR retainer agreements from
+`contracts/` as Sign templates and adds two things to every quotation:
+
+* a **Payment plan** tab — one row per instalment with a share (100%, 50%, a
+  third, 25%, a custom amount, or the remainder) and the milestone it is due
+  at (on signing, N months after signing, after the LOA, after the ITA or N
+  months later, after nomination, before submitting the SP/WP/TRV/PR
+  application, on a date…). "Recalculate amounts" turns shares into amounts;
+  an empty plan gets a sensible default from the service (single payment
+  under 2,500; halves; thirds for study permits; 1,500 then the rest after
+  ITA for Express Entry).
+* a **Send Contract** button — applies the customer's taxes, checks the plan
+  adds up, pre-fills the agreement (professional fees, discount, tax, total —
+  government fees are never on the contract — and the plan in English and
+  Farsi) and sends it: the RCIC signs first, then the client. A signed
+  agreement confirms the quotation and files the PDF on the CRM card.
+
+The customer needs a country (and a province, in Canada) before a contract
+can be sent — the tax on it depends on that. To change the agreement text,
+edit `contracts/src/*.docx`, then run `contracts/tokenize_docs.py`, convert
+to PDF with LibreOffice, run `contracts/extract_tokens.py`, and rerun
+`phase2 contracts` (a template that already has signed requests is kept,
+archived, and replaced by a new version).
+
 ## Repair commands
 
 Two commands exist to repair data migrated by earlier versions of this tool,

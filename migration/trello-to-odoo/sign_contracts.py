@@ -39,14 +39,11 @@ FIELD_SPECS = {
     "CB_PNP": (T_CHECK, ROLE_COMPANY, 11, 11, None),
     "CB_PNPEE": (T_CHECK, ROLE_COMPANY, 11, 11, None),
     "PROFEE": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
-    "GOVFEE": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
-    "BIOFEE": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
     "TAX": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
     "DISCOUNT": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
     "TOTAL": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
-    "PAY1": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
-    "PAY2": (T_TEXT, ROLE_COMPANY, 70, 12, "left"),
-    "PAYNOTE": (T_TEXTAREA, ROLE_COMPANY, 470, 40, "left"),
+    # The payment plan: one line per instalment, up to 6 lines.
+    "PAYPLAN": (T_TEXTAREA, ROLE_COMPANY, 470, 84, "left"),
     "GIVEN": (T_TEXT, ROLE_COMPANY, 180, 12, "left"),
     "FAMILY": (T_TEXT, ROLE_COMPANY, 180, 12, "left"),
     "ADDR2": (T_TEXT, ROLE_COMPANY, 250, 12, "left"),
@@ -60,8 +57,9 @@ FIELD_SPECS = {
 # Farsi twins of the fields on the TR contract: same value, right-aligned,
 # grown to the left of the marker.
 FA_FIELDS = {"FILENO", "DATE", "CLIENT", "ADDR", "CB_SP", "CB_WP", "CB_TRV", "PROFEE",
-             "GOVFEE", "BIOFEE", "TAX", "TOTAL", "PAY1", "PAY2", "GIVEN", "FAMILY",
-             "ADDR2", "PHONE", "EMAIL"}
+             "DISCOUNT", "TAX", "TOTAL", "PAYPLAN", "GIVEN", "FAMILY", "ADDR2", "PHONE", "EMAIL"}
+# The bilingual TR contract is two columns: multi-line fields must fit one column.
+TR_COLUMN_WIDTH = 245
 # Fields the Send Contract action fills (everything but signatures/dates).
 PREFILLED = [n for n, s in FIELD_SPECS.items() if s[0] not in (T_SIGN, T_DATE)]
 
@@ -73,12 +71,14 @@ def _spec(name):
     return base, FIELD_SPECS[base]
 
 
-def _items(doc, W, H):
+def _items(doc, W, H, kind="TR"):
     """sign.item vals for every marker of one contract."""
     vals = []
     for name, pos in doc["tokens"].items():
         base, (ftype, role, w, h, align) = _spec(name)
         fa = name.endswith("_FA")
+        if kind == "TR" and ftype == T_TEXTAREA:
+            w = min(w, TR_COLUMN_WIDTH)
         # Grow from the marker: right/down for LTR, left/down for the Farsi twins.
         x0 = (pos["x1"] - w) if fa else pos["x0"]
         top = pos["top"] - 2
@@ -96,38 +96,184 @@ def _items(doc, W, H):
     return vals
 
 
+def _ensure_sign_admin(odoo):
+    """Replacing template fields needs the Sign administrator group."""
+    rows = odoo.search_read("ir.model.data", [("module", "=", "sign"), ("name", "=", "group_sign_manager")],
+                            ["res_id"], limit=1)
+    if rows:
+        odoo.execute("res.users", "write", [odoo.uid], {"groups_id": [(4, rows[0]["res_id"])]})
+
+
 def install_templates(odoo):
+    _ensure_sign_admin(odoo)
     tokens = json.loads((CONTRACTS / "tokens.json").read_text(encoding="utf-8"))
     ids = {}
+    names = {"TR": "Retainer Agreement – TR (EN/FA)", "PR": "Retainer Agreement – PR (EN)"}
     for kind, pdf in TEMPLATES.items():
         doc = tokens[kind]
         data = base64.b64encode((CONTRACTS / pdf).read_bytes()).decode()
-        att_id, _ = odoo.upsert("signpdf", kind, "ir.attachment", {
-            "name": pdf, "datas": data, "mimetype": "application/pdf",
-            "res_model": "sign.template",
-        })
         tmpl_id = odoo.ref("signtmpl", kind)
         if tmpl_id:
-            odoo.write("sign.template", [tmpl_id], {"attachment_id": att_id})
-            # The viewer fetches the PDF through the attachment: it must belong to the template.
-            odoo.write("ir.attachment", [att_id], {"res_model": "sign.template", "res_id": tmpl_id})
-            old = odoo.search_read("sign.item", [("template_id", "=", tmpl_id)], ["id"])
-            if old:
-                odoo.execute("sign.item", "unlink", [o["id"] for o in old])
+            used = odoo.search_read("sign.template", [("id", "=", tmpl_id)], ["has_sign_requests"],
+                                    context={"active_test": False})
+            if used and used[0]["has_sign_requests"]:
+                # Odoo freezes a template once requests exist on it: keep it
+                # (archived) for those requests and continue on a fresh copy.
+                odoo.write("sign.template", [tmpl_id], {"active": False})
+                att_id = odoo.execute("ir.attachment", "create", {
+                    "name": pdf, "datas": data, "mimetype": "application/pdf", "res_model": "sign.template"})
+                tmpl_id = odoo.execute("sign.template", "create", {
+                    "attachment_id": att_id, "name": names[kind], "active": True})
+                odoo.restamp("signtmpl", kind, tmpl_id)
+                odoo.restamp("signpdf", kind, att_id)
+                log.info("  sign template %s had requests: archived, replaced by a new version", kind)
+            else:
+                att_id, _ = odoo.upsert("signpdf", kind, "ir.attachment", {
+                    "name": pdf, "datas": data, "mimetype": "application/pdf", "res_model": "sign.template"})
+                odoo.write("sign.template", [tmpl_id], {"attachment_id": att_id, "name": names[kind]})
+                old = odoo.search_read("sign.item", [("template_id", "=", tmpl_id)], ["id"])
+                if old:
+                    odoo.execute("sign.item", "unlink", [o["id"] for o in old])
         else:
+            att_id, _ = odoo.upsert("signpdf", kind, "ir.attachment", {
+                "name": pdf, "datas": data, "mimetype": "application/pdf", "res_model": "sign.template"})
             tmpl_id, _ = odoo.upsert("signtmpl", kind, "sign.template", {
-                "attachment_id": att_id,
-                "name": {"TR": "Retainer Agreement – TR (EN/FA)",
-                         "PR": "Retainer Agreement – PR (EN)"}[kind],
-                "active": True,
-            })
-            odoo.write("ir.attachment", [att_id], {"res_model": "sign.template", "res_id": tmpl_id})
-        for item in _items(doc, doc["W"], doc["H"]):
+                "attachment_id": att_id, "name": names[kind], "active": True})
+        # The viewer fetches the PDF through the attachment: it must belong to the template.
+        odoo.write("ir.attachment", [att_id], {"res_model": "sign.template", "res_id": tmpl_id})
+        for item in _items(doc, doc["W"], doc["H"], kind):
             item["template_id"] = tmpl_id
             odoo.execute("sign.item", "create", item)
         ids[kind] = tmpl_id
         log.info("  sign template %s: %d fields", kind, len(doc["tokens"]))
     return ids
+
+
+# --- Payment plan ----------------------------------------------------------
+
+# Odoo model behind the "Payment plan" table on the quotation: one row per
+# instalment, an amount (typed, or a share of the contract total) and the
+# milestone it is due at. The contract prints these rows.
+PLAN_MODEL = "x_pay_plan"
+PLAN_FIELD = "x_pay_plan_ids"
+
+SHARES = [("100", "100% – full amount"), ("50", "50%"), ("33", "A third"),
+          ("25", "25%"), ("custom", "Custom amount"), ("rest", "Remainder")]
+
+# key -> (English label, Farsi label). Printed on the contract after the amount.
+DUE = {
+    "signing": ("upon signing the retainer agreement (within 7 business days)",
+                "همزمان با امضای قرارداد (ظرف ۷ روز کاری)"),
+    "m1": ("one month after signing the retainer agreement", "یک ماه پس از امضای قرارداد"),
+    "m2": ("two months after signing the retainer agreement", "دو ماه پس از امضای قرارداد"),
+    "m3": ("three months after signing the retainer agreement", "سه ماه پس از امضای قرارداد"),
+    "loa": ("after receiving the letter of acceptance from the DLI", "پس از دریافت نامه پذیرش از دانشگاه/کالج"),
+    "ita": ("after receiving the Invitation to Apply (ITA)", "پس از دریافت دعوت‌نامه اقدام (ITA)"),
+    "ita1": ("one month after receiving the ITA", "یک ماه پس از دریافت ITA"),
+    "ita2": ("two months after receiving the ITA", "دو ماه پس از دریافت ITA"),
+    "ita3": ("three months after receiving the ITA", "سه ماه پس از دریافت ITA"),
+    "nomination": ("after receiving the provincial nomination", "پس از دریافت نامینیشن استانی"),
+    "sub_sp": ("before submitting the study permit application", "قبل از ارسال درخواست مجوز تحصیل"),
+    "sub_wp": ("before submitting the work permit application", "قبل از ارسال درخواست مجوز کار"),
+    "sub_trv": ("before submitting the visitor visa application", "قبل از ارسال درخواست ویزای ویزیتوری"),
+    "sub_pr": ("before submitting the permanent residence application", "قبل از ارسال درخواست اقامت دائم"),
+    "sub_app": ("before submitting the application", "قبل از ارسال درخواست"),
+    "announce": ("upon announcement of the program details for the coming year",
+                 "پس از اعلام جزئیات برنامه سال آینده"),
+    "date": ("on {date}", "در تاریخ {date}"),
+}
+DUE_LABELS = [(k, v[0][0].upper() + v[0][1:]) for k, v in DUE.items()]
+
+ORDINALS_EN = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"]
+ORDINALS_FA = ["اول", "دوم", "سوم", "چهارم", "پنجم", "ششم", "هفتم", "هشتم"]
+
+# Shared by the Recalculate and Send Contract actions: applies the fiscal
+# position for the customer's location to the lines, returns the contract
+# total (professional fees after discount, plus tax; government fees are never
+# part of the contract), and fills the amounts of the plan rows from their
+# shares. When the plan is empty it proposes one from the service.
+RECALC_CODE = r"""
+def is_gov(line):
+    return (line.product_id.default_code or '').startswith('GOV-')
+
+for order in records:
+    partner = order.partner_id
+    # 1. Fiscal position from the customer's country/province (auto-apply rules).
+    FP = env['account.fiscal.position'].sudo()
+    fpos = FP.browse()
+    country = partner.country_id
+    if country:
+        for cand in FP.search([('company_id', '=', order.company_id.id), ('auto_apply', '=', True)], order='sequence, id'):
+            if cand.country_id and cand.country_id != country:
+                continue
+            if cand.country_group_id and country not in cand.country_group_id.country_ids:
+                continue
+            if not cand.country_id and not cand.country_group_id:
+                continue
+            if cand.state_ids and partner.state_id not in cand.state_ids:
+                continue
+            fpos = cand
+            break
+    if order.fiscal_position_id != fpos:
+        order.write({'fiscal_position_id': fpos.id})
+    for line in order.order_line:
+        if line.display_type or not line.product_id:
+            continue
+        taxes = line.product_id.taxes_id.filtered(lambda t: t.company_id == order.company_id)
+        if is_gov(line):
+            taxes = taxes.browse()
+        elif fpos:
+            taxes = fpos.map_tax(taxes)
+        if set(line.tax_id.ids) != set(taxes.ids):
+            line.write({'tax_id': [(6, 0, taxes.ids)]})
+
+    # 2. Contract total: everything but government fees.
+    lines = order.order_line.filtered(lambda l: not l.display_type and not is_gov(l))
+    total = round(sum(lines.mapped('price_total')), 2)
+
+    # 3. A default plan when there is none yet.
+    Plan = env['x_pay_plan'].sudo()
+    rows = Plan.search([('x_order_id', '=', order.id)], order='x_sequence, id')
+    if not rows:
+        codes = [l.product_id.default_code or '' for l in lines if l.product_uom_qty]
+        main = codes[0] if codes else ''
+        tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
+        if 'PR' in tags:
+            due2 = 'ita' if main in ('EE', 'PNP-EE') else 'sub_pr'
+            plan = [('custom', min(1500.0, total), 'signing'), ('rest', 0.0, due2)]
+        elif main.startswith(('SP', 'PGWP')):
+            plan = [('33', 0.0, 'signing'), ('33', 0.0, 'loa'), ('rest', 0.0, 'sub_sp')]
+        elif total >= 2500:
+            due2 = 'sub_wp' if main.startswith(('WP', 'LMIA', 'OWP', 'IN-WP', 'PERMIT')) else (
+                'sub_trv' if main.startswith(('TRV', 'BV', 'SUPERVISA', 'VR', 'IN-TRV')) else 'sub_app')
+            plan = [('50', 0.0, 'signing'), ('rest', 0.0, due2)]
+        else:
+            plan = [('100', 0.0, 'signing')]
+        for i, (share, amount, due) in enumerate(plan, start=1):
+            Plan.create({'x_order_id': order.id, 'x_sequence': i, 'x_share': share,
+                         'x_amount': amount, 'x_due': due})
+        rows = Plan.search([('x_order_id', '=', order.id)], order='x_sequence, id')
+
+    # 4. Amounts from the shares; "Remainder" rows split what is left.
+    fixed = 0.0
+    rest = []
+    for row in rows:
+        share = row.x_share or 'custom'
+        if share == 'rest':
+            rest.append(row)
+            continue
+        amount = row.x_amount if share == 'custom' else round(total / 3.0 if share == '33' else total * float(share) / 100.0, 2)
+        if row.x_amount != amount:
+            row.write({'x_amount': amount})
+        fixed += amount
+    if rest:
+        remaining = round(total - fixed, 2)
+        each = round(remaining / len(rest), 2)
+        for i, row in enumerate(rest):
+            amount = each if i < len(rest) - 1 else round(remaining - each * (len(rest) - 1), 2)
+            if row.x_amount != amount:
+                row.write({'x_amount': amount})
+""".strip()
 
 
 # --- Send Contract ---------------------------------------------------------
@@ -138,9 +284,17 @@ lead = order.opportunity_id
 partner = order.partner_id
 if not partner.email:
     raise UserError("The customer has no e-mail address. Add it on the customer, then send again.")
+if not partner.country_id:
+    raise UserError("Set the customer's country (and province, for Canada): the sales tax on the contract depends on it.")
+if partner.country_id.code == 'CA' and not partner.state_id:
+    raise UserError("Set the customer's province: GST/HST on the contract depends on it.")
 rcic_email = env['ir.config_parameter'].sudo().get_param('phase2.rcic_email') or ''
 rcic_user = env['res.users'].sudo().search(['|', ('login', '=ilike', rcic_email), ('email', '=ilike', rcic_email)], limit=1) if rcic_email else env['res.users']
 rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
+
+# Taxes for the customer's location, plan amounts from their shares.
+env.ref('__trello__.p2action_recalc_plan').with_context(active_model='sale.order', active_id=order.id, active_ids=order.ids).run()
+order.invalidate_recordset()
 
 # TR or PR contract, from the tags on the quotation's products.
 tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
@@ -149,27 +303,45 @@ template = env.ref('__trello__.signtmpl_' + kind, raise_if_not_found=False)
 if not template:
     raise UserError("Sign template %s is not installed." % kind)
 
-# Amounts from the lines.
+# Amounts from the lines. Government fees are never on the contract.
+cur = order.currency_id.name
 def money(v):
-    return '{:,.2f}'.format(v or 0.0)
-pro = gov = bio = disc = 0.0
+    s = '{:,.2f}'.format(v or 0.0)
+    return s if cur == 'CAD' else '%s %s' % (cur, s)
+pro = disc = 0.0
 codes = []
 for l in order.order_line:
-    if l.display_type:
+    if l.display_type or not l.product_id:
         continue
     code = (l.product_id.default_code or '')
+    if code.startswith('GOV-'):
+        continue
     if l.product_uom_qty:
         codes.append(code)
-    if code == 'GOV-BIO':
-        bio += l.price_subtotal
-    elif code.startswith('GOV-'):
-        gov += l.price_subtotal
-    else:
-        pro += l.price_subtotal
-    disc += l.product_uom_qty * l.price_unit * (l.discount or 0.0) / 100.0
-cur = order.currency_id.name
-first = order.x_pay1 if order.x_pay1 else round(pro / 2.0, 2)
-second = order.x_pay2 if order.x_pay2 else round(pro - first, 2)
+    gross = l.product_uom_qty * l.price_unit
+    pro += gross
+    disc += gross * (l.discount or 0.0) / 100.0
+tax = sum(l.price_tax for l in order.order_line if not l.display_type and not (l.product_id.default_code or '').startswith('GOV-'))
+total = round(pro - disc + tax, 2)
+
+rows = env['x_pay_plan'].sudo().search([('x_order_id', '=', order.id)], order='x_sequence, id')
+if not rows:
+    raise UserError("The payment plan is empty. Add at least one instalment on the Payment plan tab.")
+if abs(sum(rows.mapped('x_amount')) - total) > 0.05:
+    raise UserError("The payment plan adds up to %s but the contract total is %s. Fix the amounts on the Payment plan tab (or use 'Remainder' on the last row)." % (money(sum(rows.mapped('x_amount'))), money(total)))
+due = __DUE__
+ord_en = __ORD_EN__
+ord_fa = __ORD_FA__
+plan_en, plan_fa = [], []
+for i, row in enumerate(rows):
+    when_en, when_fa = due.get(row.x_due, due['sub_app'])
+    if row.x_due == 'date':
+        d = row.x_due_date.strftime('%B %d, %Y') if row.x_due_date else '…'
+        when_en, when_fa = when_en.format(date=d), when_fa.format(date=d)
+    note = (' – ' + row.x_note) if row.x_note else ''
+    plan_en.append('%s Payment – %s CAD – %s%s' % (ord_en[i] if i < len(ord_en) else str(i + 1), money(row.x_amount), when_en, note))
+    plan_fa.append('پرداخت %s – %s دلار کانادا – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
+
 main = codes[0] if codes else ''
 checks = {
     'CB_SP': main.startswith(('SP', 'PGWP')),
@@ -187,10 +359,9 @@ values = {
     'DATE': datetime.date.today().strftime('%d/%m/%Y'),
     'CLIENT': partner.name or '',
     'ADDR': address,
-    'PROFEE': money(pro), 'GOVFEE': money(gov), 'BIOFEE': money(bio),
-    'TAX': money(order.amount_tax), 'DISCOUNT': money(disc), 'TOTAL': money(order.amount_total),
-    'PAY1': money(first), 'PAY2': money(second),
-    'PAYNOTE': order.x_pay_note or '',
+    'PROFEE': money(pro), 'DISCOUNT': money(disc), 'TAX': money(tax), 'TOTAL': money(total),
+    'PAYPLAN': '\n'.join(plan_en),
+    'PAYPLAN_FA': '\n'.join(plan_fa),
     'GIVEN': names[0], 'FAMILY': names[1] if len(names) > 1 else '',
     'ADDR2': address, 'PHONE': partner.phone or partner.mobile or '', 'EMAIL': partner.email or '',
 }
@@ -213,20 +384,22 @@ for item in template.sign_item_ids:
     if item.type_id.item_type == 'checkbox':
         val = 'on' if checks.get(base) else ''
     else:
-        val = values.get(base)
+        val = values.get(item.name) if item.name in values else values.get(base)
     if val:
         ItemValue.create({'sign_request_id': request.id, 'sign_item_id': item.id,
                           'sign_request_item_id': company_item.id, 'value': val})
 request.send_signature_accesses()
 order.write({'x_sign_request_id': request.id})
-order.message_post(body='Retainer agreement (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s' % (kind, rcic.name, request.reference),
+summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees excluded). Payment plan: %s' % (
+    money(pro), money(disc), money(tax), money(total), '; '.join(plan_en))
+order.message_post(body='Retainer agreement (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s. %s' % (kind, rcic.name, request.reference, summary),
                    message_type='comment', subtype_xmlid='mail.mt_note')
 if lead:
     lead.sudo().message_post(body='Retainer agreement sent for signature: %s' % request.reference,
                              message_type='comment', subtype_xmlid='mail.mt_note')
 action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': request.id,
           'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
-""".strip()
+""".strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA))
 
 
 # When everyone has signed: confirm the quotation (the existing automation
@@ -264,23 +437,58 @@ def _field(odoo, model, name, vals):
     return fid
 
 
+def _server_action(odoo, key, vals):
+    act_id = odoo.ref("p2action", key)
+    if act_id:
+        odoo.write("ir.actions.server", [act_id], vals)
+    else:
+        act_id, _ = odoo.upsert("p2action", key, "ir.actions.server", vals)
+    return act_id
+
+
+def install_pay_plan(odoo):
+    """The payment-plan table: its model, fields, access, and the Recalculate action."""
+    model_id = odoo.ref("p2model", PLAN_MODEL)
+    if not model_id:
+        model_id, _ = odoo.upsert("p2model", PLAN_MODEL, "ir.model",
+                                  {"name": "Payment plan line", "model": PLAN_MODEL, "state": "manual"},
+                                  update=False)
+        log.info("  payment plan model created")
+    _field(odoo, PLAN_MODEL, "x_order_id", {
+        "field_description": "Quotation", "ttype": "many2one", "relation": "sale.order",
+        "on_delete": "cascade", "required": True, "index": True})
+    _field(odoo, PLAN_MODEL, "x_sequence", {"field_description": "Sequence", "ttype": "integer"})
+    _field(odoo, PLAN_MODEL, "x_share", {
+        "field_description": "Share", "ttype": "selection", "required": True,
+        "selection_ids": [(0, 0, {"value": v, "name": n, "sequence": i}) for i, (v, n) in enumerate(SHARES)]})
+    _field(odoo, PLAN_MODEL, "x_amount", {"field_description": "Amount", "ttype": "float"})
+    _field(odoo, PLAN_MODEL, "x_due", {
+        "field_description": "Due", "ttype": "selection", "required": True,
+        "selection_ids": [(0, 0, {"value": v, "name": n, "sequence": i}) for i, (v, n) in enumerate(DUE_LABELS)]})
+    _field(odoo, PLAN_MODEL, "x_due_date", {"field_description": "Date", "ttype": "date"})
+    _field(odoo, PLAN_MODEL, "x_note", {"field_description": "Note (printed)", "ttype": "char"})
+    _field(odoo, "sale.order", PLAN_FIELD, {
+        "field_description": "Payment plan", "ttype": "one2many", "relation": PLAN_MODEL,
+        "relation_field": "x_order_id", "copied": True})
+    group = odoo.search_read("ir.model.data", [("module", "=", "base"), ("name", "=", "group_user")],
+                             ["res_id"], limit=1)[0]["res_id"]
+    odoo.upsert("p2access", PLAN_MODEL, "ir.model.access", {
+        "name": "x_pay_plan user", "model_id": model_id, "group_id": group,
+        "perm_read": True, "perm_write": True, "perm_create": True, "perm_unlink": True})
+    return _server_action(odoo, "recalc_plan", {
+        "name": "Recalculate payment plan", "model_id": _model_id(odoo, "sale.order"),
+        "state": "code", "code": RECALC_CODE, "binding_model_id": False})
+
+
 def install_send_button(odoo, rcic_email):
     odoo.execute("ir.config_parameter", "set_param", "phase2.rcic_email", rcic_email or "")
     _field(odoo, "sale.order", "x_sign_request_id", {
         "field_description": "Retainer agreement", "ttype": "many2one",
         "relation": "sign.request", "on_delete": "set null"})
-    _field(odoo, "sale.order", "x_pay1", {"field_description": "1st payment", "ttype": "float"})
-    _field(odoo, "sale.order", "x_pay2", {"field_description": "2nd payment", "ttype": "float"})
-    _field(odoo, "sale.order", "x_pay_note", {"field_description": "Payment plan (on the contract)",
-                                              "ttype": "text"})
-
-    act_vals = {"name": "Send Contract", "model_id": _model_id(odoo, "sale.order"),
-                "state": "code", "code": SEND_CONTRACT_CODE, "binding_model_id": False}
-    act_id = odoo.ref("p2action", "send_contract")
-    if act_id:
-        odoo.write("ir.actions.server", [act_id], act_vals)
-    else:
-        act_id, _ = odoo.upsert("p2action", "send_contract", "ir.actions.server", act_vals)
+    recalc_id = install_pay_plan(odoo)
+    act_id = _server_action(odoo, "send_contract", {
+        "name": "Send Contract", "model_id": _model_id(odoo, "sale.order"),
+        "state": "code", "code": SEND_CONTRACT_CODE, "binding_model_id": False})
 
     parents = odoo.search_read("ir.ui.view", [("model", "=", "sale.order"), ("type", "=", "form"),
                                               ("inherit_id", "=", False), ("name", "=", "sale.order.form")],
@@ -293,10 +501,24 @@ def install_send_button(odoo, rcic_email):
             '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
             '<field name="x_sign_request_id" readonly="1"/>'
-            '<field name="x_pay1"/><field name="x_pay2"/>'
             '</xpath>'
-            '<xpath expr="//field[@name=\'note\']" position="before">'
-            '<field name="x_pay_note" placeholder="Payment plan printed on the retainer agreement"/>'
+            '<xpath expr="//notebook" position="inside">'
+            '<page string="Payment plan" name="pay_plan">'
+            '<div class="text-muted mb-2">Instalments printed on the retainer agreement. '
+            'Government fees are never part of the contract. A share is a percentage of the contract total '
+            '(professional fees after discount, plus tax); Remainder takes whatever is left. '
+            'Amounts are recalculated when the contract is sent.</div>'
+            f'<button name="{recalc_id}" type="action" string="Recalculate amounts" class="btn-secondary mb-2"/>'
+            f'<field name="{PLAN_FIELD}" nolabel="1">'
+            '<tree editable="bottom">'
+            '<field name="x_sequence" widget="handle"/>'
+            '<field name="x_share"/>'
+            '<field name="x_amount" sum="Total"/>'
+            '<field name="x_due"/>'
+            '<field name="x_due_date" invisible="x_due != \'date\'"/>'
+            '<field name="x_note" optional="hide"/>'
+            '</tree></field>'
+            '</page>'
             '</xpath>'
             '</data>')
     view_id = odoo.ref("p2view", "so_send_contract")
@@ -308,18 +530,24 @@ def install_send_button(odoo, rcic_email):
                 view_id, _ = odoo.upsert("p2view", "so_send_contract", "ir.ui.view", {
                     "name": "sale.order.form.send_contract", "model": "sale.order",
                     "inherit_id": parent["id"], "arch_db": arch, "priority": 99})
-            log.info("  Send Contract button placed on the quotation form")
+            log.info("  Send Contract button and Payment plan tab placed on the quotation form")
             break
         except OdooError as exc:
             log.warning("  quotation form: %s", str(exc)[-200:])
 
-    signed_vals = {"name": "Retainer signed -> confirm quotation", "model_id": _model_id(odoo, "sign.request"),
-                   "state": "code", "code": SIGNED_CODE}
-    sact = odoo.ref("p2action", "contract_signed")
-    if sact:
-        odoo.write("ir.actions.server", [sact], signed_vals)
-    else:
-        sact, _ = odoo.upsert("p2action", "contract_signed", "ir.actions.server", signed_vals)
+    # The old fixed fields (1st/2nd payment, note) are replaced by the plan.
+    for old in ("x_pay1", "x_pay2", "x_pay_note"):
+        fid = odoo.ref("p2field", f"sale.order.{old}")
+        if fid:
+            try:
+                odoo.execute("ir.model.fields", "unlink", [fid])
+                log.info("  removed the old %s field", old)
+            except OdooError as exc:
+                log.warning("  could not remove %s: %s", old, str(exc)[-120:])
+
+    sact = _server_action(odoo, "contract_signed", {
+        "name": "Retainer signed -> confirm quotation", "model_id": _model_id(odoo, "sign.request"),
+        "state": "code", "code": SIGNED_CODE})
     state_field = odoo.search_read("ir.model.fields", [("model", "=", "sign.request"), ("name", "=", "state")],
                                    ["id"], limit=1)[0]["id"]
     auto_vals = {"name": "Phase 2: retainer signed -> confirm quotation",

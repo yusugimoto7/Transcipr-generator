@@ -209,6 +209,15 @@ class Odoo:
             },
         )
 
+    def restamp(self, kind, trello_id, res_id):
+        """Point an existing external id at another record (e.g. a fresh copy)."""
+        name = self.key(kind, trello_id)
+        rows = self.search_read("ir.model.data", [("module", "=", MODULE), ("name", "=", name)], ["id"])
+        if rows:
+            self.execute("ir.model.data", "write", [r["id"] for r in rows], {"res_id": res_id})
+        if self._refs is not None:
+            self._refs[name] = res_id
+
     def upsert(self, kind, trello_id, model, vals, update=True, context=None):
         """Create the record on first run; on later runs reuse and refresh it.
 

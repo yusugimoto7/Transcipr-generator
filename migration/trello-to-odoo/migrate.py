@@ -762,12 +762,20 @@ def cmd_phase2(args, env):
     elif args.step == "deactivate":
         phase2.set_active(odoo, False)
         print("Phase 2 automation switched off.")
+    elif args.step == "taxes":
+        import taxes
+        taxes.install(odoo)
+        print("Sales taxes installed: GST 5% on services by default, provincial HST/QST and "
+              "'Outside Canada – no tax' applied from the customer's address. Government fees "
+              "carry no tax. Confirm the rates in taxes.py with the accountant.")
     elif args.step == "contracts":
         import sign_contracts
+        import taxes
+        taxes.install(odoo)
         ids = sign_contracts.install(odoo, args.rcic_email)
         print(f"Retainer agreements installed as Sign templates {ids}. Quotations now have a "
-              "'Send Contract' button; a signed agreement confirms the quotation and files the PDF "
-              "on the CRM card.")
+              "'Send Contract' button and a Payment plan tab; a signed agreement confirms the "
+              "quotation and files the PDF on the CRM card.")
 
 
 def cmd_crm_bridge(args, env):
@@ -955,7 +963,7 @@ def build_parser():
     p2 = sub.add_parser("phase2",
                         help="contracts as quotations: plan / install (CRM untouched, "
                              "automation off) / activate / deactivate")
-    p2.add_argument("step", choices=["plan", "install", "activate", "deactivate", "contracts"])
+    p2.add_argument("step", choices=["plan", "install", "activate", "deactivate", "taxes", "contracts"])
     p2.add_argument("--rcic-email", default="hamed@team.sugimotogroup.org",
                     help="Odoo contact who signs as the RCIC (contracts step)")
     p2.add_argument("--db", help="run against another database, e.g. --db test "

@@ -2,12 +2,27 @@
 
 Each token marks where a Sign field goes. Tokens are rendered in white so
 the PDF looks blank there, but pdfplumber can still read their position.
+
+    python tokenize_docs.py            # src/TR.docx, src/PR.docx -> TR-retainer.docx, PR-retainer.docx
+    soffice --headless --convert-to pdf TR-retainer.docx PR-retainer.docx
+    python extract_tokens.py           # -> tokens.json
+
+The fee block on the contract is: Professional Fees, Discount, Tax, Total.
+Government and biometrics fees are deliberately NOT on the contract (the
+note under the block says they are excluded); the payment plan is one
+multi-line field (PAYPLAN) listing every instalment with its due milestone.
 """
 import copy
+import pathlib
+
 import docx
 from docx.shared import RGBColor, Pt
 
+HERE = pathlib.Path(__file__).resolve().parent
+SRC = HERE / "src"
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+# Blank lines kept under the payment-plan marker so the text field has room.
+PLAN_ROOM = "\n" * 6
 
 
 def tok(name):
@@ -85,11 +100,25 @@ def set_text(p, parts):
             run.font.size = None
 
 
+def remove_paragraph(p):
+    p._p.getparent().remove(p._p)
+
+
+def unnumber(p):
+    """Drop the list numbering ("1.") from a paragraph."""
+    ppr = p._p.pPr
+    if ppr is not None:
+        for num in ppr.findall(docx.oxml.ns.qn("w:numPr")):
+            ppr.remove(num)
+        p.paragraph_format.left_indent = 0
+        p.paragraph_format.first_line_indent = 0
+
+
 T = lambda n: ("tok", n)
 
 
 def do_tr():
-    d = docx.Document("TR.docx")
+    d = docx.Document(SRC / "TR.docx")
     t = d.tables[0]
     c = lambda r, col, i: t.rows[r].cells[col].paragraphs[i]
     replace_in_runs(c(1, 0, 1), "S25328", [T("FILENO")])
@@ -104,33 +133,36 @@ def do_tr():
     for i, name in ((4, "CB_SP"), (5, "CB_WP"), (6, "CB_TRV")):
         prepend_token(c(5, 0, i), name)
         prepend_token(c(5, 1, i), name + "_FA")
-    for i, name in ((5, "PROFEE"), (6, "GOVFEE"), (7, "BIOFEE")):
-        replace_in_runs(c(9, 0, i), "Fee  CAD", [T(name), "  CAD"])
-    replace_in_runs(c(9, 0, 8), "Fee CAD", [T("TAX"), " CAD"])
-    replace_in_runs(c(9, 0, 9), "Fees  CAD", [T("TOTAL"), "  CAD"])
+
+    # Fee block (EN): Professional / Discount / Tax / Total. The government
+    # and biometrics lines of the original are dropped.
+    replace_in_runs(c(9, 0, 5), "Fee  CAD", [T("PROFEE"), "  CAD"])
+    set_text(c(9, 0, 6), ["Discount:                   ( ", T("DISCOUNT"), " ) CAD"])
+    remove_paragraph(c(9, 0, 7))                       # biometrics line
+    replace_in_runs(c(9, 0, 7), "Fee CAD", [T("TAX"), " CAD"])      # tax (was index 8)
+    replace_in_runs(c(9, 0, 8), "Fees  CAD", [T("TOTAL"), "  CAD"])  # total (was index 9)
+    # Fee block (FA)
     replace_in_runs(c(9, 1, 5), "Fee", [T("PROFEE_FA")])
-    replace_in_runs(c(9, 1, 6), "Fee", [T("GOVFEE_FA")])
-    p = c(9, 1, 7)
-    replace_in_runs(p, "Fees", [T("TOTAL_FA")])
-    replace_in_runs(p, "Fee", [T("BIOFEE_FA")])
-    replace_in_runs(p, "Fee", [T("TAX_FA")])
-    replace_in_runs(c(11, 0, 2), "...........", [T("PAY1")])
-    replace_in_runs(c(11, 0, 3), "...........", [T("PAY2")])
-    set_text(c(11, 0, 4), [T("PAYNOTE")])
-    p = c(11, 1, 1)
-    replace_in_runs(p, "...........", [T("PAY1_FA")])
-    replace_in_runs(p, "...........", [T("PAY2_FA")])
+    set_text(c(9, 1, 6), ["تخفیف:                     ( ", T("DISCOUNT_FA"), " ) دلار کانادا"])
+    set_text(c(9, 1, 7), ["مالیات :                                 ", T("TAX_FA"), " دلار کانادا\n",
+                          "      هزینه کل:                     ", T("TOTAL_FA"), " دلار کانادا"])
+
+    # Payment plan: one multi-line field per language, with room below it.
+    set_text(c(11, 0, 2), [T("PAYPLAN"), PLAN_ROOM])
+    remove_paragraph(c(11, 0, 3))
+    set_text(c(11, 1, 1), [T("PAYPLAN_FA"), PLAN_ROOM])
+
     for i, name in ((2, "GIVEN"), (3, "FAMILY"), (4, "ADDR2"), (5, "PHONE"), (6, "EMAIL")):
         append_token(c(24, 0, i), name)
         append_token(c(24, 1, i), name + "_FA")
     set_text(c(26, 0, 3), [T("SIG_C"), "\t\t\t\t", T("SIG_R")])
     p = c(26, 0, 5)
     set_text(p, ["Signature of Client \t\tDate: ", T("DATE_C"), "\t\t\tSignature of RCIC           Date: ", T("DATE_R")])
-    d.save("TR_t.docx")
+    d.save(HERE / "TR-retainer.docx")
 
 
 def do_pr():
-    d = docx.Document("PR.docx")
+    d = docx.Document(SRC / "PR.docx")
     P = d.paragraphs
     append_token(P[3], "FILENO", prefix="")
     replace_in_runs(P[5], "Date", [T("DATE")])
@@ -141,18 +173,19 @@ def do_pr():
     replace_in_runs(P[54], "$Fee", ["$", T("TAX")])
     replace_in_runs(P[56], "$Amount", ["$", T("DISCOUNT")])
     replace_in_runs(P[58], "$Fee", ["$", T("TOTAL")])
-    replace_in_runs(P[66], "$Fee", ["$", T("PAY1")])
-    replace_in_runs(P[67], "$Fee", ["$", T("PAY2")])
-    set_text(P[68], [T("PAYNOTE")])
+    # Payment plan: one multi-line field replacing the two fixed lines.
+    set_text(P[66], [T("PAYPLAN"), PLAN_ROOM])
+    unnumber(P[66])
+    remove_paragraph(P[67])
     for i, name in ((129, "GIVEN"), (130, "FAMILY"), (131, "ADDR2"), (132, "PHONE"), (133, "EMAIL")):
         append_token(P[i], name)
     set_text(P[148], [T("SIG_C"), "\t\t\t\t\t\t", T("SIG_R")])
     set_text(P[150], ["Signature of Client \t\t\t\t\t\tSignature of RCIC    Date ", T("DATE_R")])
     set_text(P[151], ["Date ", T("DATE_C")])
-    d.save("PR_t.docx")
+    d.save(HERE / "PR-retainer.docx")
 
 
 if __name__ == "__main__":
     do_tr()
     do_pr()
-    print("tokenized: TR_t.docx PR_t.docx")
+    print("tokenized: TR-retainer.docx PR-retainer.docx")
