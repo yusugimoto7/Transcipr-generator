@@ -3,3 +3,4 @@ users.json
 report.json
 __pycache__/
 .venv/
+archived_cards.json
