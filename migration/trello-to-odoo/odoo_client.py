@@ -22,15 +22,19 @@ class _RequestsTransport(xmlrpc.client.Transport):
     which fails inside sandboxes that only allow egress through a proxy.
     """
 
-    def __init__(self):
+    timeout = 600
+
+    def __init__(self, timeout=None):
         super().__init__()
         self.session = requests.Session()
+        if timeout:
+            self.timeout = timeout
 
     def request(self, host, handler, request_body, verbose=False):
         scheme = "https" if isinstance(self, xmlrpc.client.SafeTransport) else "http"
         response = self.session.post(
             f"{scheme}://{host}{handler}", data=request_body,
-            headers={"Content-Type": "text/xml"}, timeout=600,
+            headers={"Content-Type": "text/xml"}, timeout=self.timeout,
         )
         if response.status_code != 200:
             raise xmlrpc.client.ProtocolError(
@@ -45,8 +49,9 @@ class _RequestsSafeTransport(_RequestsTransport, xmlrpc.client.SafeTransport):
     pass
 
 
-def server_proxy(url):
-    transport = _RequestsSafeTransport() if url.startswith("https") else _RequestsTransport()
+def server_proxy(url, timeout=None):
+    transport = (_RequestsSafeTransport(timeout) if url.startswith("https")
+                 else _RequestsTransport(timeout))
     return xmlrpc.client.ServerProxy(url, allow_none=True, transport=transport)
 
 MODULE = "__trello__"

@@ -736,6 +736,27 @@ def cmd_audit(args, env):
           "who always sees that single task).")
 
 
+def cmd_archive(args, env):
+    """Archive CRM cards by owner and by inactivity (reversible)."""
+    import crm_cleanup
+    db = args.db or env("ODOO_DB")
+    db_password = env(f"ODOO_PASSWORD__{re.sub(r'[^A-Za-z0-9]', '_', db).upper()}") or env("ODOO_PASSWORD")
+    odoo = Odoo(env("ODOO_URL"), db, env("ODOO_USERNAME"), db_password)
+    odoo.login()
+    log.info("Archiving CRM cards on database %r", db)
+    if args.undo:
+        crm_cleanup.unarchive_last(odoo)
+        return
+    picked = crm_cleanup.select(odoo, user_names=args.people or (), quiet_days=args.quiet_days)
+    if not picked:
+        raise SystemExit("nothing selected: pass --people and/or --quiet-days")
+    ids = crm_cleanup.archive(odoo, picked, dry_run=args.dry_run)
+    if args.dry_run:
+        print(f"Dry run: {len(ids)} cards would be archived. Re-run without --dry-run to apply.")
+    else:
+        print(f"Archived {len(ids)} cards. Undo with: migrate.py archive --undo")
+
+
 def cmd_phase2(args, env):
     import phase2
     db = args.db or env("ODOO_DB")
@@ -964,6 +985,15 @@ def build_parser():
     sub.add_parser("audit",
                    help="print who can actually see each migrated project, and why")
 
+    arch = sub.add_parser("archive",
+                         help="archive CRM cards by owner and/or inactivity (reversible)")
+    arch.add_argument("--people", nargs="*", help="archive cards owned or created by these people")
+    arch.add_argument("--quiet-days", type=int,
+                      help="archive cards with no write and no message for this many days")
+    arch.add_argument("--dry-run", action="store_true", help="report only, archive nothing")
+    arch.add_argument("--undo", action="store_true", help="restore the cards of the last run")
+    arch.add_argument("--db", help="run against another database, e.g. --db test")
+
     p2 = sub.add_parser("phase2",
                         help="contracts as quotations: plan / install (CRM untouched, "
                              "automation off) / activate / deactivate")
@@ -1037,7 +1067,7 @@ def main():
         "merge-fields": cmd_merge_fields, "fix-comments": cmd_fix_comments,
         "fix-descriptions": cmd_fix_descriptions,
         "access": cmd_access, "crm-bridge": cmd_crm_bridge, "audit": cmd_audit,
-        "phase2": cmd_phase2, "grant": cmd_grant,
+        "phase2": cmd_phase2, "archive": cmd_archive, "grant": cmd_grant,
     }
     try:
         handlers[args.command](args, env)
