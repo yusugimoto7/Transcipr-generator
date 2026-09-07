@@ -571,7 +571,54 @@ def install_send_button(odoo, rcic_email):
     log.info("  signed-contract automation active")
 
 
+def install_state_dropdown(odoo):
+    """State dropdowns offer Canadian provinces until a country is picked.
+
+    Odoo lists every state of every country while the country field is
+    empty; almost every address typed here is Canadian or has no province.
+    """
+    domain = "[('country_id', '=', country_id)] if country_id else [('country_id.code', '=', 'CA')]"
+    for model, key in (("res.partner", "partner_state"), ("crm.lead", "lead_state")):
+        parents = odoo.search_read("ir.ui.view", [("model", "=", model), ("type", "=", "form"),
+                                                  ("inherit_id", "=", False)], ["id"])
+        arch = (f'<data><xpath expr="//field[@name=\'state_id\']" position="attributes">'
+                f'<attribute name="domain">{domain}</attribute></xpath></data>')
+        view_id = odoo.ref("p2view", key)
+        for parent in parents:
+            try:
+                if view_id:
+                    odoo.write("ir.ui.view", [view_id], {"inherit_id": parent["id"], "arch_db": arch})
+                else:
+                    view_id, _ = odoo.upsert("p2view", key, "ir.ui.view", {
+                        "name": f"{model}.form.state_canada", "model": model,
+                        "inherit_id": parent["id"], "arch_db": arch, "priority": 99})
+                log.info("  %s: State dropdown limited to Canadian provinces", model)
+                break
+            except OdooError as exc:
+                log.warning("  %s state dropdown: %s", model, str(exc)[-160:])
+
+
+def prune_states(odoo, dry_run=False):
+    """Delete every state that is not a Canadian province (destructive).
+
+    Contacts using a foreign state keep their country; the state is cleared.
+    """
+    canada = odoo.search_read("res.country", [("code", "=", "CA")], ["id"], limit=1)[0]["id"]
+    others = [s["id"] for s in odoo.search_read("res.country.state", [("country_id", "!=", canada)], ["id"])]
+    used = odoo.search_read("res.partner", [("state_id", "in", others)], ["name"], context={"active_test": False})
+    log.info("%d non-Canadian states, used by %d contacts", len(others), len(used))
+    if dry_run:
+        return len(others)
+    if used:
+        odoo.write("res.partner", [u["id"] for u in used], {"state_id": False})
+    for i in range(0, len(others), 200):
+        odoo.execute("res.country.state", "unlink", others[i:i + 200])
+    log.info("deleted %d states; %d remain", len(others), odoo.execute("res.country.state", "search_count", []))
+    return len(others)
+
+
 def install(odoo, rcic_email):
     ids = install_templates(odoo)
     install_send_button(odoo, rcic_email)
+    install_state_dropdown(odoo)
     return ids

@@ -762,6 +762,10 @@ def cmd_phase2(args, env):
     elif args.step == "deactivate":
         phase2.set_active(odoo, False)
         print("Phase 2 automation switched off.")
+    elif args.step == "prune-states":
+        import sign_contracts
+        n = sign_contracts.prune_states(odoo, dry_run=args.dry_run)
+        print(f"{'Would delete' if args.dry_run else 'Deleted'} {n} non-Canadian states.")
     elif args.step == "taxes":
         import taxes
         taxes.install(odoo)
@@ -963,7 +967,8 @@ def build_parser():
     p2 = sub.add_parser("phase2",
                         help="contracts as quotations: plan / install (CRM untouched, "
                              "automation off) / activate / deactivate")
-    p2.add_argument("step", choices=["plan", "install", "activate", "deactivate", "taxes", "contracts"])
+    p2.add_argument("step", choices=["plan", "install", "activate", "deactivate", "taxes", "contracts", "prune-states"])
+    p2.add_argument("--dry-run", action="store_true", help="prune-states: only count, delete nothing")
     p2.add_argument("--rcic-email", default="hamed@team.sugimotogroup.org",
                     help="Odoo contact who signs as the RCIC (contracts step)")
     p2.add_argument("--db", help="run against another database, e.g. --db test "
