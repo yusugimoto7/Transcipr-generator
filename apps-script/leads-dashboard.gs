@@ -37,7 +37,12 @@ const SECRET = 'sgv_a7mftc7VvVgM4UaCrI7QRYYhVubQoBEf';
 // never touch the sheet-bound script that runs the lead pipeline.
 const SHEET_ID = '1hiRcyNEA-zggpDW-OldQ1CRcbPVmjMipfpG0BZIiIOU';
 const TABS_TO_READ = 3;       // the first three tabs: Main + the two dated exports
-const CACHE_SECONDS = 300;    // serve a cached pack for 5 minutes to keep loads snappy
+// Building the pack means reading every lead, Instagram and CRM row — minutes of
+// Apps Script sheet I/O. That must never happen while someone waits for the page,
+// so a trigger builds it on a schedule and a request only ever reads the result.
+const CACHE_SECONDS = 21600;  // 6 hours, the CacheService maximum
+const PACK_TAB = 'Pack cache';
+const PACK_CELL = 45000;      // a cell holds 50,000 characters; leave headroom
 
 // Instagram insights, written into these tabs by instagram-insights.gs. Absent
 // tabs are not an error: the dashboard just hides its Social section.
@@ -644,6 +649,74 @@ function cachePut(payload) {
   } catch (err) { /* caching is best-effort */ }
 }
 
+/* ------------------------------------------------------------- durable store */
+/**
+ * The built pack, parked in a hidden tab of the same spreadsheet. CacheService
+ * evicts whenever it likes and caps out at six hours, and a cold miss would put a
+ * multi-minute rebuild in front of whoever asked first. Reading a dozen cells
+ * costs a moment and never expires.
+ *
+ * The tab is appended last and hidden: leads-dashboard reads the FIRST THREE tabs
+ * as leads, so its position matters and its contents are nobody's business.
+ */
+function packSave(payload) {
+  var ss = book();
+  var sh = ss.getSheetByName(PACK_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(PACK_TAB, ss.getNumSheets());
+    sh.hideSheet();
+  }
+  sh.clearContents();
+  var rows = [[new Date().toISOString()]];
+  for (var i = 0; i < payload.length; i += PACK_CELL) rows.push([payload.substr(i, PACK_CELL)]);
+  sh.getRange(1, 1, rows.length, 1).setValues(rows);
+  return rows.length - 1;
+}
+
+function packLoad() {
+  try {
+    var sh = book().getSheetByName(PACK_TAB);
+    if (!sh || sh.getLastRow() < 2) return null;
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+    var out = '';
+    for (var i = 0; i < vals.length; i++) out += vals[i][0];
+    return out || null;
+  } catch (err) { return null; }
+}
+
+/**
+ * What the trigger runs. Everything expensive happens here, on a schedule,
+ * where nobody is waiting for it.
+ */
+function refreshPack() {
+  var started = Date.now();
+  var payload = buildPayload();
+  cachePut(payload);
+  var chunks = packSave(payload);
+  Logger.log('pack refreshed in %ss — %s KB in %s cells',
+    Math.round((Date.now() - started) / 1000), Math.round(payload.length / 1024), chunks);
+}
+
+/**
+ * Hourly rather than half-hourly on purpose. A consumer Google account allows
+ * about 90 minutes of trigger runtime a day in total, shared with the Instagram
+ * and Odoo collectors — and a full rebuild is not cheap. refreshPack logs how
+ * long it took, so once that is known the interval can be tightened or loosened
+ * with eyes open.
+ */
+function installPackTrigger() {
+  removePackTriggers();
+  ScriptApp.newTrigger('refreshPack').timeBased().everyHours(1).create();
+  Logger.log('trigger installed: refreshPack every hour');
+  refreshPack();   // so the first visitor after this does not pay for the first build
+}
+
+function removePackTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'refreshPack') ScriptApp.deleteTrigger(t);
+  });
+}
+
 /* ---------------------------------------------------------------- entrypoint */
 function doGet(e) {
   var params = (e && e.parameter) || {};
@@ -651,10 +724,20 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify({ error: 'unauthorized' }))
       .setMimeType(ContentService.MimeType.JSON);
   }
-  var payload = params.fresh === '1' ? null : cacheGet();
+  // Cache first, then the stored copy, and only build as a last resort — a rebuild
+  // here is minutes long and the page is waiting on it.
+  var payload = null;
+  if (params.fresh !== '1') {
+    payload = cacheGet();
+    if (!payload) {
+      payload = packLoad();
+      if (payload) cachePut(payload);   // warm the cache so the next hit skips the sheet
+    }
+  }
   if (!payload) {
     payload = buildPayload();
     cachePut(payload);
+    packSave(payload);
   }
   return ContentService.createTextOutput(payload)
     .setMimeType(ContentService.MimeType.JSON);

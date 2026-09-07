@@ -2129,7 +2129,7 @@ function connectLive() {
   } catch (e) {}
   // reload on disconnect: the fetched pack is already loaded, and reloading is the
   // simplest way to get the embedded snapshot back rather than leave stale live data
-  if (url.trim()) goLive(true);
+  if (url.trim()) goLive(false);
   else location.reload();
 }
 function renderLiveBadge() {
@@ -2148,7 +2148,8 @@ function renderLiveBadge() {
   } else if (live.state === 'live') {
     cls += ' ok';
     label.textContent = 'Live · ' + live.at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    host.title = 'Fetched from the sheet when this page loaded. Refresh for newer rows.';
+    host.title = 'Fetched when this page loaded. The endpoint rebuilds from the sheets '
+      + 'on its own schedule, so Refresh picks up whatever it last built.';
   } else {
     cls += ' err';
     label.textContent = 'Live fetch failed — showing snapshot';
@@ -2159,7 +2160,10 @@ function renderLiveBadge() {
   host.appendChild(label);
   if (live.state === 'live' || live.state === 'err') {
     const btn = el('button', 'lvbtn', 'Refresh');
-    btn.addEventListener('click', () => goLive(true));
+    // A plain re-fetch, not force. Forcing makes the endpoint rebuild from every
+    // sheet — minutes of work — and the button would look broken while it ran.
+    // The endpoint rebuilds itself on a schedule, so a normal fetch is current.
+    btn.addEventListener('click', () => goLive(false));
     host.appendChild(btn);
     const edit = el('button', 'lvbtn', 'Change');
     edit.addEventListener('click', connectLive);
