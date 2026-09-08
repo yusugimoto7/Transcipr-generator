@@ -296,8 +296,21 @@ rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
 env.ref('__trello__.p2action_recalc_plan').with_context(active_model='sale.order', active_id=order.id, active_ids=order.ids).run()
 order.invalidate_recordset()
 
-# TR or PR contract, from the tags on the quotation's products.
-tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
+# TR or PR contract, from the tags on the quotation's products. A service with
+# no tag has no agreement of its own yet, so refuse rather than send the wrong
+# one: Sparkbridge consulting and the entrepreneur streams are not TR work.
+billable = order.order_line.filtered(
+    lambda l: not l.display_type and l.product_id and l.product_uom_qty
+    and not (l.product_id.default_code or '').startswith('GOV-'))
+untagged = billable.filtered(lambda l: not (
+    set(l.product_id.product_tmpl_id.product_tag_ids.mapped('name')) & {'TR', 'PR'}))
+if untagged:
+    raise UserError(
+        "No retainer agreement is defined for: %s.\n\n"
+        "Tag the product TR or PR under Sales > Products, or ask for the right "
+        "template to be installed. The contract was not sent."
+        % ", ".join(untagged.mapped('product_id.display_name')))
+tags = billable.mapped('product_id.product_tmpl_id.product_tag_ids.name')
 kind = 'PR' if 'PR' in tags else 'TR'
 template = env.ref('__trello__.signtmpl_' + kind, raise_if_not_found=False)
 if not template:
