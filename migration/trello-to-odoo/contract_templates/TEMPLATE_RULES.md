@@ -27,3 +27,10 @@ These apply to **all** Sugimoto Visa and Sparkbridge agreements generated from O
     Farsi (`sg_clauses.parties()`; Sparkbridge `sbc_body(companions_en, companions_fa)`).
 
 Also decided: the Sparkbridge SUV Canada template (SB-B) is retired; nine templates remain.
+
+## Templates (2026-09-09)
+
+Ten agreement templates: SG-TR, SG-PR, SG-SPON, SG-ENT, SG-PFL (procedural fairness letter
+response, built on SG-TR with sections 2, 3, 4, 5, 7 and 12 rewritten), SB-A, SB-C, SB-D, SB-E, SB-F.
+Services without one of these use the custom-agreement upload on the quotation
+(`sign_contracts.py`, fields `x_custom_agreement` / `x_custom_agreement_url`).

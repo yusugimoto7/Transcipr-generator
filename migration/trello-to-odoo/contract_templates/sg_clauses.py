@@ -205,3 +205,102 @@ def contact(client_en_lines, client_fa_lines, rcic_email="Legal@sugimotovisa.com
 
 WITNESS = (P("IN WITNESS THEREOF, this Agreement has been duly executed by the parties hereto on the date first above written."),
            P("به موجب این توافقنامه، طرفین در تاریخ فوق‌الذکر این قرارداد را به نحو صحیح و قانونی امضاء کرده‌اند."))
+
+
+# ---------------------------------------------------------------------------
+# SG-PFL : response to a Procedural Fairness Letter. Same skeleton as SG-TR;
+# the sections whose wording is application-specific are rewritten here.
+# ---------------------------------------------------------------------------
+def service_pfl(app_en, app_fa, letter_date_en, letter_date_fa, deadline_en, deadline_fa, app_no):
+    en = (H("2. Service") + P("2.1 Type of service offered:") +
+          UL([f"Preparation and submission of a written response to the Procedural Fairness Letter (PFL) dated {letter_date_en}, issued by Immigration, Refugees and Citizenship Canada (IRCC) in respect of the Client’s {app_en} (Application No. {app_no}).",
+              f"Response deadline set by IRCC: {deadline_en}."]) +
+          P("2.2 The scope of this Agreement is limited to the response to the above-mentioned letter. Any reconsideration request, new application, appeal, judicial review, or any other step that may follow IRCC’s decision is outside the scope of this Agreement and requires a separate retainer agreement."))
+    fa = (H("۲. خدمات") + P("۲.۱ نوع خدمات ارائه شده:") +
+          UL([f"تهیه و ارسال پاسخ کتبی به نامه انصاف رویه‌ای (PFL) مورخ {letter_date_fa}، صادر شده از سوی اداره مهاجرت، پناهندگی و شهروندی کانادا (IRCC) در خصوص {app_fa} متقاضی (شماره پرونده {app_no}).",
+              f"مهلت پاسخ تعیین شده توسط IRCC: {deadline_fa}."]) +
+          P("۲.۲ دامنه این قرارداد محدود به پاسخ به نامه فوق است. هرگونه درخواست بازنگری، درخواست جدید، تجدیدنظر، بازبینی قضایی یا هر اقدام دیگری که پس از تصمیم IRCC لازم شود، خارج از دامنه این قرارداد است و مستلزم انعقاد قرارداد جداگانه می‌باشد."))
+    return (en, fa)
+
+def rcic_duties_pfl(parties_en, parties_fa):
+    en = (H("3. RCIC Responsibilities and Commitments") +
+      P(f"The Client asked the RCIC and the RCIC has agreed to act for {parties_en} in the matter described in section 2 of this Agreement. In consideration of the fees paid and the matter stated above, the RCIC agrees to do the following:") +
+      OL(["Representing the Client before IRCC in respect of the Procedural Fairness Letter.",
+          "Reviewing the Procedural Fairness Letter, the application file and the concerns raised by the officer, and advising the Client on the explanations and evidence required to address each concern.",
+          "Checking and verifying that the documents and explanations provided by the Client address the concerns raised and meet the requirements of the Immigration Regulations. Please note that some of the work to be undertaken may be delegated to employees or contracted out in order to expedite the work.",
+          "Drafting the written response and submissions, with reference to the applicable law and guidelines where appropriate.",
+          "Submitting the response through the channel and within the deadline stated in the letter, and providing the Client with proof of submission.",
+          "Communication with the visa office if required for clarification until the final decision is reached.",
+          "Please be advised that information and documents may be shared with employees who may be involved in this case, both salaried and contracted, and they may be shared with outside parties in the event of a complaint, investigation, tribunal, or if required by law.",
+          "Track the Client’s file until IRCC’s decision on the application and endeavor to provide quality consulting services and to adequately supervise any employees participating or assisting in this process. A list of employees who might assist in the Client’s case is listed on the official website: https://sugimotovisa.com/",
+          "The time IRCC takes to decide the application after the response is submitted is at the sole discretion of IRCC and the RCIC shall have no control over it.",
+          "RCIC shall, if needed, obtain the assistance of a translator for communicating with the Client. Fees for such services shall be paid by the Client.",
+          "If RCIC receives any original documents from the Client, he shall return such original documents as soon as the purpose for receiving these documents is achieved."]))
+    fa = (H("۳. مسئولیت‌ها و تعهدات RCIC") +
+      P(f"متقاضی از RCIC درخواست کرده و RCIC نیز موافقت کرده است که در موضوع ذکر شده در بخش ۲ این قرارداد، نمایندگی {parties_fa} را بر عهده بگیرد. در ازای حق‌الوکاله پرداخت شده و با توجه به موارد ذکر شده در بالا، RCIC متعهد به انجام موارد زیر است:") +
+      OL(["نمایندگی متقاضی نزد IRCC در خصوص نامه انصاف رویه‌ای.",
+          "بررسی نامه انصاف رویه‌ای، پرونده درخواست و نگرانی‌های مطرح شده توسط افسر، و راهنمایی متقاضی در مورد توضیحات و مدارک لازم برای پاسخ به هر یک از موارد.",
+          "بررسی و تأیید اینکه مدارک و توضیحات ارائه شده توسط متقاضی، به نگرانی‌های مطرح شده پاسخ می‌دهد و مطابق با الزامات مقررات مهاجرتی است. توجه داشته باشید که بخشی از کار ممکن است به کارمندان محول یا به اشخاص دیگر واگذار شود تا روند کار سریع‌تر پیش رود.",
+          "تهیه پاسخ کتبی و لایحه، در صورت لزوم با استناد به قوانین و دستورالعمل‌های مربوطه.",
+          "ارسال پاسخ از طریق مسیر و در مهلت تعیین شده در نامه، و ارائه رسید ارسال به متقاضی.",
+          "در صورت لزوم، برقراری ارتباط با دفتر ویزا برای توضیحات تا زمان صدور تصمیم نهایی.",
+          "لطفاً توجه داشته باشید که اطلاعات و مدارک ممکن است با کارمندانی که در این پرونده نقش دارند، چه کارکنان رسمی و چه قراردادی، به اشتراک گذاشته شود و همچنین ممکن است در موارد شکایت، تحقیق، دادگاه یا در صورت لزوم قانونی با اشخاص دیگر به اشتراک گذاشته شود.",
+          "پیگیری پرونده متقاضی تا زمان تصمیم IRCC در مورد درخواست و تلاش برای ارائه خدمات مشاوره‌ای با کیفیت و نظارت مناسب بر هر کارمندی که در این فرآیند مشارکت یا کمک می‌کند. فهرست کارمندانی که ممکن است در پرونده متقاضی کمک کنند، در وب‌سایت رسمی درج شده است: https://sugimotovisa.com",
+          "مدت زمانی که IRCC پس از ارسال پاسخ برای تصمیم‌گیری در مورد درخواست صرف می‌کند، صرفاً در اختیار IRCC است و RCIC هیچ کنترلی بر آن ندارد.",
+          "وکیل RCIC در صورت نیاز، از مترجمی برای ارتباط با متقاضی استفاده خواهد کرد. هزینه‌های این خدمات به عهده متقاضی خواهد بود.",
+          "اگر RCIC هرگونه مدارک اصلی را از متقاضی دریافت کند، موظف است این مدارک را به محض رسیدن به هدف دریافت آن‌ها، به متقاضی بازگرداند."]))
+    return (en, fa)
+
+def client_duties_pfl(internal_deadline_en, internal_deadline_fa):
+    en = (H("4. Client Responsibilities and Commitments") +
+      P("4.1 The Client must provide, upon request from the RCIC:") +
+      UL(["A complete copy of the Procedural Fairness Letter and of the application it relates to, with all attachments, within two (2) business days of signing this Agreement.",
+          f"All documents, explanations and supporting evidence requested by the RCIC no later than {internal_deadline_en}, so that the response can be completed and submitted before IRCC’s deadline.",
+          "All documentation in English, or with a certified English translation.",
+          "Inform RCIC of the change of status, address, and any information that bears to the Client(s) application."]) +
+      PS("4.2 The Client understands that they must be accurate, honest, and genuine in the information they provide. Any inaccuracies may void this Agreement or seriously affect the outcome of the response or the retention of any status they may obtain. The RCIC’s obligations under this Agreement are null and void if the Client knowingly provides any inaccurate, misleading, or false material information. The Client’s financial obligations remain.",
+         "4.3 In the event Immigration, Refugees and Citizenship Canada (IRCC) should contact the Client directly, the Client is instructed to notify the RCIC immediately and to forward any further correspondence on the same day it is received.",
+         "4.4 The Client is to immediately advise the RCIC of any change in the marital, family, or civil status or change of physical address or contact information for any person included in the application.",
+         "4.5 The Client acknowledges that the response deadline is set by IRCC, that a request for an extension is at IRCC’s sole discretion, and that a late or incomplete response may result in the refusal of the application. The Client is responsible for the truthfulness and completeness of the explanations and evidence supplied to the RCIC.",
+         "4.6 In the event of a Joint Retainer Agreement, the Clients understand that no information received in connection with the matter from one Client can be treated as confidential so far as any of the other Clients are concerned and that if a conflict develops, that cannot be resolved, the RCIC cannot continue to act for both or all of the Clients and may have to withdraw completely.",
+         "4.7 If the Client fails to deliver the requested documents by the date in 4.1, the RCIC may submit the response on the basis of the material available or, where a proper response is no longer possible, terminate this Agreement in writing. In either case the RCIC is not liable for the outcome and the fees under section 5 remain payable in full."))
+    fa = (H("۴. مسئولیت‌ها و تعهدات متقاضی") +
+      P("۴.۱ متقاضی موظف است در صورت درخواست RCIC، موارد زیر را ارائه دهد:") +
+      UL(["نسخه کامل نامه انصاف رویه‌ای و درخواست مربوط به آن، همراه با تمامی پیوست‌ها، ظرف دو (۲) روز کاری پس از امضای این قرارداد.",
+          f"تمامی مدارک، توضیحات و مستندات درخواست شده توسط RCIC حداکثر تا {internal_deadline_fa}، به‌گونه‌ای که پاسخ بتواند پیش از مهلت IRCC تکمیل و ارسال شود.",
+          "تمامی مدارک به زبان انگلیسی یا با ترجمه رسمی به زبان انگلیسی.",
+          "اطلاع‌رسانی به RCIC در مورد هرگونه تغییر در وضعیت، آدرس و هر اطلاعات دیگری که به درخواست متقاضی مربوط می‌شود."]) +
+      PS("۴.۲ متقاضی می‌داند که باید در اطلاعاتی که ارائه می‌دهد، دقت، صداقت و واقعیت را رعایت کند. هرگونه نادرستی ممکن است این قرارداد را باطل کرده یا به طور جدی بر نتیجه پاسخ یا حفظ هرگونه وضعیتی که ممکن است به دست آورد، تأثیر بگذارد. تعهدات RCIC طبق این قرارداد در صورت ارائه آگاهانه هرگونه اطلاعات نادرست، گمراه‌کننده یا کذب از طرف متقاضی، بی‌اعتبار خواهد شد. اما تعهدات مالی متقاضی پابرجا خواهد ماند.",
+         "۴.۳ در صورتی که اداره مهاجرت، پناهندگی و شهروندی کانادا (IRCC) به‌طور مستقیم با متقاضی تماس بگیرد، متقاضی موظف است فوراً RCIC را مطلع کند و هرگونه مکاتبه بعدی را در همان روز دریافت، برای RCIC ارسال نماید.",
+         "۴.۴ متقاضی باید بلافاصله RCIC را از هرگونه تغییر در وضعیت ازدواج، خانواده یا وضعیت مدنی، یا تغییر آدرس فیزیکی یا اطلاعات تماس هر شخصی که در درخواست گنجانده شده است، آگاه کند.",
+         "۴.۵ متقاضی می‌پذیرد که مهلت پاسخ توسط IRCC تعیین شده است، درخواست تمدید مهلت صرفاً در اختیار IRCC است و پاسخ دیرهنگام یا ناقص ممکن است به رد درخواست منجر شود. مسئولیت صحت و کامل بودن توضیحات و مدارک ارائه شده به RCIC بر عهده متقاضی است.",
+         "۴.۶ در صورت وجود قرارداد حق‌الوکاله مشترک، متقاضیان متوجه هستند که هیچ‌یک از اطلاعات دریافت‌شده در ارتباط با موضوع مورد نظر از یک متقاضی نمی‌تواند برای دیگر متقاضیان به‌عنوان محرمانه تلقی شود و در صورتی که تضاد غیرقابل حلی ایجاد شود، RCIC نمی‌تواند به نمایندگی از هر دو یا تمامی متقاضیان ادامه دهد و ممکن است مجبور شود به‌طور کامل کنار برود.",
+         "۴.۷ اگر متقاضی مدارک درخواستی را تا تاریخ مندرج در بند ۴.۱ تحویل ندهد، RCIC می‌تواند پاسخ را بر اساس مدارک موجود ارسال کند یا، در صورتی که ارائه پاسخ مناسب دیگر ممکن نباشد، این قرارداد را به صورت کتبی فسخ نماید. در هر دو حالت، RCIC مسئولیتی در قبال نتیجه ندارد و هزینه‌های مندرج در بخش ۵ به طور کامل قابل پرداخت باقی می‌ماند."))
+    return (en, fa)
+
+FEE_NOTE_PFL_EN = ("*Professional fees exclude any government fees and any other fees that the client(s) are obligated to pay to any third party(ies), such as certified translations or expert reports. No government fee is normally payable for a response to a Procedural Fairness Letter. The above amount is to be paid by the Client(s) and is subject to change upon mutual agreement of both parties.")
+FEE_NOTE_PFL_FA = ("هزینه‌های حرفه‌ای شامل هزینه‌های دولتی و هر هزینه دیگری که متقاضی موظف به پرداخت به اشخاص ثالث است، مانند ترجمه رسمی یا گزارش کارشناسی، نمی‌شود. برای پاسخ به نامه انصاف رویه‌ای معمولاً هزینه دولتی پرداخت نمی‌شود. مبلغ فوق باید توسط متقاضی پرداخت شود و ممکن است با توافق متقابل هر دو طرف تغییر کند.")
+
+REFUND_PFL = (
+    H("7. Refund Policy") +
+    P("The Client acknowledges that the assessment of the response and the final decision on the application, as well as the time required to reach it, are at the sole discretion of the government of Canada and not the RCIC and any staff and/or contractors.") +
+    UL(["If this Agreement is terminated in writing before the RCIC has started work on the response, unused fees, if any, will be refunded to the Client or his or her Designate.",
+        "Once the RCIC has started work on the response, fees are not refundable.",
+        "Fees are not refundable in the event that the application is refused after the response is submitted."]),
+    H("۷. شرایط بازپرداخت") +
+    P("متقاضی مطلع است که ارزیابی پاسخ و تصمیم نهایی در مورد درخواست، و همچنین زمان لازم برای آن، صرفاً در اختیار دولت کانادا است و نه RCIC و کارکنان و/یا پیمانکاران آن.") +
+    UL(["در صورتی که این قرارداد پیش از شروع کار RCIC روی پاسخ، به صورت کتبی فسخ شود، هزینه‌های استفاده‌نشده، در صورت وجود، به متقاضی یا نماینده او بازپرداخت خواهد شد.",
+        "پس از شروع کار RCIC روی پاسخ، هزینه‌ها قابل بازپرداخت نیستند.",
+        "در صورت رد درخواست پس از ارسال پاسخ، هزینه‌ها قابل بازپرداخت نیستند."]))
+
+TERMINATION_PFL = (
+    H("12. Termination") +
+    PS("12.1 This Agreement is considered terminated upon submission of the response described in section 2 and receipt of IRCC’s decision on the application.",
+       "12.2 This Agreement is considered terminated if material changes occur to the Client’s application or eligibility, or if IRCC decides the application before the response can be submitted, which make it impossible to proceed with the services detailed in section 2 of this Agreement.",
+       "12.3 This Agreement may be terminated, upon writing, by the Client, at which time any outstanding fees or Disbursements will be refunded by the RCIC to the Client/any outstanding fees or Disbursements will be remitted by the Client to the RCIC, subject to section 7.",
+       "12.4 Pursuant to Article 11 of the Code of Professional Conduct, this Agreement may be terminated, upon writing, by the RCIC, provided withdrawal does not cause prejudice to the Client."),
+    H("۱۲. مهلت قرارداد") +
+    PS("۱۲.۱ این قرارداد با ارسال پاسخ موضوع بخش ۲ و دریافت تصمیم IRCC در مورد درخواست، خاتمه‌یافته تلقی می‌شود.",
+       "۱۲.۲ این قرارداد در صورتی که تغییرات اساسی در درخواست یا واجد شرایط بودن متقاضی رخ دهد، یا IRCC پیش از امکان ارسال پاسخ در مورد درخواست تصمیم بگیرد، به‌گونه‌ای که ادامه خدمات مذکور در بخش ۲ غیرممکن شود، خاتمه‌یافته تلقی می‌شود.",
+       "۱۲.۳ این قرارداد می‌تواند با اطلاع کتبی متقاضی خاتمه یابد که در این صورت، با رعایت بخش ۷، هزینه کارهای انجام نشده از سمت RCIC به متقاضی پرداخت خواهد شد و هرگونه هزینه پرداخت نشده کارهای انجام شده، از سمت متقاضی به RCIC پرداخت خواهد شد.",
+       "۱۲.۴ بر اساس ماده ۱۱ کد رفتار حرفه‌ای، این قرارداد می‌تواند با اطلاع کتبی توسط RCIC خاتمه یابد، مشروط بر اینکه انصراف موجب ضرر به متقاضی نشود."))

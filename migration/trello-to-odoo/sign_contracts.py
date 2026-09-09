@@ -276,6 +276,58 @@ for order in records:
 """.strip()
 
 
+
+# --- Custom agreement (uploaded PDF) ---------------------------------------
+# A quotation can carry its own agreement instead of a generated one: a PDF
+# uploaded on the quotation (or a Google Docs / Drive link kept for reference;
+# the PDF still has to be uploaded, server actions cannot fetch from Google).
+# The PDF becomes a Sign template with signature and date boxes on its last
+# page, and the Sign editor opens so the sender can move the boxes and press
+# Send. Signing confirms the quotation exactly like a generated agreement.
+
+SEND_CUSTOM_CODE = r"""
+order = record
+partner = order.partner_id
+fname = order.x_custom_agreement_filename or 'agreement.pdf'
+if not order.x_custom_agreement:
+    raise UserError(
+        "A link to the agreement was given but no PDF was uploaded. Open the document, "
+        "download it as PDF (File > Download > PDF in Google Docs), upload it in "
+        "'Custom agreement (PDF)' and send again.")
+if not fname.lower().endswith('.pdf'):
+    raise UserError("The custom agreement must be a PDF file, not %s." % fname)
+previous = order.x_sign_request_id
+if previous and previous.state not in ('signed', 'canceled'):
+    previous.sudo().cancel()
+att = env['ir.attachment'].sudo().create({
+    'name': fname, 'datas': order.x_custom_agreement, 'mimetype': 'application/pdf',
+    'res_model': 'sign.template'})
+tmpl = env['sign.template'].sudo().create({
+    'attachment_id': att.id,
+    'name': '%s – Custom agreement – %s' % (order.client_order_ref or order.name, partner.name)})
+att.write({'res_id': tmpl.id})
+last = tmpl.num_pages or 1
+Item = env['sign.item'].sudo()
+# Signature + date for the customer (left) and the company (right), bottom of
+# the last page. Positions are fractions of the page; the editor lets the
+# sender move them if the last page already has text there.
+for role, x in ((1, 0.08), (2, 0.55)):
+    Item.create({'template_id': tmpl.id, 'type_id': 1, 'responsible_id': role, 'required': True,
+                 'page': last, 'posX': x, 'posY': 0.80, 'width': 0.32, 'height': 0.06})
+    Item.create({'template_id': tmpl.id, 'type_id': 11, 'responsible_id': role, 'required': True,
+                 'page': last, 'posX': x, 'posY': 0.87, 'width': 0.18, 'height': 0.025})
+order.write({'x_custom_sign_template_id': tmpl.id, 'x_sign_request_id': False})
+order.message_post(
+    body='Custom agreement %s loaded into Sign as "%s". Check the signature boxes on the last page, '
+         'then press Send in the Sign editor; the quotation is confirmed once everyone has signed.'
+         % (fname, tmpl.name), message_type='comment', subtype_xmlid='mail.mt_note')
+if order.opportunity_id:
+    order.opportunity_id.sudo().message_post(body='Custom agreement prepared for signature: %s' % tmpl.name,
+                                             message_type='comment', subtype_xmlid='mail.mt_note')
+action = tmpl.go_to_custom_template()
+""".strip()
+
+
 # --- Send Contract ---------------------------------------------------------
 
 SEND_CONTRACT_CODE = r"""
@@ -288,135 +340,139 @@ if not partner.country_id:
     raise UserError("Set the customer's country (and province, for Canada): the sales tax on the contract depends on it.")
 if partner.country_id.code == 'CA' and not partner.state_id:
     raise UserError("Set the customer's province: GST/HST on the contract depends on it.")
-rcic_email = env['ir.config_parameter'].sudo().get_param('phase2.rcic_email') or ''
-rcic_user = env['res.users'].sudo().search(['|', ('login', '=ilike', rcic_email), ('email', '=ilike', rcic_email)], limit=1) if rcic_email else env['res.users']
-rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
+if order.x_custom_agreement or (order.x_custom_agreement_url or '').strip():
+    action = env.ref('__trello__.p2action_send_custom').with_context(
+        active_model='sale.order', active_id=order.id, active_ids=order.ids).run()
+else:
+    rcic_email = env['ir.config_parameter'].sudo().get_param('phase2.rcic_email') or ''
+    rcic_user = env['res.users'].sudo().search(['|', ('login', '=ilike', rcic_email), ('email', '=ilike', rcic_email)], limit=1) if rcic_email else env['res.users']
+    rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
 
-# Taxes for the customer's location, plan amounts from their shares.
-env.ref('__trello__.p2action_recalc_plan').with_context(active_model='sale.order', active_id=order.id, active_ids=order.ids).run()
-order.invalidate_recordset()
+    # Taxes for the customer's location, plan amounts from their shares.
+    env.ref('__trello__.p2action_recalc_plan').with_context(active_model='sale.order', active_id=order.id, active_ids=order.ids).run()
+    order.invalidate_recordset()
 
-# TR or PR contract, from the tags on the quotation's products. A service with
-# no tag has no agreement of its own yet, so refuse rather than send the wrong
-# one: Sparkbridge consulting and the entrepreneur streams are not TR work.
-billable = order.order_line.filtered(
-    lambda l: not l.display_type and l.product_id and l.product_uom_qty
-    and not (l.product_id.default_code or '').startswith('GOV-'))
-untagged = billable.filtered(lambda l: not (
-    set(l.product_id.product_tmpl_id.product_tag_ids.mapped('name')) & {'TR', 'PR'}))
-if untagged:
-    raise UserError(
-        "No retainer agreement is defined for: %s.\n\n"
-        "Tag the product TR or PR under Sales > Products, or ask for the right "
-        "template to be installed. The contract was not sent."
-        % ", ".join(untagged.mapped('product_id.display_name')))
-tags = billable.mapped('product_id.product_tmpl_id.product_tag_ids.name')
-kind = 'PR' if 'PR' in tags else 'TR'
-template = env.ref('__trello__.signtmpl_' + kind, raise_if_not_found=False)
-if not template:
-    raise UserError("Sign template %s is not installed." % kind)
+    # TR or PR contract, from the tags on the quotation's products. A service with
+    # no tag has no agreement of its own yet, so refuse rather than send the wrong
+    # one: Sparkbridge consulting and the entrepreneur streams are not TR work.
+    billable = order.order_line.filtered(
+        lambda l: not l.display_type and l.product_id and l.product_uom_qty
+        and not (l.product_id.default_code or '').startswith('GOV-'))
+    untagged = billable.filtered(lambda l: not (
+        set(l.product_id.product_tmpl_id.product_tag_ids.mapped('name')) & {'TR', 'PR'}))
+    if untagged:
+        raise UserError(
+            "No retainer agreement is defined for: %s.\n\n"
+            "Tag the product TR or PR under Sales > Products, or ask for the right "
+            "template to be installed. The contract was not sent."
+            % ", ".join(untagged.mapped('product_id.display_name')))
+    tags = billable.mapped('product_id.product_tmpl_id.product_tag_ids.name')
+    kind = 'PR' if 'PR' in tags else 'TR'
+    template = env.ref('__trello__.signtmpl_' + kind, raise_if_not_found=False)
+    if not template:
+        raise UserError("Sign template %s is not installed." % kind)
 
-# Amounts from the lines. Government fees are never on the contract.
-cur = order.currency_id.name
-def money(v):
-    s = '{:,.2f}'.format(v or 0.0)
-    return s if cur == 'CAD' else '%s %s' % (cur, s)
-pro = disc = 0.0
-codes = []
-for l in order.order_line:
-    if l.display_type or not l.product_id:
-        continue
-    code = (l.product_id.default_code or '')
-    if code.startswith('GOV-'):
-        continue
-    if l.product_uom_qty:
-        codes.append(code)
-    gross = l.product_uom_qty * l.price_unit
-    pro += gross
-    disc += gross * (l.discount or 0.0) / 100.0
-tax = sum(l.price_tax for l in order.order_line if not l.display_type and not (l.product_id.default_code or '').startswith('GOV-'))
-total = round(pro - disc + tax, 2)
+    # Amounts from the lines. Government fees are never on the contract.
+    cur = order.currency_id.name
+    def money(v):
+        s = '{:,.2f}'.format(v or 0.0)
+        return s if cur == 'CAD' else '%s %s' % (cur, s)
+    pro = disc = 0.0
+    codes = []
+    for l in order.order_line:
+        if l.display_type or not l.product_id:
+            continue
+        code = (l.product_id.default_code or '')
+        if code.startswith('GOV-'):
+            continue
+        if l.product_uom_qty:
+            codes.append(code)
+        gross = l.product_uom_qty * l.price_unit
+        pro += gross
+        disc += gross * (l.discount or 0.0) / 100.0
+    tax = sum(l.price_tax for l in order.order_line if not l.display_type and not (l.product_id.default_code or '').startswith('GOV-'))
+    total = round(pro - disc + tax, 2)
 
-rows = env['x_pay_plan'].sudo().search([('x_order_id', '=', order.id)], order='x_sequence, id')
-if not rows:
-    raise UserError("The payment plan is empty. Add at least one instalment on the Payment plan tab.")
-if abs(sum(rows.mapped('x_amount')) - total) > 0.05:
-    raise UserError("The payment plan adds up to %s but the contract total is %s. Fix the amounts on the Payment plan tab (or use 'Remainder' on the last row)." % (money(sum(rows.mapped('x_amount'))), money(total)))
-due = __DUE__
-ord_en = __ORD_EN__
-ord_fa = __ORD_FA__
-plan_en, plan_fa = [], []
-for i, row in enumerate(rows):
-    when_en, when_fa = due.get(row.x_due, due['sub_app'])
-    if row.x_due == 'date':
-        d = row.x_due_date.strftime('%B %d, %Y') if row.x_due_date else '…'
-        when_en, when_fa = when_en.format(date=d), when_fa.format(date=d)
-    note = (' – ' + row.x_note) if row.x_note else ''
-    plan_en.append('%s Payment – %s CAD – %s%s' % (ord_en[i] if i < len(ord_en) else str(i + 1), money(row.x_amount), when_en, note))
-    plan_fa.append('پرداخت %s – %s دلار کانادا – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
+    rows = env['x_pay_plan'].sudo().search([('x_order_id', '=', order.id)], order='x_sequence, id')
+    if not rows:
+        raise UserError("The payment plan is empty. Add at least one instalment on the Payment plan tab.")
+    if abs(sum(rows.mapped('x_amount')) - total) > 0.05:
+        raise UserError("The payment plan adds up to %s but the contract total is %s. Fix the amounts on the Payment plan tab (or use 'Remainder' on the last row)." % (money(sum(rows.mapped('x_amount'))), money(total)))
+    due = __DUE__
+    ord_en = __ORD_EN__
+    ord_fa = __ORD_FA__
+    plan_en, plan_fa = [], []
+    for i, row in enumerate(rows):
+        when_en, when_fa = due.get(row.x_due, due['sub_app'])
+        if row.x_due == 'date':
+            d = row.x_due_date.strftime('%B %d, %Y') if row.x_due_date else '…'
+            when_en, when_fa = when_en.format(date=d), when_fa.format(date=d)
+        note = (' – ' + row.x_note) if row.x_note else ''
+        plan_en.append('%s Payment – %s CAD – %s%s' % (ord_en[i] if i < len(ord_en) else str(i + 1), money(row.x_amount), when_en, note))
+        plan_fa.append('پرداخت %s – %s دلار کانادا – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
 
-main = codes[0] if codes else ''
-checks = {
-    'CB_SP': main.startswith(('SP', 'PGWP')),
-    'CB_WP': main.startswith(('WP', 'LMIA', 'OWP', 'IN-WP', 'PERMIT')),
-    'CB_TRV': main.startswith(('TRV', 'BV', 'SUPERVISA', 'VR', 'IN-TRV')),
-    'CB_EE': main == 'EE',
-    'CB_PNP': main == 'PNP',
-    'CB_PNPEE': main == 'PNP-EE',
-}
-names = (partner.name or '').split(' ', 1)
-address = ', '.join(p for p in [partner.street, partner.street2, partner.city,
-                                partner.state_id.name, partner.zip, partner.country_id.name] if p)
-values = {
-    'FILENO': order.client_order_ref or order.name,
-    'DATE': datetime.date.today().strftime('%d/%m/%Y'),
-    'CLIENT': partner.name or '',
-    'ADDR': address,
-    'PROFEE': money(pro), 'DISCOUNT': money(disc), 'TAX': money(tax), 'TOTAL': money(total),
-    'PAYPLAN': '\n'.join(plan_en),
-    'PAYPLAN_FA': '\n'.join(plan_fa),
-    'GIVEN': names[0], 'FAMILY': names[1] if len(names) > 1 else '',
-    'ADDR2': address, 'PHONE': partner.phone or partner.mobile or '', 'EMAIL': partner.email or '',
-}
+    main = codes[0] if codes else ''
+    checks = {
+        'CB_SP': main.startswith(('SP', 'PGWP')),
+        'CB_WP': main.startswith(('WP', 'LMIA', 'OWP', 'IN-WP', 'PERMIT')),
+        'CB_TRV': main.startswith(('TRV', 'BV', 'SUPERVISA', 'VR', 'IN-TRV')),
+        'CB_EE': main == 'EE',
+        'CB_PNP': main == 'PNP',
+        'CB_PNPEE': main == 'PNP-EE',
+    }
+    names = (partner.name or '').split(' ', 1)
+    address = ', '.join(p for p in [partner.street, partner.street2, partner.city,
+                                    partner.state_id.name, partner.zip, partner.country_id.name] if p)
+    values = {
+        'FILENO': order.client_order_ref or order.name,
+        'DATE': datetime.date.today().strftime('%d/%m/%Y'),
+        'CLIENT': partner.name or '',
+        'ADDR': address,
+        'PROFEE': money(pro), 'DISCOUNT': money(disc), 'TAX': money(tax), 'TOTAL': money(total),
+        'PAYPLAN': '\n'.join(plan_en),
+        'PAYPLAN_FA': '\n'.join(plan_fa),
+        'GIVEN': names[0], 'FAMILY': names[1] if len(names) > 1 else '',
+        'ADDR2': address, 'PHONE': partner.phone or partner.mobile or '', 'EMAIL': partner.email or '',
+    }
 
-# Re-sending: the previous agreement, unless already signed, is cancelled so
-# only the newest one is open for signature.
-previous = order.x_sign_request_id
-if previous and previous.state not in ('signed', 'canceled'):
-    previous.sudo().cancel()
-request = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
-    'template_id': template.id,
-    'reference': '%s – Retainer Agreement – %s' % (order.client_order_ref or order.name, partner.name),
-    'subject': 'Retainer agreement with Sugimoto Visa – please review and sign',
-    # The RCIC signs first: their view shows the pre-filled values (still
-    # editable), and once they sign the client sees them filled and locked.
-    'request_item_ids': [
-        (0, 0, {'partner_id': rcic.id, 'role_id': 2, 'mail_sent_order': 1}),
-        (0, 0, {'partner_id': partner.id, 'role_id': 1, 'mail_sent_order': 2}),
-    ],
-})
-company_item = request.request_item_ids.filtered(lambda r: r.role_id.id == 2)
-ItemValue = env['sign.request.item.value'].sudo()
-for item in template.sign_item_ids:
-    base = item.name[:-3] if item.name.endswith('_FA') else item.name
-    if item.type_id.item_type == 'checkbox':
-        val = 'on' if checks.get(base) else ''
-    else:
-        val = values.get(item.name) if item.name in values else values.get(base)
-    if val:
-        ItemValue.create({'sign_request_id': request.id, 'sign_item_id': item.id,
-                          'sign_request_item_id': company_item.id, 'value': val})
-request.send_signature_accesses()
-order.write({'x_sign_request_id': request.id})
-summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees excluded). Payment plan: %s' % (
-    money(pro), money(disc), money(tax), money(total), '; '.join(plan_en))
-order.message_post(body=('Updated retainer agreement' if previous else 'Retainer agreement') + ' (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s. %s' % (kind, rcic.name, request.reference, summary),
-                   message_type='comment', subtype_xmlid='mail.mt_note')
-if lead:
-    lead.sudo().message_post(body='Retainer agreement sent for signature: %s' % request.reference,
-                             message_type='comment', subtype_xmlid='mail.mt_note')
-action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': request.id,
-          'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
+    # Re-sending: the previous agreement, unless already signed, is cancelled so
+    # only the newest one is open for signature.
+    previous = order.x_sign_request_id
+    if previous and previous.state not in ('signed', 'canceled'):
+        previous.sudo().cancel()
+    request = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
+        'template_id': template.id,
+        'reference': '%s – Retainer Agreement – %s' % (order.client_order_ref or order.name, partner.name),
+        'subject': 'Retainer agreement with Sugimoto Visa – please review and sign',
+        # The RCIC signs first: their view shows the pre-filled values (still
+        # editable), and once they sign the client sees them filled and locked.
+        'request_item_ids': [
+            (0, 0, {'partner_id': rcic.id, 'role_id': 2, 'mail_sent_order': 1}),
+            (0, 0, {'partner_id': partner.id, 'role_id': 1, 'mail_sent_order': 2}),
+        ],
+    })
+    company_item = request.request_item_ids.filtered(lambda r: r.role_id.id == 2)
+    ItemValue = env['sign.request.item.value'].sudo()
+    for item in template.sign_item_ids:
+        base = item.name[:-3] if item.name.endswith('_FA') else item.name
+        if item.type_id.item_type == 'checkbox':
+            val = 'on' if checks.get(base) else ''
+        else:
+            val = values.get(item.name) if item.name in values else values.get(base)
+        if val:
+            ItemValue.create({'sign_request_id': request.id, 'sign_item_id': item.id,
+                              'sign_request_item_id': company_item.id, 'value': val})
+    request.send_signature_accesses()
+    order.write({'x_sign_request_id': request.id})
+    summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees excluded). Payment plan: %s' % (
+        money(pro), money(disc), money(tax), money(total), '; '.join(plan_en))
+    order.message_post(body=('Updated retainer agreement' if previous else 'Retainer agreement') + ' (%s) sent to %s for review and signature; the client is e-mailed once the RCIC has signed: %s. %s' % (kind, rcic.name, request.reference, summary),
+                       message_type='comment', subtype_xmlid='mail.mt_note')
+    if lead:
+        lead.sudo().message_post(body='Retainer agreement sent for signature: %s' % request.reference,
+                                 message_type='comment', subtype_xmlid='mail.mt_note')
+    action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': request.id,
+              'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
 """.strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA))
 
 
@@ -427,6 +483,10 @@ for req in records:
     if req.state != 'signed':
         continue
     order = env['sale.order'].sudo().search([('x_sign_request_id', '=', req.id)], limit=1)
+    if not order and req.template_id:
+        order = env['sale.order'].sudo().search([('x_custom_sign_template_id', '=', req.template_id.id)], limit=1)
+        if order:
+            order.write({'x_sign_request_id': req.id})
     if not order:
         continue
     attachments = req.completed_document_attachment_ids
@@ -503,7 +563,19 @@ def install_send_button(odoo, rcic_email):
     _field(odoo, "sale.order", "x_sign_request_id", {
         "field_description": "Retainer agreement", "ttype": "many2one",
         "relation": "sign.request", "on_delete": "set null"})
+    _field(odoo, "sale.order", "x_custom_agreement", {
+        "field_description": "Custom agreement (PDF)", "ttype": "binary", "copied": False})
+    _field(odoo, "sale.order", "x_custom_agreement_filename", {
+        "field_description": "Custom agreement file name", "ttype": "char"})
+    _field(odoo, "sale.order", "x_custom_agreement_url", {
+        "field_description": "Custom agreement link", "ttype": "char"})
+    _field(odoo, "sale.order", "x_custom_sign_template_id", {
+        "field_description": "Custom agreement in Sign", "ttype": "many2one",
+        "relation": "sign.template", "on_delete": "set null", "copied": False})
     recalc_id = install_pay_plan(odoo)
+    _server_action(odoo, "send_custom", {
+        "name": "Send custom agreement", "model_id": _model_id(odoo, "sale.order"),
+        "state": "code", "code": SEND_CUSTOM_CODE, "binding_model_id": False})
     act_id = _server_action(odoo, "send_contract", {
         "name": "Send Contract", "model_id": _model_id(odoo, "sale.order"),
         "state": "code", "code": SEND_CONTRACT_CODE, "binding_model_id": False})
@@ -522,6 +594,12 @@ def install_send_button(odoo, rcic_email):
             '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
             '<field name="x_sign_request_id" readonly="1"/>'
+            '<field name="x_custom_agreement_url" widget="url" placeholder="Google Docs / Drive link (reference only)"/>'
+            '<field name="x_custom_agreement_filename" invisible="1"/>'
+            '<field name="x_custom_agreement" widget="binary" filename="x_custom_agreement_filename" '
+            'help="Upload a PDF here to send it instead of the generated agreement. '
+            'Leave empty to generate the agreement from the quotation."/>'
+            '<field name="x_custom_sign_template_id" readonly="1" invisible="not x_custom_sign_template_id"/>'
             '</xpath>'
             '<xpath expr="//notebook" position="inside">'
             '<page string="Payment plan" name="pay_plan">'

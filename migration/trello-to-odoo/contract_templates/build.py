@@ -224,6 +224,32 @@ rows = sb.sbf_rows("SB000025292", "October 4, 2025", "Hanif Garfami", "Unit 1, N
 rows.append(SIG([("Client: Hanif Garfami", "Signature"), ("Company: Ken Sugimoto, CEO", "Signature")]))
 DOCS["sb_f"] = dict(company="SB", title="Service Agreement", file_label="Contract No SB000025292", layout="en", rows=rows)
 
+# ---------------- SG-PFL : S26301 (sample data) response to a Procedural Fairness Letter ----------------
+rows = [
+  sg.file_row("S26301"),
+  sg.preamble("September 09, 2026", "September 09, 2026", "Amirhossein Rahimi",
+              "Unit 12, No. 45, Golestan Street, Saadat Abad, Tehran, Iran",
+              "امیرحسین رحیمی", "ایران، تهران، سعادت‌آباد، خیابان گلستان، پلاک ۴۵، واحد ۱۲"),
+  sg.DEFINITIONS,
+  sg.service_pfl("Study Permit application", "درخواست مجوز تحصیلی", "August 28, 2026", "August 28, 2026",
+                 "September 27, 2026 (30 days from the date of the letter)", "September 27, 2026 (۳۰ روز از تاریخ نامه)", "S312345678"),
+  sg.rcic_duties_pfl(*sg.parties("Amirhossein Rahimi", "امیرحسین رحیمی")),
+  sg.client_duties_pfl("September 18, 2026", "September 18, 2026"),
+  sg.billing([("Professional Fees", "$3,000.00 CAD")], ("Total Cost", "$3,000.00 CAD"),
+             [("هزینه‌های حرفه‌ای", "$3,000.00 CAD")], ("هزینه کل", "$3,000.00 CAD"),
+             ["Full payment – $3,000.00 CAD within 3 business days of signing this Agreement and before the RCIC starts drafting the response."],
+             ["پرداخت کامل – مبلغ $3,000.00 CAD ظرف ۳ روز کاری پس از امضای این قرارداد و پیش از شروع تهیه پاسخ توسط RCIC."],
+             note_en=sg.FEE_NOTE_PFL_EN, note_fa=sg.FEE_NOTE_PFL_FA),
+  sg.COMMS, sg.REFUND_PFL, sg.DISPUTE, sg.CONFID, sg.FORCE, sg.CHANGE, sg.TERMINATION_PFL, sg.LAW,
+  sg.misc(),
+  sg.contact(["Given Name: Amirhossein", "Family Name: Rahimi", "Residential Address: Unit 12, No. 45, Golestan Street, Saadat Abad, Tehran, Iran", "Telephone/Cellphone Number: 989121234567", "E-mail: a.rahimi.sample@gmail.com"],
+             ["نام: امیرحسین", "نام خانوادگی: رحیمی", "آدرس محل سکونت: ایران، تهران، سعادت‌آباد، خیابان گلستان، پلاک ۴۵، واحد ۱۲", "شماره تلفن/موبایل: 989121234567", "ایمیل: a.rahimi.sample@gmail.com"]),
+  sg.WITNESS,
+  SIG([("Signature of Client / امضای موکل", "Signature / امضا"), ("Signature of RCIC / امضای مشاور", "Signature / امضا")]),
+]
+DOCS["sg_pfl"] = dict(company="SG", title="Retainer Agreement", file_label="RCIC R713046 · Client File S26301", layout="bilingual", rows=rows)
+
+
 if __name__ == "__main__":
     import xml.dom.minidom as md
     out = pathlib.Path(__file__).parent / "out"; out.mkdir(exist_ok=True)
@@ -233,3 +259,4 @@ if __name__ == "__main__":
         (out / f"{k}.arch.xml").write_text(arch, encoding="utf-8")
         (out / f"{k}.html").write_text(preview_html(f"x_sample.{k}", d), encoding="utf-8")
         print(k, len(arch), "chars, rows", len(d["rows"]))
+
