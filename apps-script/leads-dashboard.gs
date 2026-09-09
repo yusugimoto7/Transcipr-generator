@@ -85,10 +85,20 @@ var FIELD_GROUPS = [
 /* ------------------------------------------------------------------ helpers */
 function txt(v) {
   if (v === null || v === undefined) return '';
-  if (Object.prototype.toString.call(v) === '[object Date]') {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  }
+  if (Object.prototype.toString.call(v) === '[object Date]') return isoDate(v);
   return String(v).trim();
+}
+/**
+ * yyyy-MM-dd without Utilities.formatDate. Sheets hands back every date cell as
+ * a Date, and formatDate is a service call costing a millisecond or more — across
+ * the lead tabs and 15k CRM rows with four date columns each, that alone ran to
+ * minutes and was what pushed the build past Apps Script's six-minute limit.
+ * Under the V8 runtime a Date's local getters honour the script's timezone, so
+ * this yields the same day for a fraction of the cost.
+ */
+function isoDate(d) {
+  var m = d.getMonth() + 1, day = d.getDate();
+  return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
 }
 function normDate(s) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
@@ -409,9 +419,7 @@ function readTab(name) {
 }
 
 function dayText(v) {
-  if (Object.prototype.toString.call(v) === '[object Date]') {
-    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  }
+  if (Object.prototype.toString.call(v) === '[object Date]') return isoDate(v);
   var s = String(v || '').trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   return normDate(s);
