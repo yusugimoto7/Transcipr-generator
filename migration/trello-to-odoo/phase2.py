@@ -209,6 +209,27 @@ def _ensure_tag(odoo, name):
     return tag_id
 
 
+def retire_services(odoo):
+    """Archive the products and quotation templates of withdrawn services.
+
+    pricelist_data.RETIRED lists them; archiving keeps old quotations intact
+    while the codes disappear from the sales board.
+    """
+    from pricelist_data import RETIRED
+    codes = sorted(RETIRED)
+    if not codes:
+        return
+    prods = odoo.search_read("product.template", [("default_code", "in", codes), ("active", "=", True)], ["id"])
+    if prods:
+        odoo.write("product.template", [p["id"] for p in prods], {"active": False})
+    if _model_exists(odoo, "sale.order.template"):
+        tmpls = [t for t in odoo.search_read("sale.order.template", [], ["name"])
+                 if t["name"].split(" · ")[0].strip() in codes]
+        if tmpls:
+            odoo.write("sale.order.template", [t["id"] for t in tmpls], {"active": False})
+        log.info("  retired services archived: %d products, %d quotation templates", len(prods), len(tmpls))
+
+
 def install(odoo, stage_needle, currency_check=True):
     if not PRODUCTS.exists():
         raise OdooError("products.json not found — run `phase2 plan` and fill in prices first")
@@ -366,6 +387,7 @@ def install(odoo, stage_needle, currency_check=True):
     else:
         odoo.upsert("p2auto", "signed", "base.automation", auto_vals)
         log.info("  automation installed and SWITCHED OFF (run `phase2 activate` after checking)")
+    retire_services(odoo)
     return product_ids
 
 

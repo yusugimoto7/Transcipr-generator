@@ -207,39 +207,12 @@ SERVICES = {
     "PROV-CERT": dict(cat="biz", en="Provincial certification – specific occupations", fa="تأیید استانی مشاغل خاص", price=2000),
 
     # --- Litigation & special cases --------------------------------------------------
-    "JR": dict(cat="lit", en="Judicial review – refusal handled by us", fa="دادگاه فدرال – ریجکت شده با ما", price=2500,
-               terms_en="Full amount at signing. Done with PAX Law; cheaper than contracting PAX Law directly.",
-               terms_fa="کل مبلغ همراه با امضا. با مجموعه PAX Law؛ ارزان‌تر از قرارداد مستقیم با PAX Law."),
-    "JR-REPEAT": dict(cat="lit", en="Judicial review – second time on the same file", fa="دادگاه فدرال – بار دوم همان پرونده",
-                      price=2000, terms_en="Full amount at signing.", terms_fa="کل مبلغ همراه با امضا."),
-    "JR-EXT": dict(cat="lit", en="Judicial review – refusal not handled by us", fa="دادگاه فدرال – ریجکت خارج از ما",
-                   price=3500, terms_en="Full amount at signing (2,500 PAX Law + 1,000 SugimotoVisa).",
-                   terms_fa="کل مبلغ همراه با امضا (۲٬۵۰۰ PAX Law + ۱٬۰۰۰ سوگیموتو ویزا)."),
-    "MANDAMUS": dict(cat="lit", en="Mandamus (processing-delay litigation)", fa="مانداموس (تسریع پرونده)", price=2500,
-                     terms_en="750 CAD – demand letter (about 30% succeed; 2–4 weeks). 1,750 CAD – Federal Court filing (2–12 months).",
-                     terms_fa="۷۵۰ دلار – ارسال Demand Letter (حدود ۳۰٪ موفق؛ ۲ تا ۴ هفته). ۱٬۷۵۰ دلار – ثبت در فدرال کورت (۲ ماه تا ۱ سال)."),
     "PFL": dict(cat="lit", en="Procedural fairness letter response", fa="پاسخ به نامه PFL", price=2500,
                 terms_en="Full amount at signing. Fixed at 3,000–5,000 CAD after reviewing the letter; payment plan available.",
                 terms_fa="کل مبلغ همراه با امضا. مبلغ ثابت ۳٬۰۰۰ تا ۵٬۰۰۰ دلار پس از بررسی نامه؛ امکان پرداخت اقساطی."),
-    "HC": dict(cat="lit", en="Humanitarian & compassionate (in Canada)", fa="روش بشردوستانه H&C (داخل کانادا)", price=6500,
-               terms_en="2,000 at signing; 2,000 after 3 months; 1,500 after 6 months.",
-               terms_fa="۲٬۰۰۰ همراه با امضا؛ ۲٬۰۰۰ بعد از سه ماه؛ ۱٬۵۰۰ بعد از شش ماه.",
-               notes_en="Delivered by Parsay; coordinate with Mr Hossein.", notes_fa="توسط شرکت پارسای؛ هماهنگی با آقای حسین."),
-    "REF": dict(cat="lit", en="Refugee claim – without hearing", fa="پناهندگی – بدون جلسه دادگاه", price=4500,
-                terms_en="3,000 at signing; 1,500 after the submission.", terms_fa="۳٬۰۰۰ همراه با امضا؛ ۱٬۵۰۰ بعد از ارسال لایحه.",
-                notes_en="Delivered by Parsay.", notes_fa="توسط شرکت پارسای."),
-    "REF-HEAR": dict(cat="lit", en="Refugee claim – with hearing", fa="پناهندگی – با جلسه دادگاه", price=6500,
-                     terms_en="3,000 at signing; 1,500 after the submission; 2,000 after the hearing notice.",
-                     terms_fa="۳٬۰۰۰ همراه با امضا؛ ۱٬۵۰۰ بعد از لایحه؛ ۲٬۰۰۰ بعد از نامه جلسه Hearing.",
-                     notes_en="Delivered by Parsay.", notes_fa="توسط شرکت پارسای."),
-    "DETENTION": dict(cat="lit", en="Immigration / border detention", fa="بازداشت مهاجرتی و مرزبانی", price=3000,
-                      notes_en="3,000–9,000 CAD depending on the case; quote per file.",
-                      notes_fa="۳٬۰۰۰ تا ۹٬۰۰۰ دلار بسته به پرونده؛ قیمت اختصاصی."),
-    "PRRA": dict(cat="lit", en="Pre-removal risk assessment", fa="ارزیابی خطر پیش از اخراج (PRRA)", price=3000,
-                 notes_en="3,000–9,000 CAD depending on the case; quote per file.",
-                 notes_fa="۳٬۰۰۰ تا ۹٬۰۰۰ دلار بسته به پرونده؛ قیمت اختصاصی."),
-    "TD-REF": dict(cat="lit", en="Travel document – refugee", fa="تراول داکیومنت پناهنده", price=2000),
-
+    "HC": dict(cat="pr", en="Humanitarian & compassionate (in Canada)", fa="روش بشردوستانه H&C (داخل کانادا)", price=6000,
+               terms_en="2,000 at signing; 2,000 after 3 months; 2,000 after 6 months.",
+               terms_fa="۲٬۰۰۰ همراه با امضا؛ ۲٬۰۰۰ بعد از سه ماه؛ ۲٬۰۰۰ بعد از شش ماه."),
     # --- Other ------------------------------------------------------------------------
     "CUSTOM": dict(cat="other", en="Custom / negotiated service", fa="خدمت سفارشی / توافقی", price=0,
                    terms_en="Price and payment plan set on the quotation by the agent.",
@@ -295,3 +268,37 @@ CUSTOM_RULES = [
      "Alberta and BC entrepreneur contracts carry two lines — Sparkbridge fees and Sugimoto fees — so revenue reports split by partner.",
      "قراردادهای کارآفرینی آلبرتا و BC دو ردیف دارند — حق‌الزحمه اسپارک‌بریج و سوگیموتو — تا گزارش درآمد به تفکیک شریک باشد."),
 ]
+
+
+# Services withdrawn from the catalogue on 2026-09-09 (no agreement template of
+# their own; litigation is no longer offered as a packaged service). Kept here
+# so the codes stay documented; build_catalogue.py skips them and phase2
+# archives their products and quotation templates.
+RETIRED = {
+    "JR": dict(cat="lit", en="Judicial review – refusal handled by us", fa="دادگاه فدرال – ریجکت شده با ما", price=2500,
+               terms_en="Full amount at signing. Done with PAX Law; cheaper than contracting PAX Law directly.",
+               terms_fa="کل مبلغ همراه با امضا. با مجموعه PAX Law؛ ارزان‌تر از قرارداد مستقیم با PAX Law."),
+    "JR-REPEAT": dict(cat="lit", en="Judicial review – second time on the same file", fa="دادگاه فدرال – بار دوم همان پرونده",
+                      price=2000, terms_en="Full amount at signing.", terms_fa="کل مبلغ همراه با امضا."),
+    "JR-EXT": dict(cat="lit", en="Judicial review – refusal not handled by us", fa="دادگاه فدرال – ریجکت خارج از ما",
+                   price=3500, terms_en="Full amount at signing (2,500 PAX Law + 1,000 SugimotoVisa).",
+                   terms_fa="کل مبلغ همراه با امضا (۲٬۵۰۰ PAX Law + ۱٬۰۰۰ سوگیموتو ویزا)."),
+    "MANDAMUS": dict(cat="lit", en="Mandamus (processing-delay litigation)", fa="مانداموس (تسریع پرونده)", price=2500,
+                     terms_en="750 CAD – demand letter (about 30% succeed; 2–4 weeks). 1,750 CAD – Federal Court filing (2–12 months).",
+                     terms_fa="۷۵۰ دلار – ارسال Demand Letter (حدود ۳۰٪ موفق؛ ۲ تا ۴ هفته). ۱٬۷۵۰ دلار – ثبت در فدرال کورت (۲ ماه تا ۱ سال)."),
+    "REF": dict(cat="lit", en="Refugee claim – without hearing", fa="پناهندگی – بدون جلسه دادگاه", price=4500,
+                terms_en="3,000 at signing; 1,500 after the submission.", terms_fa="۳٬۰۰۰ همراه با امضا؛ ۱٬۵۰۰ بعد از ارسال لایحه.",
+                notes_en="Delivered by Parsay.", notes_fa="توسط شرکت پارسای."),
+    "REF-HEAR": dict(cat="lit", en="Refugee claim – with hearing", fa="پناهندگی – با جلسه دادگاه", price=6500,
+                     terms_en="3,000 at signing; 1,500 after the submission; 2,000 after the hearing notice.",
+                     terms_fa="۳٬۰۰۰ همراه با امضا؛ ۱٬۵۰۰ بعد از لایحه؛ ۲٬۰۰۰ بعد از نامه جلسه Hearing.",
+                     notes_en="Delivered by Parsay.", notes_fa="توسط شرکت پارسای."),
+    "DETENTION": dict(cat="lit", en="Immigration / border detention", fa="بازداشت مهاجرتی و مرزبانی", price=3000,
+                      notes_en="3,000–9,000 CAD depending on the case; quote per file.",
+                      notes_fa="۳٬۰۰۰ تا ۹٬۰۰۰ دلار بسته به پرونده؛ قیمت اختصاصی."),
+    "PRRA": dict(cat="lit", en="Pre-removal risk assessment", fa="ارزیابی خطر پیش از اخراج (PRRA)", price=3000,
+                 notes_en="3,000–9,000 CAD depending on the case; quote per file.",
+                 notes_fa="۳٬۰۰۰ تا ۹٬۰۰۰ دلار بسته به پرونده؛ قیمت اختصاصی."),
+    "TD-REF": dict(cat="lit", en="Travel document – refugee", fa="تراول داکیومنت پناهنده", price=2000),
+
+}
