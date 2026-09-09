@@ -239,11 +239,11 @@ def install(odoo, stage_needle, currency_check=True):
     has_templates = _model_exists(odoo, "sale.order.template")
     pricelists = _ensure_pricelists(odoo)
     eur_tag = _ensure_tag(odoo, "EUR")
-    kind_tags = {k: _ensure_tag(odoo, k) for k in ("TR", "PR")}
+    kind_tags = {k: _ensure_tag(odoo, k) for k in ("TR", "PR", "SPON", "ENT", "PFL", "SB-A", "SB-C", "SB-D", "SB-E", "SB-F")}
 
     def price_in(code, pid, currency, price, kind="TR"):
         """Fixed price on the currency's pricelist; tag EUR products."""
-        tags = [(4, kind_tags[kind])]
+        tags = [(3, t) for t in kind_tags.values()] + ([(4, kind_tags[kind])] if kind in kind_tags else [])
         if currency == "EUR":
             tags.append((4, eur_tag))
         odoo.write("product.template", [pid], {"product_tag_ids": tags})
@@ -282,7 +282,9 @@ def install(odoo, stage_needle, currency_check=True):
             # component, each becomes its own quotation line.
             variants[key] = []
             for comp in spec["components"]:
-                _, cvid, created = make_product(comp["code"], comp["name"], comp["price"], plan=spec.get("plan", ""))
+                cpid, cvid, created = make_product(comp["code"], comp["name"], comp["price"], plan=spec.get("plan", ""))
+                if comp.get("contract"):
+                    odoo.write("product.template", [cpid], {"product_tag_ids": [(4, kind_tags[comp["contract"]])]})
                 variants[key].append((cvid, comp["name"], comp["price"]))
                 log.info("  component %-12s %-55s %s", comp["code"], comp["name"][:55],
                          "created" if created else "ok")

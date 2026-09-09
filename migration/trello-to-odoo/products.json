@@ -438,7 +438,7 @@
     "name": "Spousal / common-law sponsorship · اسپانسرشیپ همسر / کامن‌لا",
     "price": 4000,
     "currency": "CAD",
-    "contract": "PR",
+    "contract": "SPON",
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission. Or 4 monthly instalments of 1,000 CAD.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت. یا چهار قسط ماهانه ۱٬۰۰۰ دلاری.",
@@ -449,7 +449,7 @@
     "name": "Child sponsorship · اسپانسرشیپ فرزند",
     "price": 4000,
     "currency": "CAD",
-    "contract": "PR",
+    "contract": "SPON",
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت.",
@@ -460,7 +460,7 @@
     "name": "Parent sponsorship · اسپانسرشیپ والدین",
     "price": 5000,
     "currency": "CAD",
-    "contract": "PR",
+    "contract": "SPON",
     "addons": {
       "Second parent": 2000
     },
@@ -473,7 +473,7 @@
     "name": "Refused sponsorship · رد شدن اسپانسرشیپ",
     "price": 10000,
     "currency": "CAD",
-    "contract": "PR",
+    "contract": "SPON",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -484,7 +484,7 @@
     "name": "Alberta entrepreneur stream – Sparkbridge + Sugimoto · کارآفرینی آلبرتا – اسپارک‌بریج + سوگیموتو",
     "price": 40000,
     "currency": "CAD",
-    "contract": "PR",
+    "contract": "ENT",
     "addons": {},
     "gov": [
       "GOV-AB-EOI",
@@ -499,12 +499,14 @@
       {
         "code": "AB-ENT-SB",
         "name": "Sparkbridge – business development fees · اسپارک‌بریج – خدمات توسعه کسب‌وکار",
-        "price": 28000
+        "price": 28000,
+        "contract": "SB-E"
       },
       {
         "code": "AB-ENT-SV",
         "name": "Sugimoto Visa – RCIC professional fees · سوگیموتو ویزا – حق‌الزحمه مشاور",
-        "price": 12000
+        "price": 12000,
+        "contract": "ENT"
       }
     ]
   },
@@ -512,7 +514,7 @@
     "name": "BC PNP entrepreneur – Sparkbridge + Sugimoto · کارآفرینی BC PNP – اسپارک‌بریج + سوگیموتو",
     "price": 38000,
     "currency": "CAD",
-    "contract": "PR",
+    "contract": "ENT",
     "addons": {},
     "gov": [
       "GOV-BC-REG",
@@ -527,12 +529,14 @@
       {
         "code": "BC-ENT-SB",
         "name": "Sparkbridge – business development fees · اسپارک‌بریج – خدمات توسعه کسب‌وکار",
-        "price": 26000
+        "price": 26000,
+        "contract": "SB-D"
       },
       {
         "code": "BC-ENT-SV",
         "name": "Sugimoto Visa – RCIC professional fees · سوگیموتو ویزا – حق‌الزحمه مشاور",
-        "price": 12000
+        "price": 12000,
+        "contract": "ENT"
       }
     ]
   },
@@ -551,7 +555,7 @@
     "name": "Procedural fairness letter response · پاسخ به نامه PFL",
     "price": 2500,
     "currency": "CAD",
-    "contract": "TR",
+    "contract": "PFL",
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing. Fixed at 3,000–5,000 CAD after reviewing the letter; payment plan available.\nکل مبلغ همراه با امضا. مبلغ ثابت ۳٬۰۰۰ تا ۵٬۰۰۰ دلار پس از بررسی نامه؛ امکان پرداخت اقساطی.",
@@ -573,7 +577,7 @@
     "name": "Custom / negotiated service · خدمت سفارشی / توافقی",
     "price": 0,
     "currency": "CAD",
-    "contract": "TR",
+    "contract": "",
     "addons": {},
     "gov": [],
     "terms": "Price and payment plan set on the quotation by the agent.\nقیمت و شرایط پرداخت توسط کارشناس روی پیش‌فاکتور تعیین می‌شود.",
@@ -584,7 +588,7 @@
     "name": "Start-up visa – Netherlands / Finland / Denmark / Lithuania / Estonia · استارتاپ ویزا اروپا",
     "price": 20000,
     "currency": "EUR",
-    "contract": "TR",
+    "contract": "SB-C",
     "addons": {},
     "gov": [],
     "terms": "5,000 at signing; 10,000 after facilitator approval; 5,000 after visa filing. Facilitator fee (5,000–10,000) paid by the client. Netherlands 25,000; Lithuania/Estonia/Denmark 15,000; UK 20,000 GBP.\n۵٬۰۰۰ زمان عقد قرارداد؛ ۱۰٬۰۰۰ بعد از تأیید طرح توسط سازمان حامی؛ ۵٬۰۰۰ بعد از ثبت ویزا. هزینه سازمان حامی (۵ تا ۱۰ هزار) با کلاینت. هلند ۲۵٬۰۰۰؛ لیتوانی/استونی/دانمارک ۱۵٬۰۰۰؛ انگلستان ۲۰٬۰۰۰ پوند.",
@@ -595,7 +599,7 @@
     "name": "Admission + study visa – Europe · پذیرش و ویزای تحصیلی اروپا",
     "price": 2150,
     "currency": "EUR",
-    "contract": "TR",
+    "contract": "SB-A",
     "addons": {
       "Accompanying spouse visa": 1000,
       "Child visa (each)": 250
@@ -609,7 +613,7 @@
     "name": "Admission + study visa – language course (Hungary EN / France FR) · پذیرش و ویزای دوره زبان (مجارستان انگلیسی / فرانسه فرانسوی)",
     "price": 1500,
     "currency": "EUR",
-    "contract": "TR",
+    "contract": "SB-A",
     "addons": {
       "Accompanying spouse visa": 1000,
       "Child visa (each)": 250
@@ -623,7 +627,7 @@
     "name": "Admission only – Europe · فقط پذیرش تحصیلی اروپا",
     "price": 1000,
     "currency": "EUR",
-    "contract": "TR",
+    "contract": "SB-A",
     "addons": {},
     "gov": [],
     "terms": "",
@@ -634,7 +638,7 @@
     "name": "Study visa only – Europe · فقط ویزای تحصیلی اروپا",
     "price": 1500,
     "currency": "EUR",
-    "contract": "TR",
+    "contract": "SB-A",
     "addons": {},
     "gov": [],
     "terms": "",

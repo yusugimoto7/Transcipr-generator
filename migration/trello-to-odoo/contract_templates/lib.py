@@ -63,6 +63,23 @@ def _iso(s):
     """Keep URLs / e-mails as LTR runs inside RTL text."""
     return _URL.sub(lambda m: f'<span class="ltr">{m.group(0)}</span>', esc(s))
 
+# ---------- QWeb placeholders (data-driven templates) ----------
+# V(expr) marks a value filled at render time; finalize() turns the marker
+# into <t t-esc="expr"/>. The marker survives html escaping, so it can be
+# passed through every clause builder like an ordinary string.
+def V(expr):  return f"\x00{expr}\x00"
+def DL(expr):
+    """A list whose items come from the data (one bullet per item)."""
+    return f'<div class="dl"><t t-foreach="{expr}" t-as="i"><p class="li">• <t t-esc="i"/></p></t></div>'
+def NL(expr):
+    """A numbered list from the data."""
+    return f'<div class="dl"><t t-foreach="{expr}" t-as="i"><p class="li"><t t-esc="i_index + 1"/>. <t t-esc="i"/></p></t></div>'
+def FEE_D(rows_expr, total_label, total_expr):
+    return (f'<table class="fee"><t t-foreach="{rows_expr}" t-as="r"><tr><td><t t-esc="r[0]"/></td><td class="n"><t t-esc="r[1]"/></td></tr></t>'
+            f'<tr class="tot"><td>{esc(total_label)}</td><td class="n"><t t-esc="{total_expr}"/></td></tr></table>')
+def finalize(arch):
+    return re.sub("\x00(.*?)\x00", lambda m: f'<t t-esc="{m.group(1)}"/>', arch)
+
 # ---------- inline builders (return XHTML) ----------
 def P(text, cls=""):   return f'<p class="{cls}">{_iso(text)}</p>' if cls else f"<p>{_iso(text)}</p>"
 def PS(*texts):        return "".join(P(t) for t in texts)
@@ -85,7 +102,7 @@ def SIG(pairs):
     return f'<div class="sig"><table><tr>{cells}</tr></table></div>'
 
 # ---------- row splitting (rule 6) ----------
-_BLOCK = re.compile(r'(<h2 class="c">.*?</h2>|<p(?: class="[^"]*")?>.*?</p>|<ul>.*?</ul>|<ol>.*?</ol>|<table class="fee">.*?</table>)', re.S)
+_BLOCK = re.compile(r'(<h2 class="c">.*?</h2>|<p(?: class="[^"]*")?>.*?</p>|<ul>.*?</ul>|<ol>.*?</ol>|<table class="fee">.*?</table>|<div class="dl">.*?</div>)', re.S)
 _LI = re.compile(r"<li>(.*?)</li>", re.S)
 
 def _tokens(cell):
@@ -130,16 +147,17 @@ def split_pair(en, fa):
 
 # ---------- document assembly ----------
 def bilingual_rows(rows):
-    out = []
+    out, tail = [], []
     for r in rows:
         if isinstance(r, tuple):
             for en, fa in split_pair(*r):
                 out.append(f'<tr><td class="en">{en}</td><td class="facell"><div class="fa" dir="rtl">{fa}</div></td></tr>')
+        elif r.startswith('<div class="sig"'):
+            tail.append(r)   # signature blocks live outside the table so they can start a new page
         else:
-            cls = "full nb" if r.startswith('<div class="sig"') else "full"
-            out.append(f'<tr><td class="{cls}" colspan="2">{r}</td></tr>')
+            out.append(f'<tr><td class="full" colspan="2">{r}</td></tr>')
     return ('<table class="bi"><colgroup><col style="width:50%"/><col style="width:50%"/></colgroup>'
-            + "".join(out) + "</table>")
+            + "".join(out) + "</table>" + "".join(tail))
 
 def en_rows(rows): return "".join(rows)
 
@@ -164,6 +182,8 @@ def title_rows(doc):
     t = f'<h1 class="t">{esc(doc["title"])}</h1><p class="meta">{esc(doc["file_label"])}</p>'
     return t
 
+SIG_PAGE_CSS = ".sig{page-break-before:always;margin-top:0;} .sig+.sig{page-break-before:auto;margin-top:40px;}"
+
 def qweb(key, doc):
     co = COMPANY[doc["company"]]
     header = ('<div class="header"><table style="width:100%;border:0;border-bottom:1px solid #999;margin-bottom:6px"><tr>'
@@ -173,10 +193,10 @@ def qweb(key, doc):
     footer = ('<div class="footer"><div style="border-top:1px solid #999;padding-top:4px;font-size:8.5pt;color:#333;text-align:center;line-height:1.35">'
               f'{footer_lines}<br/>Page <span class="page"/> of <span class="topage"/></div></div>')
     body = title_rows(doc) + (bilingual_rows(doc["rows"]) if doc["layout"] == "bilingual" else en_rows(doc["rows"]))
-    style = "<style>" + font_css() + CSS + "</style>"
-    return (f'<t t-name="{key}"><t t-call="web.html_container"><t t-foreach="docs" t-as="o">'
-            f'{header}<div class="article">{style}<div class="page">{body}</div></div>{footer}'
-            f'</t></t></t>')
+    style = "<style>" + font_css() + CSS + (SIG_PAGE_CSS if doc.get("sig_page") else "") + "</style>"
+    return finalize(f'<t t-name="{key}"><t t-call="web.html_container"><t t-foreach="docs" t-as="o">'
+                    f'{header}<div class="article">{style}<div class="page">{body}</div></div>{footer}'
+                    f'</t></t></t>')
 
 def preview_html(key, doc):
     arch = qweb(key, doc)
