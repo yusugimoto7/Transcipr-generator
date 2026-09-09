@@ -60,7 +60,8 @@
     },
     "gov": [],
     "terms": "1,500 CAD at signing; balance after ITA. Or 4 instalments of 1,000 CAD: signing, +1 month, after ITA, before PR submission. Government fees extra.\nپرداخت اول ۱٬۵۰۰ دلار همراه با امضا؛ مابقی بعد از دریافت ITA. یا چهار قسط ۱٬۰۰۰ دلاری: امضا، یک ماه بعد، بعد از ITA، قبل از سابمیت PR. هزینه‌های دولتی جدا.",
-    "template": true
+    "template": true,
+    "plan": "custom:1500:signing;rest:0:sub_pr"
   },
   "PNP": {
     "name": "PNP – non-Express Entry stream · PNP – روش مستقیم",
@@ -73,7 +74,8 @@
     },
     "gov": [],
     "terms": "50% at signing; 50% after provincial nomination. Or 4 instalments of 1,000 CAD.\nنصف مبلغ همراه با امضا؛ نصف دیگر بعد از نامینیشن استانی. یا چهار قسط ۱٬۰۰۰ دلاری.",
-    "template": true
+    "template": true,
+    "plan": "custom:1500:signing;rest:0:sub_pr"
   },
   "PNP-EE": {
     "name": "PNP – Express Entry stream · PNP – روش اکسپرس انتری",
@@ -86,7 +88,8 @@
     },
     "gov": [],
     "terms": "50% at signing; 50% after provincial nomination. Or 4 instalments: 1,000 / 1,000 / 1,000 / 1,500 CAD.\nنصف مبلغ همراه با امضا؛ نصف دیگر بعد از نامینیشن. یا چهار قسط: ۱٬۰۰۰ / ۱٬۰۰۰ / ۱٬۰۰۰ / ۱٬۵۰۰ دلار.",
-    "template": true
+    "template": true,
+    "plan": "custom:1500:signing;rest:0:sub_pr"
   },
   "CAREGIVER": {
     "name": "Caregiver – PR · پرستار خانگی – اقامت دائم",
@@ -99,7 +102,8 @@
     },
     "gov": [],
     "terms": "2,000 CAD at signing; balance when the 2026 details are announced, before PR submission. 50% refund if we cannot submit.\n۲٬۰۰۰ دلار همراه با امضا؛ مابقی در زمان اعلام جزئیات ۲۰۲۶ و قبل از سابمیت. ۵۰٪ ریفاند در صورت عدم امکان سابمیت.",
-    "template": true
+    "template": true,
+    "plan": "custom:2000:signing;rest:0:announce"
   },
   "PRC-RENEW": {
     "name": "PR card renewal (no issues) · تمدید کارت اقامت دائم",
@@ -109,7 +113,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "PRC-LOST": {
     "name": "Replacement of lost PR card · صدور مجدد کارت PR گمشده",
@@ -119,7 +124,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "PR-RENOUNCE": {
     "name": "PR renunciation · انصراف از اقامت دائم",
@@ -129,7 +135,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "PR-RO": {
     "name": "PR residency obligation · تعهد اقامتی PR",
@@ -139,7 +146,8 @@
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing.\nکل مبلغ همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "CIT": {
     "name": "Citizenship application · درخواست شهروندی",
@@ -149,7 +157,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "CIT-LEGAL": {
     "name": "Citizenship – with legal issue · شهروندی – با مشکل قانونی",
@@ -159,7 +168,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:sub_app"
   },
   "TD-PR": {
     "name": "Travel document – PR · تراول داکیومنت PR",
@@ -169,7 +179,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "SP-ADM": {
     "name": "Admission + Study permit (college / university) · پذیرش و ویزای تحصیلی",
@@ -186,7 +197,8 @@
       "GOV-BIO"
     ],
     "terms": "50% at signing (admission process starts); 50% after the original letter of acceptance. Opening offer 2,200 CAD, floor 1,800 CAD.\n۵۰٪ در زمان امضا و شروع پروسه پذیرش؛ ۵۰٪ بعد از اخذ اصل نامه پذیرش. پیشنهاد اولیه ۲٬۲۰۰ دلار، کف قیمت ۱٬۸۰۰ دلار.",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:sub_sp"
   },
   "SP-ADM-K12": {
     "name": "Admission + Study permit (school student) · پذیرش و ویزای تحصیلی دانش‌آموزی",
@@ -202,7 +214,8 @@
       "GOV-BIO"
     ],
     "terms": "50% at signing; 50% after the original letter of acceptance.\n۵۰٪ در زمان امضا؛ ۵۰٪ بعد از اخذ اصل نامه پذیرش.",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:sub_sp"
   },
   "SP-ONLY": {
     "name": "Study permit only (admission in hand) · فقط ویزای تحصیلی (با پذیرش)",
@@ -220,7 +233,8 @@
       "GOV-BIO"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ قرارداد + هزینه‌های دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "SPX": {
     "name": "Study permit extension · تمدید مجوز تحصیل",
@@ -232,7 +246,8 @@
       "GOV-SP"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "PGWP": {
     "name": "Post-graduation work permit · مجوز کار پس از تحصیل (PGWP)",
@@ -246,7 +261,8 @@
       "GOV-WP"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "TRV": {
     "name": "Visitor visa (TRV) · ویزای ویزیتوری (توریستی)",
@@ -262,7 +278,8 @@
       "GOV-BIO"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه‌های دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "BV": {
     "name": "Business visitor visa · ویزای بیزنس ویزیتور",
@@ -279,7 +296,8 @@
       "GOV-BIO"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه‌های دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "SUPERVISA": {
     "name": "Parents' super visa · سوپر ویزای والدین",
@@ -294,7 +312,8 @@
       "GOV-BIO"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه‌های دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "IN-WP": {
     "name": "In-Canada work permit (2025 update) · ورک پرمیت داخل کانادا",
@@ -308,7 +327,8 @@
       "GOV-WP"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "IN-TRV": {
     "name": "In-Canada visitor visa (permit holders) · ویزای توریستی داخل کانادا",
@@ -323,7 +343,8 @@
       "GOV-TRV"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "VR": {
     "name": "Visitor record · ویزیتور ریکورد",
@@ -335,7 +356,8 @@
       "GOV-TRV"
     ],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "PERMIT-AMEND": {
     "name": "Permit amendment (e.g. remove a condition) · اصلاحیه پرمیت",
@@ -345,7 +367,8 @@
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing; no government fee.\nکل مبلغ همراه با امضا؛ هزینه دولتی ندارد.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "RESTORE": {
     "name": "Restoration of status (added to the permit service) · Restoration",
@@ -357,7 +380,8 @@
       "GOV-REST"
     ],
     "terms": "Full amount plus government fee at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "WP-ABROAD": {
     "name": "Work permit from outside Canada · ورک پرمیت از خارج کانادا",
@@ -367,7 +391,8 @@
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission to IRCC.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت در سایت اداره مهاجرت.",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:sub_wp"
   },
   "OWP-ACC": {
     "name": "Accompanying work permit (spouse / children of student or worker) · ورک پرمیت همراه دانشجو یا نیروی کار",
@@ -379,7 +404,8 @@
     },
     "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "LMIA": {
     "name": "LMIA with employer · قرارداد LMIA با کارفرما",
@@ -391,7 +417,8 @@
       "GOV-LMIA"
     ],
     "terms": "Full LMIA amount at signing; the work-permit contract starts once LMIA is issued.\nکل مبلغ LMIA همراه با امضا؛ قرارداد ورک پرمیت بعد از دریافت LMIA شروع می‌شود.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "LMIA-WP": {
     "name": "Work permit under LMIA · ورک پرمیت نیروی کار LMIA",
@@ -404,7 +431,8 @@
     },
     "gov": [],
     "terms": "50% at signing; 50% before submission to IRCC. Government fees extra.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت. هزینه دولتی جدا.",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:sub_wp"
   },
   "SPON-SPOUSE": {
     "name": "Spousal / common-law sponsorship · اسپانسرشیپ همسر / کامن‌لا",
@@ -414,7 +442,8 @@
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission. Or 4 monthly instalments of 1,000 CAD.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت. یا چهار قسط ماهانه ۱٬۰۰۰ دلاری.",
-    "template": true
+    "template": true,
+    "plan": "25:0:signing;25:0:m1;25:0:m2;rest:0:sub_pr"
   },
   "SPON-CHILD": {
     "name": "Child sponsorship · اسپانسرشیپ فرزند",
@@ -424,7 +453,8 @@
     "addons": {},
     "gov": [],
     "terms": "50% at signing; 50% before submission.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت.",
-    "template": true
+    "template": true,
+    "plan": "25:0:signing;25:0:m1;25:0:m2;rest:0:sub_pr"
   },
   "SPON-PARENT": {
     "name": "Parent sponsorship · اسپانسرشیپ والدین",
@@ -436,7 +466,8 @@
     },
     "gov": [],
     "terms": "50% at signing; 50% before submission.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت.",
-    "template": true
+    "template": true,
+    "plan": "25:0:signing;25:0:m1;25:0:m2;rest:0:sub_pr"
   },
   "SPON-REFUSED": {
     "name": "Refused sponsorship · رد شدن اسپانسرشیپ",
@@ -446,7 +477,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:sub_pr"
   },
   "AB-ENT": {
     "name": "Alberta entrepreneur stream – Sparkbridge + Sugimoto · کارآفرینی آلبرتا – اسپارک‌بریج + سوگیموتو",
@@ -462,6 +494,7 @@
     ],
     "terms": "Sparkbridge 28,000: 8,000 at signing (business idea, summary business plan, landing page, pitch deck, preliminary LOR approval); 20,000 after delivery (letter of recommendation, final business plan, financial model, competitive analysis, website). Sugimoto 12,000: 2,000 + 200 gov at signing (file opening, EOI); 2,000 + 3,500 gov on invitation to submit; 8,000 + 155 gov before the work-permit application. GST/PST on Sugimoto fees: 600.\nاسپارک‌بریج ۲۸٬۰۰۰: ۸٬۰۰۰ همراه با امضا (ایده تجاری، خلاصه طرح کسب‌وکار، صفحه فرود، پیچ‌دک، تأیید اولیه توصیه‌نامه)؛ ۲۰٬۰۰۰ پس از تحویل (توصیه‌نامه، طرح تجاری نهایی، مدل مالی، تحلیل رقابتی، وب‌سایت). سوگیموتو ۱۲٬۰۰۰: ۲٬۰۰۰ + ۲۰۰ دولتی همراه با امضا (تشکیل پرونده، EOI)؛ ۲٬۰۰۰ + ۳٬۵۰۰ دولتی پس از دعوت‌نامه؛ ۸٬۰۰۰ + ۱۵۵ دولتی قبل از درخواست مجوز کار. مالیات حق‌الزحمه سوگیموتو: ۶۰۰.",
     "template": true,
+    "plan": "custom:10000:signing;custom:20000:lor;custom:2000:ita;rest:0:sub_wp",
     "components": [
       {
         "code": "AB-ENT-SB",
@@ -489,6 +522,7 @@
     ],
     "terms": "Sparkbridge 26,000: 8,000 at signing (Phase 1); 18,000 at the start of Phase 2. Sugimoto 12,000: 2,000 + 400 gov at signing (file opening, provincial profile/EOI); 2,000 + 3,500 gov on ITA from BC (full provincial application); 8,000 + 800 gov before the work-permit application (performance agreement, WP support letter, filing).\nاسپارک‌بریج ۲۶٬۰۰۰: ۸٬۰۰۰ همراه با امضا (فاز ۱)؛ ۱۸٬۰۰۰ در شروع فاز ۲. سوگیموتو ۱۲٬۰۰۰: ۲٬۰۰۰ + ۴۰۰ دولتی همراه با امضا (تشکیل پرونده، پروفایل استانی/EOI)؛ ۲٬۰۰۰ + ۳٬۵۰۰ دولتی پس از ITA از BC (درخواست کامل استانی)؛ ۸٬۰۰۰ + ۸۰۰ دولتی قبل از درخواست مجوز کار (توافق‌نامه عملکرد، نامه پشتیبانی، ثبت درخواست).",
     "template": true,
+    "plan": "custom:10000:signing;custom:18000:phase2;custom:2000:ita;rest:0:sub_wp",
     "components": [
       {
         "code": "BC-ENT-SB",
@@ -510,7 +544,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "PFL": {
     "name": "Procedural fairness letter response · پاسخ به نامه PFL",
@@ -520,7 +555,8 @@
     "addons": {},
     "gov": [],
     "terms": "Full amount at signing. Fixed at 3,000–5,000 CAD after reviewing the letter; payment plan available.\nکل مبلغ همراه با امضا. مبلغ ثابت ۳٬۰۰۰ تا ۵٬۰۰۰ دلار پس از بررسی نامه؛ امکان پرداخت اقساطی.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "HC": {
     "name": "Humanitarian & compassionate (in Canada) · روش بشردوستانه H&C (داخل کانادا)",
@@ -530,7 +566,8 @@
     "addons": {},
     "gov": [],
     "terms": "2,000 at signing; 2,000 after 3 months; 2,000 after 6 months.\n۲٬۰۰۰ همراه با امضا؛ ۲٬۰۰۰ بعد از سه ماه؛ ۲٬۰۰۰ بعد از شش ماه.",
-    "template": true
+    "template": true,
+    "plan": "custom:2000:signing;custom:2000:m3;rest:0:m6"
   },
   "CUSTOM": {
     "name": "Custom / negotiated service · خدمت سفارشی / توافقی",
@@ -540,7 +577,8 @@
     "addons": {},
     "gov": [],
     "terms": "Price and payment plan set on the quotation by the agent.\nقیمت و شرایط پرداخت توسط کارشناس روی پیش‌فاکتور تعیین می‌شود.",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "EU-SUV": {
     "name": "Start-up visa – Netherlands / Finland / Denmark / Lithuania / Estonia · استارتاپ ویزا اروپا",
@@ -550,7 +588,8 @@
     "addons": {},
     "gov": [],
     "terms": "5,000 at signing; 10,000 after facilitator approval; 5,000 after visa filing. Facilitator fee (5,000–10,000) paid by the client. Netherlands 25,000; Lithuania/Estonia/Denmark 15,000; UK 20,000 GBP.\n۵٬۰۰۰ زمان عقد قرارداد؛ ۱۰٬۰۰۰ بعد از تأیید طرح توسط سازمان حامی؛ ۵٬۰۰۰ بعد از ثبت ویزا. هزینه سازمان حامی (۵ تا ۱۰ هزار) با کلاینت. هلند ۲۵٬۰۰۰؛ لیتوانی/استونی/دانمارک ۱۵٬۰۰۰؛ انگلستان ۲۰٬۰۰۰ پوند.",
-    "template": true
+    "template": true,
+    "plan": "25:0:signing;50:0:dsif;rest:0:sub_visa"
   },
   "EU-STUDY": {
     "name": "Admission + study visa – Europe · پذیرش و ویزای تحصیلی اروپا",
@@ -563,7 +602,8 @@
     },
     "gov": [],
     "terms": "50% at signing (admission process starts); 50% after the letter of acceptance. Two spouses studying together: 3,500. Embassy and application fees paid by the client.\n۵۰٪ زمان امضا و شروع پذیرش؛ ۵۰٪ بعد از نامه پذیرش. دو نفر همزمان (همسر): ۳٬۵۰۰. هزینه سفارت و اپلیکیشن فی با متقاضی.",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:adm"
   },
   "EU-LANG": {
     "name": "Admission + study visa – language course (Hungary EN / France FR) · پذیرش و ویزای دوره زبان (مجارستان انگلیسی / فرانسه فرانسوی)",
@@ -576,7 +616,8 @@
     },
     "gov": [],
     "terms": "50% at signing; 50% after the letter of acceptance.\n۵۰٪ زمان امضا؛ ۵۰٪ بعد از نامه پذیرش.",
-    "template": true
+    "template": true,
+    "plan": "50:0:signing;rest:0:adm"
   },
   "EU-ADM-ONLY": {
     "name": "Admission only – Europe · فقط پذیرش تحصیلی اروپا",
@@ -586,7 +627,8 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   },
   "EU-VISA-ONLY": {
     "name": "Study visa only – Europe · فقط ویزای تحصیلی اروپا",
@@ -596,6 +638,7 @@
     "addons": {},
     "gov": [],
     "terms": "",
-    "template": true
+    "template": true,
+    "plan": "100:0:signing"
   }
 }

@@ -6,7 +6,7 @@ Services carry their currency (CAD or EUR); Odoo gets one pricelist per currency
 import json
 import pathlib
 
-from pricelist_data import GOV, SERVICES
+from pricelist_data import GOV, PLANS, SERVICES
 
 OUT = pathlib.Path(__file__).resolve().parent / "products.json"
 
@@ -23,6 +23,7 @@ def build():
             "gov": s.get("gov", []),
             "terms": "\n".join(t for t in (s.get("terms_en"), s.get("terms_fa")) if t),
             "template": True,
+            "plan": ";".join(f"{sh}:{amt}:{due}" for sh, amt, due in PLANS.get(key, [])),
         }
         if s.get("components"):
             entry["components"] = [{"code": c, "name": f"{en} · {fa}", "price": p}

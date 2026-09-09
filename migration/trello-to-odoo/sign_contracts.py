@@ -180,6 +180,14 @@ DUE = {
     "sub_app": ("before submitting the application", "قبل از ارسال درخواست"),
     "announce": ("upon announcement of the program details for the coming year",
                  "پس از اعلام جزئیات برنامه سال آینده"),
+    "m6": ("six months after signing the retainer agreement", "شش ماه پس از امضای قرارداد"),
+    "lor": ("after receiving the Letter of Recommendation from the designated agency",
+            "پس از دریافت نامه توصیه (LoR) از آژانس تعیین‌شده"),
+    "phase2": ("at the start of Phase 2 of the business development services",
+               "در شروع فاز ۲ خدمات توسعه کسب‌وکار"),
+    "dsif": ("after the facilitator / DSIF approval", "پس از تأیید فسیلیتیتور / DSIF"),
+    "sub_visa": ("before filing the visa application", "قبل از ثبت درخواست ویزا"),
+    "adm": ("after receiving the admission letter", "پس از دریافت نامه پذیرش"),
     "date": ("on {date}", "در تاریخ {date}"),
 }
 DUE_LABELS = [(k, v[0][0].upper() + v[0][1:]) for k, v in DUE.items()]
@@ -234,11 +242,23 @@ for order in records:
     # 3. A default plan when there is none yet.
     Plan = env['x_pay_plan'].sudo()
     rows = Plan.search([('x_order_id', '=', order.id)], order='x_sequence, id')
-    if not rows:
+    if not rows and lines:
         codes = [l.product_id.default_code or '' for l in lines if l.product_uom_qty]
         main = codes[0] if codes else ''
         tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
-        if 'PR' in tags:
+        # The service's default plan ("share:amount:due;..." on the product),
+        # taken from the first billable line that has one.
+        spec = ''
+        for l in lines:
+            if l.product_uom_qty and (l.product_id.product_tmpl_id.x_default_plan or '').strip():
+                spec = l.product_id.product_tmpl_id.x_default_plan.strip()
+                break
+        if spec:
+            plan = []
+            for part in spec.split(';'):
+                share, amount, due = (part.split(':') + ['', ''])[:3]
+                plan.append((share.strip() or 'custom', float(amount or 0), due.strip() or 'signing'))
+        elif 'PR' in tags:
             due2 = 'ita' if main in ('EE', 'PNP-EE') else 'sub_pr'
             plan = [('custom', min(1500.0, total), 'signing'), ('rest', 0.0, due2)]
         elif main.startswith(('SP', 'PGWP')):
@@ -515,6 +535,20 @@ def _field(odoo, model, name, vals):
     return fid
 
 
+def _sync_selection(odoo, model, name, options):
+    """Add missing options to an existing manual selection field (in order)."""
+    fid = odoo.search_read("ir.model.fields", [("model", "=", model), ("name", "=", name)], ["id"], limit=1)
+    if not fid:
+        return
+    fid = fid[0]["id"]
+    have = {r["value"]: r["id"] for r in odoo.search_read("ir.model.fields.selection", [("field_id", "=", fid)], ["value"])}
+    for i, (value, label) in enumerate(options):
+        if value in have:
+            odoo.write("ir.model.fields.selection", [have[value]], {"name": label, "sequence": i})
+        else:
+            odoo.execute("ir.model.fields.selection", "create", {"field_id": fid, "value": value, "name": label, "sequence": i})
+
+
 def _server_action(odoo, key, vals):
     act_id = odoo.ref("p2action", key)
     if act_id:
@@ -543,19 +577,42 @@ def install_pay_plan(odoo):
     _field(odoo, PLAN_MODEL, "x_due", {
         "field_description": "Due", "ttype": "selection", "required": True,
         "selection_ids": [(0, 0, {"value": v, "name": n, "sequence": i}) for i, (v, n) in enumerate(DUE_LABELS)]})
+    _sync_selection(odoo, PLAN_MODEL, "x_share", SHARES)
+    _sync_selection(odoo, PLAN_MODEL, "x_due", DUE_LABELS)
     _field(odoo, PLAN_MODEL, "x_due_date", {"field_description": "Date", "ttype": "date"})
     _field(odoo, PLAN_MODEL, "x_note", {"field_description": "Note (printed)", "ttype": "char"})
     _field(odoo, "sale.order", PLAN_FIELD, {
         "field_description": "Payment plan", "ttype": "one2many", "relation": PLAN_MODEL,
         "relation_field": "x_order_id", "copied": True})
+    _field(odoo, "product.template", "x_default_plan", {
+        "field_description": "Default payment plan",
+        "help": "Proposed on new quotations: share:amount:due per instalment, separated by ';'. "
+                "share = percentage, rest or custom; due = a key of the plan's Due list.",
+        "ttype": "char"})
     group = odoo.search_read("ir.model.data", [("module", "=", "base"), ("name", "=", "group_user")],
                              ["res_id"], limit=1)[0]["res_id"]
     odoo.upsert("p2access", PLAN_MODEL, "ir.model.access", {
         "name": "x_pay_plan user", "model_id": model_id, "group_id": group,
         "perm_read": True, "perm_write": True, "perm_create": True, "perm_unlink": True})
-    return _server_action(odoo, "recalc_plan", {
+    recalc = _server_action(odoo, "recalc_plan", {
         "name": "Recalculate payment plan", "model_id": _model_id(odoo, "sale.order"),
         "state": "code", "code": RECALC_CODE, "binding_model_id": False})
+    # A quotation built from a quotation template gets the service's default
+    # plan right away (the Recalculate action only fills an empty plan).
+    tmpl_field = odoo.search_read("ir.model.fields", [("model", "=", "sale.order"),
+                                                      ("name", "=", "sale_order_template_id")], ["id"], limit=1)
+    if tmpl_field:
+        auto_vals = {"name": "Phase 2: quotation template chosen -> default payment plan",
+                     "model_id": _model_id(odoo, "sale.order"), "trigger": "on_create_or_write",
+                     "trigger_field_ids": [(6, 0, [tmpl_field[0]["id"]])],
+                     "filter_domain": "[('sale_order_template_id', '!=', False), ('state', 'in', ('draft', 'sent'))]",
+                     "action_server_ids": [(6, 0, [recalc])], "active": True}
+        auto = odoo.ref("p2auto", "default_plan")
+        if auto:
+            odoo.write("base.automation", [auto], auto_vals)
+        else:
+            odoo.upsert("p2auto", "default_plan", "base.automation", auto_vals)
+    return recalc
 
 
 def install_send_button(odoo, rcic_email):

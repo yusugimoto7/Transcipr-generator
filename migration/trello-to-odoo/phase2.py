@@ -254,12 +254,14 @@ def install(odoo, stage_needle, currency_check=True):
 
     # 1. Products: shared government fees, then per service a principal
     #    product and one add-on product per priced component.
-    def make_product(key, name, price, is_gov=False):
+    def make_product(key, name, price, is_gov=False, plan=None):
         vals = {
             "name": name, "default_code": key, "type": "service",
             "sale_ok": True, "purchase_ok": False, "invoice_policy": "order",
             "list_price": float(price or 0),
         }
+        if plan is not None and odoo.has_field("product.template", "x_default_plan"):
+            vals["x_default_plan"] = plan
         pid, created = odoo.upsert("p2prod", key, "product.template", vals)
         variant = odoo.search_read("product.product", [("product_tmpl_id", "=", pid)],
                                    ["id"], limit=1)
@@ -280,13 +282,13 @@ def install(odoo, stage_needle, currency_check=True):
             # component, each becomes its own quotation line.
             variants[key] = []
             for comp in spec["components"]:
-                _, cvid, created = make_product(comp["code"], comp["name"], comp["price"])
+                _, cvid, created = make_product(comp["code"], comp["name"], comp["price"], plan=spec.get("plan", ""))
                 variants[key].append((cvid, comp["name"], comp["price"]))
                 log.info("  component %-12s %-55s %s", comp["code"], comp["name"][:55],
                          "created" if created else "ok")
             product_ids[key] = None
         else:
-            pid, vid, created = make_product(key, spec["name"], spec.get("price"))
+            pid, vid, created = make_product(key, spec["name"], spec.get("price"), plan=spec.get("plan", ""))
             product_ids[key], variants[key] = pid, vid
             price_in(key, pid, spec.get("currency", "CAD"), spec.get("price"), spec.get("contract", "TR"))
             log.info("  service  %-12s %-55s %s", key, spec["name"][:55], "created" if created else "ok")

@@ -302,3 +302,68 @@ RETIRED = {
     "TD-REF": dict(cat="lit", en="Travel document – refugee", fa="تراول داکیومنت پناهنده", price=2000),
 
 }
+
+
+# Default payment plan per service, proposed on a new quotation (editable there).
+# Each row: (share, amount, due). share is a percentage, "rest" (whatever is
+# left) or "custom" (fixed amount in the currency of the service); due keys are
+# defined in sign_contracts.DUE. Derived from the last 60 Sugimoto retainers,
+# the last 30 Sparkbridge agreements on Drive, and the finance price sheet.
+PLANS = {
+    # Permanent residence: first instalment at signing, balance (+ government
+    # fees) before the PR application is filed — the wording on every 2025-26 PR retainer.
+    "EE": [("custom", 1500, "signing"), ("rest", 0, "sub_pr")],
+    "PNP": [("custom", 1500, "signing"), ("rest", 0, "sub_pr")],
+    "PNP-EE": [("custom", 1500, "signing"), ("rest", 0, "sub_pr")],
+    "CAREGIVER": [("custom", 2000, "signing"), ("rest", 0, "announce")],
+    "PRC-RENEW": [("100", 0, "signing")],
+    "PRC-LOST": [("100", 0, "signing")],
+    "PR-RENOUNCE": [("100", 0, "signing")],
+    "PR-RO": [("100", 0, "signing")],
+    "CIT": [("100", 0, "signing")],
+    "CIT-LEGAL": [("50", 0, "signing"), ("rest", 0, "sub_app")],
+    "TD-PR": [("100", 0, "signing")],
+    "HC": [("custom", 2000, "signing"), ("custom", 2000, "m3"), ("rest", 0, "m6")],
+    # Study: two halves, signing and before the study permit is filed
+    # (S25203, S25207, S25190-97 all use this split).
+    "SP-ADM": [("50", 0, "signing"), ("rest", 0, "sub_sp")],
+    "SP-ADM-K12": [("50", 0, "signing"), ("rest", 0, "sub_sp")],
+    "SP-ONLY": [("100", 0, "signing")],
+    "SPX": [("100", 0, "signing")],
+    "PGWP": [("100", 0, "signing")],
+    # Visitor and in-Canada permits: single payment at signing on every retainer read.
+    "TRV": [("100", 0, "signing")],
+    "BV": [("100", 0, "signing")],
+    "SUPERVISA": [("100", 0, "signing")],
+    "IN-WP": [("100", 0, "signing")],
+    "IN-TRV": [("100", 0, "signing")],
+    "VR": [("100", 0, "signing")],
+    "PERMIT-AMEND": [("100", 0, "signing")],
+    "RESTORE": [("100", 0, "signing")],
+    # Work: half at signing, half before submission (S25315, S25304).
+    "WP-ABROAD": [("50", 0, "signing"), ("rest", 0, "sub_wp")],
+    "OWP-ACC": [("100", 0, "signing")],
+    "LMIA": [("100", 0, "signing")],
+    "LMIA-WP": [("50", 0, "signing"), ("rest", 0, "sub_wp")],
+    # Sponsorship: four instalments (S26256); refused-sponsorship files in two halves.
+    "SPON-SPOUSE": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
+    "SPON-CHILD": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
+    "SPON-PARENT": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
+    "SPON-REFUSED": [("50", 0, "signing"), ("rest", 0, "sub_pr")],
+    "PROV-CERT": [("100", 0, "signing")],
+    # Entrepreneur streams: Sparkbridge phases + Sugimoto milestones combined
+    # (SB000026110/26112 + SG000026112: 8,000 + 2,000 at signing, 20,000 on the
+    # LoR / 18,000 at Phase 2, 2,000 at ITA, 8,000 before the work permit).
+    "AB-ENT": [("custom", 10000, "signing"), ("custom", 20000, "lor"), ("custom", 2000, "ita"), ("rest", 0, "sub_wp")],
+    "BC-ENT": [("custom", 10000, "signing"), ("custom", 18000, "phase2"), ("custom", 2000, "ita"), ("rest", 0, "sub_wp")],
+    # Litigation-type services still offered.
+    "PFL": [("100", 0, "signing")],
+    # Europe (EUR): SUV in three steps (SB000025304: 5k / 5k / 5k), study 50/50
+    # (SB000025300, 25308, 25301), single services paid at signing.
+    "EU-SUV": [("25", 0, "signing"), ("50", 0, "dsif"), ("rest", 0, "sub_visa")],
+    "EU-STUDY": [("50", 0, "signing"), ("rest", 0, "adm")],
+    "EU-LANG": [("50", 0, "signing"), ("rest", 0, "adm")],
+    "EU-ADM-ONLY": [("100", 0, "signing")],
+    "EU-VISA-ONLY": [("100", 0, "signing")],
+    "CUSTOM": [("100", 0, "signing")],
+}
