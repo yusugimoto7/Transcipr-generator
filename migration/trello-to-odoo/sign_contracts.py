@@ -395,7 +395,9 @@ rcic_user = env['res.users'].sudo().search(['|', ('login', '=ilike', rcic_email)
 rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
 sb_email = env['ir.config_parameter'].sudo().get_param('phase2.sparkbridge_email') or ''
 sb_user = env['res.users'].sudo().search(['|', ('login', '=ilike', sb_email), ('email', '=ilike', sb_email)], limit=1) if sb_email else env['res.users']
-sb_signer = sb_user.partner_id if sb_user else env.user.partner_id
+sb_signer = sb_user.partner_id if sb_user else (env['res.partner'].sudo().search([('email', '=ilike', sb_email)], limit=1) if sb_email else env['res.partner'])
+if not sb_signer:
+    sb_signer = env.user.partner_id
 
 if order.x_custom_agreement or (order.x_custom_agreement_url or '').strip():
     action = env.ref('__trello__.p2action_send_custom').with_context(
@@ -727,8 +729,13 @@ def install_pay_plan(odoo):
     return recalc
 
 
+SPARKBRIDGE_SIGNER = "ken@sparkbridge.ca"   # signs the Sparkbridge agreements
+
+
 def install_send_button(odoo, rcic_email):
     odoo.execute("ir.config_parameter", "set_param", "phase2.rcic_email", rcic_email or "")
+    if not odoo.execute("ir.config_parameter", "get_param", "phase2.sparkbridge_email"):
+        odoo.execute("ir.config_parameter", "set_param", "phase2.sparkbridge_email", SPARKBRIDGE_SIGNER)
     _field(odoo, "sale.order", "x_sign_request_id", {
         "field_description": "Retainer agreement", "ttype": "many2one",
         "relation": "sign.request", "on_delete": "set null"})
