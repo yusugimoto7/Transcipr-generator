@@ -10,12 +10,13 @@ DOCS = {}
 
 # ---------------- SG-TR : S25203 Pardis Hassanpour ----------------
 rows = [
+  sg.file_row("S25203"),
   sg.preamble("September 13, 2025", "September 13, 2025", "Pardis Hassanpour",
               "No. 4, Rooh Parvar Dead End, Khojasteh Alley, Khaghani Street, Isfahan, Iran",
               "پردیس حسن پور", "ایران، اصفهان، خیابان خاقانی، کوچه خجسته، بن بست روح پرور، پلاک ۴"),
   sg.DEFINITIONS,
   sg.service(["Study Permit", "Work Permit", "Visitor Visa"], ["مجوز تحصیلی", "مجوز کار", "ویزای توریستی"]),
-  sg.RCIC_DUTIES,
+  sg.rcic_duties(*sg.parties("Pardis Hassanpour", "پردیس حسن پور")),
   sg.client_duties("Give biometrics on time as required for Work Permit, Study Permit, and Visitor Visa applications.",
                    "ارائه بیومتریک‌ها به‌موقع، طبق نیاز برای درخواست‌های مجوز کار، مجوز تحصیل و ویزای توریستی.", months_note=False),
   sg.billing([("Professional Fees", "$2,200.00 CAD"), ("Government Fees", "$150.00 CAD"), ("Biometrics Fee", "$85.00 CAD"), ("Discount", "($400.00) CAD")], ("Total Cost", "$2,035.00 CAD"),
@@ -23,11 +24,11 @@ rows = [
              ["1st Payment – $1,017.50 CAD within 7 business days upon the Retainer Agreement,", "2nd Payment – $1,017.50 CAD before submission of Client’s application."],
              ["پرداخت اول – مبلغ $1,017.50 CAD ظرف 7 روز کاری هنگام انعقاد قرارداد.", "پرداخت دوم – $1,017.50 CAD قبل از ارسال درخواست متقاضی."]),
   sg.COMMS, sg.REFUND, sg.DISPUTE, sg.CONFID, sg.FORCE, sg.CHANGE, sg.TERMINATION, sg.LAW,
-  sg.misc(["N/A"], ["N/A"]),
+  sg.misc(),
   sg.contact(["Given Name: Pardis", "Family Name: Hassanpour", "Residential Address: No. 4, Rooh Parvar Dead End, Khojasteh Alley, Khaghani Street, Isfahan, Iran", "Telephone/Cellphone Number: 989131922669", "E-mail: pardis.hassanpour.66@gmail.com"],
              ["نام: پردیس", "نام خانوادگی: حسن پور", "آدرس محل سکونت: ایران، اصفهان، خیابان خاقانی، کوچه خجسته، بن بست روح پرور، پلاک ۴", "شماره تلفن/موبایل: 989131922669", "ایمیل: pardis.hassanpour.66@gmail.com"]),
   sg.WITNESS,
-  SIG([("Signature of Client", "Date"), ("Signature of RCIC", "Date")]),
+  SIG([("Signature of Client", "Signature"), ("Signature of RCIC", "Signature")]),
 ]
 DOCS["sg_tr"] = dict(company="SG", title="Retainer Agreement", file_label="RCIC R713046 · Client File S25203", layout="bilingual", rows=rows)
 
@@ -98,9 +99,9 @@ def pr_contact(client_lines, rcic_email="info@sugimotovisa.com"):
             UL(["Given Name: Hamed", "Family Name: Sugimoto", "RCIC Member Number: R713046", f"Business Address: {sg.RCIC_ADDR}", "Telephone Number: +1 (778) 200-8856", f"E-mail: {rcic_email}"]) +
             P("IN WITNESS THEREOF, this Agreement has been duly executed by the parties hereto on the date first above written."))
 
-program = (P("The Client asked the RCIC, and the RCIC has agreed to act for the Client (Zahrasadat Nourbakhsh) in the matter of Permanent Residence Application by following the program:") +
-           UL(["☐ Express Entry only", "☐ PNP only", "☒ PNP and Express Entry"]))
+program = P("The Client asked the RCIC, and the RCIC has agreed to act for the Client, Zahrasadat Nourbakhsh, in the matter of Permanent Residence Application by following the program: PNP and Express Entry.")
 rows = [
+  P("RCIC Member Number: R713046 — Client File Number: S25205", "meta"),
   PS(f"This Retainer Agreement is made on May 18, 2025, between RCIC Hamed Sugimoto, located at {sg.RCIC_ADDR}, and the Client Zahrasadat Nourbakhsh, located at 181 Ravine Dr, Port Moody.",
      "WHEREAS the RCIC and the Client wish to enter into a written agreement which contains the agreed-upon terms and conditions upon which the RCIC will provide his/her services to the Client.",
      "AND WHEREAS the RCIC is a member of the College of Immigration and Citizenship Consultants (CICC), the regulator in Canada for immigration consultants;",
@@ -110,7 +111,7 @@ rows = [
              ["1st Payment – $1,000 CAD within 7 business days upon the Retainer Agreement date,", "2nd Payment – $3,200 CAD + government fees before submitting the PR application."]),
   *pr_tail(),
   pr_contact(["Given Name: Zahrasadat", "Family Name: Nourbakhsh", "Residential Address: 181 Ravine Dr, Port Moody", "Telephone/Cellphone Number: 9009202170217", "E-mail: zahranoorbakhsh26@gmail.com"]),
-  SIG([("Signature of Client", "Date"), ("Signature of RCIC", "Date")]),
+  SIG([("Signature of Client", "Signature"), ("Signature of RCIC", "Signature")]),
 ]
 DOCS["sg_pr"] = dict(company="SG", title="Retainer Agreement", file_label="RCIC R713046 · Client File S25205", layout="en", rows=rows)
 
@@ -118,6 +119,7 @@ DOCS["sg_pr"] = dict(company="SG", title="Retainer Agreement", file_label="RCIC 
 program = P("The Client asked the RCIC, and the RCIC has agreed to act for the principal applicant, Tandis Hakaki, and the sponsor, Seyed Shayan Hosseini, in the matter of the Permanent Residence Application under the Common-law/Spousal Sponsorship program (outland applications):")
 spon_note = PR_TAIL_NOTE.replace("pre-determined dates as follows. ", "pre-determined dates as follows. The RCIC’s obligations under this Agreement are strictly conditional upon payment of the first installment. Should the first installment remain unpaid for a period of ten (10) days, this Agreement shall automatically terminate without any further obligation or liability on the part of the RCIC, unless otherwise agreed to by the Parties in advance. ")
 rows = [
+  P("RCIC Member Number: R713046 — Client File Number: S26256", "meta"),
   PS(f"This Retainer Agreement was made on September 4th, 2026, between RCIC Hamed Sugimoto, located at 501-3292 Production Way, Burnaby, BC V5A 4R4, Canada, and the Clients, Tandis Hakaki (the principal applicant) and Seyed Shayan Hosseini (the sponsor), located at Unit 1008, 3111 Corvette Way, Richmond, BC, Canada.",
      "WHEREAS the RCIC and the Client wish to enter into a written agreement which contains the agreed-upon terms and conditions upon which the RCIC will provide his/her services to the Client.",
      "AND WHEREAS the RCIC is a member of the College of Immigration and Citizenship Consultants (CICC), the regulator in Canada for immigration consultants;",
@@ -131,25 +133,27 @@ rows = [
   (H("14. Contact Information") + P("Clients") + UL(["Principal Applicant’s name: Tandis Hakaki", "Sponsor’s name: Seyed Shayan Hosseini", "Residential Address: Unit 1008, 3111 Corvette Way, Richmond, BC V6X 4K3, Canada", "Telephone/Cellphone Number: +12365123309", "E-mail: tandis.hakkaki@gmail.com"]) +
    P("RCIC") + UL(["Name: Hamed Sugimoto", "RCIC Member Number: R713046", "Business Address: 501-3292 Production Way, Burnaby, BC V5A 4R4, Canada", "Telephone Number: +1 (778) 200-8856", "E-mail: legal@sugimotovisa.com"]) +
    P("IN WITNESS THEREOF, this Agreement has been duly executed by the parties hereto on the date first above written.")),
-  SIG([("Signature of Principal Applicant", "Date"), ("Signature of Sponsor", "Date")]) + SIG([("Signature of RCIC", "Date")]),
+  SIG([("Signature of Principal Applicant", "Signature"), ("Signature of Sponsor", "Signature")]) + SIG([("Signature of RCIC", "Signature")]),
 ]
 DOCS["sg_spon"] = dict(company="SG", title="Retainer Agreement", file_label="RCIC R713046 · Client File S26256", layout="en", rows=rows)
 
 # ---------------- SG-ENT : SG000026112 Hamid Kalantari, BC PNP Entrepreneur (bilingual) ----------------
-ent_program_en = (P("The Client asked the RCIC, and the RCIC has agreed to act for the Client, in the matter of a British Columbia Provincial Nominee Program (BC PNP) Entrepreneur Immigration - Regional Stream Permanent Residence Application by following the program:") +
+ent_program_en = (P("The Client asked the RCIC, and the RCIC has agreed to act for the Client, Hamid Kalantari, and the accompanying spouse, Behnaz Bakhshimehvar, and the dependent children, Nora Kalantari and Taha Kalantari, in the matter of a British Columbia Provincial Nominee Program (BC PNP) Entrepreneur Immigration - Regional Stream Permanent Residence Application by following the program:") +
   UL(["Expression of Interest (EOI): Preparation and submission to the BC PNP.",
       "Invitation to Apply (ITA) & Provincial Application: Managing the provincial application process upon receipt of an ITA, leading to a Performance Agreement.",
       "Work Permit application: Preparation and filing of the Work Permit application to IRCC (after receiving the Work Permit Support Letter from BC PNP) to allow the Client to move to British Columbia and start business operations."]))
-ent_program_fa = (P("موکل از مشاور درخواست کرده و مشاور پذیرفته است که به نمایندگی از موکل، در خصوص پرونده «درخواست اقامت دائم از طریق برنامه مهاجرتی استان بریتیش کلمبیا (BC PNP) کارآفرینی - مسیر منطقه‌ای» در مراحل زیر اقدام نماید:") +
+ent_program_fa = (P("موکل از مشاور درخواست کرده و مشاور پذیرفته است که به نمایندگی از موکل، حمید کلانتری، و همسر همراه، بهناز بخشی مهوار، و فرزندان وابسته، نورا کلانتری و طاها کلانتری، در خصوص پرونده «درخواست اقامت دائم از طریق برنامه مهاجرتی استان بریتیش کلمبیا (BC PNP) کارآفرینی - مسیر منطقه‌ای» در مراحل زیر اقدام نماید:") +
   UL(["باز کردن پروفایل استانی (EOI): آماده‌سازی و ارسال به برنامه مهاجرتی بریتیش کلمبیا (BC PNP).",
       "آماده سازی پرونده بعد از دریافت دعوتنامه برای درخواست (ITA) استانی: مدیریت فرآیند درخواست استانی پس از دریافت دعوتنامه، که منجر به توافقنامه عملکرد (Performance Agreement) می‌شود.",
       "پرونده اجازه کار: آماده‌سازی و ارسال درخواست مجوز کار به اداره مهاجرت کانادا (IRCC) (پس از دریافت نامه پشتیبانی مجوز کار از BC PNP) جهت امکان نقل مکان موکل به بریتیش کلمبیا و راه‌اندازی کسب‌وکار."]))
-duties = sg.RCIC_DUTIES
+duties = sg.rcic_duties(*sg.parties("Hamid Kalantari", "حمید کلانتری", spouse=("Behnaz Bakhshimehvar", "بهناز بخشی مهوار"),
+                                    children=[("Nora Kalantari", "نورا کلانتری"), ("Taha Kalantari", "طاها کلانتری")]))
 rows = [
+  sg.file_row("SG000026112"),
   sg.preamble("June 09th, 2026", "۹ ژوئن ۲۰۲۶", "Hamid Kalantari", "4900 Lennox Lane, Burnaby, BC, Canada", "حمید کلانتری", "کانادا، بریتیش کلمبیا، برنابی، لینکس لین، پلاک ۴۹۰۰"),
   sg.DEFINITIONS,
-  (H("2. RCIC Responsibilities and Commitments") + ent_program_en + duties[0].split("</h2>",1)[1],
-   H("۲. مسئولیت‌ها و تعهدات مشاور RCIC") + ent_program_fa + duties[1].split("</h2>",1)[1]),
+  (H("2. RCIC Responsibilities and Commitments") + ent_program_en + duties[0].split("</h2>",1)[1].split("</p>",1)[1],
+   H("۲. مسئولیت‌ها و تعهدات مشاور RCIC") + ent_program_fa + duties[1].split("</h2>",1)[1].split("</p>",1)[1]),
   tuple(x.replace("4. Client Responsibilities", "3. Client Responsibilities").replace("۴. مسئولیت", "۳. مسئولیت") for x in
         sg.client_duties("Give biometrics on time as required for immigration applications.", "انجام به‌موقع انگشت‌نگاری (بیومتریک) طبق الزامات پرونده.", months_note=False)),
   tuple(x.replace("5. Billing", "4. Billing").replace("۵. مبلغ", "۴. مبلغ") for x in
@@ -171,11 +175,11 @@ rows = [
   tuple(x.replace("11. Change","10. Change").replace("۱۱. سیاست","۱۰. سیاست") for x in sg.CHANGE),
   tuple(x.replace("12. Termination","11. Termination").replace("۱۲. مهلت","۱۱. فسخ").replace("12.","11.").replace("۱۲.","۱۱.") for x in sg.TERMINATION),
   tuple(x.replace("13. Governing","12. Governing").replace("۱۳. قانون","۱۲. قانون") for x in sg.LAW),
-  tuple(x.replace("14.","13.").replace("۱۴.","۱۳.") for x in sg.misc(["Behnaz Bakhshimehvar", "Nora Kalantari", "Taha Kalantari"], ["بهناز بخشی مهوار", "نورا کلانتری", "طاها کلانتری"])),
+  tuple(x.replace("14.","13.").replace("۱۴.","۱۳.") for x in sg.misc()),
   tuple(x.replace("15.","14.").replace("۱۵.","۱۴.") for x in sg.contact(["Given Name: Hamid", "Family Name: Kalantari", "Residential Address: 4900 Lennox Lane, Burnaby, BC, Canada", "Phone Number: 1672 699 0206", "E-mail: hkalantari63@gmail.com"],
              ["نام: حمید", "نام خانوادگی: کلانتری", "آدرس محل سکونت: کانادا، بریتیش کلمبیا، برنابی، لینکس لین، پلاک ۴۹۰۰", "شماره تلفن: 1672 699 0206", "ایمیل: hkalantari63@gmail.com"])),
   sg.WITNESS,
-  SIG([("Signature of Client / امضای موکل", "Date / تاریخ"), ("Signature of RCIC / امضای مشاور", "Date / تاریخ")]),
+  SIG([("Signature of Client / امضای موکل", "Signature / امضا"), ("Signature of RCIC / امضای مشاور", "Signature / امضا")]),
 ]
 DOCS["sg_ent"] = dict(company="SG", title="Retainer Agreement / قرارداد مشاوره", file_label="RCIC R713046 · Client File SG000026112", layout="bilingual", rows=rows)
 
@@ -184,7 +188,7 @@ rows = sb.sba_rows("SB000025300", "October 08, 2025", "Arman Shojaei", "آرما
                    "Unit 1510, 15th Floor, Pamchal 6 Building, Chitgar Town, End of Hakim Expressway, Tehran",
                    "ایران، تهران، انتهای اتوبان‌حکیم، شهرک چیتگر، ساختمان پامچال۶، طبقه۱۵، واحد ۱۵۱۰",
                    "Sweden", "سوئد", "+989192259455", "armansh20@gmail.com", "900.00", "900.00", "1,800.00", "هزار و هشتصد یورو")
-rows.append(SIG([("Signature of Client / امضای متقاضی", "Date / تاریخ"), ("Ken Sugimoto, Director – SparkBridge Incubator Ltd.", "Date / تاریخ")]))
+rows.append(SIG([("Signature of Client / امضای متقاضی", "Signature / امضا"), ("Ken Sugimoto, Director – SparkBridge Incubator Ltd.", "Signature / امضا")]))
 DOCS["sb_a"] = dict(company="SB", title="Service Agreement", file_label="Client File SB000025300", layout="bilingual", rows=rows)
 
 # ---------------- SB-C : SB000025287 Davoud Nasiri, Netherlands ----------------
@@ -194,7 +198,8 @@ rows = sb.retainer_head("SB000025287", "September 27, 2025", "September 27, 2025
 rows += sb.sbc_body("Netherlands", "هلند", "17,000",
                     [("8,000", "upon signing this agreement", "هشت هزار", "هنگام امضای قرارداد."),
                      ("7,000", "after receiving approval from the Relevant incubators or facilitator organization (DSIF)", "هفت هزار", "پس از دریافت تاییدیه از سازمان شتابدهنده یا تسهیلگر مربوطه (DSIF)."),
-                     ("2,000", "before applying for a visa", "دو هزار", "قبل از اقدام برای ویزا.")])
+                     ("2,000", "before applying for a visa", "دو هزار", "قبل از اقدام برای ویزا.")],
+                    companions_en="Ghazal Nasiri, Saghar Nasiri and Mehrab Nasiri", companions_fa="غزل نصیری، ساغر نصیری و مهراب نصیری")
 rows += [sb.validation_sb(["Ghazal Nasiri", "Saghar Nasiri", "Mehrab Nasiri"], ["غزل نصیری", "ساغر نصیری", "مهراب نصیری"]),
          sb.sig_block_sb("Davoud Nasiri", "داود نصیری", "September 27, 2025", "September 27, 2025")]
 DOCS["sb_c"] = dict(company="SB", title="Retainer Agreement", file_label="Contract No SB000025287", layout="bilingual", rows=rows)
@@ -216,7 +221,7 @@ DOCS["sb_e"] = dict(company="SB", title="Retainer Agreement", file_label="Contra
 
 # ---------------- SB-F : SB000025292 Hanif Garfami, business event (English only) ----------------
 rows = sb.sbf_rows("SB000025292", "October 4, 2025", "Hanif Garfami", "Unit 1, No. 15, Before the intersection, 163 St., Gilan Blvd., Golsar, Rasht", "700.00", "hanifgarfami369@gmail.com")
-rows.append(SIG([("Client: Hanif Garfami", "Signature / Date"), ("Company: Ken Sugimoto, CEO", "Signature / Date")]))
+rows.append(SIG([("Client: Hanif Garfami", "Signature"), ("Company: Ken Sugimoto, CEO", "Signature")]))
 DOCS["sb_f"] = dict(company="SB", title="Service Agreement", file_label="Contract No SB000025292", layout="en", rows=rows)
 
 if __name__ == "__main__":

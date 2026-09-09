@@ -20,6 +20,12 @@ for cid, code in ((1, "SG"), (2, "SB")):
 
 import build
 only = sys.argv[1:] or list(build.DOCS)
+# US Letter paper format for the contract reports (rule 2)
+pf = o.search_read("report.paperformat", [("name", "=", "Contracts - US Letter")], ["id"])
+pf_vals = {"name": "Contracts - US Letter", "format": "Letter", "orientation": "Portrait", "margin_top": 30, "margin_bottom": 26,
+           "margin_left": 16, "margin_right": 16, "header_line": False, "header_spacing": 22, "dpi": 90}
+pf_id = pf[0]["id"] if pf else o.create("report.paperformat", pf_vals)
+if pf: o.write("report.paperformat", [pf_id], pf_vals)
 mid = o.search_read("ir.model", [("model", "=", "res.company")], ["id"])[0]["id"]
 pf = o.search_read("report.paperformat", [("name", "=", "x Sample A4 compact")], ["id"])
 pfvals = {"name": "x Sample A4 compact", "format": "A4", "orientation": "Portrait", "margin_top": 22, "margin_bottom": 22,
@@ -35,6 +41,7 @@ for k in only:
     else: vid = o.create("ir.ui.view", {"name": f"sample {k}", "type": "qweb", "key": key, "arch_db": arch, "mode": "primary"})
     r = o.search_read("ir.actions.report", [("report_name", "=", key)], ["id"])
     rid = r[0]["id"] if r else o.create("ir.actions.report", {"name": f"sample {k}", "model": "res.company", "report_type": "qweb-pdf", "report_name": key, "binding_model_id": False})
+    o.write("ir.actions.report", [rid], {"paperformat_id": pf_id})
     o.write("ir.actions.report", [rid], {"paperformat_id": pfid})
     cid = 1 if d["company"] == "SG" else 2
     fname = f"sample_{k}.pdf"

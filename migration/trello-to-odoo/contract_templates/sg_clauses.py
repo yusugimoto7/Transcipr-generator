@@ -4,6 +4,9 @@ from lib import P, PS, H, UL, OL, FEE, RAW, esc
 
 RCIC_ADDR = "501-3292 Production Way, Greater Vancouver – V5A 4R4 - Canada"
 
+def file_row(no):
+    return (P(f"RCIC Member Number: R713046 — Client File Number: {no}"), P(f"شماره عضویت مشاور: R713046 — شماره پرونده متقاضی: {no}"))
+
 def preamble(date_en, date_fa, client_en, addr_en, client_fa, addr_fa, extra_en="", extra_fa=""):
     en = PS(f"This Retainer Agreement is made on {date_en}, between RCIC Hamed Sugimoto, located at {RCIC_ADDR}, and the Client {client_en}, located at {addr_en}{extra_en}.",
             "WHEREAS the RCIC and the Client wish to enter into a written agreement which contains the agreed-upon terms and conditions upon which the RCIC will provide his/her services to the Client.",
@@ -23,9 +26,21 @@ def service(items_en, items_fa):
     return (H("2. Service") + P("2.1 Type of service offered:") + UL(items_en),
             H("۲. خدمات") + P("۲.۱ نوع خدمات ارائه شده:") + UL(items_fa))
 
-RCIC_DUTIES = (
+def parties(name_en, name_fa, spouse=None, children=()):
+    """Rule 10: main applicant, then accompanying spouse and dependent children, in both languages.
+    spouse=(en, fa); children=[(en, fa), ...]"""
+    en = f"the Client, {name_en}"; fa = f"متقاضی، {name_fa}"
+    if spouse:
+        en += f", and the accompanying spouse, {spouse[0]}"; fa += f"، و همسر همراه، {spouse[1]}"
+    if children:
+        en += (", and the dependent child, " if len(children) == 1 else ", and the dependent children, ") + " and ".join(c[0] for c in children)
+        fa += ("، و فرزند وابسته، " if len(children) == 1 else "، و فرزندان وابسته، ") + " و ".join(c[1] for c in children)
+    return en, fa
+
+def rcic_duties(parties_en="the Client", parties_fa="متقاضی"):
+    return (
     H("3. RCIC Responsibilities and Commitments") +
-    P("The Client asked the RCIC and the RCIC has agreed to act for the Client in the matter(s) as described in 2.1 of this agreement. In consideration of the fees paid and the matter stated above, the RCIC agrees to do the following:") +
+    P(f"The Client asked the RCIC and the RCIC has agreed to act for {parties_en} in the matter(s) as described in 2.1 of this agreement. In consideration of the fees paid and the matter stated above, the RCIC agrees to do the following:") +
     OL(["Representing the file of the Client.",
         "Checking and verifying that all Client (s) documents and forms meet the requirements of the Immigration Regulations. Please note that some of the work to be undertaken may be delegated to employees or contracted out in order to expedite the processing of the work associated with the application.",
         "Preparing and filing submissions for online applications and/or by mail.",
@@ -38,7 +53,7 @@ RCIC_DUTIES = (
         "RCIC shall, if needed, obtain the assistance of a translator for communicating with the Client. Fees for such services shall be paid by the Client.",
         "If RCIC receives any original documents from the Client, he shall return such original documents as soon as the purpose for receiving these documents is achieved."]),
     H("۳. مسئولیت‌ها و تعهدات RCIC") +
-    P("متقاضی از RCIC درخواست کرده و RCIC نیز موافقت کرده است که در موردهای ذکر شده در بخش 2.1 این قرارداد، نمایندگی متقاضی را بر عهده بگیرد. در ازای حق‌الوکاله پرداخت شده و با توجه به موارد ذکر شده در بالا، RCIC متعهد به انجام موارد زیر است:") +
+    P(f"متقاضی از RCIC درخواست کرده و RCIC نیز موافقت کرده است که در موردهای ذکر شده در بخش 2.1 این قرارداد، نمایندگی {parties_fa} را بر عهده بگیرد. در ازای حق‌الوکاله پرداخت شده و با توجه به موارد ذکر شده در بالا، RCIC متعهد به انجام موارد زیر است:") +
     OL(["وکالت و پیگیری پرونده متقاضی.",
         "بررسی و تأیید اینکه تمامی مدارک و فرم‌های مشتری مطابق با الزامات مقررات مهاجرتی باشند. توجه داشته باشید که بخشی از کار ممکن است به کارمندان محول یا به اشخاص دیگر واگذار شود تا روند انجام کارهای مربوط به درخواست سریع‌تر پیش رود.",
         "آماده‌سازی و ارسال مدارک برای درخواست‌های آنلاین و/یا پستی.",
@@ -50,6 +65,8 @@ RCIC_DUTIES = (
         "مدت زمان تقریبی برای تکمیل پرونده طبق زمان‌های تقریبی ارائه شده در وب‌سایت رسمی IRCC خواهد بود و RCIC هیچ کنترلی بر آن ندارد: https://www.canada.ca/en/immigration-refugees-citizenship/services/application/check-processing-times.html",
         "وکیل RCIC در صورت نیاز، از مترجمی برای ارتباط با متقاضی استفاده خواهد کرد. هزینه‌های این خدمات به عهده متقاضی خواهد بود.",
         "اگر RCIC هرگونه مدارک اصلی را از متقاضی دریافت کند، موظف است این مدارک را به محض رسیدن به هدف دریافت آن‌ها، به متقاضی بازگرداند."]))
+
+RCIC_DUTIES = rcic_duties()
 
 def client_duties(biometrics_en, biometrics_fa, months_note=True):
     note_en = " Note: The applicant shall provide all required documents and supporting materials within five (5) months. If the documents are not sent as requested within the specified period, the RCIC shall have the right to terminate the agreement without any refund. Furthermore, the mentioned period may be extended upon the written agreement of both parties." if months_note else ""
@@ -156,7 +173,7 @@ LAW = (
     H("13. Governing Law") + P("This Agreement shall be governed by the laws in effect in the Province of British Columbia and the federal laws of Canada applicable therein, and except for disputes according to Section 8 hereof, any dispute with respect to the terms of this Agreement shall be decided by a court of competent jurisdiction within the Province of British Columbia."),
     H("۱۳. قانون دولتی") + P("این توافق‌نامه طبق قوانین جاری در استان بریتیش کلمبیا و قوانین فدرال کانادا که در آن قابل اجرا است، حاکم خواهد بود و به‌جز اختلافات مطابق با بخش 8 اینجا، هرگونه اختلاف در مورد شرایط این توافق‌نامه توسط دادگاه صلاحیت‌دار در استان بریتیش کلمبیا حل‌وفصل خواهد شد."))
 
-def misc(schedule_a_en, schedule_a_fa):
+def misc(schedule_a_en=None, schedule_a_fa=None):
     en = (H("14. Miscellaneous") +
       PS("14.1 This Agreement constitutes the entire agreement between the parties with respect to the subject matter hereof and supersedes all prior agreements, understandings, warranties, representations, negotiations, and discussions, whether oral or written, of the parties except as specifically set forth herein.",
          "14.2 This Agreement shall be binding upon the parties hereto and their respective heirs, administrators, successors, and permitted assigns.",
@@ -165,8 +182,7 @@ def misc(schedule_a_en, schedule_a_fa):
          "14.5 The headings utilized in this Agreement are for convenience only and are not to be construed in any way as additions to or limitations of the covenants and agreements contained in this Agreement.",
          "14.6 Each of the parties hereto shall do and execute or cause to be done or executed all such further and other things, acts, deeds, documents, and assurances as may be necessary or reasonably required to carry out the intent and purpose of this Agreement fully and effectively.",
          "14.7 The Client acknowledges that they have had sufficient time to review this Agreement and have been allowed to obtain independent legal advice and translation prior to the execution and delivery of this Agreement. In the event the Client did not seek independent legal advice prior to signing this Agreement, they did so voluntarily without any undue pressure and agree that the failure to obtain independent legal advice shall not be used as a defense to the enforcement of obligations created by this Agreement. Furthermore, the Client acknowledges that she has received a copy of this Agreement and agrees to be bound by its terms.",
-         "14.8 The Client acknowledges that only the English version of the agreement shall be binding. The Persian translation is only offered for the assistance of the Client.") +
-      P("Schedule A: Dependents Information") + UL(schedule_a_en))
+         "14.8 The Client acknowledges that only the English version of the agreement shall be binding. The Persian translation is only offered for the assistance of the Client."))
     fa = (H("۱۴. متفرقه") +
       PS("۱۴.۱ این توافق‌نامه شامل تمام توافقات بین طرفین در مورد موضوع آن است و تمامی توافقات، تفاهم‌نامه‌ها، ضمانت‌ها، نمایندگی‌ها، مذاکرات و بحث‌های قبلی، چه شفاهی و چه کتبی، طرفین را از بین می‌برد مگر اینکه به‌طور خاص در اینجا مشخص شده باشد.",
          "۱۴.۲ این توافق‌نامه برای طرفین و وراث، مدیران، جانشینان و واگذاران مجاز آن‌ها الزام‌آور خواهد بود.",
@@ -175,8 +191,7 @@ def misc(schedule_a_en, schedule_a_fa):
          "۱۴.۵ عنوان‌های استفاده‌شده در این توافق‌نامه صرفاً برای سهولت است و به‌هیچ وجه نباید به‌عنوان اضافات یا محدودیت‌هایی از مفاد و توافقات موجود در این توافق‌نامه تفسیر شود.",
          "۱۴.۶ هر یک از طرفین این توافقنامه موظف است تمام اقدامات، اعمال، اسناد و تضمین‌های لازم یا معقول را برای تحقق کامل و مؤثر نیات و اهداف این توافقنامه انجام دهد یا سبب انجام آن شود.",
          "۱۴.۷ متقاضی تأیید می‌کند که زمان کافی برای بررسی این توافق‌نامه داشته و اجازه داشته تا قبل از امضا و تحویل این توافق‌نامه مشاوره قانونی مستقل و ترجمه دریافت کند. در صورتی که متقاضی قبل از امضای این توافق‌نامه مشاوره قانونی مستقل دریافت نکرده باشد، او به‌طور داوطلبانه و بدون هیچگونه فشار غیرمجاز این کار را انجام داده و تأیید می‌کند که عدم دریافت مشاوره قانونی مستقل به‌عنوان دفاعی برای اجرای تعهدات ایجادشده توسط این توافق‌نامه مورد استفاده قرار نخواهد گرفت. علاوه بر این، متقاضی تأیید می‌کند که نسخه‌ای از این توافق‌نامه را دریافت کرده و به شرایط آن پایبند است.",
-         "۱۴.۸ متقاضی تأیید می‌کند که صرفا نسخه انگلیسی قرارداد مرجع طرفین می باشد و ترجمه فارسی صرفا جهت سهولت متقاضی می باشد.") +
-      P("جدول A: اطلاعات افراد وابسته") + UL(schedule_a_fa))
+         "۱۴.۸ متقاضی تأیید می‌کند که صرفا نسخه انگلیسی قرارداد مرجع طرفین می باشد و ترجمه فارسی صرفا جهت سهولت متقاضی می باشد."))
     return (en, fa)
 
 def contact(client_en_lines, client_fa_lines, rcic_email="Legal@sugimotovisa.com"):

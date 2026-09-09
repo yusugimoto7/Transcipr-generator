@@ -144,7 +144,7 @@ def sba_rows(no, date_en, name_en, name_fa, addr_en, addr_fa, country_en, countr
     ]
 
 # ---------- SB-C: SUV Europe (DSIF) ----------
-def sbc_body(country_en, country_fa, fee_total, inst, embassy_note=True):
+def sbc_body(country_en, country_fa, fee_total, inst, embassy_note=True, companions_en=None, companions_fa=None):
     """inst: list of (amount_en, when_en, amount_fa_words, when_fa)"""
     rows = [
       (H("1. Background") + PS(f"a. The Client intends to establish an innovative startup in the {country_en} startup ecosystem.",
@@ -153,8 +153,8 @@ def sbc_body(country_en, country_fa, fee_total, inst, embassy_note=True):
        H("۱. پیش زمینه") + PS(f"الف- مشتری قصد راه اندازی یک کسب و کار با ایده نوآورانه در فضای استارتاپی {country_fa} را دارد.",
           "ب- مشاور دارای تخصص لازم در اکوسیستم استارتاپی اروپا بوده و توانایی ارائه خدمات فنی، بازاریابی و مارکتینگ مربوط به محصول را دارا می باشد.",
           "پ- مراکز شتابدهنده یا تسهیلگر اختصاصی استارتاپ‌ها: سازمان یا نهادی در کشور (های) مورد نظر که در فرایند انجام موضوع قرارداد نیاز به اخذ تاییدیه از آن پیش از اخذ نامه تاییدیه وجود داشته باشد، به تعیین و انتخاب اسپارک بریج، در این قرارداد از این به بعد \"سازمان شتابدهنده و یا تسهیلگر مربوطه\" یا به اختصار \"(DSIF)\" نامیده می شود.")),
-      (H("2. Subject") + P(f"Providing advisory and technical services and training for the formation of a startup qualified to be accepted by a startup visa program of {country_en}. Sparkbridge shall get acceptance in one of the programs in the aforementioned countries and assist the Client in obtaining a residency permit."),
-       H("۲. موضوع قرارداد") + P(f"ارائه خدمات فنی، مشاوره‌ای و آموزشی لازم برای تشکیل یک استارتاپ که شرایط لازم جهت پذیرفته شدن در یکی از برنامه های استارتاپ ویزای {country_fa} را داشته باشد. مشاور بر اساس شرایط متقاضی در یکی از برنامه های فوق الذکر تاییدیه را دریافت و به متقاضی کمک خواهد نمود تا اقامت کشور مقصد را اخذ نماید.")),
+      (H("2. Subject") + P(f"Providing advisory and technical services and training for the formation of a startup qualified to be accepted by a startup visa program of {country_en}. Sparkbridge shall get acceptance in one of the programs in the aforementioned countries and assist the Client" + (f", together with the accompanying family members {companions_en}," if companions_en else "") + " in obtaining a residency permit."),
+       H("۲. موضوع قرارداد") + P(f"ارائه خدمات فنی، مشاوره‌ای و آموزشی لازم برای تشکیل یک استارتاپ که شرایط لازم جهت پذیرفته شدن در یکی از برنامه های استارتاپ ویزای {country_fa} را داشته باشد. مشاور بر اساس شرایط متقاضی در یکی از برنامه های فوق الذکر تاییدیه را دریافت و به متقاضی" + (f" و همراهان وی، {companions_fa}،" if companions_fa else "") + " کمک خواهد نمود تا اقامت کشور مقصد را اخذ نماید.")),
       (H("3. Spark Bridge Obligations") + OL([
           "Providing the necessary consultations for the discovery, evaluation, and implementation of a startup idea (in the form of MVP) that has the capability to operate in the European startup ecosystem and is acceptable by Relevant incubators or facilitator organizations (DSIF).",
           "Conducting comprehensive market research.",
