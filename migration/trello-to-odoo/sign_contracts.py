@@ -993,6 +993,25 @@ def install_agreements(odoo):
     return done
 
 
+def relax_partner_accounting(odoo):
+    """Contacts must be savable without a receivable/payable account.
+
+    The Accounting app makes both fields required on the contact form, but no
+    chart of accounts is installed (invoicing happens outside Odoo), so there
+    is nothing to pick and saving an address fails with "Invalid fields".
+    They stay on the form, just no longer mandatory.
+    """
+    arch = ('<data>'
+            '<xpath expr="//field[@name=\'property_account_receivable_id\']" position="attributes">'
+            '<attribute name="required">0</attribute></xpath>'
+            '<xpath expr="//field[@name=\'property_account_payable_id\']" position="attributes">'
+            '<attribute name="required">0</attribute></xpath>'
+            '</data>')
+    if _inherit_view(odoo, "res.partner", "partner_account_optional",
+                     "res.partner.form.account.optional", arch):
+        log.info("  contacts: Account Receivable/Payable are no longer required")
+
+
 def migrate_lead_address(odoo):
     """One-time copy of the Studio Address / Postal Code fields into the native address."""
     if not odoo.has_field("crm.lead", "x_studio_address"):
@@ -1061,6 +1080,7 @@ def prune_states(odoo, dry_run=False):
 def install(odoo, rcic_email):
     ids = {}
     install_send_button(odoo, rcic_email)
+    relax_partner_accounting(odoo)
     migrate_lead_address(odoo)
     install_state_dropdown(odoo)
     return ids
