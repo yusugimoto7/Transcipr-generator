@@ -85,6 +85,8 @@ for order in records:
 # opens it, instead of Odoo's empty form + customer popup.
 NEW_QUOTE_ACTION_CODE = """
 lead = record
+if not lead.x_service:
+    raise UserError("Set the Service Agreement on this card before creating a quotation.")
 partner = lead.partner_id
 if not partner:
     partner = env['res.partner'].sudo().create({

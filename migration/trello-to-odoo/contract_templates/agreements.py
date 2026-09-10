@@ -47,7 +47,6 @@ DOCS = {}
 
 # ---------------- TR (bilingual) ----------------
 DOCS["TR"] = dict(company="SG", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=[
-  sg.file_row(D("file_no")),
   sg.preamble(D("date_en"), D("date_fa"), D("client_en"), D("addr_en"), D("client_fa"), D("addr_fa")),
   sg.DEFINITIONS,
   (H("2. Service") + P("2.1 Type of service offered:") + DL(L("services_en")),
@@ -64,7 +63,6 @@ DOCS["TR"] = dict(company="SG", title=D("title"), file_label=D("file_label"), la
 
 # ---------------- PFL (bilingual, TR skeleton) ----------------
 DOCS["PFL"] = dict(company="SG", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=[
-  sg.file_row(D("file_no")),
   sg.preamble(D("date_en"), D("date_fa"), D("client_en"), D("addr_en"), D("client_fa"), D("addr_fa")),
   sg.DEFINITIONS,
   sg.service_pfl(D("subject_en"), D("subject_fa"), D("letter_date"), D("letter_date"), D("deadline"), D("deadline"), D("ref")),
@@ -83,7 +81,6 @@ from build import pr_common, pr_tail, PR_TAIL_NOTE  # noqa: E402  (English PR cl
 
 def _pr_head():
     return [
-      P(f"RCIC Member Number: R713046 — Client File Number: {D('file_no')}", "meta"),
       PS(f"This Retainer Agreement is made on {D('date_en')}, between RCIC Hamed Sugimoto, located at {sg.RCIC_ADDR}, and the Client {D('client_en')}, located at {D('addr_en')}.",
          "WHEREAS the RCIC and the Client wish to enter into a written agreement which contains the agreed-upon terms and conditions upon which the RCIC will provide his/her services to the Client.",
          "AND WHEREAS the RCIC is a member of the College of Immigration and Citizenship Consultants (CICC), the regulator in Canada for immigration consultants;",
@@ -114,7 +111,6 @@ DOCS["PR"] = dict(company="SG", title=D("title"), file_label=D("file_label"), la
 # ---------------- SPON (English, two clients) ----------------
 _spon_note = PR_TAIL_NOTE.replace("pre-determined dates as follows. ", "pre-determined dates as follows. The RCIC’s obligations under this Agreement are strictly conditional upon payment of the first installment. Should the first installment remain unpaid for a period of ten (10) days, this Agreement shall automatically terminate without any further obligation or liability on the part of the RCIC, unless otherwise agreed to by the Parties in advance. ")
 DOCS["SPON"] = dict(company="SG", title=D("title"), file_label=D("file_label"), layout="en", sig_page=True, rows=[
-  P(f"RCIC Member Number: R713046 — Client File Number: {D('file_no')}", "meta"),
   PS(f"This Retainer Agreement was made on {D('date_en')}, between RCIC Hamed Sugimoto, located at {sg.RCIC_ADDR}, and the Clients, {D('client_en')} (the principal applicant) and {D('sponsor_en')} (the sponsor), located at {D('addr_en')}.",
      "WHEREAS the RCIC and the Client wish to enter into a written agreement which contains the agreed-upon terms and conditions upon which the RCIC will provide his/her services to the Client.",
      "AND WHEREAS the RCIC is a member of the College of Immigration and Citizenship Consultants (CICC), the regulator in Canada for immigration consultants;",
@@ -137,7 +133,6 @@ def _apply(x, subs):
         x = x.replace(a, b)
     return x
 DOCS["ENT"] = dict(company="SG", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=[
-  sg.file_row(D("file_no")),
   sg.preamble(D("date_en"), D("date_fa"), D("client_en"), D("addr_en"), D("client_fa"), D("addr_fa")),
   sg.DEFINITIONS,
   (H("2. RCIC Responsibilities and Commitments") + P(f"The Client asked the RCIC, and the RCIC has agreed to act for {D('parties_en')}, in the matter of {D('program_en')} by following the program:") + DL(L("scope_en")) + _duties[0].split("</h2>", 1)[1].split("</p>", 1)[1],
@@ -160,12 +155,12 @@ DOCS["ENT"] = dict(company="SG", title=D("title"), file_label=D("file_label"), l
 
 # ---------------- SB-A EU study admission (bilingual) ----------------
 _rows = sb.sba_rows(D("file_no"), D("date_en"), D("client_en"), D("client_fa"), D("addr_en"), D("addr_fa"),
-                    D("country_en"), D("country_fa"), D("phone"), D("email"), D("p1"), D("p2"), D("fee_total"), D("fee_total"))
+                    D("country_en"), D("country_fa"), D("phone"), D("email"), D("p1"), D("p2"), D("fee_total"), D("fee_total"))[1:]
 _rows.append(SIG_SB_BI)
 DOCS["SB-A"] = dict(company="SB", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=_rows)
 
 # ---------------- SB-C EU start-up visa (bilingual) ----------------
-_rows = sb.retainer_head(D("file_no"), D("date_en"), D("date_fa"), D("client_en"), D("client_fa"), D("nid"), D("addr_en"), D("addr_fa"), D("phone"), D("email"))
+_rows = sb.retainer_head(D("file_no"), D("date_en"), D("date_fa"), D("client_en"), D("client_fa"), D("nid"), D("addr_en"), D("addr_fa"), D("phone"), D("email"))[1:]
 _rows += sb.sbc_body(D("country_en"), D("country_fa"), D("fee_total"), (DL(L("inst_en")), DL(L("inst_fa"))),
                      companions_en=D("companions_en"), companions_fa=D("companions_fa"))
 _rows += [sb.validation_sb([D("companions_en")], [D("companions_fa")]), SIG_SB_BI]
@@ -173,13 +168,13 @@ DOCS["SB-C"] = dict(company="SB", title=D("title"), file_label=D("file_label"), 
 
 # ---------------- SB-D BC business advisory / SB-E Alberta DA LoR (bilingual) ----------------
 for _k, _body in (("SB-D", sb.sbd_body), ("SB-E", sb.sbe_body)):
-    _rows = sb.retainer_head(D("file_no"), D("date_en"), D("date_fa"), D("client_en"), D("client_fa"), D("nid"), D("addr_en"), D("addr_fa"), D("phone"), D("email"))
+    _rows = sb.retainer_head(D("file_no"), D("date_en"), D("date_fa"), D("client_en"), D("client_fa"), D("nid"), D("addr_en"), D("addr_fa"), D("phone"), D("email"))[1:]
     _rows += _body(D("fee_total"), D("p1"), D("p2"))
     _rows += [sb.validation_sb(), SIG_SB_BI]
     DOCS[_k] = dict(company="SB", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=_rows)
 
 # ---------------- SB-F business event (English) ----------------
-_rows = sb.sbf_rows(D("file_no"), D("date_en"), D("client_en"), D("addr_en"), D("fee_total"), D("email"))
+_rows = sb.sbf_rows(D("file_no"), D("date_en"), D("client_en"), D("addr_en"), D("fee_total"), D("email"))[1:]
 _rows.append(SIG([(f"Client: {D('client_en')}", "Signature"), ("Company: Ken Sugimoto, CEO", "Signature")]))
 DOCS["SB-F"] = dict(company="SB", title=D("title"), file_label=D("file_label"), layout="en", sig_page=True, rows=_rows)
 

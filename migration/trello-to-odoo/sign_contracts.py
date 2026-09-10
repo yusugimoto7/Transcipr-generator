@@ -338,6 +338,7 @@ for order in records:
 SEND_CUSTOM_CODE = r"""
 order = record
 partner = order.partner_id
+order.write({'x_pending_approval': False})
 fname = order.x_custom_agreement_filename or 'agreement.pdf'
 if not order.x_custom_agreement:
     raise UserError(
@@ -346,6 +347,8 @@ if not order.x_custom_agreement:
         "'Custom agreement (PDF)' and send again.")
 if not fname.lower().endswith('.pdf'):
     raise UserError("The custom agreement must be a PDF file, not %s." % fname)
+if not b64decode(order.x_custom_agreement).startswith(b'%PDF'):
+    raise UserError("The uploaded file is not a valid PDF. Re-download it and upload it again.")
 previous = order.x_sign_request_id
 if previous and previous.state not in ('signed', 'canceled'):
     previous.sudo().cancel()
@@ -384,6 +387,7 @@ SEND_CONTRACT_CODE = r"""
 order = record
 lead = order.opportunity_id
 partner = order.partner_id
+order.write({'x_pending_approval': False})
 if not partner.email:
     raise UserError("The customer has no e-mail address. Add it on the customer, then send again.")
 if not partner.country_id:
@@ -585,6 +589,9 @@ else:
         d['file_no'] = file_no_for(kind)
         d['file_label'] = ('Contract No %s' % d['file_no']) if is_sb else ('RCIC R713046 · Client File %s' % d['file_no'])
         pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
+        if not pdf or not bytes(pdf).startswith(b'%PDF') or not bytes(pdf).rstrip().endswith(b'%%EOF'):
+            raise UserError("The %s agreement for %s did not render into a valid PDF. Nothing was sent; "
+                            "try again, or tell IT." % (kind, order.name))
         fname = '%s - %s - %s.pdf' % (d['file_no'], d['title'], partner.name or '')
         att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
         tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, partner.name or '')})
@@ -597,10 +604,10 @@ else:
             Item.create({'template_id': tmpl.id, 'type_id': 11 if key.endswith('_date') else 1, 'responsible_id': role_of[key],
                          'required': True, 'page': last, 'posX': x, 'posY': y, 'width': w, 'height': h})
         signer = sb_signer if is_sb else rcic
-        items = [(0, 0, {'partner_id': signer.id, 'role_id': 2, 'mail_sent_order': 1}),
-                 (0, 0, {'partner_id': partner.id, 'role_id': 1, 'mail_sent_order': 2})]
+        items = [(0, 0, {'partner_id': partner.id, 'role_id': 1, 'mail_sent_order': 1}),
+                 (0, 0, {'partner_id': signer.id, 'role_id': 2, 'mail_sent_order': 2})]
         if kind == 'SPON':
-            items.append((0, 0, {'partner_id': sponsor.id, 'role_id': __SPONSOR_ROLE__, 'mail_sent_order': 2}))
+            items.append((0, 0, {'partner_id': sponsor.id, 'role_id': __SPONSOR_ROLE__, 'mail_sent_order': 1}))
         req = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
             'template_id': tmpl.id,
             'reference': '%s – %s – %s' % (d['file_no'], d['title'], partner.name or ''),
@@ -613,7 +620,7 @@ else:
                  'x_agreement_kinds': ', '.join(kinds)})
     summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees %s, excluded). Payment plan: %s' % (
         money(pro), money(disc), money(tax), money(total), money(gov), '; '.join(plan_en))
-    order.message_post(body='Agreement(s) %s generated and sent for signature (%s signs first, then the client is e-mailed): %s. %s' % (
+    order.message_post(body='Agreement(s) %s generated and sent for signature (the client signs first, then %s): %s. %s' % (
         ', '.join(kinds), rcic.name, '; '.join(r.reference for r in requests), summary), message_type='comment', subtype_xmlid='mail.mt_note')
     if lead:
         lead.sudo().message_post(body='Agreement sent for signature: %s' % '; '.join(r.reference for r in requests),
@@ -748,6 +755,79 @@ def install_pay_plan(odoo):
 SPARKBRIDGE_SIGNER = "ken@sparkbridge.ca"   # signs the Sparkbridge agreements
 
 
+# Contract team: only these logins may press Send/Resend Contract. Everyone
+# else gets "Submit for Approval" instead — it notifies this group and does
+# not itself send anything to the client.
+APPROVERS = [
+    ("z.ghasemi.sugimoto@gmail.com", "Zeinab Ghasemi"),
+    ("iman.alinejad.einalou@gmail.com", "Iman Alinejad"),
+    ("aban.teymouri@sparkbridge.ca", "Aban Teymoury"),
+    ("yusugimoto7@gmail.com", "Yu Sugimoto"),
+    ("sugimoto.ken@gmail.com", "Ken Sugimoto"),
+    ("nima@sparkbridge.ca", "Nima"),
+]
+
+SUBMIT_APPROVAL_CODE = r"""
+order = record
+partner = order.partner_id
+if not partner.email:
+    raise UserError("The customer has no e-mail address. Add it on the customer, then submit again.")
+if not partner.country_id:
+    raise UserError("Set the customer's country (and province, for Canada) before submitting for approval.")
+if partner.country_id.code == 'CA' and not partner.state_id:
+    raise UserError("Set the customer's province before submitting for approval.")
+billable = order.order_line.filtered(lambda l: not l.display_type and l.product_id and l.product_uom_qty
+    and not (l.product_id.default_code or '').startswith('GOV-'))
+has_custom = bool(order.x_custom_agreement) or bool((order.x_custom_agreement_url or '').strip())
+if not billable and not has_custom:
+    raise UserError("Add at least one service line, or upload a custom agreement, before submitting for approval.")
+if billable and not has_custom:
+    tags = set(billable.mapped('product_id.product_tmpl_id.product_tag_ids.name'))
+    known = {'TR', 'PR', 'SPON', 'ENT', 'PFL', 'SB-A', 'SB-C', 'SB-D', 'SB-E', 'SB-F'}
+    if not (tags & known):
+        raise UserError("No agreement template is defined for this service. Tag the product under Sales > "
+                         "Products, or upload a custom agreement on this quotation.")
+    if not env['x_pay_plan'].sudo().search_count([('x_order_id', '=', order.id)]):
+        raise UserError("Add a payment plan before submitting for approval.")
+approvers = env['res.groups'].sudo().search([('name', '=', 'Contract Approvers')]).users
+order.write({'x_pending_approval': True})
+order.message_post(
+    body='%s submitted this quotation for contract approval. A member of the contract team should review it '
+         'and press Send Contract.' % env.user.name,
+    partner_ids=approvers.mapped('partner_id').ids, message_type='comment', subtype_xmlid='mail.mt_comment')
+if order.opportunity_id:
+    order.opportunity_id.sudo().message_post(body='Quotation %s submitted for contract approval.' % order.name,
+                                             message_type='comment', subtype_xmlid='mail.mt_note')
+""".strip()
+
+
+def install_contract_approval(odoo):
+    """Only the Contract Approvers group may press Send/Resend Contract;
+    everyone else can only submit the quotation for their review."""
+    group_id, created = odoo.upsert("p2group", "contract_approvers", "res.groups", {
+        "name": "Contract Approvers",
+        "comment": "Can send a generated or custom agreement to the client for signature.",
+    }, update=False)
+    if created:
+        log.info("  Contract Approvers group created")
+    users = []
+    for login, label in APPROVERS:
+        u = odoo.search_read("res.users", ["|", ("login", "=ilike", login), ("email", "=ilike", login)], ["id"], limit=1)
+        if u:
+            users.append(u[0]["id"])
+        else:
+            log.warning("  approver not found (no login matching %s): %s", login, label)
+    if users:
+        odoo.write("res.groups", [group_id], {"users": [(6, 0, users)]})
+    log.info("  Contract Approvers: %d of %d configured members found", len(users), len(APPROVERS))
+    _field(odoo, "sale.order", "x_pending_approval", {
+        "field_description": "Pending contract approval", "ttype": "boolean"})
+    submit_id = _server_action(odoo, "submit_approval", {
+        "name": "Submit for Approval", "model_id": _model_id(odoo, "sale.order"),
+        "state": "code", "code": SUBMIT_APPROVAL_CODE, "binding_model_id": False})
+    return group_id, submit_id
+
+
 def install_send_button(odoo, rcic_email):
     odoo.execute("ir.config_parameter", "set_param", "phase2.rcic_email", rcic_email or "")
     if not odoo.execute("ir.config_parameter", "get_param", "phase2.sparkbridge_email"):
@@ -766,6 +846,7 @@ def install_send_button(odoo, rcic_email):
         "relation": "sign.template", "on_delete": "set null", "copied": False})
     recalc_id = install_pay_plan(odoo)
     install_agreements(odoo)
+    approver_group_id, submit_id = install_contract_approval(odoo)
     sponsor_role = odoo.execute("ir.config_parameter", "get_param", "phase2.sponsor_role") or "3"
     _server_action(odoo, "send_custom", {
         "name": "Send custom agreement", "model_id": _model_id(odoo, "sale.order"),
@@ -781,13 +862,17 @@ def install_send_button(odoo, rcic_email):
     arch = ('<data>'
             '<xpath expr="//header" position="inside">'
             f'<button name="{act_id}" type="action" string="Send Contract" class="btn-primary" '
-            'invisible="x_sign_request_id or state == \'cancel\'"/>'
+            'invisible="x_sign_request_id or state == \'cancel\'" groups="__trello__.p2group_contract_approvers"/>'
             f'<button name="{act_id}" type="action" string="Resend Contract" class="btn-secondary" '
             'invisible="not x_sign_request_id or state == \'cancel\'" '
+            'groups="__trello__.p2group_contract_approvers" '
             'confirm="This sends a new agreement built from the current quotation. The previous one is cancelled unless it was already signed. Continue?"/>'
+            f'<button name="{submit_id}" type="action" string="Submit for Approval" class="btn-primary" '
+            'invisible="x_sign_request_id or x_pending_approval or state == \'cancel\'"/>'
             '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
             '<field name="x_sign_request_id" readonly="1"/>'
+            '<field name="x_pending_approval" readonly="1" invisible="not x_pending_approval"/>'
             '<field name="x_custom_agreement_url" widget="url" placeholder="Google Docs / Drive link (reference only)"/>'
             '<field name="x_custom_agreement_filename" invisible="1"/>'
             '<field name="x_custom_agreement" widget="binary" filename="x_custom_agreement_filename" '
@@ -888,17 +973,19 @@ RELATIONS = [("spouse", "Accompanying spouse"), ("child", "Dependent child"), ("
              ("guardian", "Parent / guardian"), ("sponsor", "Sponsor")]
 
 
-def _inherit_view(odoo, model, key, name, arch):
+def _inherit_view(odoo, model, key, name, arch, priority=99):
+    """priority must beat any Studio customisation on the same model to stick
+    (Studio views on this instance run at priority 160, not the usual 16)."""
     parents = odoo.search_read("ir.ui.view", [("model", "=", model), ("type", "=", "form"), ("inherit_id", "=", False)], ["id", "name"])
     parents.sort(key=lambda v: (v["name"] not in (f"{model}.form", "crm.lead.form", "res.partner.form", "sale.order.form")))
     view_id = odoo.ref("p2view", key)
     for parent in parents:
         try:
             if view_id:
-                odoo.write("ir.ui.view", [view_id], {"inherit_id": parent["id"], "arch_db": arch})
+                odoo.write("ir.ui.view", [view_id], {"inherit_id": parent["id"], "arch_db": arch, "priority": priority})
             else:
                 view_id, _ = odoo.upsert("p2view", key, "ir.ui.view", {
-                    "name": name, "model": model, "inherit_id": parent["id"], "arch_db": arch, "priority": 99})
+                    "name": name, "model": model, "inherit_id": parent["id"], "arch_db": arch, "priority": priority})
             return view_id
         except OdooError as exc:
             log.warning("  %s view %s: %s", model, key, str(exc)[-200:])
@@ -1039,6 +1126,72 @@ def install_sequences(odoo, seed=None):
         log.info("  sequence %s ready (%s)", code, spec["prefix"])
 
 
+def fix_crm_fields(odoo):
+    """Budget is optional; Service Agreement is required and sits above the
+    renamed Execution team field (was Case Type)."""
+    _inherit_view(odoo, "crm.lead", "lead_budget_optional", "crm.lead.form.budget.optional",
+        "<data><xpath expr=\"//field[@name='x_budget']\" position=\"attributes\">"
+        "<attribute name=\"required\">0</attribute></xpath></data>", priority=200)
+    for name, label in (("x_case_type", "Execution team"), ("x_service", "Service Agreement")):
+        f = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"), ("name", "=", name)], ["id"], limit=1)
+        if f:
+            odoo.write("ir.model.fields", [f[0]["id"]], {"field_description": label})
+    log.info("  Budget is optional; Case Type -> Execution team, Service -> Service Agreement")
+    # Move Service Agreement above Execution team, and make it required in the
+    # form (existing empty leads stay valid; the next save through this form
+    # enforces it — this is what "required to send the quotation" means, since
+    # New Quotation is only ever pressed from this form).
+    view_id = odoo.ref("p2view", "lead_service")
+    if view_id:
+        parent = odoo.search_read("ir.ui.view", [("id", "=", view_id)], ["inherit_id"])[0]["inherit_id"]
+        arch = ("<data><xpath expr=\"//field[@name='x_case_type']\" position=\"before\">"
+                "<field name=\"x_service\" options=\"{'no_create': True}\" required=\"1\"/></xpath></data>")
+        try:
+            odoo.write("ir.ui.view", [view_id], {"inherit_id": parent[0], "arch_db": arch, "priority": 200})
+            log.info("  Service Agreement moved above Execution team and marked required")
+        except OdooError as exc:
+            log.warning("  could not reorder Service Agreement / Execution team: %s", str(exc)[-200:])
+    else:
+        log.warning("  Service Agreement view not found — run phase2 install first")
+
+
+STAGE_GATE_CODE = r"""
+stage = env['crm.stage'].sudo().search([('name', 'ilike', 'Need to Receive Draft Contract')], limit=1)
+for lead in records:
+    if not stage or lead.stage_id != stage:
+        continue
+    orders = env['sale.order'].sudo().search([('opportunity_id', '=', lead.id)])
+    sent = orders.filtered(lambda o: o.x_sign_request_id or o.x_sign_request2_id or o.x_custom_sign_template_id)
+    if not sent:
+        raise UserError(
+            "This card cannot move to '%s' until a contract has been sent to the client. Set the Service "
+            "Agreement, fill in the payment plan on a quotation, and press Send Contract (or have it approved "
+            "and sent by the contract team) first." % stage.name)
+""".strip()
+
+
+def install_stage_gate(odoo):
+    """A card cannot reach "Need to Receive Draft Contract" without a sent agreement."""
+    act_id = _server_action(odoo, "stage_gate", {
+        "name": "Contract must be sent before Need to Receive Draft Contract",
+        "model_id": _model_id(odoo, "crm.lead"), "state": "code",
+        "code": STAGE_GATE_CODE, "binding_model_id": False})
+    stage_field = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"), ("name", "=", "stage_id")], ["id"], limit=1)
+    if not stage_field:
+        log.warning("  stage_id field not found on crm.lead — stage gate not installed")
+        return
+    auto_vals = {"name": "Phase 2: contract sent before Need to Receive Draft Contract",
+                 "model_id": _model_id(odoo, "crm.lead"), "trigger": "on_write",
+                 "trigger_field_ids": [(6, 0, [stage_field[0]["id"]])],
+                 "filter_domain": "[]", "action_server_ids": [(6, 0, [act_id])], "active": True}
+    auto = odoo.ref("p2auto", "stage_gate")
+    if auto:
+        odoo.write("base.automation", [auto], auto_vals)
+    else:
+        odoo.upsert("p2auto", "stage_gate", "base.automation", auto_vals)
+    log.info("  stage gate active: 'Need to Receive Draft Contract' now requires a sent contract")
+
+
 def relax_partner_accounting(odoo):
     """Contacts must be savable without a receivable/payable account.
 
@@ -1128,5 +1281,7 @@ def install(odoo, rcic_email):
     install_send_button(odoo, rcic_email)
     relax_partner_accounting(odoo)
     migrate_lead_address(odoo)
+    fix_crm_fields(odoo)
+    install_stage_gate(odoo)
     install_state_dropdown(odoo)
     return ids
