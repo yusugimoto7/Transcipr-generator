@@ -388,8 +388,9 @@ order = record
 lead = order.opportunity_id
 partner = order.partner_id
 order.write({'x_pending_approval': False})
-_acts = env['mail.activity'].sudo().search([('res_model', '=', 'sale.order'), ('res_id', '=', order.id),
-                                            ('summary', 'like', 'Approve and send')])
+_acts = env['mail.activity'].sudo().search(['&', ('res_model', '=', 'sale.order'), ('res_id', '=', order.id),
+                                            '|', ('summary', 'like', 'Approve and send'),
+                                                 ('summary', 'like', 'returned for changes')])
 if _acts:
     _acts.action_feedback(feedback='Contract sent by %s' % env.user.name)
 if not partner.email:
@@ -864,37 +865,44 @@ if billable and not has_custom:
 approvers = env['res.groups'].sudo().search([('name', '=', 'Contract Approvers')]).users
 if not approvers:
     raise UserError("The Contract Approvers group has no members. Ask IT to add the contract team.")
-order.write({'x_pending_approval': True})
 
+# Re-submitting after the agent corrected the fees or the payment plan
+# (whether it was returned first or edited while still pending).
+round_no = (order.x_approval_round or 0) + 1
+revision = round_no > 1
+order.write({'x_pending_approval': True, 'x_approval_round': round_no})
+
+plan = env['x_pay_plan'].sudo().search([('x_order_id', '=', order.id)], order='x_sequence, id')
+plan_txt = '; '.join('%s %s' % (order.currency_id.symbol or '', r.x_amount) for r in plan) or 'not set'
 base = env['ir.config_parameter'].sudo().get_param('web.base.url') or ''
 link = '%s/web#id=%s&model=sale.order&view_type=form' % (base, order.id)
-title = 'Contract approval needed: %s - %s' % (order.name, partner.name or '')
-body = ('<p>%s submitted this quotation for contract approval.</p>'
-        '<p>Customer: <strong>%s</strong><br/>Amount: %s %s</p>'
-        '<p>Review it and press <strong>Send Contract</strong> to send the agreement to the client:<br/>'
-        '<a href="%s">%s</a></p>') % (env.user.name, partner.name or '', order.currency_id.symbol or '',
-                                      order.amount_total, link, order.name)
+lead_word = 'revised and re-submitted' if revision else 'submitted'
+title = ('Contract approval needed (revised): %s - %s' if revision else
+         'Contract approval needed: %s - %s') % (order.name, partner.name or '')
+body = ('<p>%s %s this quotation for contract approval.</p>'
+        '<p>Customer: <strong>%s</strong><br/>Amount: %s %s<br/>Payment plan: %s</p>'
+        '<p>Review it (use <strong>Preview Agreement</strong> to read the draft) and press '
+        '<strong>Send Contract</strong> to send it to the client:<br/>'
+        '<a href="%s">%s</a></p>') % (env.user.name, lead_word, partner.name or '',
+                                      order.currency_id.symbol or '', order.amount_total, plan_txt,
+                                      link, order.name)
 
-# 1. An activity for each approver: shows in their Activities menu and on the
-#    quotation list, and Odoo chases it in the daily digest.
-act_type = env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
+# Refresh the activities so the note always shows the current figures.
 Activity = env['mail.activity'].sudo()
 model_id = env['ir.model'].sudo()._get_id('sale.order')
+Activity.search(['&', ('res_model_id', '=', model_id), ('res_id', '=', order.id),
+                 '|', ('summary', 'like', 'Approve and send'),
+                      ('summary', 'like', 'returned for changes')]).unlink()
+act_type = env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
 for user in approvers:
-    exists = Activity.search_count([('res_model_id', '=', model_id), ('res_id', '=', order.id),
-                                    ('user_id', '=', user.id), ('summary', 'like', 'Approve and send')])
-    if exists:
-        continue
     Activity.create({
         'res_model_id': model_id, 'res_id': order.id, 'user_id': user.id,
         'activity_type_id': act_type.id if act_type else False,
-        'summary': 'Approve and send the contract',
+        'summary': 'Approve and send the contract' + (' (revision %s)' % round_no if revision else ''),
         'note': body,
         'date_deadline': datetime.date.today(),
     })
 
-# 2. A real e-mail, so it does not depend on each person's Odoo notification
-#    preference (they are all set to Inbox only).
 Mail = env['mail.mail'].sudo()
 for user in approvers:
     if user.id == env.user.id or not user.email:
@@ -906,8 +914,43 @@ for user in approvers:
 
 order.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
 if order.opportunity_id:
-    order.opportunity_id.sudo().message_post(body='Quotation %s submitted for contract approval.' % order.name,
-                                             message_type='comment', subtype_xmlid='mail.mt_note')
+    order.opportunity_id.sudo().message_post(
+        body='Quotation %s %s for contract approval.' % (order.name, lead_word),
+        message_type='comment', subtype_xmlid='mail.mt_note')
+""".strip()
+
+
+# --- Return to agent -------------------------------------------------------
+# The other half of the loop: an approver hands the draft back with a reason,
+# the agent fixes the fees or the plan and re-submits.
+RETURN_TO_AGENT_CODE = r"""
+order = record
+if not order.x_pending_approval:
+    raise UserError("This quotation is not waiting for approval.")
+order.write({'x_pending_approval': False})
+model_id = env['ir.model'].sudo()._get_id('sale.order')
+env['mail.activity'].sudo().search([('res_model_id', '=', model_id), ('res_id', '=', order.id),
+                                    ('summary', 'like', 'Approve and send')]).unlink()
+agent = order.user_id or order.create_uid
+base = env['ir.config_parameter'].sudo().get_param('web.base.url') or ''
+link = '%s/web#id=%s&model=sale.order&view_type=form' % (base, order.id)
+body = ('<p>%s sent this contract back for changes. Correct the fees or the payment plan and press '
+        '<strong>Resubmit for Approval</strong>.</p><p><a href="%s">%s</a></p>') % (env.user.name, link, order.name)
+if agent:
+    act_type = env.ref('mail.mail_activity_data_todo', raise_if_not_found=False)
+    env['mail.activity'].sudo().create({
+        'res_model_id': model_id, 'res_id': order.id, 'user_id': agent.id,
+        'activity_type_id': act_type.id if act_type else False,
+        'summary': 'Contract returned for changes',
+        'note': body, 'date_deadline': datetime.date.today(),
+    })
+    if agent.email and agent.id != env.user.id:
+        env['mail.mail'].sudo().create({
+            'subject': 'Contract returned for changes: %s' % order.name,
+            'body_html': body, 'email_to': agent.email, 'auto_delete': False,
+            'model': 'sale.order', 'res_id': order.id,
+        }).send()
+order.message_post(body=body, message_type='comment', subtype_xmlid='mail.mt_note')
 """.strip()
 
 
@@ -962,10 +1005,16 @@ def install_contract_approval(odoo):
     log.info("  Contract Approvers: %d of %d configured members found", len(users), len(APPROVERS))
     _field(odoo, "sale.order", "x_pending_approval", {
         "field_description": "Pending contract approval", "ttype": "boolean"})
+    _field(odoo, "sale.order", "x_approval_round", {
+        "field_description": "Approval round", "ttype": "integer",
+        "help": "How many times this quotation has been submitted for contract approval."})
     submit_id = _server_action(odoo, "submit_approval", {
         "name": "Submit for Approval", "model_id": _model_id(odoo, "sale.order"),
         "state": "code", "code": SUBMIT_APPROVAL_CODE, "binding_model_id": False})
-    return group_id, submit_id
+    return_id = _server_action(odoo, "return_to_agent", {
+        "name": "Return to Agent", "model_id": _model_id(odoo, "sale.order"),
+        "state": "code", "code": RETURN_TO_AGENT_CODE, "binding_model_id": False})
+    return group_id, submit_id, return_id
 
 
 def install_send_button(odoo, rcic_email):
@@ -986,7 +1035,7 @@ def install_send_button(odoo, rcic_email):
         "relation": "sign.template", "on_delete": "set null", "copied": False})
     recalc_id = install_pay_plan(odoo)
     install_agreements(odoo)
-    approver_group_id, submit_id = install_contract_approval(odoo)
+    approver_group_id, submit_id, return_id = install_contract_approval(odoo)
     install_approval_filter(odoo)
     sponsor_role = odoo.execute("ir.config_parameter", "get_param", "phase2.sponsor_role") or "3"
     _server_action(odoo, "send_custom", {
@@ -1014,6 +1063,12 @@ def install_send_button(odoo, rcic_email):
             f'<button name="{submit_id}" type="action" string="Submit for Approval" class="btn-primary" '
             'invisible="x_sign_request_id or x_pending_approval or state == \'cancel\'" '
             'groups="!__trello__.p2group_contract_approvers"/>'
+            f'<button name="{submit_id}" type="action" string="Resubmit for Approval" class="btn-primary" '
+            'invisible="x_sign_request_id or not x_pending_approval or state == \'cancel\'" '
+            'groups="!__trello__.p2group_contract_approvers"/>'
+            f'<button name="{return_id}" type="action" string="Return to Agent" class="btn-secondary" '
+            'invisible="x_sign_request_id or not x_pending_approval or state == \'cancel\'" '
+            'groups="__trello__.p2group_contract_approvers"/>'
             f'<button name="{preview_id}" type="action" string="Preview Agreement" class="btn-secondary" '
             'invisible="state == \'cancel\'"/>'
             '</xpath>'
