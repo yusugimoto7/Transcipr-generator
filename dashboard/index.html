@@ -2119,7 +2119,7 @@ const LIVE_SIZE_KEY = 'leadsDashboardPackBytes';
 // a first-time visitor gets a crawl instead of a percentage, and most of the team
 // are first-time visitors. Being out by a little only shifts the pace slightly;
 // the bar is clamped either way, and the real size replaces this after one load.
-const LIVE_SIZE_HINT = 485000;
+const LIVE_SIZE_HINT = 550000;
 function lastPackBytes() {
   let seen = 0;
   try { seen = Number(localStorage.getItem(LIVE_SIZE_KEY)) || 0; } catch (e) {}
@@ -2359,6 +2359,14 @@ const countryName = c => {
 };
 const GENDER_LABEL = { F: 'Women', M: 'Men', U: 'Not specified' };
 const socNum = v => (v === null || v === undefined || v === '') ? 0 : (Number(v) || 0);
+/* The pack stores permalinks without the domain — 'reel/DAbCdEfGhIj' — because the
+   prefix is the same on every one of several hundred rows. Older packs sent the
+   whole URL, so an absolute value is passed through untouched. */
+const socLink = v => {
+  const s = String(v || '').trim();
+  if (!s) return '';
+  return /^https?:\/\//.test(s) ? s : 'https://www.instagram.com/' + s + '/';
+};
 const kfmt = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2) + 'M'
   : n >= 1e5 ? Math.round(n / 1000) + 'k'
   : n >= 1e4 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : fmt(Math.round(n));
@@ -2758,7 +2766,7 @@ function renderSocPosts(ctx) {
   chart.appendChild(lg);
   table.appendChild(socTable(ranked.slice(0, 60).map(p => {
     const cell = el('div');
-    const link = String(p[SOC.pi.link] || '');
+    const link = socLink(p[SOC.pi.link]);
     const head = link ? el('a', null, String(p[SOC.pi.d] || '').slice(0, 10)) : el('span', null, String(p[SOC.pi.d] || '').slice(0, 10));
     if (link) { head.href = link; head.target = '_blank'; head.rel = 'noopener noreferrer'; }
     cell.appendChild(head);

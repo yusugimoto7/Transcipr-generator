@@ -49,6 +49,11 @@ const PACK_CELL = 45000;      // a cell holds 50,000 characters; leave headroom
 const SOCIAL_TABS = { daily: 'IG Daily', posts: 'IG Posts', audience: 'IG Audience' };
 const SOCIAL_DAYS = 400;      // history sent to the page; older rows stay in the sheet
 const SOCIAL_POST_DAYS = 120;
+// Real captions run to several hundred characters of Persian, two bytes each,
+// across hundreds of posts. The page shows a caption in a 330px cell and a
+// tooltip, so the tail is paid for and never read.
+const SOCIAL_CAP_CHARS = 140;
+const IG_PREFIX = 'https://www.instagram.com/';
 
 // Odoo CRM, written into these tabs by odoo-crm.gs. Absent tabs are not an error:
 // the dashboard hides its CRM section and every lead reads as unmatched.
@@ -59,6 +64,10 @@ const CRM_HEADERS = ['id', 'email_norm', 'phone_digits', 'kind', 'status', 'stag
   'write_date', 'updated_at'];
 const CRM_STAGE_HEADERS = ['date', 'stage', 'stage_seq', 'open', 'won', 'lost',
   'open_revenue', 'won_revenue', 'updated_at'];
+// One row per stage per day is 27 rows a day forever — 169 KB after four months
+// of collection, and nothing on the page plots the per-stage split. The pack
+// carries daily pipeline totals instead, capped so a year of it stays flat.
+const CRM_HISTORY_DAYS = 365;
 
 /* ------------------------------------------------------------------ columns */
 var C = {
@@ -434,6 +443,19 @@ function daysAgo(dateStr, today) {
   return Math.round((Date.parse(today) - Date.parse(dateStr)) / 86400000);
 }
 
+/* Everything after the domain: 'reel/DAbCdEfGhIj'. The page prepends the rest. */
+function shortLink(v) {
+  var s = txt(v);
+  return s.indexOf(IG_PREFIX) === 0 ? s.slice(IG_PREFIX.length).replace(/\/$/, '') : s;
+}
+/* Clipped on a word boundary where there is one within reach of the limit. */
+function clip(v, max) {
+  var s = txt(v).replace(/\s+/g, ' ').trim();
+  if (s.length <= max) return s;
+  var cut = s.slice(0, max), sp = cut.lastIndexOf(' ');
+  return (sp > max * 0.6 ? cut.slice(0, sp) : cut) + '…';
+}
+
 /**
  * Packs the Instagram tabs into a compact block. Individual posts and reels are
  * sent as rows; stories are rolled up per day, because a few thousand expired
@@ -466,7 +488,11 @@ function buildSocial() {
   });
   dailyRows.sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
 
-  var postCols = ['id', 'a', 'd', 'surface', 'type', 'link', 'cap', 'reach', 'views',
+  // media_id and media_type were never read by the page, so they are not sent.
+  // 'link' is the permalink with the instagram.com prefix stripped; the page
+  // puts it back. The page indexes by name, so dropping a column needs nothing
+  // there beyond leaving the field alone.
+  var postCols = ['a', 'd', 'surface', 'link', 'cap', 'reach', 'views',
     'likes', 'comments', 'saved', 'shares', 'inter', 'visits', 'follows', 'watch'];
   var postRows = [], storyAgg = {};
   posts.forEach(function (r) {
@@ -485,8 +511,9 @@ function buildSocial() {
       agg.clicks += num(r.link_clicks) || 0;
       return;
     }
-    postRows.push([txt(r.media_id), acct(r.account), stamp.slice(0, 16), surface,
-      txt(r.media_type), txt(r.permalink), txt(r.caption), num(r.reach), num(r.views),
+    postRows.push([acct(r.account), stamp.slice(0, 16), surface,
+      shortLink(r.permalink), clip(r.caption, SOCIAL_CAP_CHARS),
+      num(r.reach), num(r.views),
       num(r.likes), num(r.comments), num(r.saved), num(r.shares),
       num(r.total_interactions), num(r.profile_visits), num(r.follows),
       num(r.avg_watch_time_s)]);
@@ -559,11 +586,24 @@ function buildCrm(matched, total) {
   });
   closedDays.sort(function (a, b) { return a - b; });
 
-  var history = readTab(CRM_TABS.stages).map(function (r) {
-    return [dayText(r.date), txt(r.stage), num(r.open) || 0, num(r.won) || 0, num(r.lost) || 0,
-      Math.round(num(r.won_revenue) || 0)];
-  }).filter(function (r) { return r[0]; })
-    .sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; });
+  // Summed across stages into one row per day. The stage tab keeps the full
+  // per-stage detail; the pack only needs the trend.
+  var today = isoDate(new Date());
+  var byDay = {};
+  readTab(CRM_TABS.stages).forEach(function (r) {
+    var d = dayText(r.date);
+    if (!d || daysAgo(d, today) > CRM_HISTORY_DAYS) return;
+    var b = byDay[d] || (byDay[d] = [d, 0, 0, 0, 0]);
+    b[1] += num(r.open) || 0;
+    b[2] += num(r.won) || 0;
+    b[3] += num(r.lost) || 0;
+    b[4] += num(r.won_revenue) || 0;
+  });
+  var history = Object.keys(byDay).sort().map(function (k) {
+    var b = byDay[k];
+    b[4] = Math.round(b[4]);
+    return b;
+  });
 
   return {
     stages: Object.keys(stages).map(function (k) { return stages[k]; })
@@ -576,7 +616,7 @@ function buildCrm(matched, total) {
     // measured against Odoo itself rather than against the sheet's own flag.
     matched: matched, submissions: total,
     unmatchedCrm: Math.max(0, rows.length - matched),
-    historyCols: ['d', 'stage', 'open', 'won', 'lost', 'wonRevenue'],
+    historyCols: ['d', 'open', 'won', 'lost', 'wonRevenue'],
     history: history,
     lastRun: txt(PropertiesService.getScriptProperties().getProperty('ODOO_LAST_RUN') || ''),
     generatedAt: new Date().toISOString()

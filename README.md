@@ -185,6 +185,16 @@ obfuscation, not access control: anyone who can open the dashboard can call the
 endpoint and get exactly what the dashboard already shows. The Apps Script
 transform is verified byte-identical to the Python build script's output.
 
+**What the pack does and does not carry.** Building it reads every lead,
+Instagram and CRM row, so `refreshPack` does that on an hourly trigger and writes
+the result to a hidden `Pack cache` tab; a request only ever reads the stored
+copy, in about a millisecond. Because it is downloaded on every visit, the pack
+carries only what a chart reads: post captions are clipped to
+`SOCIAL_CAP_CHARS`, permalinks are stored without the `instagram.com/` prefix and
+rebuilt on the page, and the per-stage `CRM Stage Daily` rows are summed into one
+pipeline row per day, capped at `CRM_HISTORY_DAYS`. The sheet keeps the full
+detail either way — these caps only bound what crosses the wire.
+
 **Rebuilding the embedded snapshot.** Independent of the live endpoint, the
 fallback snapshot can be refreshed so the page is useful even offline:
 
