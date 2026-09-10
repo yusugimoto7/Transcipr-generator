@@ -510,7 +510,6 @@ else:
         bio_en, bio_fa = 'Give biometrics on time as required for the application.', 'ارائه بیومتریک به‌موقع، طبق نیاز برای درخواست.'
     today = datetime.date.today()
     date_en = today.strftime('%B %d, %Y')
-    file_no = order.client_order_ref or order.name
     subject_en = (order.x_agr_subject or '').strip() or (services_en[0] if services_en else '')
     subject_fa = (order.x_agr_subject_fa or '').strip() or (services_fa[0] if services_fa else '')
     sponsor = order.x_sponsor_id
@@ -523,7 +522,7 @@ else:
     scope = __SCOPE__
     sc = scope.get(main, scope.get('BC-ENT'))
     d = {
-        'file_no': file_no, 'date_en': date_en, 'date_fa': date_en,
+        'file_no': '', 'date_en': date_en, 'date_fa': date_en,
         'client_en': partner.name or '', 'client_fa': client_fa, 'addr_en': address, 'addr_fa': addr_fa,
         'phone': partner.mobile or partner.phone or '', 'email': partner.email or '',
         'nid': fa(partner, 'x_national_id', '—'),
@@ -557,6 +556,22 @@ else:
     if 'PFL' in kinds and not (order.x_agr_date and order.x_agr_deadline and order.x_agr_deadline2 and order.x_agr_subject):
         raise UserError("For a PFL agreement fill in Agreement details on the quotation: the application concerned (EN and FA), IRCC reference, letter date, IRCC deadline and the internal document deadline.")
 
+    # Contract number: Sparkbridge files count on the Sparkbridge sequence
+    # (SB0000yyNNN); a combined entrepreneur file carries SG0000yyNNN with the
+    # same digits on the Sugimoto part; everything else on the Sugimoto
+    # sequence (SyyNNN). Assigned once, kept on re-sends.
+    if not (order.client_order_ref or '').strip():
+        seq_code = 'x_sparkbridge_contract' if any(k.startswith('SB-') for k in kinds) else 'x_sugimoto_file'
+        number = env['ir.sequence'].sudo().next_by_code(seq_code)
+        if not number:
+            raise UserError("The contract number sequence %s is not set up." % seq_code)
+        order.write({'client_order_ref': number})
+    file_no = order.client_order_ref.strip()
+    def file_no_for(kind):
+        if kind == 'ENT' and file_no.startswith('SB0000'):
+            return 'SG0000' + file_no[6:]
+        return file_no
+
     # One agreement per kind (the entrepreneur streams send two: Sugimoto + Sparkbridge).
     for prev in [order.x_sign_request_id, order.x_sign_request2_id]:
         if prev and prev.state not in ('signed', 'canceled'):
@@ -567,11 +582,12 @@ else:
         is_sb = kind.startswith('SB-')
         company_name = 'Sparkbridge Incubator Ltd.' if is_sb else 'Sugimoto Visa'
         d['title'] = 'Service Agreement' if kind in ('SB-A', 'SB-F') else ('Retainer Agreement' if kind != 'ENT' else 'Retainer Agreement / قرارداد مشاوره')
-        d['file_label'] = ('Contract No %s' % file_no) if is_sb else ('RCIC R713046 · Client File %s' % file_no)
+        d['file_no'] = file_no_for(kind)
+        d['file_label'] = ('Contract No %s' % d['file_no']) if is_sb else ('RCIC R713046 · Client File %s' % d['file_no'])
         pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
-        fname = '%s - %s - %s.pdf' % (file_no, d['title'], partner.name or '')
+        fname = '%s - %s - %s.pdf' % (d['file_no'], d['title'], partner.name or '')
         att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
-        tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (file_no, kind, partner.name or '')})
+        tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, partner.name or '')})
         att.write({'res_id': tmpl.id})
         last = tmpl.num_pages or 1
         Item = env['sign.item'].sudo()
@@ -587,7 +603,7 @@ else:
             items.append((0, 0, {'partner_id': sponsor.id, 'role_id': __SPONSOR_ROLE__, 'mail_sent_order': 2}))
         req = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
             'template_id': tmpl.id,
-            'reference': '%s – %s – %s' % (file_no, d['title'], partner.name or ''),
+            'reference': '%s – %s – %s' % (d['file_no'], d['title'], partner.name or ''),
             'subject': '%s with %s – please review and sign' % (d['title'], company_name),
             'request_item_ids': items,
         })
@@ -991,6 +1007,36 @@ def install_agreements(odoo):
     done = agreements.install(odoo, pf_id)
     log.info("  agreement reports installed: %s", ", ".join(done))
     return done
+
+
+# Contract number sequences, seeded from the two Google Sheets (last numbers
+# read on 2026-09-10): Sugimoto "ALL Numbers" tab and Sparkbridge "Customer
+# Info" tab. Both restart at 001 every year.
+SEQUENCES = {
+    "x_sugimoto_file": {"name": "Sugimoto Visa client file number", "prefix": "S%(y)s", "padding": 3},
+    "x_sparkbridge_contract": {"name": "Sparkbridge contract number", "prefix": "SB0000%(y)s", "padding": 3},
+}
+
+
+def install_sequences(odoo, seed=None):
+    """Create the two yearly sequences; seed = {code: next_number} for the current year."""
+    import datetime
+    year = datetime.date.today().year
+    for code, spec in SEQUENCES.items():
+        seq = odoo.search_read("ir.sequence", [("code", "=", code)], ["id"], limit=1)
+        vals = dict(spec, code=code, use_date_range=True, implementation="no_gap", number_increment=1)
+        if seq:
+            sid = seq[0]["id"]; odoo.write("ir.sequence", [sid], vals)
+        else:
+            sid = odoo.execute("ir.sequence", "create", vals)
+        if seed and code in seed:
+            rng = odoo.search_read("ir.sequence.date_range", [("sequence_id", "=", sid), ("date_from", "<=", f"{year}-12-31"), ("date_to", ">=", f"{year}-01-01")], ["id"], limit=1)
+            if rng:
+                odoo.write("ir.sequence.date_range", [rng[0]["id"]], {"number_next_actual": seed[code]})
+            else:
+                rid = odoo.execute("ir.sequence.date_range", "create", {"sequence_id": sid, "date_from": f"{year}-01-01", "date_to": f"{year}-12-31"})
+                odoo.write("ir.sequence.date_range", [rid], {"number_next_actual": seed[code]})
+        log.info("  sequence %s ready (%s)", code, spec["prefix"])
 
 
 def relax_partner_accounting(odoo):
