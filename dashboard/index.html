@@ -75,6 +75,13 @@
   .lv .lvbtn { border: none; background: none; color: var(--s1); font: inherit; font-size: 11.5px;
     cursor: pointer; padding: 0 0 0 4px; text-decoration: underline; }
   .lv .lvbtn:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+  /* progress while the live pack downloads. The number is real: it counts bytes
+     off the wire against the size of the last pack this browser saw. */
+  .lv .lvbar { width: 54px; height: 4px; border-radius: 3px; background: var(--grid);
+    overflow: hidden; flex: none; }
+  .lv .lvbar > i { display: block; height: 100%; background: var(--s1); border-radius: 3px;
+    transition: width .18s linear; }
+  .lv .lvpct { font-variant-numeric: tabular-nums; color: var(--ink-2); }
   @media (prefers-reduced-motion: no-preference) {
     .lv.load .lvdot { animation: lvpulse 1.1s ease-in-out infinite; }
   }
@@ -2103,7 +2110,31 @@ function initCompare() {
 --------------------------------------------------------------------------- */
 const LIVE_DATA_URL = 'https://script.google.com/macros/s/AKfycbyBIQbPBjOcGwBeFjPPnxdonEqAm4jIgO_HziR7ufajqqWM_GvFCkEmyC1vVUd3WYyiWg/exec?secret=sgv_a7mftc7VvVgM4UaCrI7QRYYhVubQoBEf';
 
-const live = { state: 'off', at: null, error: null };
+const live = { state: 'off', at: null, error: null, pct: 0, note: '' };
+// The pack's decompressed size, remembered so the next load has something real to
+// measure against. Content-Length is the compressed length when the endpoint gzips,
+// which it does, so it cannot be compared against bytes counted after decoding.
+const LIVE_SIZE_KEY = 'leadsDashboardPackBytes';
+// Roughly what the pack weighs, for a browser that has never seen one. Without it
+// a first-time visitor gets a crawl instead of a percentage, and most of the team
+// are first-time visitors. Being out by a little only shifts the pace slightly;
+// the bar is clamped either way, and the real size replaces this after one load.
+const LIVE_SIZE_HINT = 485000;
+function lastPackBytes() {
+  let seen = 0;
+  try { seen = Number(localStorage.getItem(LIVE_SIZE_KEY)) || 0; } catch (e) {}
+  return seen || LIVE_SIZE_HINT;
+}
+function rememberPackBytes(n) {
+  try { localStorage.setItem(LIVE_SIZE_KEY, String(n)); } catch (e) {}
+}
+function setProgress(pct, note) {
+  live.pct = Math.max(0, Math.min(100, Math.round(pct)));
+  live.note = note || '';
+  renderLiveBadge();
+}
+/** Lets the browser paint before a blocking step, so the number is not a lie. */
+const yieldPaint = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 const LIVE_KEY = 'leadsDashboardLiveUrl';
 // Resolution order: ?live= in the address bar, then whatever this browser saved,
 // then the value committed into the file. The first two let you point the page at a
@@ -2144,7 +2175,8 @@ function renderLiveBadge() {
     host.title = 'This page has no live endpoint configured, so it shows the data that was built into it.';
   } else if (live.state === 'loading') {
     cls += ' load';
-    label.textContent = 'Fetching live data…';
+    label.textContent = live.note || 'Updating dashboard…';
+    host.title = 'Downloading the current pack from the endpoint, then redrawing the page.';
   } else if (live.state === 'live') {
     cls += ' ok';
     label.textContent = 'Live · ' + live.at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -2158,6 +2190,13 @@ function renderLiveBadge() {
   host.className = cls;
   host.appendChild(dot);
   host.appendChild(label);
+  if (live.state === 'loading') {
+    const bar = el('div', 'lvbar'), fill = document.createElement('i');
+    fill.style.width = live.pct + '%';
+    bar.appendChild(fill);
+    host.appendChild(bar);
+    host.appendChild(el('span', 'lvpct', live.pct + '%'));
+  }
   if (live.state === 'live' || live.state === 'err') {
     const btn = el('button', 'lvbtn', 'Refresh');
     // A plain re-fetch, not force. Forcing makes the endpoint rebuild from every
@@ -2174,18 +2213,60 @@ function renderLiveBadge() {
     host.appendChild(btn);
   }
 }
+/**
+ * Reads the response body chunk by chunk so the badge can show real progress.
+ * Download is mapped to 0-85%, leaving the rest for parsing and redrawing, which
+ * on this payload are not instant either.
+ *
+ * The total is the size of the last pack this browser saw, because the endpoint
+ * gzips and Content-Length would then be the compressed length — smaller than the
+ * bytes being counted here, which would run the number past 100% mid-download.
+ * With no remembered size the percentage is held at a slow crawl rather than
+ * invented, and the kilobyte count carries the real information.
+ */
+async function readWithProgress(res) {
+  if (!res.body || !res.body.getReader) return res.text();   // older browsers
+  const total = lastPackBytes();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let out = '', bytes = 0, painted = -1;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.length;
+    out += decoder.decode(value, { stream: true });
+    const kb = Math.round(bytes / 1024);
+    const pct = total ? Math.min(85, 85 * bytes / total)
+      : Math.min(70, 8 * Math.log2(1 + bytes / 65536));   // no yardstick: crawl, never claim
+    if (Math.round(pct) !== painted) {
+      painted = Math.round(pct);
+      setProgress(pct, `Updating dashboard… ${fmt(kb)} KB`);
+      await yieldPaint();
+    }
+  }
+  out += decoder.decode();
+  return out;
+}
+
 async function goLive(force) {
   const url = liveUrl();
   if (!url) { live.state = 'off'; renderLiveBadge(); return; }
-  live.state = 'loading'; live.error = null; renderLiveBadge();
+  live.state = 'loading'; live.error = null;
+  setProgress(0, 'Connecting…');
   document.body.style.opacity = '0.75';          // hold the frame while refetching
   try {
     const sep = url.includes('?') ? '&' : '?';
     const res = await fetch(url + (force ? `${sep}fresh=1` : ''), { redirect: 'follow' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    const pack = await res.json();
+    const text = await readWithProgress(res);
+    setProgress(88, 'Reading data…');
+    await yieldPaint();
+    const pack = JSON.parse(text);
     if (pack.error) throw new Error(String(pack.error));
     if (!pack.cols || !pack.n) throw new Error('unexpected response shape');
+    rememberPackBytes(text.length);
+    setProgress(93, 'Drawing charts…');
+    await yieldPaint();
     loadPack(pack);
     live.state = 'live'; live.at = new Date();
     renderAll();
