@@ -676,6 +676,73 @@ def _field(odoo, model, name, vals):
     return fid
 
 
+# --- Preview Agreement -----------------------------------------------------
+# The approver has to read the draft before approving it. Preview reuses the
+# send action's data-building half verbatim (so the PDF is byte-identical to
+# what would be sent), then renders to an attachment instead of creating a
+# Sign request. It never draws a contract number and never touches the client.
+
+PREVIEW_TAIL = r"""
+    file_no = (order.client_order_ref or '').strip() or 'DRAFT'
+    def file_no_for(kind):
+        if kind == 'ENT' and file_no.startswith('SB0000'):
+            return 'SG0000' + file_no[6:]
+        return file_no
+
+    _att = env['ir.attachment'].sudo()
+    made = []
+    for kind in kinds:
+        is_sb = kind.startswith('SB-')
+        d['title'] = 'Service Agreement' if kind in ('SB-A', 'SB-F') else ('Retainer Agreement' if kind != 'ENT' else 'Retainer Agreement / قرارداد مشاوره')
+        d['file_no'] = file_no_for(kind)
+        d['file_label'] = ('Contract No %s' % d['file_no']) if is_sb else ('RCIC R713046 · Client File %s' % d['file_no'])
+        pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
+        if not pdf or not bytes(pdf).startswith(b'%PDF'):
+            raise UserError("The %s agreement did not render into a valid PDF." % kind)
+        name = 'PREVIEW %s - %s - %s.pdf' % (d['file_no'], d['title'], partner.name or '')
+        old = _att.search([('res_model', '=', 'sale.order'), ('res_id', '=', order.id), ('name', '=', name)])
+        if old:
+            old.unlink()
+        made.append(_att.create({'name': name, 'datas': b64encode(pdf), 'mimetype': 'application/pdf',
+                                 'res_model': 'sale.order', 'res_id': order.id}))
+    if len(made) == 1:
+        action = {'type': 'ir.actions.act_url', 'target': 'new',
+                  'url': '/web/content/%s?download=false' % made[0].id}
+    else:
+        order.message_post(body='Draft agreements attached for review: %s' % ', '.join(m.name for m in made),
+                           attachment_ids=[m.id for m in made], message_type='comment', subtype_xmlid='mail.mt_note')
+        action = {'type': 'ir.actions.act_url', 'target': 'new',
+                  'url': '/web/content/%s?download=false' % made[0].id}
+""".rstrip()
+
+
+def _preview_code(sponsor_role):
+    """Build the Preview action from the send action's data-building half."""
+    lines = SEND_CONTRACT_CODE.replace("__SPONSOR_ROLE__", str(int(sponsor_role))).split("\n")
+    cut = next(i for i, l in enumerate(lines) if "# Contract number:" in l)
+    head = "\n".join(lines[:cut])
+    # Drop the parts that only make sense when actually sending.
+    for gone in ("order.write({'x_pending_approval': False})\n",):
+        head = head.replace(gone, "")
+    a = head.index("_acts = env['mail.activity']")
+    b = head.index("if not partner.email:")
+    head = head[:a] + head[b:]
+    # A custom upload has nothing to render: point at the file on the form.
+    fork_old = ("if order.x_custom_agreement or (order.x_custom_agreement_url or '').strip():\n"
+                "    action = env.ref('__trello__.p2action_send_custom').with_context(\n"
+                "        active_model='sale.order', active_id=order.id, active_ids=order.ids).run()\n"
+                "else:")
+    fork_new = ("if order.x_custom_agreement:\n"
+                "    raise UserError(\"This quotation uses a custom agreement. Open the 'Custom agreement (PDF)' \"\n"
+                "                    \"field on this form to read it.\")\n"
+                "if False:\n"
+                "    pass\n"
+                "else:")
+    assert fork_old in head, "custom-agreement fork not found"
+    head = head.replace(fork_old, fork_new, 1)
+    return head + PREVIEW_TAIL
+
+
 def _sync_selection(odoo, model, name, options):
     """Add missing options to an existing manual selection field (in order)."""
     fid = odoo.search_read("ir.model.fields", [("model", "=", model), ("name", "=", name)], ["id"], limit=1)
@@ -928,6 +995,9 @@ def install_send_button(odoo, rcic_email):
     act_id = _server_action(odoo, "send_contract", {
         "name": "Send Contract", "model_id": _model_id(odoo, "sale.order"),
         "state": "code", "code": SEND_CONTRACT_CODE.replace("__SPONSOR_ROLE__", str(int(sponsor_role))), "binding_model_id": False})
+    preview_id = _server_action(odoo, "preview_agreement", {
+        "name": "Preview Agreement", "model_id": _model_id(odoo, "sale.order"),
+        "state": "code", "code": _preview_code(sponsor_role), "binding_model_id": False})
 
     parents = odoo.search_read("ir.ui.view", [("model", "=", "sale.order"), ("type", "=", "form"),
                                               ("inherit_id", "=", False), ("name", "=", "sale.order.form")],
@@ -943,6 +1013,8 @@ def install_send_button(odoo, rcic_email):
             'confirm="This sends a new agreement built from the current quotation. The previous one is cancelled unless it was already signed. Continue?"/>'
             f'<button name="{submit_id}" type="action" string="Submit for Approval" class="btn-primary" '
             'invisible="x_sign_request_id or x_pending_approval or state == \'cancel\'"/>'
+            f'<button name="{preview_id}" type="action" string="Preview Agreement" class="btn-secondary" '
+            'invisible="state == \'cancel\'"/>'
             '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
             '<field name="x_sign_request_id" readonly="1"/>'
