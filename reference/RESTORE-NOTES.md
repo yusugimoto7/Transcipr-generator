@@ -359,3 +359,52 @@ is one; else BC's own wage wording translated on an exact pattern match; else
 the factors text verbatim in English; else «بدون اعلام حداقل نمره». Only the
 wage pattern is ever translated — anything else passes through untouched,
 because a paraphrased eligibility rule is advice.
+
+## Alert node, streams-table column fix, جدیدترین wording — 2026-09-11
+
+**Alert on channel failure.** Every channel node keeps onError:
+continueRegularOutput (one dead channel must never block the other three) —
+that's exactly what let Telegram publish nothing for days after going live
+without anyone noticing until a human did. Added a join: Telegram, X,
+Publish IG story and LinkedIn now all feed a 4-input Merge node
+("Wait for all channels", mode append), followed by "Check for failures"
+(reads each channel's own output via $('NodeName').first().json — a channel
+node with onError: continueRegularOutput emits exactly
+{ error: "<message>" } on failure, confirmed directly from the read-only
+Telegram admin-check execution used to diagnose the outage, not assumed),
+then an IF ("Any failures?") that fires "Send alert" — a Telegram message to
+@testchannel_draws (repurposed as the internal ops channel now that real
+draws no longer post there) naming the failed channel(s), the error, the
+draw, and a link to the execution.
+
+**Streams-table header alignment (BC breakdown card, "streams" shape).** The
+column headers "استریم" / "دعوت‌نامه · حداقل امتیاز" were mixing
+text-anchor="end"/"start" on RTL Farsi labels with text-anchor="end"/"start"
+on LTR English data cells in the SAME columns. "start"/"end" resolve to
+OPPOSITE visual edges depending on the text's own direction — that's what
+sent "دعوت‌نامه · حداقل امتیاز" off the left edge of the card entirely.
+Fixed by splitting into three columns (استریم / دعوت‌نامه / نمره) and using
+text-anchor="middle" for BOTH the header and the data cell in every column,
+at identical x coordinates (STREAM_X=760, INVITE_X=460, SCORE_X=240).
+Centering is direction-agnostic — a middle anchor lands on the same point
+regardless of which script it's centering, so header and data can never
+drift apart again. cardRows now carries {name, count, score} separately
+instead of a combined "182 · 99" string.
+
+**"آخرین" -> "جدیدترین" everywhere.** Changed in: the story-card headline
+("جدیدترین Draw", both the Express Entry and provincial call sites), and on
+the website page: the hero heading, the "جدیدترین دراو اعلام‌شده" badge, and
+the stale-province note ("جدول بالا جدیدترین دراوهای اعلام‌شده است").
+TEMPLATE_VERSION bumped 9 -> 10 so the wording change actually forces a
+rewrite (data-only fingerprints don't change from a text edit). Deliberately
+NOT changed: "نمره آخرین نفر قبولی" (the Express Entry single-draw CRS-cutoff
+label) — that's a different, correct idiom ("score of the last accepted
+candidate" / cut-off score), not "latest". Blindly replacing it would have
+produced "نمره جدیدترین نفر قبولی", which doesn't mean the same thing.
+
+Verified live: execution 1337832 wrote fingerprint cqrvju with zero
+occurrences of "آخرین" and 4 of "جدیدترین" in the rendered HTML;
+WordPress confirmed status:publish, modified 2026-09-11T04:40:57Z.
+
+The full corrected Expand Programs source is kept at
+`reference/social-expand-programs.js` for reference.
