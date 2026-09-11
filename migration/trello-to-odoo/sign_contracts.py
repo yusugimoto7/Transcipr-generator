@@ -1429,18 +1429,18 @@ def fix_crm_fields(odoo):
         if f:
             odoo.write("ir.model.fields", [f[0]["id"]], {"field_description": label})
     log.info("  Budget is optional; Case Type -> Execution team, Service -> Service Agreement")
-    # Move Service Agreement above Execution team, and make it required in the
-    # form (existing empty leads stay valid; the next save through this form
-    # enforces it — this is what "required to send the quotation" means, since
-    # New Quotation is only ever pressed from this form).
+    # Move Service Agreement above Execution team. It is NOT required to save
+    # the card — only to create a quotation (New Quotation checks it) or to
+    # move the card to "Need to Receive Draft Contract" (the stage gate
+    # checks it), so agents can still create and save a fresh card first.
     view_id = odoo.ref("p2view", "lead_service")
     if view_id:
         parent = odoo.search_read("ir.ui.view", [("id", "=", view_id)], ["inherit_id"])[0]["inherit_id"]
         arch = ("<data><xpath expr=\"//field[@name='x_case_type']\" position=\"before\">"
-                "<field name=\"x_service\" options=\"{'no_create': True}\" required=\"1\"/></xpath></data>")
+                "<field name=\"x_service\" options=\"{'no_create': True}\"/></xpath></data>")
         try:
             odoo.write("ir.ui.view", [view_id], {"inherit_id": parent[0], "arch_db": arch, "priority": 200})
-            log.info("  Service Agreement moved above Execution team and marked required")
+            log.info("  Service Agreement moved above Execution team (not required to save the card)")
         except OdooError as exc:
             log.warning("  could not reorder Service Agreement / Execution team: %s", str(exc)[-200:])
     else:
@@ -1452,13 +1452,15 @@ stage = env['crm.stage'].sudo().search([('name', 'ilike', 'Need to Receive Draft
 for lead in records:
     if not stage or lead.stage_id != stage:
         continue
+    if not lead.x_service:
+        raise UserError("This card cannot move to '%s' until the Service Agreement is set." % stage.name)
     orders = env['sale.order'].sudo().search([('opportunity_id', '=', lead.id)])
     sent = orders.filtered(lambda o: o.x_sign_request_id or o.x_sign_request2_id or o.x_custom_sign_template_id)
     if not sent:
         raise UserError(
-            "This card cannot move to '%s' until a contract has been sent to the client. Set the Service "
-            "Agreement, fill in the payment plan on a quotation, and press Send Contract (or have it approved "
-            "and sent by the contract team) first." % stage.name)
+            "This card cannot move to '%s' until a contract has been sent to the client. Fill in the payment "
+            "plan on a quotation, and press Send Contract (or have it approved and sent by the contract team) "
+            "first." % stage.name)
 """.strip()
 
 
