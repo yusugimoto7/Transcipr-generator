@@ -19,6 +19,11 @@ On the CRM card, open the **Address & family** tab and enter:
   with their name in English and Farsi. This is what makes an agreement read "...the
   Client, X, and the accompanying spouse, Y, and the dependent child, Z...". Leave it
   empty if the client has no dependents on the file.
+- **Names are mandatory once a member is added.** Every spouse, child or companion row
+  needs the name in English, and on bilingual agreements (TR, PFL, ENT, SB-A, SB-C, SB-D,
+  SB-E) also the name in Farsi, plus the client's own Farsi name. Submit for Approval,
+  Preview Agreement and Send Contract all refuse to generate the draft until these are
+  filled, and the error lists exactly which names are missing.
 
 Everything typed on the card is copied to the customer record automatically. Do **not**
 edit the address on the customer directly — the next CRM card edit will overwrite it.
@@ -99,6 +104,7 @@ resending.
 |---|---|
 | "The customer has no e-mail address." | Add one on the customer, then send again. |
 | "Set the customer's country..." / "...province..." | Fill the address on the CRM card (Address & family tab) — it syncs to the customer. |
+| "The draft was not generated. Complete the family members on the CRM card..." | A spouse/child/companion row (or the client) is missing a name in English or Farsi. Fill it on the CRM card, Address & family tab, then try again. |
 | "No agreement template is defined for: ..." | The product on that line has no agreement tag. Tag it under Sales → Products, or use the custom-agreement upload instead. |
 | "The payment plan is empty." | Add at least one row on the Payment plan tab (or press Recalculate). |
 | "The payment plan adds up to X but the contract total is Y." | Fix the instalment amounts, or set the last row's share to "Remainder" so it absorbs the difference. |

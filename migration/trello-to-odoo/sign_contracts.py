@@ -497,6 +497,22 @@ else:
     spouse = fam.filtered(lambda f: f.x_relation == 'spouse')[:1]
     kids = fam.filtered(lambda f: f.x_relation == 'child')
     comps = fam.filtered(lambda f: f.x_relation in ('spouse', 'child', 'companion'))
+    # Family members named on the CRM card must be complete before a draft is generated.
+    BILINGUAL = {'TR', 'PFL', 'ENT', 'SB-A', 'SB-C', 'SB-D', 'SB-E'}
+    need_fa = any(k in BILINGUAL for k in kinds)
+    missing = []
+    for f in fam:
+        if f.x_relation in ('spouse', 'child', 'companion'):
+            label = {'spouse': 'Spouse', 'child': 'Child', 'companion': 'Companion'}[f.x_relation]
+            if not (f.x_name_en or '').strip():
+                missing.append('%s: name in English' % label)
+            if need_fa and not (f.x_name_fa or '').strip():
+                missing.append('%s %s: name in Farsi' % (label, (f.x_name_en or '').strip()))
+    if need_fa and 'x_name_fa' in partner._fields and not (partner.x_name_fa or '').strip():
+        missing.append("Client %s: name in Farsi (on the CRM card, Address & family tab)" % (partner.name or ''))
+    if missing:
+        raise UserError("The draft was not generated. Complete the family members on the CRM card "
+                        "(Address & family tab):\n- " + "\n- ".join(missing))
     parties_en = 'the Client, %s' % (partner.name or '')
     parties_fa = 'متقاضی، %s' % client_fa
     if spouse:
@@ -861,6 +877,25 @@ if billable and not has_custom:
                          "Products, or upload a custom agreement on this quotation.")
     if not env['x_pay_plan'].sudo().search_count([('x_order_id', '=', order.id)]):
         raise UserError("Add a payment plan before submitting for approval.")
+    kinds = sorted(tags & known)
+    lead = order.opportunity_id
+    fam = env['x_family'].sudo().search([('x_lead_id', '=', lead.id)], order='x_sequence, id') if lead else env['x_family'].sudo()
+    # Family members named on the CRM card must be complete before a draft is generated.
+    BILINGUAL = {'TR', 'PFL', 'ENT', 'SB-A', 'SB-C', 'SB-D', 'SB-E'}
+    need_fa = any(k in BILINGUAL for k in kinds)
+    missing = []
+    for f in fam:
+        if f.x_relation in ('spouse', 'child', 'companion'):
+            label = {'spouse': 'Spouse', 'child': 'Child', 'companion': 'Companion'}[f.x_relation]
+            if not (f.x_name_en or '').strip():
+                missing.append('%s: name in English' % label)
+            if need_fa and not (f.x_name_fa or '').strip():
+                missing.append('%s %s: name in Farsi' % (label, (f.x_name_en or '').strip()))
+    if need_fa and 'x_name_fa' in partner._fields and not (partner.x_name_fa or '').strip():
+        missing.append("Client %s: name in Farsi (on the CRM card, Address & family tab)" % (partner.name or ''))
+    if missing:
+        raise UserError("The draft was not generated. Complete the family members on the CRM card "
+                        "(Address & family tab):\n- " + "\n- ".join(missing))
 
 approvers = env['res.groups'].sudo().search([('name', '=', 'Contract Approvers')]).users
 if not approvers:
