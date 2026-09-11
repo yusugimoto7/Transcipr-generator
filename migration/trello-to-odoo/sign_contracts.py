@@ -208,6 +208,10 @@ DUE = {
     "sub_trv": ("before submitting the visitor visa application", "قبل از ارسال درخواست ویزای ویزیتوری"),
     "sub_pr": ("before submitting the permanent residence application", "قبل از ارسال درخواست اقامت دائم"),
     "sub_app": ("before submitting the application", "قبل از ارسال درخواست"),
+    "app1": ("one month after submitting the application", "یک ماه پس از ارسال درخواست"),
+    "app2": ("two months after submitting the application", "دو ماه پس از ارسال درخواست"),
+    "app3": ("three months after submitting the application", "سه ماه پس از ارسال درخواست"),
+    "app4": ("four months after submitting the application", "چهار ماه پس از ارسال درخواست"),
     "announce": ("upon announcement of the program details for the coming year",
                  "پس از اعلام جزئیات برنامه سال آینده"),
     "m6": ("six months after signing the retainer agreement", "شش ماه پس از امضای قرارداد"),
@@ -359,7 +363,17 @@ tmpl = env['sign.template'].sudo().create({
     'attachment_id': att.id,
     'name': '%s – Custom agreement – %s' % (order.client_order_ref or order.name, partner.name)})
 att.write({'res_id': tmpl.id})
-last = tmpl.num_pages or 1
+if not tmpl.num_pages:
+    # Odoo's own PDF library could not read the page count, so the Sign
+    # screen would fail to load ("0 of 0 pages") if this went out. It's an
+    # uploaded file, so there's nothing of ours to re-render; ask for a
+    # cleaner export instead of sending something that would break later.
+    tmpl.sudo().unlink()
+    att.sudo().unlink()
+    raise UserError("The uploaded PDF looks intact but Odoo could not read its pages, so it would fail to "
+                    "open on the signature screen. Re-export it (e.g. print to PDF instead of a direct "
+                    "download) and upload it again. Nothing was sent.")
+last = tmpl.num_pages
 Item = env['sign.item'].sudo()
 # Signature + date for the customer (left) and the company (right), bottom of
 # the last page. Positions are fractions of the page; the editor lets the
@@ -609,15 +623,43 @@ else:
         d['title'] = 'Service Agreement' if kind in ('SB-A', 'SB-F') else ('Retainer Agreement' if kind != 'ENT' else 'Retainer Agreement / قرارداد مشاوره')
         d['file_no'] = file_no_for(kind)
         d['file_label'] = ('Contract No %s' % d['file_no']) if is_sb else ('RCIC R713046 · Client File %s' % d['file_no'])
-        pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
-        if not pdf or not bytes(pdf).startswith(b'%PDF') or not bytes(pdf).rstrip().endswith(b'%%EOF'):
-            raise UserError("The %s agreement for %s did not render into a valid PDF. Nothing was sent; "
-                            "try again, or tell IT." % (kind, order.name))
+        def _render():
+            pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
+            if not pdf or not bytes(pdf).startswith(b'%PDF') or not bytes(pdf).rstrip().endswith(b'%%EOF'):
+                raise UserError("The %s agreement for %s did not render into a valid PDF. Nothing was sent; "
+                                "try again, or tell IT." % (kind, order.name))
+            return pdf
         fname = '%s - %s - %s.pdf' % (d['file_no'], d['title'], partner.name or '')
+        pdf = _render()
         att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
         tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, partner.name or '')})
         att.write({'res_id': tmpl.id})
-        last = tmpl.num_pages or 1
+        if not tmpl.num_pages:
+            # Odoo's own PDF library could not read the page count, which is
+            # exactly what makes the Sign screen fail to load later ("0 of 0
+            # pages"). Rather than send a document that will break in the
+            # signer's browser, discard it and render once more before
+            # giving up with a clear, retryable error.
+            tmpl.sudo().unlink()
+            att.sudo().unlink()
+            pdf = _render()
+            att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
+            tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, partner.name or '')})
+            att.write({'res_id': tmpl.id})
+            if not tmpl.num_pages:
+                tmpl.sudo().unlink()
+                att.sudo().unlink()
+                raise UserError("The %s agreement for %s rendered, but Odoo could not read its pages, so it "
+                                "would fail to open on the signature screen. Nothing was sent; try Send "
+                                "Contract again, or tell IT." % (kind, order.name))
+        last = tmpl.num_pages
+        # A plain, verified copy on the quotation itself: if the signature
+        # screen ever fails to load the document, the agent or RCIC can
+        # still open the identical PDF straight from the quotation's
+        # attachments without depending on the Sign app at all.
+        env['ir.attachment'].sudo().create({
+            'name': 'SENT %s' % fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf',
+            'res_model': 'sale.order', 'res_id': order.id})
         Item = env['sign.item'].sudo()
         layout = boxes['spon'] if kind == 'SPON' else boxes['page']
         role_of = {'client': 1, 'client_date': 1, 'sponsor': __SPONSOR_ROLE__, 'sponsor_date': __SPONSOR_ROLE__, 'company': 2, 'company_date': 2}
