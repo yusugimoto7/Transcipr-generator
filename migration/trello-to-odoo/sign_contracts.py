@@ -1107,6 +1107,19 @@ def install_send_button(odoo, rcic_email):
             f'<button name="{preview_id}" type="action" string="Preview Agreement" class="btn-secondary" '
             'invisible="state == \'cancel\'"/>'
             '</xpath>'
+            # The native quotation buttons are redundant with (and confusing next
+            # to) the ones above: "Send by Email" skips the approval/agreement/
+            # sign flow entirely, and "Preview" shows the bare quotation instead
+            # of the generated agreement. Hide both; leave Confirm and Cancel.
+            '<xpath expr="//button[@name=\'action_quotation_send\'][@id=\'send_by_email_primary\']" position="attributes">'
+            '<attribute name="invisible">1</attribute>'
+            '</xpath>'
+            '<xpath expr="//button[@name=\'action_quotation_send\'][@id=\'send_by_email\']" position="attributes">'
+            '<attribute name="invisible">1</attribute>'
+            '</xpath>'
+            '<xpath expr="//button[@name=\'action_preview_sale_order\']" position="attributes">'
+            '<attribute name="invisible">1</attribute>'
+            '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
             '<field name="x_sign_request_id" readonly="1"/>'
             '<field name="x_pending_approval" readonly="1" invisible="not x_pending_approval"/>'

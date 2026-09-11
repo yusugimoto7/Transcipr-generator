@@ -39,7 +39,7 @@ def build():
             "price": s.get("price", 0),
             "currency": s.get("currency", "CAD"),
             "contract": _kind(key, s),
-            "addons": {label.split("|")[0]: price for label, price in s.get("addons", {}).items()},
+            "addons": dict(s.get("addons", {})),  # keep "Label EN|Label FA" keys intact for phase2.py
             "gov": s.get("gov", []),
             "terms": "\n".join(t for t in (s.get("terms_en"), s.get("terms_fa")) if t),
             "template": True,

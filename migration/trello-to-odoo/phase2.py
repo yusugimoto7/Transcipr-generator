@@ -299,11 +299,14 @@ def install(odoo, stage_needle, currency_check=True):
             if not spec.get("price") and key != "CUSTOM":
                 log.warning("    price is 0 for %s — set it in products.json", key)
         addon_variants[key] = []
+        main_en, _, main_fa = spec["name"].partition(" · ")
         for i, (label, price) in enumerate(spec.get("addons", {}).items(), start=1):
             akey = f"{key}-A{i}"
-            apid, avid, _ = make_product(akey, f"{spec['name'].split(' · ')[0]} – {label}", price)
+            en_lbl, _, fa_lbl = label.partition("|")
+            addon_name = f"{main_en} – {en_lbl} · {main_fa} – {fa_lbl}" if fa_lbl else f"{main_en} – {en_lbl}"
+            apid, avid, _ = make_product(akey, addon_name, price)
             price_in(akey, apid, spec.get("currency", "CAD"), price, spec.get("contract", "TR"))
-            addon_variants[key].append((avid, label))
+            addon_variants[key].append((avid, addon_name))
 
     # 2. One quotation template per service: the principal as the line,
     #    add-ons and government fees as optional products the salesperson
@@ -331,15 +334,31 @@ def install(odoo, stage_needle, currency_check=True):
                         "product_id": variants[key], "product_uom_qty": 1,
                         "name": spec["name"],
                     })]
-                options = [(0, 0, {"product_id": v, "quantity": 1, "name": label})
-                           for v, label in addon_variants[key]]
-                options += [(0, 0, {"product_id": gov_variants[g], "quantity": 1,
-                                    "name": products["_gov"][g]["name"]})
-                            for g in spec.get("gov", []) if g in gov_variants]
-                if options and odoo.has_field("sale.order.template",
-                                              "sale_order_template_option_ids"):
-                    vals["sale_order_template_option_ids"] = options
-            _, created = odoo.upsert("p2tmpl", key, "sale.order.template", vals)
+            # Optional lines (add-ons + government fees) are rebuilt every run
+            # so a product-name fix or a government-fee removal in the price
+            # list is reflected on templates that already existed.
+            options = [(0, 0, {"product_id": v, "quantity": 1, "name": label})
+                       for v, label in addon_variants[key]]
+            options += [(0, 0, {"product_id": gov_variants[g], "quantity": 1,
+                                "name": products["_gov"][g]["name"]})
+                        for g in spec.get("gov", []) if g in gov_variants]
+            if odoo.has_field("sale.order.template", "sale_order_template_option_ids"):
+                vals["sale_order_template_option_ids"] = (
+                    options if not existing else [(5, 0, 0)] + options)
+            tmpl_id, created = odoo.upsert("p2tmpl", key, "sale.order.template", vals)
+            if existing:
+                # Refresh the principal line(s)' displayed name so a wording
+                # fix in the price list (e.g. dropping "Admission") reaches
+                # templates that already existed, without touching quantities
+                # or any line an agent may have added by hand.
+                names = ({v: n for v, n, _ in variants[key]} if isinstance(variants[key], list)
+                         else {variants[key]: spec["name"]})
+                for tl in odoo.search_read("sale.order.template.line",
+                                           [("sale_order_template_id", "=", tmpl_id)],
+                                           ["id", "product_id", "name"]):
+                    pid = tl["product_id"][0] if tl["product_id"] else False
+                    if pid in names and tl["name"] != names[pid]:
+                        odoo.write("sale.order.template.line", [tl["id"]], {"name": names[pid]})
             log.info("  template %-12s %s", key, "created" if created else "updated")
     else:
         log.warning("Quotation templates are not enabled: Sales > Configuration > Settings > "

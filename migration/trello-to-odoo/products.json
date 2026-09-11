@@ -55,8 +55,8 @@
     "currency": "CAD",
     "contract": "PR",
     "addons": {
-      "Spouse": 1000,
-      "Child (each)": 500
+      "Spouse|همسر": 1000,
+      "Child (each)|هر فرزند": 500
     },
     "gov": [],
     "terms": "1,500 CAD at signing; balance after ITA. Or 4 instalments of 1,000 CAD: signing, +1 month, after ITA, before PR submission. Government fees extra.\nپرداخت اول ۱٬۵۰۰ دلار همراه با امضا؛ مابقی بعد از دریافت ITA. یا چهار قسط ۱٬۰۰۰ دلاری: امضا، یک ماه بعد، بعد از ITA، قبل از سابمیت PR. هزینه‌های دولتی جدا.",
@@ -69,8 +69,8 @@
     "currency": "CAD",
     "contract": "PR",
     "addons": {
-      "Spouse": 1000,
-      "Child (each)": 500
+      "Spouse|همسر": 1000,
+      "Child (each)|هر فرزند": 500
     },
     "gov": [],
     "terms": "50% at signing; 50% after provincial nomination. Or 4 instalments of 1,000 CAD.\nنصف مبلغ همراه با امضا؛ نصف دیگر بعد از نامینیشن استانی. یا چهار قسط ۱٬۰۰۰ دلاری.",
@@ -83,8 +83,8 @@
     "currency": "CAD",
     "contract": "PR",
     "addons": {
-      "Spouse": 1000,
-      "Child (each)": 500
+      "Spouse|همسر": 1000,
+      "Child (each)|هر فرزند": 500
     },
     "gov": [],
     "terms": "50% at signing; 50% after provincial nomination. Or 4 instalments: 1,000 / 1,000 / 1,000 / 1,500 CAD.\nنصف مبلغ همراه با امضا؛ نصف دیگر بعد از نامینیشن. یا چهار قسط: ۱٬۰۰۰ / ۱٬۰۰۰ / ۱٬۰۰۰ / ۱٬۵۰۰ دلار.",
@@ -97,8 +97,8 @@
     "currency": "CAD",
     "contract": "PR",
     "addons": {
-      "Spouse": 1000,
-      "Child (each)": 500
+      "Spouse|همسر": 1000,
+      "Child (each)|هر فرزند": 500
     },
     "gov": [],
     "terms": "2,000 CAD at signing; balance when the 2026 details are announced, before PR submission. 50% refund if we cannot submit.\n۲٬۰۰۰ دلار همراه با امضا؛ مابقی در زمان اعلام جزئیات ۲۰۲۶ و قبل از سابمیت. ۵۰٪ ریفاند در صورت عدم امکان سابمیت.",
@@ -183,36 +183,28 @@
     "plan": "100:0:signing"
   },
   "SP-ADM": {
-    "name": "Admission + Study permit (college / university) · پذیرش و ویزای تحصیلی",
+    "name": "Study permit application (college / university) · مجوز تحصیل (کالج / دانشگاه)",
     "price": 2200,
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse open work permit": 800,
-      "Child study permit (each, max 500)": 250
+      "Spouse open work permit|مجوز کار همسر": 800,
+      "Child study permit (each, max 500)|مجوز تحصیل فرزند (هر نفر، سقف ۵۰۰)": 250
     },
-    "gov": [
-      "GOV-SP",
-      "GOV-WP",
-      "GOV-BIO"
-    ],
+    "gov": [],
     "terms": "50% at signing (admission process starts); 50% after the original letter of acceptance. Opening offer 2,200 CAD, floor 1,800 CAD.\n۵۰٪ در زمان امضا و شروع پروسه پذیرش؛ ۵۰٪ بعد از اخذ اصل نامه پذیرش. پیشنهاد اولیه ۲٬۲۰۰ دلار، کف قیمت ۱٬۸۰۰ دلار.",
     "template": true,
     "plan": "50:0:signing;rest:0:sub_sp"
   },
   "SP-ADM-K12": {
-    "name": "Admission + Study permit (school student) · پذیرش و ویزای تحصیلی دانش‌آموزی",
+    "name": "Study permit application (school student) · مجوز تحصیل دانش‌آموزی",
     "price": 2200,
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Accompanying parent visitor visa": 800
+      "Accompanying parent visitor visa|ویزای ویزیتوری پدر یا مادر همراه": 800
     },
-    "gov": [
-      "GOV-SP",
-      "GOV-TRV",
-      "GOV-BIO"
-    ],
+    "gov": [],
     "terms": "50% at signing; 50% after the original letter of acceptance.\n۵۰٪ در زمان امضا؛ ۵۰٪ بعد از اخذ اصل نامه پذیرش.",
     "template": true,
     "plan": "50:0:signing;rest:0:sub_sp"
@@ -223,15 +215,10 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse open work permit": 800,
-      "Child visitor visa (each)": 250
+      "Spouse open work permit|مجوز کار همسر": 800,
+      "Child visitor visa (each)|ویزای ویزیتوری فرزند": 250
     },
-    "gov": [
-      "GOV-SP",
-      "GOV-WP",
-      "GOV-TRV",
-      "GOV-BIO"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ قرارداد + هزینه‌های دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -242,9 +229,7 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {},
-    "gov": [
-      "GOV-SP"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -255,11 +240,9 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse": 400
+      "Spouse|همسر": 400
     },
-    "gov": [
-      "GOV-WP"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -270,13 +253,10 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse": 300,
-      "Child (each; 3rd onward free)": 200
+      "Spouse|همسر": 300,
+      "Child (each; 3rd onward free)|هر فرزند (از فرزند سوم رایگان)": 200
     },
-    "gov": [
-      "GOV-TRV",
-      "GOV-BIO"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه‌های دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -287,14 +267,11 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse": 300,
-      "Child (each; 3rd onward free)": 200,
-      "Event / conference invitation letter": 500
+      "Spouse|همسر": 300,
+      "Child (each; 3rd onward free)|هر فرزند (از سوم رایگان)": 200,
+      "Event / conference invitation letter|دعوت‌نامه ایونت و کنفرانس": 500
     },
-    "gov": [
-      "GOV-TRV",
-      "GOV-BIO"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه‌های دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -305,12 +282,9 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse": 500
+      "Spouse|همسر": 500
     },
-    "gov": [
-      "GOV-TRV",
-      "GOV-BIO"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه‌های دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -321,11 +295,9 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse": 200
+      "Spouse|همسر": 200
     },
-    "gov": [
-      "GOV-WP"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -336,12 +308,10 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse": 200,
-      "Child (one; further free)": 200
+      "Spouse|همسر": 200,
+      "Child (one; further free)|فرزند (یک نفر؛ بیشتر رایگان)": 200
     },
-    "gov": [
-      "GOV-TRV"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -352,9 +322,7 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {},
-    "gov": [
-      "GOV-TRV"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -376,9 +344,7 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {},
-    "gov": [
-      "GOV-REST"
-    ],
+    "gov": [],
     "terms": "Full amount plus government fee at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
     "template": true,
     "plan": "100:0:signing"
@@ -400,7 +366,7 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Child study permit (each)": 200
+      "Child study permit (each)|مجوز تحصیل فرزند": 200
     },
     "gov": [],
     "terms": "Full amount plus government fees at signing.\nکل مبلغ + هزینه دولتی همراه با امضا.",
@@ -413,9 +379,7 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {},
-    "gov": [
-      "GOV-LMIA"
-    ],
+    "gov": [],
     "terms": "Full LMIA amount at signing; the work-permit contract starts once LMIA is issued.\nکل مبلغ LMIA همراه با امضا؛ قرارداد ورک پرمیت بعد از دریافت LMIA شروع می‌شود.",
     "template": true,
     "plan": "100:0:signing"
@@ -426,8 +390,8 @@
     "currency": "CAD",
     "contract": "TR",
     "addons": {
-      "Spouse work permit": 1000,
-      "Child visitor visa (each)": 500
+      "Spouse work permit|ورک پرمیت همسر": 1000,
+      "Child visitor visa (each)|ویزای فرزند": 500
     },
     "gov": [],
     "terms": "50% at signing; 50% before submission to IRCC. Government fees extra.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت. هزینه دولتی جدا.",
@@ -462,7 +426,7 @@
     "currency": "CAD",
     "contract": "SPON",
     "addons": {
-      "Second parent": 2000
+      "Second parent|نفر دوم": 2000
     },
     "gov": [],
     "terms": "50% at signing; 50% before submission.\n۵۰٪ همراه با امضا؛ ۵۰٪ قبل از سابمیت.",
@@ -601,8 +565,8 @@
     "currency": "EUR",
     "contract": "SB-A",
     "addons": {
-      "Accompanying spouse visa": 1000,
-      "Child visa (each)": 250
+      "Accompanying spouse visa|ویزای پیوست همسر": 1000,
+      "Child visa (each)|ویزای پیوست فرزند": 250
     },
     "gov": [],
     "terms": "50% at signing (admission process starts); 50% after the letter of acceptance. Two spouses studying together: 3,500. Embassy and application fees paid by the client.\n۵۰٪ زمان امضا و شروع پذیرش؛ ۵۰٪ بعد از نامه پذیرش. دو نفر همزمان (همسر): ۳٬۵۰۰. هزینه سفارت و اپلیکیشن فی با متقاضی.",
@@ -615,8 +579,8 @@
     "currency": "EUR",
     "contract": "SB-A",
     "addons": {
-      "Accompanying spouse visa": 1000,
-      "Child visa (each)": 250
+      "Accompanying spouse visa|ویزای پیوست همسر": 1000,
+      "Child visa (each)|ویزای پیوست فرزند": 250
     },
     "gov": [],
     "terms": "50% at signing; 50% after the letter of acceptance.\n۵۰٪ زمان امضا؛ ۵۰٪ بعد از نامه پذیرش.",
