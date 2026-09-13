@@ -766,12 +766,18 @@ PREVIEW_TAIL = r"""
                                  'res_model': 'sale.order', 'res_id': order.id}))
     if len(made) == 1:
         action = {'type': 'ir.actions.act_url', 'target': 'new',
-                  'url': '/web/content/%s?download=false' % made[0].id}
+                  # No download parameter: Odoo treats *any* value of `download` as true
+                  # (the string 'false' is truthy), which sets Content-Disposition:
+                  # attachment and makes the browser download instead of display.
+                  'url': '/web/content/%s' % made[0].id}
     else:
         order.message_post(body='Draft agreements attached for review: %s' % ', '.join(m.name for m in made),
                            attachment_ids=[m.id for m in made], message_type='comment', subtype_xmlid='mail.mt_note')
         action = {'type': 'ir.actions.act_url', 'target': 'new',
-                  'url': '/web/content/%s?download=false' % made[0].id}
+                  # No download parameter: Odoo treats *any* value of `download` as true
+                  # (the string 'false' is truthy), which sets Content-Disposition:
+                  # attachment and makes the browser download instead of display.
+                  'url': '/web/content/%s' % made[0].id}
 """.rstrip()
 
 
