@@ -897,6 +897,16 @@ APPROVERS = [
     ("nima@sparkbridge.ca", "Nima"),
 ]
 
+# Of the approvers above, only these get an e-mail when a contract is
+# submitted. The rest still get the Odoo to-do activity and the chatter
+# message, so the request is waiting for them when they next open Odoo,
+# but their inbox stays quiet.
+EMAIL_APPROVERS = [
+    "z.ghasemi.sugimoto@gmail.com",   # Zeinab Ghasemi
+    "iman.alinejad.einalou@gmail.com",  # Iman Alinejad
+    "aban.teymouri@sparkbridge.ca",   # Aban Teymoury
+]
+
 SUBMIT_APPROVAL_CODE = r"""
 order = record
 partner = order.partner_id
@@ -981,8 +991,12 @@ for user in approvers:
     })
 
 Mail = env['mail.mail'].sudo()
+mail_logins = __EMAIL_APPROVERS__
 for user in approvers:
     if user.id == env.user.id or not user.email:
+        continue
+    # Everyone gets the Odoo to-do above; only the contract team gets an e-mail.
+    if (user.login or '').strip().lower() not in mail_logins:
         continue
     Mail.create({
         'subject': title, 'body_html': body, 'email_to': user.email,
@@ -994,7 +1008,7 @@ if order.opportunity_id:
     order.opportunity_id.sudo().message_post(
         body='Quotation %s %s for contract approval.' % (order.name, lead_word),
         message_type='comment', subtype_xmlid='mail.mt_note')
-""".strip()
+""".strip().replace("__EMAIL_APPROVERS__", repr([e.lower() for e in EMAIL_APPROVERS]))
 
 
 # --- Return to agent -------------------------------------------------------
