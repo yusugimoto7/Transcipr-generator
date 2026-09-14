@@ -1444,18 +1444,9 @@ def install_agreements(odoo):
         '</page></xpath></data>')
 
     # Card -> customer sync.
-    fields = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"),
-        ("name", "in", ["street", "street2", "city", "zip", "state_id", "country_id", "x_name_fa", "x_address_fa", "x_national_id", "partner_id"])], ["id"])
-    sync = _server_action(odoo, "lead_sync", {"name": "CRM card -> customer address", "model_id": _model_id(odoo, "crm.lead"),
-                                              "state": "code", "code": LEAD_SYNC_CODE, "binding_model_id": False})
-    auto_vals = {"name": "Phase 2: CRM card address -> customer", "model_id": _model_id(odoo, "crm.lead"),
-                 "trigger": "on_create_or_write", "trigger_field_ids": [(6, 0, [f["id"] for f in fields])],
-                 "filter_domain": "[('partner_id', '!=', False)]", "action_server_ids": [(6, 0, [sync])], "active": True}
-    auto = odoo.ref("p2auto", "lead_sync")
-    if auto:
-        odoo.write("base.automation", [auto], auto_vals)
-    else:
-        odoo.upsert("p2auto", "lead_sync", "base.automation", auto_vals)
+    _server_action(odoo, "lead_sync", {"name": "CRM card -> customer address", "model_id": _model_id(odoo, "crm.lead"),
+                                       "state": "code", "code": LEAD_SYNC_CODE, "binding_model_id": False})
+    # The automation that runs it is the shared one from install_card_rules.
 
     # Paper format + the ten reports.
     pf = odoo.search_read("report.paperformat", [("name", "=", "Contracts - US Letter")], ["id"], limit=1)
@@ -1549,20 +1540,72 @@ def install_stage_gate(odoo):
         "name": "Contract must be sent before Need to Receive Draft Contract",
         "model_id": _model_id(odoo, "crm.lead"), "state": "code",
         "code": STAGE_GATE_CODE, "binding_model_id": False})
-    stage_field = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"), ("name", "=", "stage_id")], ["id"], limit=1)
-    if not stage_field:
-        log.warning("  stage_id field not found on crm.lead — stage gate not installed")
+    log.info("  stage gate action ready (run by the shared card-rules automation)")
+    return act_id
+
+
+ADDRESS_FIELDS = ["street", "street2", "city", "zip", "state_id", "country_id",
+                  "x_name_fa", "x_address_fa", "x_national_id"]
+
+# One automation for every Phase-2 rule on the card, plus the customer's
+# stage-22 handoff.  Odoo 17's automation engine writes date_automation_last
+# on every automation it runs, and that write re-triggers every *other*
+# automation on the record, so the work per save grows factorially with the
+# number of automations that match (4 -> ~2 s, 5 -> ~12 s, 6 -> over a
+# minute, which nginx cuts off).  Three separate automations therefore cost
+# far more than one that dispatches to the same three actions.
+CARD_RULES_CODE = r"""
+old_values = env.context.get('old_values') or {}
+Action = env['ir.actions.server'].sudo()
+for lead in records:
+    changed = old_values.get(lead.id)   # None on create: everything counts as changed
+    ctx = {'active_model': 'crm.lead', 'active_id': lead.id, 'active_ids': [lead.id]}
+    # Card -> customer address (only when the customer or an address field changed).
+    if lead.partner_id and (changed is None or 'partner_id' in changed or any(f in changed for f in __ADDRESS_FIELDS__)):
+        Action.browse(__SYNC__).with_context(**ctx).run()
+    if changed is not None and 'stage_id' in changed and changed['stage_id'] != lead.stage_id:
+        # Stage gate: a contract must be sent before Need to Receive Draft Contract.
+        Action.browse(__GATE__).with_context(**ctx).run()
+        # Execution handoff: the card just arrived in 22- Sent to Execution Team.
+        if lead.stage_id.id == __EXEC_STAGE__:
+            Action.browse(__ROUTE__).with_context(**ctx).run()
+    elif changed is None and lead.stage_id.id == __EXEC_STAGE__:
+        Action.browse(__ROUTE__).with_context(**ctx).run()
+""".strip()
+
+
+def install_card_rules(odoo):
+    """The single automation behind the card rules (see CARD_RULES_CODE)."""
+    sync = odoo.ref("p2action", "lead_sync")
+    gate = odoo.ref("p2action", "stage_gate")
+    stage = odoo.search_read("crm.stage", [("name", "ilike", "Sent to Execution Team")], ["id"], limit=1)
+    route = odoo.search_read("base.automation", [("model_id.model", "=", "crm.lead"), ("trigger", "=", "on_stage_set"),
+                                                 ("name", "ilike", "Sent to Execution Team")], ["id", "action_server_ids"], limit=1)
+    if not (sync and gate and stage and route and route[0]["action_server_ids"]):
+        log.warning("  card rules not installed: sync=%s gate=%s stage=%s route=%s", sync, gate, stage, route)
         return
-    auto_vals = {"name": "Phase 2: contract sent before Need to Receive Draft Contract",
-                 "model_id": _model_id(odoo, "crm.lead"), "trigger": "on_write",
-                 "trigger_field_ids": [(6, 0, [stage_field[0]["id"]])],
+    code = (CARD_RULES_CODE.replace("__ADDRESS_FIELDS__", repr(ADDRESS_FIELDS)).replace("__SYNC__", str(sync))
+            .replace("__GATE__", str(gate)).replace("__EXEC_STAGE__", str(stage[0]["id"]))
+            .replace("__ROUTE__", str(route[0]["action_server_ids"][0])))
+    act_id = _server_action(odoo, "card_rules", {"name": "CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
+                                                 "state": "code", "code": code, "binding_model_id": False})
+    fields = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"),
+                                                  ("name", "in", ADDRESS_FIELDS + ["partner_id", "stage_id"])], ["id"])
+    auto_vals = {"name": "Phase 2: CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
+                 "trigger": "on_create_or_write", "trigger_field_ids": [(6, 0, [f["id"] for f in fields])],
                  "filter_domain": "[]", "action_server_ids": [(6, 0, [act_id])], "active": True}
-    auto = odoo.ref("p2auto", "stage_gate")
+    auto = odoo.ref("p2auto", "card_rules")
     if auto:
         odoo.write("base.automation", [auto], auto_vals)
     else:
-        odoo.upsert("p2auto", "stage_gate", "base.automation", auto_vals)
-    log.info("  stage gate active: 'Need to Receive Draft Contract' now requires a sent contract")
+        odoo.upsert("p2auto", "card_rules", "base.automation", auto_vals)
+    # The three automations it replaces must not run alongside it.
+    retired = [odoo.ref("p2auto", "lead_sync"), odoo.ref("p2auto", "stage_gate"), route[0]["id"]]
+    retired = [r for r in retired if r]
+    active = odoo.search_read("base.automation", [("id", "in", retired), ("active", "=", True)], ["id"])
+    if active:
+        odoo.write("base.automation", [a["id"] for a in active], {"active": False})
+    log.info("  card rules automation active; retired %d separate automations", len(active))
 
 
 def relax_partner_accounting(odoo):
@@ -1656,5 +1699,6 @@ def install(odoo, rcic_email):
     migrate_lead_address(odoo)
     fix_crm_fields(odoo)
     install_stage_gate(odoo)
+    install_card_rules(odoo)
     install_state_dropdown(odoo)
     return ids
