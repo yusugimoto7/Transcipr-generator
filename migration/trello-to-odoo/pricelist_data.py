@@ -57,14 +57,6 @@ SERVICES = {
                             "1,000 / 1,000 / 1,000 / 1,500 CAD.",
                    terms_fa="نصف مبلغ همراه با امضا؛ نصف دیگر بعد از نامینیشن. یا چهار قسط: "
                             "۱٬۰۰۰ / ۱٬۰۰۰ / ۱٬۰۰۰ / ۱٬۵۰۰ دلار."),
-    "CAREGIVER": dict(cat="pr", en="Caregiver – PR", fa="پرستار خانگی – اقامت دائم", price=5000,
-                      addons={"Spouse|همسر": 1000, "Child (each)|هر فرزند": 500}, gov=[],
-                      terms_en="2,000 CAD at signing; balance when the 2026 details are announced, "
-                               "before PR submission. 50% refund if we cannot submit.",
-                      terms_fa="۲٬۰۰۰ دلار همراه با امضا؛ مابقی در زمان اعلام جزئیات ۲۰۲۶ و قبل از سابمیت. "
-                               "۵۰٪ ریفاند در صورت عدم امکان سابمیت.",
-                      notes_en="2026 capacity: 5 contracts. Coordinate with Mr Hamed.",
-                      notes_fa="ظرفیت ۲۰۲۶: فقط ۵ نفر. با هماهنگی آقای حامد."),
     "PRC-RENEW": dict(cat="pr", en="PR card renewal (no issues)", fa="تمدید کارت اقامت دائم", price=2000),
     "PRC-LOST": dict(cat="pr", en="Replacement of lost PR card", fa="صدور مجدد کارت PR گمشده", price=1500),
     "PR-RENOUNCE": dict(cat="pr", en="PR renunciation", fa="انصراف از اقامت دائم", price=1500),
@@ -155,9 +147,6 @@ SERVICES = {
                     addons={"Child study permit (each)|مجوز تحصیل فرزند": 200},
                     terms_en="Full amount plus government fees at signing.",
                     terms_fa="کل مبلغ + هزینه دولتی همراه با امضا."),
-    "LMIA": dict(cat="work", en="LMIA with employer", fa="قرارداد LMIA با کارفرما", price=4000, gov=[],
-                 terms_en="Full LMIA amount at signing; the work-permit contract starts once LMIA is issued.",
-                 terms_fa="کل مبلغ LMIA همراه با امضا؛ قرارداد ورک پرمیت بعد از دریافت LMIA شروع می‌شود."),
     "LMIA-WP": dict(cat="work", en="Work permit under LMIA", fa="ورک پرمیت نیروی کار LMIA", price=2500,
                     addons={"Spouse work permit|ورک پرمیت همسر": 1000, "Child visitor visa (each)|ویزای فرزند": 500},
                     terms_en="50% at signing; 50% before submission to IRCC. Government fees extra.",
@@ -204,7 +193,6 @@ SERVICES = {
                             "۲٬۰۰۰ + ۴۰۰ دولتی همراه با امضا (تشکیل پرونده، پروفایل استانی/EOI)؛ ۲٬۰۰۰ + ۳٬۵۰۰ دولتی "
                             "پس از ITA از BC (درخواست کامل استانی)؛ ۸٬۰۰۰ + ۸۰۰ دولتی قبل از درخواست مجوز کار "
                             "(توافق‌نامه عملکرد، نامه پشتیبانی، ثبت درخواست)."),
-    "PROV-CERT": dict(cat="biz", en="Provincial certification – specific occupations", fa="تأیید استانی مشاغل خاص", price=2000),
 
     # --- Litigation & special cases --------------------------------------------------
     "PFL": dict(cat="lit", en="Procedural fairness letter response", fa="پاسخ به نامه PFL", price=2500,
@@ -315,7 +303,6 @@ PLANS = {
     "EE": [("custom", 1500, "signing"), ("rest", 0, "sub_pr")],
     "PNP": [("custom", 1500, "signing"), ("rest", 0, "sub_pr")],
     "PNP-EE": [("custom", 1500, "signing"), ("rest", 0, "sub_pr")],
-    "CAREGIVER": [("custom", 2000, "signing"), ("rest", 0, "announce")],
     "PRC-RENEW": [("100", 0, "signing")],
     "PRC-LOST": [("100", 0, "signing")],
     "PR-RENOUNCE": [("100", 0, "signing")],
@@ -343,14 +330,12 @@ PLANS = {
     # Work: half at signing, half before submission (S25315, S25304).
     "WP-ABROAD": [("50", 0, "signing"), ("rest", 0, "sub_wp")],
     "OWP-ACC": [("100", 0, "signing")],
-    "LMIA": [("100", 0, "signing")],
     "LMIA-WP": [("50", 0, "signing"), ("rest", 0, "sub_wp")],
     # Sponsorship: four instalments (S26256); refused-sponsorship files in two halves.
     "SPON-SPOUSE": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
     "SPON-CHILD": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
     "SPON-PARENT": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
     "SPON-REFUSED": [("50", 0, "signing"), ("rest", 0, "sub_pr")],
-    "PROV-CERT": [("100", 0, "signing")],
     # Entrepreneur streams: Sparkbridge phases + Sugimoto milestones combined
     # (SB000026110/26112 + SG000026112: 8,000 + 2,000 at signing, 20,000 on the
     # LoR / 18,000 at Phase 2, 2,000 at ITA, 8,000 before the work permit).

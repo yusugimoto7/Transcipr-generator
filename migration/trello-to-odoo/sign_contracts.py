@@ -561,7 +561,7 @@ if _has_farsi(partner.name) or not _has_latin(partner.name):
         bio_en, bio_fa = 'Give biometrics on time as required for the study permit application.', 'ارائه بیومتریک به‌موقع، طبق نیاز برای درخواست مجوز تحصیل.'
     elif main.startswith(('WP', 'LMIA', 'OWP', 'IN-WP', 'PERMIT')):
         bio_en, bio_fa = 'Give biometrics on time as required for the work permit application.', 'ارائه بیومتریک به‌موقع، طبق نیاز برای درخواست مجوز کار.'
-    elif main.startswith(('EE', 'PNP', 'CAREGIVER', 'SPON', 'HC')):
+    elif main.startswith(('EE', 'PNP', 'SPON', 'HC')):
         bio_en, bio_fa = 'Give biometrics on time as required for PR application.', 'ارائه بیومتریک به‌موقع، طبق نیاز برای درخواست اقامت دائم.'
     else:
         bio_en, bio_fa = 'Give biometrics on time as required for the application.', 'ارائه بیومتریک به‌موقع، طبق نیاز برای درخواست.'

@@ -13,8 +13,9 @@ team actually fills in on the card.  Two consequences:
 
 This patches the action in place:
 
-  1. Execution team decides the project; Contract Type is only the fallback
-     when the field is left empty.
+  1. Execution team decides the project; if it is empty the Service
+     Agreement decides (CUSTOM needs the team set by hand); Contract Type
+     is only the last fallback.
   2. The fallback map is keyed on the stored values (the old label keys are
      kept as well, so nothing that used to work stops working).
   3. A task that already exists for the lead in the wrong project is moved
@@ -45,8 +46,8 @@ if not contract_type or contract_type == 'Not Decided':
 """
 
 NEW_ROUTING = """# ------------------------------------------------------------
-# 1) Execution team decides the project.
-#    Contract Type is only the fallback when the field is empty.
+# 1) Execution team decides the project.  If it is empty, the Service
+#    Agreement decides; Contract Type is only the last fallback.
 # ------------------------------------------------------------
 contract_type = (record.x_studio_contract_type_1 or '').strip()
 if contract_type == 'Not Decided':
@@ -84,13 +85,59 @@ if case_type:
         )
 
 # ------------------------------------------------------------
-# 2) Fallback: Contract Type -> Execution Project.
+# 2) Service Agreement -> Execution Project.  The service code is the
+#    part of the template name before the first " · ".
+# ------------------------------------------------------------
+service_code = ''
+if not execution_project and record.x_service:
+    service_code = (record.x_service.name or '').split(' · ')[0].strip()
+
+    service_map = {
+        # Visa - PR
+        'EE': 'Visa - PR', 'PNP-EE': 'Visa - PR', 'PNP': 'Visa - PR',
+        'SPON-SPOUSE': 'Visa - PR', 'SPON-CHILD': 'Visa - PR', 'SPON-PARENT': 'Visa - PR',
+        'SPON-REFUSED': 'Visa - PR', 'HC': 'Visa - PR', 'PR-RO': 'Visa - PR',
+        'PRC-RENEW': 'Visa - PR', 'PRC-LOST': 'Visa - PR', 'PR-RENOUNCE': 'Visa - PR',
+        'TD-PR': 'Visa - PR', 'CIT': 'Visa - PR', 'CIT-LEGAL': 'Visa - PR', 'PFL': 'Visa - PR',
+        # Visa - TR
+        'TRV': 'Visa - TR', 'VR': 'Visa - TR', 'BV': 'Visa - TR', 'SUPERVISA': 'Visa - TR',
+        'IN-TRV': 'Visa - TR', 'IN-WP': 'Visa - TR', 'WP-ABROAD': 'Visa - TR', 'OWP-ACC': 'Visa - TR',
+        'LMIA-WP': 'Visa - TR', 'PGWP': 'Visa - TR', 'SPX': 'Visa - TR', 'PERMIT-AMEND': 'Visa - TR',
+        'RESTORE': 'Visa - TR', 'SP-ONLY': 'Visa - TR', 'EU-VISA-ONLY': 'Visa - TR',
+        # Admission
+        'SP-ADM': 'Admission', 'SP-ADM-K12': 'Admission', 'EU-STUDY': 'Admission',
+        'EU-ADM-ONLY': 'Admission', 'EU-LANG': 'Admission',
+        # SUV-Biz-Team
+        'EU-SUV': 'SUV-Biz-Team', 'AB-ENT': 'SUV-Biz-Team', 'BC-ENT': 'SUV-Biz-Team',
+    }
+
+    if service_code == 'CUSTOM':
+        raise UserError(
+            'خدمت سفارشی (CUSTOM) بورد مشخصی ندارد. لطفاً تیم اجرایی (Execution team) را انتخاب کنید.'
+        )
+
+    execution_project_name = service_map.get(service_code)
+
+    if execution_project_name:
+        execution_project = env['project.project'].sudo().search([
+            ('name', '=', execution_project_name),
+        ], limit=1)
+
+    if not execution_project:
+        raise UserError(
+            'برای خدمت "%s" پروژه اجرایی تعریف نشده است. '
+            'لطفاً تیم اجرایی (Execution team) را انتخاب کنید.'
+            % service_code
+        )
+
+# ------------------------------------------------------------
+# 3) Fallback: Contract Type -> Execution Project.
 #    Keys are the values Odoo stores, not the dropdown labels.
 # ------------------------------------------------------------
 if not execution_project:
     if not contract_type:
         raise UserError(
-            'لطفاً تیم اجرایی (Execution team) یا نوع قرارداد را انتخاب کنید.'
+            'لطفاً تیم اجرایی (Execution team) یا قرارداد خدمات (Service Agreement) را انتخاب کنید.'
         )
 
     project_map = {
@@ -277,17 +324,15 @@ def main():
 
     # The old map ran from "# 2) Mapping" to the end of the section-3 lookup;
     # the new routing block replaces all of it.
-    start = code.index(OLD_ROUTING_HEAD)
+    # Everything from the section-1 header to the section-4 header is the
+    # routing block, whether it is the original or an earlier patch of ours.
+    start = code.index("# ------------------------------------------------------------\n# 1) ")
     end = code.index("# ------------------------------------------------------------\n# 4) ")
-    body = code[start:end]
-
     if NEW_ROUTING in code:
         print("routing        already patched")
-    elif OLD_ROUTING_HEAD in body:
+    else:
         code = code[:start] + NEW_ROUTING + "\n" + code[end:]
         print("routing        patched")
-    else:
-        sys.exit("routing block does not look like the original; patch by hand")
 
     for label, old, new in PATCHES[1:]:
         if new in code:

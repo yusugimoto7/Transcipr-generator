@@ -24,7 +24,7 @@ def _kind(key, s):
         return "SB-A"
     if cat == "spon":
         return "SPON"
-    if cat in ("pr", "lit") or key == "PROV-CERT":
+    if cat in ("pr", "lit"):
         return "PR"
     if cat == "biz":
         return "ENT"
