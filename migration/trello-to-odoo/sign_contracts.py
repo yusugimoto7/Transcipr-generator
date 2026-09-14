@@ -973,8 +973,11 @@ lead_word = 'revised and re-submitted' if revision else 'submitted'
 title = ('Contract approval needed (revised): %s - %s' if revision else
          'Contract approval needed: %s - %s') % (order.name, partner.name or '')
 body = ('<p>%s %s this quotation for contract approval.</p>'
-        '<p>Customer: <strong>%s</strong><br/>Amount: %s %s<br/>Payment plan: %s</p>'
-        '<p>Review it (use <strong>Preview Agreement</strong> to read the draft) and press '
+        '<p>Customer: <strong>%s</strong><br/>Amount when submitted: %s %s'
+        '<br/>Payment plan when submitted: %s</p>'
+        '<p>The contract is always built from the quotation as it stands when you press Send, '
+        'not from the figures above \u2014 if the address or the fees changed since, the amounts '
+        'differ. Check them with <strong>Preview Agreement</strong>, then press '
         '<strong>Send Contract</strong> to send it to the client:<br/>'
         '<a href="%s">%s</a></p>') % (env.user.name, lead_word, partner.name or '',
                                       order.currency_id.symbol or '', order.amount_total, plan_txt,
@@ -1276,6 +1279,13 @@ for lead in records:
     for f in ('state_id', 'country_id'):
         if lead[f] and lead[f] != p[f]:
             vals[f] = lead[f].id
+    # A province only belongs on a Canadian address. Leaving one on a foreign
+    # address makes Odoo pick a Canadian fiscal position, which puts GST on the
+    # order and then silently removes it again once the country is filled in --
+    # that is what made a submitted amount differ from the contract total.
+    country = lead.country_id or p.country_id
+    if country and country.code != 'CA' and (p.state_id or vals.get('state_id')):
+        vals['state_id'] = False
     if vals:
         p.sudo().write(vals)
 """.strip()
@@ -1363,7 +1373,12 @@ def install_agreements(odoo):
         '<data>'
         '<xpath expr="//page[@name=\'extra\']" position="before">'
         '<page string="Address &amp; family" name="address_family">'
-        '<group><group string="Residential address (printed on the agreement)">'
+        '<div class="alert alert-info" role="status">'
+        'Fill every field on this tab <strong>in English</strong>. Only the fields labelled '
+        '<strong>(Farsi)</strong> take Farsi text \u2014 they are printed on the Farsi side of '
+        'bilingual agreements. A province belongs to a Canadian address only.'
+        '</div>'
+        '<group><group string="Residential address in English (printed on the agreement)">'
         '<label for="street" string="Address"/>'
         '<div class="o_address_format">'
         '<field name="street" placeholder="Street..." class="o_address_street"/>'
