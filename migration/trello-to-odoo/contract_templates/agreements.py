@@ -9,7 +9,7 @@ the (always separate) last page for Odoo Sign.
 """
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from lib import P, PS, H, UL, OL, SIG, V, DL, NL, FEE_D, qweb
+from lib import P, PS, H, UL, OL, SIG, V, DL, NL, FEE_D, qweb, SL
 import sg_clauses as sg
 import sb_clauses as sb
 
@@ -20,12 +20,12 @@ L = lambda k: f"d['{k}']"             # expression for lists
 
 # ---------------- shared pieces ----------------
 def _sg_contact(no_en="15.", no_fa="۱۵."):
-    rc_en = ["Given Name: Hamed", "Family Name: Sugimoto", "RCIC Member Number: R713046",
+    rc_en = ["Full Name: Hamed Sugimoto", "RCIC Member Number: R713046",
              f"Business Address: {sg.RCIC_ADDR}", "Telephone Number: +1 (778) 200-8856", f"E-mail: {D('rcic_email')}"]
-    rc_fa = ["نام: حامد", "نام خانوادگی: سوگیموتو", "شماره عضویت مشاور: R713046",
+    rc_fa = ["نام و نام خانوادگی: حامد سوگیموتو", "شماره عضویت مشاور: R713046",
              f"آدرس: {sg.RCIC_ADDR}", "تلفن: +1 (778) 200-8856", f"ایمیل: {D('rcic_email')}"]
-    en = H(f"{no_en} Contact Information") + P("Client") + DL(L("contact_en")) + P("RCIC") + UL(rc_en)
-    fa = H(f"{no_fa} اطلاعات تماس") + P("متقاضی") + DL(L("contact_fa")) + P("RCIC") + UL(rc_fa)
+    en = H(f"{no_en} Contact Information") + P("Client") + DL(L("contact_en")) + P("RCIC") + SL(rc_en)
+    fa = H(f"{no_fa} اطلاعات تماس") + P("متقاضی") + DL(L("contact_fa")) + P("RCIC") + SL(rc_fa)
     return (en, fa)
 
 def _sg_billing(no="5", no_fa="۵", note_en=sg.FEE_NOTE_EN, note_fa=sg.FEE_NOTE_FA):
@@ -95,7 +95,7 @@ def _pr_billing(note=PR_TAIL_NOTE, extra=""):
 
 def _pr_contact(label="Client"):
     return (H("14. Contact Information") + P(label) + DL(L("contact_en")) + P("RCIC") +
-            UL(["Given Name: Hamed", "Family Name: Sugimoto", "RCIC Member Number: R713046", f"Business Address: {sg.RCIC_ADDR}",
+            SL(["Full Name: Hamed Sugimoto", "RCIC Member Number: R713046", f"Business Address: {sg.RCIC_ADDR}",
                 "Telephone Number: +1 (778) 200-8856", f"E-mail: {D('rcic_email')}"]) +
             P("IN WITNESS THEREOF, this Agreement has been duly executed by the parties hereto on the date first above written."))
 

@@ -511,7 +511,25 @@ else:
     spouse = fam.filtered(lambda f: f.x_relation == 'spouse')[:1]
     kids = fam.filtered(lambda f: f.x_relation == 'child')
     comps = fam.filtered(lambda f: f.x_relation in ('spouse', 'child', 'companion'))
-    # Family members named on the CRM card must be complete before a draft is generated.
+    # The English half of the agreement prints the customer's name as stored on the
+# customer record. A Farsi name there lands in the English section of the PDF.
+def _has_farsi(t):
+    for ch in (t or ''):
+        if u'\u0600' <= ch <= u'\u06FF' or u'\uFB50' <= ch <= u'\uFEFF':
+            return True
+    return False
+def _has_latin(t):
+    for ch in (t or ''):
+        if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+            return True
+    return False
+if _has_farsi(partner.name) or not _has_latin(partner.name):
+    raise UserError(
+        "The customer is saved as \"%s\". The agreement prints that name in its English "
+        "section, so it has to be the English spelling.\n\nOpen the customer and write the "
+        "name in English. The Farsi spelling belongs in 'Name (Farsi)' on the CRM card, "
+        "Address & family tab." % (partner.name or ''))
+# Family members named on the CRM card must be complete before a draft is generated.
     BILINGUAL = {'TR', 'PFL', 'ENT', 'SB-A', 'SB-C', 'SB-D', 'SB-E'}
     need_fa = any(k in BILINGUAL for k in kinds)
     missing = []
@@ -552,18 +570,26 @@ else:
     subject_en = (order.x_agr_subject or '').strip() or (services_en[0] if services_en else '')
     subject_fa = (order.x_agr_subject_fa or '').strip() or (services_fa[0] if services_fa else '')
     sponsor = order.x_sponsor_id
-    contact_en = ['Given Name: %s' % names[0], 'Family Name: %s' % (names[1] if len(names) > 1 else ''), 'Residential Address: %s' % address,
-                  'Telephone/Cellphone Number: %s' % (partner.mobile or partner.phone or ''), 'E-mail: %s' % (partner.email or '')]
+    def phone_no(v):
+        # The CRM card keeps a leading 9 so the VoIP bar can grab an outside
+        # line. The contract must print the real number, so drop it.
+        t = (v or '').strip()
+        if t.startswith('90'):
+            t = t[1:]
+        return t
+    client_phone = phone_no(partner.mobile or partner.phone or '')
+    contact_en = ['Full Name: %s' % (partner.name or ''), 'Residential Address: %s' % address,
+                  'Telephone/Cellphone Number: %s' % client_phone, 'E-mail: %s' % (partner.email or '')]
     if 'SPON' in kinds:
-        contact_en = ['Principal Applicant’s name: %s' % (partner.name or ''), 'Sponsor’s name: %s' % (sponsor.name if sponsor else '')] + contact_en[2:]
+        contact_en = ['Principal Applicant’s name: %s' % (partner.name or ''), 'Sponsor’s name: %s' % (sponsor.name if sponsor else '')] + contact_en[1:]
     contact_fa = ['نام و نام خانوادگی: %s' % client_fa, 'آدرس محل سکونت: %s' % addr_fa,
-                  'شماره تلفن/موبایل: %s' % (partner.mobile or partner.phone or ''), 'ایمیل: %s' % (partner.email or '')]
+                  'شماره تلفن/موبایل: %s' % client_phone, 'ایمیل: %s' % (partner.email or '')]
     scope = __SCOPE__
     sc = scope.get(main, scope.get('BC-ENT'))
     d = {
         'file_no': '', 'date_en': date_en, 'date_fa': date_en,
         'client_en': partner.name or '', 'client_fa': client_fa, 'addr_en': address, 'addr_fa': addr_fa,
-        'phone': partner.mobile or partner.phone or '', 'email': partner.email or '',
+        'phone': client_phone, 'email': partner.email or '',
         'nid': fa(partner, 'x_national_id', '—'),
         'parties_en': parties_en, 'parties_fa': parties_fa,
         'services_en': services_en, 'services_fa': services_fa,
@@ -938,7 +964,25 @@ if billable and not has_custom:
     kinds = sorted(tags & known)
     lead = order.opportunity_id
     fam = env['x_family'].sudo().search([('x_lead_id', '=', lead.id)], order='x_sequence, id') if lead else env['x_family'].sudo()
-    # Family members named on the CRM card must be complete before a draft is generated.
+    # The English half of the agreement prints the customer's name as stored on the
+# customer record. A Farsi name there lands in the English section of the PDF.
+def _has_farsi(t):
+    for ch in (t or ''):
+        if u'\u0600' <= ch <= u'\u06FF' or u'\uFB50' <= ch <= u'\uFEFF':
+            return True
+    return False
+def _has_latin(t):
+    for ch in (t or ''):
+        if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+            return True
+    return False
+if _has_farsi(partner.name) or not _has_latin(partner.name):
+    raise UserError(
+        "The customer is saved as \"%s\". The agreement prints that name in its English "
+        "section, so it has to be the English spelling.\n\nOpen the customer and write the "
+        "name in English. The Farsi spelling belongs in 'Name (Farsi)' on the CRM card, "
+        "Address & family tab." % (partner.name or ''))
+# Family members named on the CRM card must be complete before a draft is generated.
     BILINGUAL = {'TR', 'PFL', 'ENT', 'SB-A', 'SB-C', 'SB-D', 'SB-E'}
     need_fa = any(k in BILINGUAL for k in kinds)
     missing = []

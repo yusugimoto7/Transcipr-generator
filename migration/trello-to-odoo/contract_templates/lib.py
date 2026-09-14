@@ -85,6 +85,9 @@ def P(text, cls=""):   return f'<p class="{cls}">{_iso(text)}</p>' if cls else f
 def PS(*texts):        return "".join(P(t) for t in texts)
 def H(text):           return f'<h2 class="c">{esc(text)}</h2>'
 def UL(items):         return "<ul>" + "".join(f"<li>{_iso(i)}</li>" for i in items) + "</ul>"
+def SL(items):         # static list kept as a single block, so the bilingual
+    """table renders it in one box instead of one row per bullet."""
+    return '<div class="dl">' + "".join(f'<p class="li">&#8226; {_iso(i)}</p>' for i in items) + "</div>"
 def OL(items):         return "<ol>" + "".join(f"<li>{_iso(i)}</li>" for i in items) + "</ol>"
 def RAW(x):            return x
 

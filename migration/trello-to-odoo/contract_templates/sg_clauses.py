@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Sugimoto Visa clause library (English + Farsi), copied from the current TR/PR Word templates."""
-from lib import P, PS, H, UL, OL, FEE, RAW, esc
+from lib import P, PS, H, UL, SL, OL, FEE, RAW, esc
 
 RCIC_ADDR = "501-3292 Production Way, Greater Vancouver – V5A 4R4 - Canada"
 
@@ -193,12 +193,12 @@ def misc(schedule_a_en=None, schedule_a_fa=None):
     return (en, fa)
 
 def contact(client_en_lines, client_fa_lines, rcic_email="Legal@sugimotovisa.com"):
-    rc_en = ["Given Name: Hamed", "Family Name: Sugimoto", "RCIC Member Number: R713046",
+    rc_en = ["Full Name: Hamed Sugimoto", "RCIC Member Number: R713046",
              f"Business Address: {RCIC_ADDR}", "Telephone Number: +1 (778) 200-8856", f"E-mail: {rcic_email}"]
-    rc_fa = ["نام: حامد", "نام خانوادگی: سوگیموتو", "شماره عضویت مشاور: R713046",
+    rc_fa = ["نام و نام خانوادگی: حامد سوگیموتو", "شماره عضویت مشاور: R713046",
              f"آدرس: {RCIC_ADDR}", "تلفن: +1 (778) 200-8856", f"ایمیل: {rcic_email}"]
-    en = H("15. Contact Information") + P("Client") + UL(client_en_lines) + P("RCIC") + UL(rc_en)
-    fa = H("۱۵. اطلاعات تماس") + P("متقاضی") + UL(client_fa_lines) + P("RCIC") + UL(rc_fa)
+    en = H("15. Contact Information") + P("Client") + UL(client_en_lines) + P("RCIC") + SL(rc_en)
+    fa = H("۱۵. اطلاعات تماس") + P("متقاضی") + UL(client_fa_lines) + P("RCIC") + SL(rc_fa)
     return (en, fa)
 
 WITNESS = (P("IN WITNESS THEREOF, this Agreement has been duly executed by the parties hereto on the date first above written."),
