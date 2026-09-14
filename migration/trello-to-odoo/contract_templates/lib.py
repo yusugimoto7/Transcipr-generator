@@ -58,10 +58,17 @@ table.bi td.nb{border-bottom:0;}
 """
 
 def esc(s): return html.escape(s, quote=False)
-_URL = re.compile(r"(https?://[^\s<]+|[\w.+-]+@[\w-]+\.[\w.-]+)")
+# A run of Latin letters, Western digits and the punctuation found in phone
+# numbers, addresses, e-mails and URLs. Inside Farsi text the bidi algorithm
+# reorders the pieces of such a run ("+1 (778) 200-8856" came out as
+# "1+ (778) 8856-200"), so every run is wrapped as one LTR unit.
+_LTR = re.compile(r"\+?[A-Za-z0-9][A-Za-z0-9@.+()\-\u2013,/:' ]*[A-Za-z0-9)]|[A-Za-z0-9]")
 def _iso(s):
-    """Keep URLs / e-mails as LTR runs inside RTL text."""
-    return _URL.sub(lambda m: f'<span class="ltr">{m.group(0)}</span>', esc(s))
+    """Keep Latin / numeric runs (phones, addresses, e-mails) as LTR units inside RTL text."""
+    parts = esc(s).split("\x00")          # never touch the placeholder expressions
+    for i in range(0, len(parts), 2):
+        parts[i] = _LTR.sub(lambda m: f'<span class="ltr">{m.group(0)}</span>', parts[i])
+    return "\x00".join(parts)
 
 # ---------- QWeb placeholders (data-driven templates) ----------
 # V(expr) marks a value filled at render time; finalize() turns the marker
