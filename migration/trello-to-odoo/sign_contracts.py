@@ -728,7 +728,16 @@ else:
                  (0, 0, {'partner_id': signer.id, 'role_id': 2, 'mail_sent_order': 2})]
         if kind == 'SPON':
             items.append((0, 0, {'partner_id': sponsor.id, 'role_id': __SPONSOR_ROLE__, 'mail_sent_order': 1}))
-        req = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
+        # Odoo Sign builds the signer's e-mail from the request's author: the
+        # From address and, more importantly, the Reply-To. Authoring it as the
+        # legal@ / contract@ identity is what makes a client's reply come back
+        # to a mailbox Odoo reads instead of to whoever pressed Send.
+        sender_email = env['ir.config_parameter'].sudo().get_param(
+            'phase2.sb_mail_from' if is_sb else 'phase2.sg_mail_from') or ''
+        sender = env['res.users'].sudo().with_context(active_test=False).search(
+            ['|', ('login', '=ilike', sender_email), ('email', '=ilike', sender_email)], limit=1) if sender_email else env['res.users']
+        Request = env['sign.request'].with_user(sender.id).sudo() if sender else env['sign.request'].sudo()
+        req = Request.with_context(no_sign_mail=True).create({
             'template_id': tmpl.id,
             'reference': '%s – %s – %s' % (d['file_no'], d['title'], client_name),
             'subject': '%s with %s – please review and sign' % (d['title'], company_name),
