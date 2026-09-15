@@ -87,12 +87,50 @@ NEW_QUOTE_ACTION_CODE = """
 lead = record
 if not lead.x_service:
     raise UserError("Set the Service Agreement on this card before creating a quotation.")
+
+
+def split_file_no(text):
+    \"\"\"'S26275 - Full Name' -> ('S26275', 'Full Name'); otherwise ('', text).\"\"\"
+    t = (text or '').strip()
+    if ' - ' in t:
+        head, _sep, rest = t.partition(' - ')
+        h = head.strip()
+        if (h[:1] == 'S' and h[1:].isdigit()) or (h[:6] in ('SB0000', 'SG0000') and h[6:].isdigit()):
+            return h, rest.strip()
+    return '', t
+
+
+# The file number the whole system knows the client by. Reuse one the card or
+# the customer already carries; otherwise draw the next one now, so the number
+# exists from the quotation onwards instead of only once a contract is sent.
+number, name_from_lead = split_file_no(lead.name)
+name_from_partner = ''
+if lead.partner_id:
+    p_no, name_from_partner = split_file_no(lead.partner_id.name)
+    number = number or p_no
+full_name = (name_from_partner or lead.contact_name or lead.partner_name or name_from_lead or '').strip()
+
+if not number:
+    # Sparkbridge files run on their own series; everything else on Sugimoto's.
+    is_sb = False
+    for tl in lead.x_service.sale_order_template_line_ids:
+        if tl.product_id:
+            for tag in tl.product_id.product_tmpl_id.product_tag_ids.mapped('name'):
+                if tag.startswith('SB-'):
+                    is_sb = True
+    seq_code = 'x_sparkbridge_contract' if is_sb else 'x_sugimoto_file'
+    number = env['ir.sequence'].sudo().next_by_code(seq_code)
+    if not number:
+        raise UserError("The contract number sequence %s is not set up." % seq_code)
+
+display = ('%s - %s' % (number, full_name)).strip() if full_name else number
+
 partner = lead.partner_id
 if not partner:
     # Everything the card already holds, so the contract has the details it
     # prints without anyone retyping them.
     vals_p = {
-        'name': lead.contact_name or lead.partner_name or lead.name,
+        'name': display,
         'email': lead.email_from or False,
         'phone': lead.phone or False,
         'mobile': lead.mobile or False,
@@ -111,7 +149,16 @@ if not partner:
             vals_p[f] = lead[f]
     partner = env['res.partner'].sudo().create(vals_p)
     lead.sudo().write({'partner_id': partner.id})
-vals = {'partner_id': partner.id, 'opportunity_id': lead.id, 'origin': lead.name,
+elif partner.name != display:
+    partner.sudo().write({'name': display})
+
+# The card carries the same identifier, so CRM, the customer list and the
+# finance sheet all read alike.
+if lead.name != display:
+    lead.sudo().write({'name': display})
+
+vals = {'partner_id': partner.id, 'opportunity_id': lead.id, 'origin': display,
+        'client_order_ref': number,
         'company_id': lead.company_id.id or env.company.id,
         'team_id': lead.team_id.id or False, 'user_id': lead.user_id.id or env.user.id}
 order = env['sale.order'].with_company(vals['company_id']).create(vals)

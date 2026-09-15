@@ -503,9 +503,21 @@ else:
     def fa(rec, field, fallback):
         v = rec[field] if rec and field in rec._fields else False
         return v or fallback
-    names = (partner.name or '').split(' ', 1)
+    # The customer record is named "S26275 - Full Name" so the number shows up
+    # in Odoo, the CRM and the finance sheet. The agreement is a legal document,
+    # so it prints the person's name alone.
+    def _no_file_no(text):
+        t = (text or '').strip()
+        if ' - ' in t:
+            head, _sep, rest = t.partition(' - ')
+            h = head.strip()
+            if (h[:1] == 'S' and h[1:].isdigit()) or (h[:6] in ('SB0000', 'SG0000') and h[6:].isdigit()):
+                return rest.strip()
+        return t
+    client_name = _no_file_no(partner.name)
+    names = client_name.split(' ', 1)
     address = ', '.join(x for x in [partner.street, partner.street2, partner.city, partner.state_id.name, partner.zip, partner.country_id.name] if x)
-    client_fa = fa(partner, 'x_name_fa', partner.name or '')
+    client_fa = _no_file_no(fa(partner, 'x_name_fa', client_name))
     addr_fa = fa(partner, 'x_address_fa', address)
     fam = env['x_family'].sudo().search([('x_lead_id', '=', lead.id)], order='x_sequence, id') if lead else env['x_family'].sudo()
     spouse = fam.filtered(lambda f: f.x_relation == 'spouse')[:1]
@@ -523,7 +535,7 @@ else:
             if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
                 return True
         return False
-    if _has_farsi(partner.name) or not _has_latin(partner.name):
+    if _has_farsi(client_name) or not _has_latin(client_name):
         raise UserError(
             "The customer is saved as \"%s\". The agreement prints that name in its English "
             "section, so it has to be the English spelling.\n\nOpen the customer and write the "
@@ -541,11 +553,11 @@ else:
             if need_fa and not (f.x_name_fa or '').strip():
                 missing.append('%s %s: name in Farsi' % (label, (f.x_name_en or '').strip()))
     if need_fa and 'x_name_fa' in partner._fields and not (partner.x_name_fa or '').strip():
-        missing.append("Client %s: name in Farsi (on the CRM card, Address & family tab)" % (partner.name or ''))
+        missing.append("Client %s: name in Farsi (on the CRM card, Address & family tab)" % client_name)
     if missing:
         raise UserError("The draft was not generated. Complete the family members on the CRM card "
                         "(Address & family tab):\n- " + "\n- ".join(missing))
-    parties_en = 'the Client, %s' % (partner.name or '')
+    parties_en = 'the Client, %s' % client_name
     parties_fa = 'متقاضی، %s' % client_fa
     if spouse:
         parties_en += ', and the accompanying spouse, %s' % spouse.x_name_en
@@ -578,17 +590,17 @@ else:
             t = t[1:]
         return t
     client_phone = phone_no(partner.mobile or partner.phone or '')
-    contact_en = ['Full Name: %s' % (partner.name or ''), 'Residential Address: %s' % address,
+    contact_en = ['Full Name: %s' % client_name, 'Residential Address: %s' % address,
                   'Telephone/Cellphone Number: %s' % client_phone, 'E-mail: %s' % (partner.email or '')]
     if 'SPON' in kinds:
-        contact_en = ['Principal Applicant’s name: %s' % (partner.name or ''), 'Sponsor’s name: %s' % (sponsor.name if sponsor else '')] + contact_en[1:]
+        contact_en = ['Principal Applicant’s name: %s' % client_name, 'Sponsor’s name: %s' % _no_file_no(sponsor.name if sponsor else '')] + contact_en[1:]
     contact_fa = ['نام و نام خانوادگی: %s' % client_fa, 'آدرس محل سکونت: %s' % addr_fa,
                   'شماره تلفن/موبایل: %s' % client_phone, 'ایمیل: %s' % (partner.email or '')]
     scope = __SCOPE__
     sc = scope.get(main, scope.get('BC-ENT'))
     d = {
         'file_no': '', 'date_en': date_en, 'date_fa': date_en,
-        'client_en': partner.name or '', 'client_fa': client_fa, 'addr_en': address, 'addr_fa': addr_fa,
+        'client_en': client_name, 'client_fa': client_fa, 'addr_en': address, 'addr_fa': addr_fa,
         'phone': client_phone, 'email': partner.email or '',
         'nid': fa(partner, 'x_national_id', '—'),
         'parties_en': parties_en, 'parties_fa': parties_fa,
@@ -655,10 +667,10 @@ else:
                 raise UserError("The %s agreement for %s did not render into a valid PDF. Nothing was sent; "
                                 "try again, or tell IT." % (kind, order.name))
             return pdf
-        fname = '%s - %s - %s.pdf' % (d['file_no'], d['title'], partner.name or '')
+        fname = '%s - %s - %s.pdf' % (d['file_no'], d['title'], client_name)
         pdf = _render()
         att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
-        tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, partner.name or '')})
+        tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, client_name)})
         att.write({'res_id': tmpl.id})
         if not tmpl.num_pages:
             # Odoo's own PDF library could not read the page count, which is
@@ -670,7 +682,7 @@ else:
             att.sudo().unlink()
             pdf = _render()
             att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
-            tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, partner.name or '')})
+            tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, client_name)})
             att.write({'res_id': tmpl.id})
             if not tmpl.num_pages:
                 tmpl.sudo().unlink()
@@ -699,7 +711,7 @@ else:
             items.append((0, 0, {'partner_id': sponsor.id, 'role_id': __SPONSOR_ROLE__, 'mail_sent_order': 1}))
         req = env['sign.request'].sudo().with_context(no_sign_mail=True).create({
             'template_id': tmpl.id,
-            'reference': '%s – %s – %s' % (d['file_no'], d['title'], partner.name or ''),
+            'reference': '%s – %s – %s' % (d['file_no'], d['title'], client_name),
             'subject': '%s with %s – please review and sign' % (d['title'], company_name),
             'request_item_ids': items,
         })
@@ -790,7 +802,7 @@ PREVIEW_TAIL = r"""
         pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
         if not pdf or not bytes(pdf).startswith(b'%PDF'):
             raise UserError("The %s agreement did not render into a valid PDF." % kind)
-        name = 'PREVIEW %s - %s - %s.pdf' % (d['file_no'], d['title'], partner.name or '')
+        name = 'PREVIEW %s - %s - %s.pdf' % (d['file_no'], d['title'], client_name)
         old = _att.search([('res_model', '=', 'sale.order'), ('res_id', '=', order.id), ('name', '=', name)])
         if old:
             old.unlink()
@@ -972,6 +984,17 @@ if billable and not has_custom:
     kinds = sorted(tags & known)
     lead = order.opportunity_id
     fam = env['x_family'].sudo().search([('x_lead_id', '=', lead.id)], order='x_sequence, id') if lead else env['x_family'].sudo()
+    # The customer record is named "S26275 - Full Name"; the check below is about
+    # the person's name, so strip the file number first.
+    def _no_file_no(text):
+        t = (text or '').strip()
+        if ' - ' in t:
+            head, _sep, rest = t.partition(' - ')
+            h = head.strip()
+            if (h[:1] == 'S' and h[1:].isdigit()) or (h[:6] in ('SB0000', 'SG0000') and h[6:].isdigit()):
+                return rest.strip()
+        return t
+    client_name = _no_file_no(partner.name)
     # The English half of the agreement prints the customer's name as stored on the
     # customer record. A Farsi name there lands in the English section of the PDF.
     def _has_farsi(t):
@@ -984,7 +1007,7 @@ if billable and not has_custom:
             if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
                 return True
         return False
-    if _has_farsi(partner.name) or not _has_latin(partner.name):
+    if _has_farsi(client_name) or not _has_latin(client_name):
         raise UserError(
             "The customer is saved as \"%s\". The agreement prints that name in its English "
             "section, so it has to be the English spelling.\n\nOpen the customer and write the "
@@ -1002,7 +1025,7 @@ if billable and not has_custom:
             if need_fa and not (f.x_name_fa or '').strip():
                 missing.append('%s %s: name in Farsi' % (label, (f.x_name_en or '').strip()))
     if need_fa and 'x_name_fa' in partner._fields and not (partner.x_name_fa or '').strip():
-        missing.append("Client %s: name in Farsi (on the CRM card, Address & family tab)" % (partner.name or ''))
+        missing.append("Client %s: name in Farsi (on the CRM card, Address & family tab)" % client_name)
     if missing:
         raise UserError("The draft was not generated. Complete the family members on the CRM card "
                         "(Address & family tab):\n- " + "\n- ".join(missing))
