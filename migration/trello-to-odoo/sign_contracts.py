@@ -714,6 +714,12 @@ if _has_farsi(partner.name) or not _has_latin(partner.name):
     if lead:
         lead.sudo().message_post(body='Agreement sent for signature: %s' % '; '.join(r.reference for r in requests),
                                  message_type='comment', subtype_xmlid='mail.mt_note')
+        # The client is the first signer, so the agreement is in their inbox now:
+        # move the card on to "13- Draft Contract Sent". Forward only, so
+        # resending never rewinds a card that is already signed or further along.
+        sent_stage = env['crm.stage'].sudo().search([('name', '=like', '13-%')], limit=1)
+        if sent_stage and lead.stage_id and lead.stage_id.sequence < sent_stage.sequence:
+            lead.sudo().write({'stage_id': sent_stage.id})
     action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': requests[0].id,
               'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
 """.strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA)).replace("__KINDS__", repr(KINDS)).replace("__SCOPE__", repr(ENT_SCOPE)).replace("__BOXES__", repr(SIGN_BOXES))
@@ -1610,6 +1616,53 @@ def install_card_rules(odoo):
     log.info("  card rules automation active; retired %d separate automations", len(active))
 
 
+CONTRACT_SENT_STAGE_CODE = r"""
+# The custom-agreement route: the Sign request is created in the Sign editor,
+# after the order already points at its template, so creation is the moment the
+# agreement goes out. (The standard Send Contract button moves the card itself,
+# because there the order is linked only after the request exists.)
+# Forward only, so a card already further along is never rewound.
+stage = env['crm.stage'].sudo().search([('name', '=like', '13-%')], limit=1)
+if stage:
+    Order = env['sale.order'].sudo()
+    for req in records:
+        if not req.template_id:
+            continue
+        for order in Order.search([('x_custom_sign_template_id', '=', req.template_id.id)]):
+            lead = order.opportunity_id
+            if not lead or not lead.stage_id or lead.stage_id.sequence >= stage.sequence:
+                continue
+            lead.sudo().write({'stage_id': stage.id})
+            lead.sudo().message_post(
+                body='Moved to "%s": the agreement was sent to the client (%s).' % (stage.name, req.reference or order.name),
+                message_type='comment', subtype_xmlid='mail.mt_note')
+""".strip()
+
+
+def install_contract_sent_stage(odoo):
+    """Sending an agreement moves the card to "13- Draft Contract Sent"."""
+    stage = odoo.search_read("crm.stage", [("name", "=like", "13-%")], ["id", "name"], limit=1)
+    if not stage:
+        log.warning("  no '13-' stage found — contract-sent automation not installed")
+        return
+    act_id = _server_action(odoo, "contract_sent_stage", {
+        "name": "Agreement sent -> card to Draft Contract Sent",
+        "model_id": _model_id(odoo, "sign.request"), "state": "code",
+        "code": CONTRACT_SENT_STAGE_CODE, "binding_model_id": False})
+    state_field = odoo.search_read("ir.model.fields", [("model", "=", "sign.request"), ("name", "=", "state")], ["id"], limit=1)
+    auto_vals = {"name": "Phase 2: agreement sent -> Draft Contract Sent",
+                 "model_id": _model_id(odoo, "sign.request"), "trigger": "on_create_or_write",
+                 "trigger_field_ids": [(6, 0, [state_field[0]["id"]])] if state_field else [(5, 0, 0)],
+                 "filter_domain": "[('state', '=', 'sent')]",
+                 "action_server_ids": [(6, 0, [act_id])], "active": True}
+    auto = odoo.ref("p2auto", "contract_sent_stage")
+    if auto:
+        odoo.write("base.automation", [auto], auto_vals)
+    else:
+        odoo.upsert("p2auto", "contract_sent_stage", "base.automation", auto_vals)
+    log.info("  sending an agreement now moves the card to %r", stage[0]["name"])
+
+
 def relax_partner_accounting(odoo):
     """Contacts must be savable without a receivable/payable account.
 
@@ -1701,6 +1754,7 @@ def install(odoo, rcic_email):
     migrate_lead_address(odoo)
     fix_crm_fields(odoo)
     install_stage_gate(odoo)
+    install_contract_sent_stage(odoo)
     install_card_rules(odoo)
     install_state_dropdown(odoo)
     return ids
