@@ -1731,6 +1731,28 @@ def install_card_tidy(odoo):
     log.warning("  could not adjust the lead form — check the Extra Information tab by hand")
 
 
+def install_line_discounts(odoo):
+    """Let every internal user set a discount on a quotation line.
+
+    Odoo hides the "Disc.%" column behind the "Discount on lines" group, which
+    only one user had, so nobody could record an agreed discount. Implying the
+    group from the base Internal User group is exactly what the Settings
+    toggle does, and it reaches everyone at once. The agreements already print
+    a Discount / تخفیف row whenever the figure is non-zero.
+    """
+    ref = odoo.execute("ir.model.data", "check_object_reference", "product", "group_discount_per_so_line")
+    disc_gid = ref[1]
+    base_gid = odoo.execute("ir.model.data", "check_object_reference", "base", "group_user")[1]
+    base = odoo.search_read("res.groups", [("id", "=", base_gid)], ["implied_ids"])[0]
+    if disc_gid in base["implied_ids"]:
+        log.info("  line discounts already available to every internal user")
+        return disc_gid
+    odoo.write("res.groups", [base_gid], {"implied_ids": [(4, disc_gid)]})
+    have = odoo.execute("res.users", "search_count", [("groups_id", "in", [disc_gid])])
+    log.info("  line discounts enabled for every internal user (%d users have it now)", have)
+    return disc_gid
+
+
 def relax_partner_accounting(odoo):
     """Contacts must be savable without a receivable/payable account.
 
@@ -1824,6 +1846,7 @@ def install(odoo, rcic_email):
     install_stage_gate(odoo)
     install_contract_sent_stage(odoo)
     install_card_tidy(odoo)
+    install_line_discounts(odoo)
     install_card_rules(odoo)
     install_state_dropdown(odoo)
     return ids
