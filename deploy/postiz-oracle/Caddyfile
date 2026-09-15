@@ -1,0 +1,15 @@
+post.sugimotogroup.org {
+	encode gzip
+	reverse_proxy postiz:5000 {
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 3
+		}
+	}
+}
