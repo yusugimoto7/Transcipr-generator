@@ -1692,6 +1692,45 @@ def install_contract_sent_stage(odoo):
     log.info("  sending an agreement now moves the card to %r", stage[0]["name"])
 
 
+def install_card_tidy(odoo):
+    """Surface the Customer field; retire the duplicate fields on Extra Information.
+
+    Studio had set partner_id invisible, so there was no way to put a customer
+    on a card at all. Address / Postal Code / Contract Type on the Extra
+    Information tab duplicate the Address & family tab and the Service
+    Agreement, so they are hidden -- and their "required" expressions cleared
+    with them, or the card could not be saved once they are out of sight.
+    """
+    parents = odoo.search_read("ir.ui.view", [("model", "=", "crm.lead"), ("type", "=", "form"),
+                                              ("inherit_id", "=", False)], ["id"])
+    hide = ("x_studio_address", "x_studio_postal_code", "x_studio_contract_type_1")
+    arch = ("<data>"
+            "<xpath expr=\"//group[@name='opportunity_partner']/field[@name='partner_id']\" position=\"attributes\">"
+            "<attribute name=\"invisible\">0</attribute>"
+            "<attribute name=\"string\">Customer</attribute>"
+            "</xpath>"
+            + "".join(
+                "<xpath expr=\"//field[@name='%s']\" position=\"attributes\">"
+                "<attribute name=\"invisible\">1</attribute>"
+                "<attribute name=\"required\">0</attribute>"
+                "</xpath>" % name for name in hide)
+            + "</data>")
+    view_id = odoo.ref("p2view", "card_tidy")
+    for parent in parents:
+        try:
+            if view_id:
+                odoo.write("ir.ui.view", [view_id], {"inherit_id": parent["id"], "arch_db": arch})
+            else:
+                view_id, _ = odoo.upsert("p2view", "card_tidy", "ir.ui.view", {
+                    "name": "crm.lead.form.card.tidy", "model": "crm.lead",
+                    "inherit_id": parent["id"], "arch_db": arch, "priority": 210})
+            log.info("  Customer field shown; %s hidden on Extra Information", ", ".join(hide))
+            return view_id
+        except OdooError:
+            continue
+    log.warning("  could not adjust the lead form — check the Extra Information tab by hand")
+
+
 def relax_partner_accounting(odoo):
     """Contacts must be savable without a receivable/payable account.
 
@@ -1784,6 +1823,7 @@ def install(odoo, rcic_email):
     fix_crm_fields(odoo)
     install_stage_gate(odoo)
     install_contract_sent_stage(odoo)
+    install_card_tidy(odoo)
     install_card_rules(odoo)
     install_state_dropdown(odoo)
     return ids

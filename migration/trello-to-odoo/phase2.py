@@ -89,13 +89,27 @@ if not lead.x_service:
     raise UserError("Set the Service Agreement on this card before creating a quotation.")
 partner = lead.partner_id
 if not partner:
-    partner = env['res.partner'].sudo().create({
+    # Everything the card already holds, so the contract has the details it
+    # prints without anyone retyping them.
+    vals_p = {
         'name': lead.contact_name or lead.partner_name or lead.name,
         'email': lead.email_from or False,
         'phone': lead.phone or False,
         'mobile': lead.mobile or False,
+        'street': lead.street or False,
+        'street2': lead.street2 or False,
+        'city': lead.city or False,
+        'zip': lead.zip or False,
+        'country_id': lead.country_id.id or False,
         'company_id': False,
-    })
+    }
+    # A province belongs to a Canadian address only.
+    if lead.country_id and lead.country_id.code == 'CA':
+        vals_p['state_id'] = lead.state_id.id or False
+    for f in ('x_name_fa', 'x_address_fa', 'x_national_id'):
+        if f in lead._fields and f in env['res.partner']._fields and lead[f]:
+            vals_p[f] = lead[f]
+    partner = env['res.partner'].sudo().create(vals_p)
     lead.sudo().write({'partner_id': partner.id})
 vals = {'partner_id': partner.id, 'opportunity_id': lead.id, 'origin': lead.name,
         'company_id': lead.company_id.id or env.company.id,
