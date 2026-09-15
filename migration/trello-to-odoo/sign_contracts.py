@@ -654,7 +654,17 @@ else:
         if prev and prev.state not in ('signed', 'canceled'):
             prev.sudo().cancel()
     boxes = __BOXES__
+    # The agents on the file are copied: they cannot be CC'd on the client's own
+    # e-mail (each signer gets a private signing link), so they get their own
+    # copy of the very same PDF below, and they are on "Copy to" of the
+    # signature request so Odoo sends them the signed original automatically.
+    agents = []
+    for u in [order.user_id, lead.user_id if lead else False]:
+        if u and u.id != env.user.id and u.id not in [a.id for a in agents]:
+            agents.append(u)
+    cc_ids = [u.partner_id.id for u in agents if u.partner_id]
     requests = []
+    sent_atts = []
     for kind in kinds:
         is_sb = kind.startswith('SB-')
         company_name = 'Sparkbridge Incubator Ltd.' if is_sb else 'Sugimoto Visa'
@@ -695,9 +705,9 @@ else:
         # screen ever fails to load the document, the agent or RCIC can
         # still open the identical PDF straight from the quotation's
         # attachments without depending on the Sign app at all.
-        env['ir.attachment'].sudo().create({
+        sent_atts.append(env['ir.attachment'].sudo().create({
             'name': 'SENT %s' % fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf',
-            'res_model': 'sale.order', 'res_id': order.id})
+            'res_model': 'sale.order', 'res_id': order.id}))
         Item = env['sign.item'].sudo()
         layout = boxes['spon'] if kind == 'SPON' else boxes['page']
         role_of = {'client': 1, 'client_date': 1, 'sponsor': __SPONSOR_ROLE__, 'sponsor_date': __SPONSOR_ROLE__, 'company': 2, 'company_date': 2}
@@ -715,6 +725,11 @@ else:
             'subject': '%s with %s – please review and sign' % (d['title'], company_name),
             'request_item_ids': items,
         })
+        # "Copy to" on a signature request is read-only: Odoo computes it from the
+        # followers, minus the signers. Following the request is therefore what
+        # puts the agents on it, and gets them the signed original.
+        if cc_ids:
+            req.sudo().message_subscribe(partner_ids=cc_ids)
         req.send_signature_accesses()
         requests.append(req)
     order.write({'x_sign_request_id': requests[0].id, 'x_sign_request2_id': requests[1].id if len(requests) > 1 else False,
@@ -723,6 +738,26 @@ else:
         money(pro), money(disc), money(tax), money(total), money(gov), '; '.join(plan_en))
     order.message_post(body='Agreement(s) %s generated and sent for signature (the client signs first, then %s): %s. %s' % (
         ', '.join(kinds), rcic.name, '; '.join(r.reference for r in requests), summary), message_type='comment', subtype_xmlid='mail.mt_note')
+    # A copy for the agents who own the file, with the same PDF the client got.
+    if agents:
+        base_url = env['ir.config_parameter'].sudo().get_param('web.base.url') or ''
+        agent_body = ('<p>The %s for <strong>%s</strong> (%s) has been e-mailed to '
+                      '<strong>%s</strong> for signature.</p>'
+                      '<p>The client signs first, then %s. The signed original will reach you '
+                      'automatically once everyone has signed.</p>'
+                      '<p>Attached is the very same document the client received.</p>'
+                      '<p><a href="%s/web#id=%s&model=sale.order&view_type=form">Open %s</a></p>') % (
+                         ' and '.join(r.reference for r in requests), client_name, file_no,
+                         partner.email or 'the client', rcic.name, base_url, order.id, order.name)
+        for u in agents:
+            if not u.email:
+                continue
+            env['mail.mail'].sudo().create({
+                'subject': 'Contract sent to %s (%s)' % (client_name, file_no),
+                'body_html': agent_body, 'email_to': u.email, 'auto_delete': False,
+                'model': 'sale.order', 'res_id': order.id,
+                'attachment_ids': [(6, 0, [a.id for a in sent_atts])],
+            }).send()
     if lead:
         lead.sudo().message_post(body='Agreement sent for signature: %s' % '; '.join(r.reference for r in requests),
                                  message_type='comment', subtype_xmlid='mail.mt_note')
