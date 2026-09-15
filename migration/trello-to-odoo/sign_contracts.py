@@ -277,7 +277,8 @@ for order in records:
     Plan = env['x_pay_plan'].sudo()
     rows = Plan.search([('x_order_id', '=', order.id)], order='x_sequence, id')
     if not rows and lines:
-        codes = [l.product_id.default_code or '' for l in lines if l.product_uom_qty]
+        codes = [l.product_id.default_code or '' for l in lines
+                 if l.product_uom_qty and (l.product_uom_qty * (l.price_unit or 0.0)) >= 0]
         main = codes[0] if codes else ''
         tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
         # The service's default plan ("share:amount:due;..." on the product),
@@ -431,8 +432,13 @@ else:
     order.invalidate_recordset()
 
     KINDS = __KINDS__
+    # A negative line is a discount, not a service: it carries no agreement tag,
+    # and it belongs in the Discount row rather than in Professional Fees.
+    def is_discount(l):
+        return (l.product_uom_qty or 0.0) * (l.price_unit or 0.0) < 0
     billable = order.order_line.filtered(
         lambda l: not l.display_type and l.product_id and l.product_uom_qty
+        and not is_discount(l)
         and not (l.product_id.default_code or '').startswith('GOV-'))
     kinds = []
     for l in billable:
@@ -464,9 +470,12 @@ else:
         if code.startswith('GOV-'):
             gov += l.price_subtotal
             continue
+        gross = l.product_uom_qty * l.price_unit
+        if gross < 0:
+            disc += -gross
+            continue
         if l.product_uom_qty:
             codes.append(code)
-        gross = l.product_uom_qty * l.price_unit
         pro += gross
         disc += gross * (l.discount or 0.0) / 100.0
     tax = sum(l.price_tax for l in order.order_line if not l.display_type and not (l.product_id.default_code or '').startswith('GOV-'))
@@ -1004,6 +1013,7 @@ if not partner.country_id:
 if partner.country_id.code == 'CA' and not partner.state_id:
     raise UserError("Set the customer's province before submitting for approval.")
 billable = order.order_line.filtered(lambda l: not l.display_type and l.product_id and l.product_uom_qty
+    and (l.product_uom_qty or 0.0) * (l.price_unit or 0.0) >= 0
     and not (l.product_id.default_code or '').startswith('GOV-'))
 has_custom = bool(order.x_custom_agreement) or bool((order.x_custom_agreement_url or '').strip())
 if not billable and not has_custom:
