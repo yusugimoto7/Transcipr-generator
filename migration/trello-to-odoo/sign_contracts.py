@@ -512,24 +512,24 @@ else:
     kids = fam.filtered(lambda f: f.x_relation == 'child')
     comps = fam.filtered(lambda f: f.x_relation in ('spouse', 'child', 'companion'))
     # The English half of the agreement prints the customer's name as stored on the
-# customer record. A Farsi name there lands in the English section of the PDF.
-def _has_farsi(t):
-    for ch in (t or ''):
-        if u'\u0600' <= ch <= u'\u06FF' or u'\uFB50' <= ch <= u'\uFEFF':
-            return True
-    return False
-def _has_latin(t):
-    for ch in (t or ''):
-        if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
-            return True
-    return False
-if _has_farsi(partner.name) or not _has_latin(partner.name):
-    raise UserError(
-        "The customer is saved as \"%s\". The agreement prints that name in its English "
-        "section, so it has to be the English spelling.\n\nOpen the customer and write the "
-        "name in English. The Farsi spelling belongs in 'Name (Farsi)' on the CRM card, "
-        "Address & family tab." % (partner.name or ''))
-# Family members named on the CRM card must be complete before a draft is generated.
+    # customer record. A Farsi name there lands in the English section of the PDF.
+    def _has_farsi(t):
+        for ch in (t or ''):
+            if u'\u0600' <= ch <= u'\u06FF' or u'\uFB50' <= ch <= u'\uFEFF':
+                return True
+        return False
+    def _has_latin(t):
+        for ch in (t or ''):
+            if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+                return True
+        return False
+    if _has_farsi(partner.name) or not _has_latin(partner.name):
+        raise UserError(
+            "The customer is saved as \"%s\". The agreement prints that name in its English "
+            "section, so it has to be the English spelling.\n\nOpen the customer and write the "
+            "name in English. The Farsi spelling belongs in 'Name (Farsi)' on the CRM card, "
+            "Address & family tab." % (partner.name or ''))
+    # Family members named on the CRM card must be complete before a draft is generated.
     BILINGUAL = {'TR', 'PFL', 'ENT', 'SB-A', 'SB-C', 'SB-D', 'SB-E'}
     need_fa = any(k in BILINGUAL for k in kinds)
     missing = []
@@ -973,24 +973,24 @@ if billable and not has_custom:
     lead = order.opportunity_id
     fam = env['x_family'].sudo().search([('x_lead_id', '=', lead.id)], order='x_sequence, id') if lead else env['x_family'].sudo()
     # The English half of the agreement prints the customer's name as stored on the
-# customer record. A Farsi name there lands in the English section of the PDF.
-def _has_farsi(t):
-    for ch in (t or ''):
-        if u'\u0600' <= ch <= u'\u06FF' or u'\uFB50' <= ch <= u'\uFEFF':
-            return True
-    return False
-def _has_latin(t):
-    for ch in (t or ''):
-        if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
-            return True
-    return False
-if _has_farsi(partner.name) or not _has_latin(partner.name):
-    raise UserError(
-        "The customer is saved as \"%s\". The agreement prints that name in its English "
-        "section, so it has to be the English spelling.\n\nOpen the customer and write the "
-        "name in English. The Farsi spelling belongs in 'Name (Farsi)' on the CRM card, "
-        "Address & family tab." % (partner.name or ''))
-# Family members named on the CRM card must be complete before a draft is generated.
+    # customer record. A Farsi name there lands in the English section of the PDF.
+    def _has_farsi(t):
+        for ch in (t or ''):
+            if u'\u0600' <= ch <= u'\u06FF' or u'\uFB50' <= ch <= u'\uFEFF':
+                return True
+        return False
+    def _has_latin(t):
+        for ch in (t or ''):
+            if ('a' <= ch <= 'z') or ('A' <= ch <= 'Z'):
+                return True
+        return False
+    if _has_farsi(partner.name) or not _has_latin(partner.name):
+        raise UserError(
+            "The customer is saved as \"%s\". The agreement prints that name in its English "
+            "section, so it has to be the English spelling.\n\nOpen the customer and write the "
+            "name in English. The Farsi spelling belongs in 'Name (Farsi)' on the CRM card, "
+            "Address & family tab." % (partner.name or ''))
+    # Family members named on the CRM card must be complete before a draft is generated.
     BILINGUAL = {'TR', 'PFL', 'ENT', 'SB-A', 'SB-C', 'SB-D', 'SB-E'}
     need_fa = any(k in BILINGUAL for k in kinds)
     missing = []
