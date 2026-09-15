@@ -924,6 +924,7 @@ APPROVERS = [
     ("z.ghasemi.sugimoto@gmail.com", "Zeinab Ghasemi"),
     ("iman.alinejad.einalou@gmail.com", "Iman Alinejad"),
     ("aban.teymouri@sparkbridge.ca", "Aban Teymoury"),
+    ("l.fathi@team.sugimotogroup.org", "Leila Fathi"),
     ("yusugimoto7@gmail.com", "Yu Sugimoto"),
     ("sugimoto.ken@gmail.com", "Ken Sugimoto"),
     ("nima@sparkbridge.ca", "Nima"),
@@ -937,6 +938,7 @@ EMAIL_APPROVERS = [
     "z.ghasemi.sugimoto@gmail.com",   # Zeinab Ghasemi
     "iman.alinejad.einalou@gmail.com",  # Iman Alinejad
     "aban.teymouri@sparkbridge.ca",   # Aban Teymoury
+    "l.fathi@team.sugimotogroup.org",  # Leila Fathi
 ]
 
 SUBMIT_APPROVAL_CODE = r"""
