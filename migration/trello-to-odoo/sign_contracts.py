@@ -719,7 +719,7 @@ else:
         # resending never rewinds a card that is already signed or further along.
         sent_stage = env['crm.stage'].sudo().search([('name', '=like', '13-%')], limit=1)
         if sent_stage and lead.stage_id and lead.stage_id.sequence < sent_stage.sequence:
-            lead.sudo().write({'stage_id': sent_stage.id})
+            lead.sudo().with_context(skip_stage_gate=True).write({'stage_id': sent_stage.id})
     action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': requests[0].id,
               'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
 """.strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA)).replace("__KINDS__", repr(KINDS)).replace("__SCOPE__", repr(ENT_SCOPE)).replace("__BOXES__", repr(SIGN_BOXES))
@@ -1526,26 +1526,55 @@ def fix_crm_fields(odoo):
 
 
 STAGE_GATE_CODE = r"""
-stage = env['crm.stage'].sudo().search([('name', 'ilike', 'Need to Receive Draft Contract')], limit=1)
-for lead in records:
-    if not stage or lead.stage_id != stage:
-        continue
-    if not lead.x_service:
-        raise UserError("This card cannot move to '%s' until the Service Agreement is set." % stage.name)
-    orders = env['sale.order'].sudo().search([('opportunity_id', '=', lead.id)])
-    sent = orders.filtered(lambda o: o.x_sign_request_id or o.x_sign_request2_id or o.x_custom_sign_template_id)
-    if not sent:
-        raise UserError(
-            "This card cannot move to '%s' until a contract has been sent to the client. Fill in the payment "
-            "plan on a quotation, and press Send Contract (or have it approved and sent by the contract team) "
-            "first." % stage.name)
+# Two gates, one per stage.
+#   12- Need to Receive Draft Contract : the client's file must be complete.
+#   13- Draft Contract Sent            : a contract must really have gone out.
+# The system's own move to 13 (right after Send Contract) passes
+# skip_stage_gate, because by then the contract has demonstrably been sent.
+if not env.context.get('skip_stage_gate'):
+    Lead = env['crm.lead'].sudo()
+    s12 = env['crm.stage'].sudo().search([('name', '=like', '12-%')], limit=1)
+    s13 = env['crm.stage'].sudo().search([('name', '=like', '13-%')], limit=1)
+    for lead in records:
+        stage = lead.stage_id
+        p = lead.partner_id
+        if s12 and stage == s12:
+            missing = []
+            if not p:
+                missing.append("the customer: pick or create one in the Customer field")
+            elif len((p.name or '').split()) < 2:
+                missing.append("the customer's full name (first and last name), currently \"%s\"" % (p.name or ''))
+            if not (lead.phone or lead.mobile or (p and (p.phone or p.mobile))):
+                missing.append("a phone number")
+            street = lead.street or (p and p.street)
+            city = lead.city or (p and p.city)
+            country = lead.country_id or (p and p.country_id)
+            if not (street and city and country):
+                missing.append("the residential address: street, city and country (Address & family tab)")
+            # Counted, not read: the image itself can be several megabytes.
+            if not Lead.search_count([('id', '=', lead.id), ('x_studio_copy_pass_info', '!=', False)]):
+                missing.append("the passport copy (Passport Image (Main Applicant))")
+            if missing:
+                raise UserError(
+                    "This card cannot move to '%s' until the client's information is complete.\n\n"
+                    "Still missing:\n- %s" % (stage.name, "\n- ".join(missing)))
+        if s13 and stage == s13:
+            if not lead.x_service:
+                raise UserError("This card cannot move to '%s' until the Service Agreement is set." % stage.name)
+            orders = env['sale.order'].sudo().search([('opportunity_id', '=', lead.id)])
+            sent = orders.filtered(lambda o: o.x_sign_request_id or o.x_sign_request2_id or o.x_custom_sign_template_id)
+            if not sent:
+                raise UserError(
+                    "This card cannot move to '%s' until a contract has been sent to the client. Fill in the payment "
+                    "plan on a quotation, and press Send Contract (or have it approved and sent by the contract team) "
+                    "first." % stage.name)
 """.strip()
 
 
 def install_stage_gate(odoo):
-    """A card cannot reach "Need to Receive Draft Contract" without a sent agreement."""
+    """Stage 12 needs a complete client file; stage 13 needs a sent agreement."""
     act_id = _server_action(odoo, "stage_gate", {
-        "name": "Contract must be sent before Need to Receive Draft Contract",
+        "name": "Stage gates: client file for 12, sent contract for 13",
         "model_id": _model_id(odoo, "crm.lead"), "state": "code",
         "code": STAGE_GATE_CODE, "binding_model_id": False})
     log.info("  stage gate action ready (run by the shared card-rules automation)")
@@ -1632,7 +1661,7 @@ if stage:
             lead = order.opportunity_id
             if not lead or not lead.stage_id or lead.stage_id.sequence >= stage.sequence:
                 continue
-            lead.sudo().write({'stage_id': stage.id})
+            lead.sudo().with_context(skip_stage_gate=True).write({'stage_id': stage.id})
             lead.sudo().message_post(
                 body='Moved to "%s": the agreement was sent to the client (%s).' % (stage.name, req.reference or order.name),
                 message_type='comment', subtype_xmlid='mail.mt_note')
