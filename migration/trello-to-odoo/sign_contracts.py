@@ -752,6 +752,39 @@ else:
         requests.append(req)
     order.write({'x_sign_request_id': requests[0].id, 'x_sign_request2_id': requests[1].id if len(requests) > 1 else False,
                  'x_agreement_kinds': ', '.join(kinds)})
+    # The finance sheet's row, worked out here rather than in n8n so the fee and
+    # payment-plan logic lives in exactly one place. n8n reads these fields and
+    # pushes the row; it clears nothing and recomputes nothing.
+    relation_label = {'spouse': 'Couple', 'child': 'Child', 'companion': 'Companion'}
+    n_spouse = len(fam.filtered(lambda f: f.x_relation == 'spouse'))
+    n_kids = len(fam.filtered(lambda f: f.x_relation == 'child'))
+    if not n_spouse and not n_kids:
+        accompanying = 'Single'
+    elif n_spouse and not n_kids:
+        accompanying = 'Couple'
+    elif n_spouse and n_kids:
+        accompanying = 'Couple + %dKid%s' % (n_kids, '' if n_kids == 1 else 's')
+    else:
+        accompanying = 'Single + %dKid%s' % (n_kids, '' if n_kids == 1 else 's')
+    kids = fam.filtered(lambda f: f.x_relation == 'child')
+    spouse_row = fam.filtered(lambda f: f.x_relation == 'spouse')[:1]
+    plan_short = ' + '.join('%s %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[0]) for r in rows)
+    order.sudo().write({
+        'x_sheet_pro': pro, 'x_sheet_gov': gov, 'x_sheet_disc': disc,
+        'x_sheet_tax': tax, 'x_sheet_total': total,
+        'x_sheet_plan': plan_short[:255],
+        'x_sheet_kinds': ', '.join(kinds),
+        'x_sheet_accompanying': accompanying,
+        'x_sheet_type': (codes[0] if codes else ''),
+        'x_sheet_rcic': rcic.name or '',
+        'x_sheet_spouse': (spouse_row.x_name_en or spouse_row.x_name_fa or '') if spouse_row else '',
+        'x_sheet_child1': (kids[0].x_name_en or kids[0].x_name_fa or '') if len(kids) > 0 else '',
+        'x_sheet_child2': (kids[1].x_name_en or kids[1].x_name_fa or '') if len(kids) > 1 else '',
+        'x_sheet_child3': (kids[2].x_name_en or kids[2].x_name_fa or '') if len(kids) > 2 else '',
+        'x_sheet_sent_date': datetime.date.today(),
+        'x_sheet_synced': False,
+    })
+
     summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees %s, excluded). Payment plan: %s' % (
         money(pro), money(disc), money(tax), money(total), money(gov), '; '.join(plan_en))
     order.message_post(body='Agreement(s) %s generated and sent for signature (the client signs first, then %s): %s. %s' % (
