@@ -783,6 +783,24 @@ else:
         'x_sheet_child3': (kids[2].x_name_en or kids[2].x_name_fa or '') if len(kids) > 2 else '',
         'x_sheet_sent_date': datetime.date.today(),
         'x_sheet_synced': False,
+        # The rest of the row, so the sync job needs one read and one write and
+        # never has to reassemble a client from four models.
+        'x_sheet_company': 'SB' if any(k.startswith('SB-') for k in kinds) else 'SG',
+        'x_sheet_contract_no': file_no,
+        'x_sheet_display': partner.name or '',
+        'x_sheet_name': names[0] if names else '',
+        'x_sheet_family': names[1] if len(names) > 1 else '',
+        'x_sheet_email': partner.email or '',
+        'x_sheet_phone': client_phone or '',
+        'x_sheet_address': address or '',
+        'x_sheet_name_fa': client_fa or '',
+        'x_sheet_address_fa': addr_fa or '',
+        'x_sheet_agent': (lead.user_id.name if lead and lead.user_id else (order.user_id.name or '')),
+        'x_sheet_country': partner.country_id.name or '',
+        'x_sheet_passport': (partner.x_national_id or '') if 'x_national_id' in partner._fields else '',
+        'x_sheet_spouse_fa': (spouse_row.x_name_fa or '') if spouse_row else '',
+        'x_sheet_child1_fa': (kids[0].x_name_fa or '') if len(kids) > 0 else '',
+        'x_sheet_child2_fa': (kids[1].x_name_fa or '') if len(kids) > 1 else '',
     })
 
     summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees %s, excluded). Payment plan: %s' % (
