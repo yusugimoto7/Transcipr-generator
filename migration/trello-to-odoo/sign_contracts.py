@@ -782,7 +782,9 @@ else:
         'x_sheet_child2': (kids[1].x_name_en or kids[1].x_name_fa or '') if len(kids) > 1 else '',
         'x_sheet_child3': (kids[2].x_name_en or kids[2].x_name_fa or '') if len(kids) > 2 else '',
         'x_sheet_sent_date': datetime.date.today(),
-        'x_sheet_synced': False,
+        # A positive marker rather than an empty value: the sync job filters on
+        # this, and Odoo does not match '' against an empty text column.
+        'x_sheet_synced': 'pending',
         # The rest of the row, so the sync job needs one read and one write and
         # never has to reassemble a client from four models.
         'x_sheet_company': 'SB' if any(k.startswith('SB-') for k in kinds) else 'SG',
