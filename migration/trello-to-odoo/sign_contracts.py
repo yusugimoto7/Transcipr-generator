@@ -771,7 +771,12 @@ else:
             '<p><b>Contract amount:</b> %(total)s<br/><b>Payment plan:</b></p><ul>%(plan_en)s</ul>'
             '<p>If the signing page does not open, please try Google Chrome or reply to this e-mail.</p>'
             '</div>'
+            '%(pay)s'
         ) % {
+            # Payment instructions live in a system parameter (Settings >
+            # Technical > Parameters) so finance can change them without IT.
+            'pay': env['ir.config_parameter'].sudo().get_param(
+                'phase2.sb_payment_html' if is_sb else 'phase2.sg_payment_html') or '',
             'client_fa': client_fa, 'client_en': client_name, 'no': d['file_no'], 'title': d['title'],
             'service_fa': service_fa, 'service_en': service_en, 'signer_fa': signer_fa, 'signer_en': signer_en,
             'total': money(total),
@@ -2108,7 +2113,51 @@ def install_sheet_fields(odoo):
         _field(odoo, "sale.order", name, {"field_description": label, "ttype": ttype})
 
 
+def _payment_html(company_en, company_fa, etransfer, eur=False):
+    """Template P1 of the e-mail catalogue, as the block under the contract e-mail."""
+    exchange = 'Quebec Money Exchange — 740 Blvd de la Côte-Vertu, #182, Montréal, QC H4L 5C8 — +1 (514) 806-7603'
+    # One LTR run in the Farsi text, or the address is reordered around the dashes.
+    exchange_fa = '<span dir="ltr">%s</span>' % exchange
+    cad_fa = 'پرداخت به دلار کانادا' + (' (یا یورو، برای قراردادهای یورویی)' if eur else '')
+    cad_en = 'Payment in Canadian dollars' + (' (or euros, for contracts in euros)' if eur else '')
+    return (
+        '<div style="margin:16px 0; padding:12px 16px; background:#f4f6f8; border-radius:4px; line-height:1.8;">'
+        '<div dir="rtl" style="text-align:right;">'
+        '<p><b>راهنمای پرداخت</b></p><ul>'
+        '<li><b>%(cad_fa)s:</b> از طریق Interac e-Transfer به ایمیل <span dir="ltr"><b>%(et)s</b></span> '
+        '(واریز خودکار به نام <span dir="ltr">%(co_en)s</span>). در صورت پرداخت از داخل خاک کانادا، مالیات مطابق قوانین '
+        'استان مربوطه به صورت‌حساب اضافه می‌شود.</li>'
+        '<li><b>پرداخت ریالی:</b> از طریق صرافی %(ex_fa)s. لطفاً هنگام تماس، شماره قرارداد خود را اعلام بفرمایید.</li>'
+        '<li>جهت اطمینان از ایمن بودن تراکنش‌ها، از پرداخت از طریق سایر روش‌ها یا صرافی‌های دیگر خودداری فرمایید.</li>'
+        '<li>لطفاً پس از واریز، تصویر رسید را در پاسخ به همین ایمیل ارسال بفرمایید.</li>'
+        '</ul></div>'
+        '<div dir="ltr" style="text-align:left; color:#444;">'
+        '<p><b>How to pay</b></p><ul>'
+        '<li><b>%(cad_en)s:</b> Interac e-Transfer to <b>%(et)s</b> (auto-deposit, registered to %(co_en)s). '
+        'If you pay from inside Canada, the applicable provincial tax is added to the invoice.</li>'
+        '<li><b>Payment in rials:</b> through %(ex)s. Please quote your contract number.</li>'
+        '<li>For your own security, do not pay through any other method or exchange.</li>'
+        '<li>After paying, please reply to this e-mail with a picture of the receipt.</li>'
+        '</ul></div></div>'
+    ) % {'cad_fa': cad_fa, 'cad_en': cad_en, 'et': etransfer, 'co_en': company_en, 'co_fa': company_fa, 'ex': exchange, 'ex_fa': exchange_fa}
+
+
+PAYMENT_DEFAULTS = {
+    "phase2.sg_payment_html": _payment_html("SUGIMOTO VISA INC.", "سوگیموتو ویزا", "info@sugimotovisa.com"),
+    "phase2.sb_payment_html": _payment_html("SPARKBRIDGE INCUBATOR LTD.", "اسپارک‌بریج", "finance@sparkbridge.ca", eur=True),
+}
+
+
+def install_payment_blocks(odoo, reset=False):
+    """Seed the payment instructions; finance's later edits are kept unless reset."""
+    for key, html in PAYMENT_DEFAULTS.items():
+        if reset or not odoo.execute("ir.config_parameter", "get_param", key):
+            odoo.execute("ir.config_parameter", "set_param", key, html)
+            log.info("  payment block %s set", key)
+
+
 def install_sign_mail(odoo):
+    install_payment_blocks(odoo)
     """Replace Odoo Sign's stock client e-mails (which render half-translated
     when the client's language is Farsi) with the catalogue's C2 / C5 texts."""
     for key, parent_key, name, arch in [
