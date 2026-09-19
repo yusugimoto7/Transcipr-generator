@@ -740,6 +740,10 @@ else:
         sender = env['res.users'].sudo().with_context(active_test=False).search(
             ['|', ('login', '=ilike', sender_email), ('email', '=ilike', sender_email)], limit=1) if sender_email else env['res.users']
         Request = env['sign.request'].with_user(sender.id).sudo() if sender else env['sign.request'].sudo()
+        # Existing contacts may still be on Farsi: Odoo's mail frame around the
+        # e-mail is only half translated, so the client's mail language is English.
+        if partner.lang != 'en_US':
+            partner.sudo().write({'lang': 'en_US'})
         # The client's e-mail (template C2 of the e-mail catalogue). Odoo Sign
         # renders it as the body of the signing e-mail, above the Sign button;
         # the layout around it is the __trello__ override of the Sign template.

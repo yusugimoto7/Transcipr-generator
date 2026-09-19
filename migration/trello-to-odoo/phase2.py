@@ -140,6 +140,9 @@ if not partner:
         'zip': lead.zip or False,
         'country_id': lead.country_id.id or False,
         'company_id': False,
+        # Odoo's own mail frame around our (bilingual) e-mails is only half
+        # translated to Farsi; English keeps it clean.
+        'lang': 'en_US',
     }
     # A province belongs to a Canadian address only.
     if lead.country_id and lead.country_id.code == 'CA':
