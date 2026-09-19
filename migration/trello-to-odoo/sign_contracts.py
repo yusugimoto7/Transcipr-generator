@@ -488,7 +488,7 @@ else:
     due = __DUE__
     ord_en = __ORD_EN__
     ord_fa = __ORD_FA__
-    plan_en, plan_fa = [], []
+    plan_en, plan_fa, plan_fa_html = [], [], []
     for i, row in enumerate(rows):
         when_en, when_fa = due.get(row.x_due, due['sub_app'])
         if row.x_due == 'date':
@@ -497,6 +497,9 @@ else:
         note = (' – ' + row.x_note) if row.x_note else ''
         plan_en.append('%s Payment – %s – %s%s' % (ord_en[i] if i < len(ord_en) else str(i + 1), money(row.x_amount), when_en, note))
         plan_fa.append('پرداخت %s – %s – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
+        # For the e-mail: the amount as an LTR run, so "$1,260.00 CAD" is not
+        # reordered by the surrounding right-to-left text.
+        plan_fa_html.append('پرداخت %s – <span dir="ltr">%s</span> – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
     fee_rows_en, fee_rows_fa = [['Professional Fees', money(pro)]], [['هزینه‌های حرفه‌ای', money(pro)]]
     if gov:
         fee_rows_en.append(['Government Fees', money(gov)]); fee_rows_fa.append(['هزینه‌های دولتی', money(gov)])
@@ -737,10 +740,49 @@ else:
         sender = env['res.users'].sudo().with_context(active_test=False).search(
             ['|', ('login', '=ilike', sender_email), ('email', '=ilike', sender_email)], limit=1) if sender_email else env['res.users']
         Request = env['sign.request'].with_user(sender.id).sudo() if sender else env['sign.request'].sudo()
+        # The client's e-mail (template C2 of the e-mail catalogue). Odoo Sign
+        # renders it as the body of the signing e-mail, above the Sign button;
+        # the layout around it is the __trello__ override of the Sign template.
+        if is_sb:
+            signer_fa = 'شرکت <span dir="ltr">Sparkbridge Incubator Ltd.</span>'
+            signer_en = 'Sparkbridge Incubator Ltd.'
+        else:
+            signer_fa = 'جناب آقای حامد سوگیموتو، مشاور رسمی مهاجرت کانادا (RCIC R713046)'
+            signer_en = 'Hamed Sugimoto, RCIC R713046'
+        service_fa = ' و '.join(services_fa)
+        service_en = ', '.join(services_en)
+        msg = (
+            '<div dir="rtl" style="text-align:right; line-height:1.9;">'
+            '<p>سرکار خانم / جناب آقای %(client_fa)s<br/>با سلام و احترام،</p>'
+            '<p>قرارداد شماره <b dir="ltr">%(no)s</b> برای خدمت «%(service_fa)s» آماده امضای الکترونیکی شماست.</p>'
+            '<p>لطفاً روی دکمه «امضای قرارداد» در همین ایمیل کلیک کرده، قرارداد را مطالعه و به‌صورت آنلاین امضا بفرمایید. '
+            'نیازی به چاپ، اسکن یا ارسال مجدد فایل نیست. پس از امضای شما، قرارداد از سوی %(signer_fa)s امضا می‌شود و '
+            'نسخه نهایی امضاشده به‌صورت خودکار برای شما ایمیل خواهد شد.</p>'
+            '<p><b>مبلغ قرارداد:</b> <span dir="ltr">%(total)s</span><br/><b>برنامه پرداخت:</b></p><ul>%(plan_fa)s</ul>'
+            '<p>نکته: اگر صفحه امضا در مرورگر شما باز نشد، لطفاً با مرورگر Chrome امتحان کنید یا با پاسخ به همین ایمیل به ما اطلاع دهید.</p>'
+            '<p>در صورت هرگونه سؤال، با پاسخ به همین ایمیل در خدمت شما هستیم.</p>'
+            '</div>'
+            '<hr style="border:none; border-top:1px solid #ddd; margin:16px 0;"/>'
+            '<div dir="ltr" style="text-align:left; line-height:1.6; color:#444;">'
+            '<p>Dear %(client_en)s,</p>'
+            '<p>Your %(title)s No. <b>%(no)s</b> for "%(service_en)s" is ready for your electronic signature. '
+            'Click "Sign document" below to review and sign it online; there is nothing to print or scan. '
+            'After you sign, %(signer_en)s countersigns and the final signed copy is e-mailed to you automatically.</p>'
+            '<p><b>Contract amount:</b> %(total)s<br/><b>Payment plan:</b></p><ul>%(plan_en)s</ul>'
+            '<p>If the signing page does not open, please try Google Chrome or reply to this e-mail.</p>'
+            '</div>'
+        ) % {
+            'client_fa': client_fa, 'client_en': client_name, 'no': d['file_no'], 'title': d['title'],
+            'service_fa': service_fa, 'service_en': service_en, 'signer_fa': signer_fa, 'signer_en': signer_en,
+            'total': money(total),
+            'plan_fa': ''.join('<li>%s</li>' % p for p in plan_fa_html),
+            'plan_en': ''.join('<li>%s</li>' % p for p in plan_en),
+        }
         req = Request.with_context(no_sign_mail=True).create({
             'template_id': tmpl.id,
             'reference': '%s – %s – %s' % (d['file_no'], d['title'], client_name),
             'subject': '%s with %s – please review and sign' % (d['title'], company_name),
+            'message': msg,
             'request_item_ids': items,
         })
         # "Copy to" on a signature request is read-only: Odoo computes it from the
@@ -1967,9 +2009,135 @@ def prune_states(odoo, dry_run=False):
     return len(others)
 
 
+SIGN_MAIL_REQUEST_ARCH = """<data>
+  <xpath expr="//table" position="replace">
+    <div style="font-family: Arial, Tahoma, sans-serif; font-size: 14px; color: #222; max-width: 640px;">
+      <t t-if="body"><t t-out="body"/></t>
+      <t t-else="">
+        <p>Hello <t t-esc="record.partner_id.name"/>,</p>
+        <p><t t-esc="record.create_uid.name"/> has requested your signature on the document
+          <t t-esc="record.sign_request_id.reference"/>.</p>
+      </t>
+      <div style="margin: 24px auto; text-align: center;">
+        <a t-att-href="link" style="display: inline-block; padding: 12px 28px; border-radius: 4px; background-color: #1f4e79; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 15px;">
+          امضای قرارداد &#160;·&#160; Sign document
+        </a>
+      </div>
+      <t t-if="show_validity">
+        <p dir="rtl" style="text-align:right;">مهلت امضای این سند تا <span dir="ltr"><t t-out="record.sign_request_id.validity"/></span> است.</p>
+        <p>You have until <t t-out="record.sign_request_id.validity"/> to sign the document.</p>
+      </t>
+      <div style="opacity: 0.75; font-size: 12px; line-height: 1.6;">
+        <p dir="rtl" style="text-align:right;">توجه: این ایمیل را برای دیگران ارسال نکنید. لینک امضا شخصی است و هر کسی که آن را داشته باشد می‌تواند به‌جای شما امضا کند. آدرس IP و موقعیت شما به امضا پیوست می‌شود.</p>
+        <p><strong>Warning:</strong> do not forward this e-mail. The signing link is personal: whoever has it can sign as you. Your IP address and location are attached to your signature.</p>
+        <p><small>If you do not wish to receive further reminders about this document,
+          <a t-att-href="'%s/sign/sign_ignore/%s/%s' % (record.get_base_url(), record.id, record.access_token)" style="color: #000000; text-decoration: none;">click here</a>.</small></p>
+      </div>
+    </div>
+  </xpath>
+</data>"""
+
+SIGN_MAIL_COMPLETED_ARCH = """<data>
+  <xpath expr="//table" position="replace">
+    <div style="font-family: Arial, Tahoma, sans-serif; font-size: 14px; color: #222; max-width: 640px;">
+      <div dir="rtl" style="text-align: right; line-height: 1.9;">
+        <p>سرکار خانم / جناب آقای <t t-esc="recipient_name"/><br/>با سلام و احترام،</p>
+        <p>ضمن تشکر از همکاری شما، قرارداد «<span dir="ltr"><t t-esc="record.reference"/></span>» توسط همه طرفین امضا شد و نسخه نهایی امضاشده به پیوست تقدیم می‌گردد. لطفاً این نسخه را برای مراجعات بعدی نزد خود نگه دارید.</p>
+      </div>
+      <hr style="border: none; border-top: 1px solid #ddd; margin: 16px 0;"/>
+      <div dir="ltr" style="text-align: left; line-height: 1.6; color: #444;">
+        <p>Dear <t t-esc="recipient_name"/>,</p>
+        <p>Thank you. The document "<t t-esc="record.reference"/>" has been signed by all parties and the final signed copy is attached. Please keep it for your records.</p>
+      </div>
+      <div style="margin: 24px auto; text-align: center;">
+        <a t-att-href="link" style="display: inline-block; padding: 12px 28px; border-radius: 4px; background-color: #1f4e79; color: #ffffff; text-decoration: none; font-weight: bold; font-size: 15px;">
+          سند امضاشده &#160;·&#160; Signed document
+        </a>
+      </div>
+    </div>
+  </xpath>
+</data>"""
+
+# Signature blocks of the two sending identities (legal@ / contract@), from the
+# e-mail catalogue. Odoo Sign appends the sender's signature under the message.
+MAIL_SIGNATURES = {
+    "phase2.sg_mail_from": (
+        '<div style="font-family: Arial, Tahoma, sans-serif; font-size: 13px; color: #333; line-height: 1.5;">'
+        '<div dir="rtl">گروه قراردادها</div>'
+        '<div>Legal Department<br/><b>Sugimoto Visa Inc.</b><br/>'
+        '501 - 3292 Production Way, Burnaby<br/>Greater Vancouver, BC V5A 4R4<br/>'
+        'Office: +1 (778) 200-8856<br/>'
+        '<a href="mailto:legal@sugimotovisa.com">legal@sugimotovisa.com</a> · '
+        '<a href="https://www.sugimotovisa.com">www.sugimotovisa.com</a></div></div>'),
+    "phase2.sb_mail_from": (
+        '<div style="font-family: Arial, Tahoma, sans-serif; font-size: 13px; color: #333; line-height: 1.5;">'
+        '<div dir="rtl">گروه قراردادها</div>'
+        '<div>Contracts Department<br/><b>Sparkbridge Incubator Ltd.</b><br/>'
+        '250 - 997 Seymour St., Vancouver, BC<br/>'
+        'Office: +1 (604) 364-9012<br/>'
+        '<a href="mailto:contract@sparkbridge.ca">contract@sparkbridge.ca</a> · '
+        '<a href="https://www.sparkbridge.ca">www.sparkbridge.ca</a></div></div>'),
+}
+
+
+# The finance-sheet row, staged on the quotation by Send Contract and pushed
+# to Google Sheets by the n8n job "Odoo contracts to finance sheets".
+SHEET_FIELDS = [
+    ("x_sheet_pro", "float", "Sheet: professional fee"), ("x_sheet_gov", "float", "Sheet: government fee"),
+    ("x_sheet_disc", "float", "Sheet: discount"), ("x_sheet_tax", "float", "Sheet: tax"),
+    ("x_sheet_total", "float", "Sheet: total"), ("x_sheet_plan", "char", "Sheet: payment plan"),
+    ("x_sheet_kinds", "char", "Sheet: agreement"), ("x_sheet_accompanying", "char", "Sheet: accompanying"),
+    ("x_sheet_type", "char", "Sheet: service code"), ("x_sheet_rcic", "char", "Sheet: RCIC"),
+    ("x_sheet_spouse", "char", "Sheet: spouse"), ("x_sheet_child1", "char", "Sheet: child 1"),
+    ("x_sheet_child2", "char", "Sheet: child 2"), ("x_sheet_child3", "char", "Sheet: child 3"),
+    ("x_sheet_sent_date", "date", "Sheet: contract sent on"),
+    ("x_sheet_synced", "char", "Sheet: written to Google Sheet at"),
+    ("x_sheet_company", "char", "Sheet: company (SG/SB)"), ("x_sheet_contract_no", "char", "Sheet: contract no"),
+    ("x_sheet_display", "char", "Sheet: contract name"), ("x_sheet_name", "char", "Sheet: first name"),
+    ("x_sheet_family", "char", "Sheet: family name"), ("x_sheet_email", "char", "Sheet: email"),
+    ("x_sheet_phone", "char", "Sheet: phone"), ("x_sheet_address", "char", "Sheet: address"),
+    ("x_sheet_name_fa", "char", "Sheet: name (Farsi)"), ("x_sheet_address_fa", "char", "Sheet: address (Farsi)"),
+    ("x_sheet_agent", "char", "Sheet: agent"), ("x_sheet_country", "char", "Sheet: country"),
+    ("x_sheet_passport", "char", "Sheet: passport/ID"), ("x_sheet_spouse_fa", "char", "Sheet: spouse (Farsi)"),
+    ("x_sheet_child1_fa", "char", "Sheet: child 1 (Farsi)"), ("x_sheet_child2_fa", "char", "Sheet: child 2 (Farsi)"),
+]
+
+
+def install_sheet_fields(odoo):
+    for name, ttype, label in SHEET_FIELDS:
+        _field(odoo, "sale.order", name, {"field_description": label, "ttype": ttype})
+
+
+def install_sign_mail(odoo):
+    """Replace Odoo Sign's stock client e-mails (which render half-translated
+    when the client's language is Farsi) with the catalogue's C2 / C5 texts."""
+    for key, parent_key, name, arch in [
+            ("sign_mail_request", "sign.sign_template_mail_request", "Contract signing e-mail (Sugimoto / Sparkbridge)", SIGN_MAIL_REQUEST_ARCH),
+            ("sign_mail_completed", "sign.sign_template_mail_completed", "Signed contract e-mail (Sugimoto / Sparkbridge)", SIGN_MAIL_COMPLETED_ARCH)]:
+        parent = odoo.search_read("ir.ui.view", [("key", "=", parent_key)], ["id"])
+        if not parent:
+            log.warning("  Sign mail template %s not found; e-mail layout not installed", parent_key)
+            continue
+        view_id, created = odoo.upsert("p2view", key, "ir.ui.view", {
+            "name": name, "type": "qweb", "mode": "extension", "inherit_id": parent[0]["id"],
+            "arch_db": arch, "priority": 99, "key": "__trello__.%s" % key})
+        log.info("  %s e-mail template: view %s (%s)", parent_key, view_id, "created" if created else "updated")
+    for param, signature in MAIL_SIGNATURES.items():
+        email = odoo.execute("ir.config_parameter", "get_param", param) or ""
+        users = odoo.search_read("res.users", ["|", ("login", "=ilike", email), ("email", "=ilike", email)], ["id"],
+                                 context={"active_test": False}) if email else []
+        if users:
+            odoo.write("res.users", [u["id"] for u in users], {"signature": signature})
+            log.info("  signature set on %s (%s)", email, [u["id"] for u in users])
+        else:
+            log.warning("  no identity user for %s (%s); signature not set", param, email)
+
+
 def install(odoo, rcic_email):
     ids = {}
     install_send_button(odoo, rcic_email)
+    install_sheet_fields(odoo)
+    install_sign_mail(odoo)
     relax_partner_accounting(odoo)
     migrate_lead_address(odoo)
     fix_crm_fields(odoo)
