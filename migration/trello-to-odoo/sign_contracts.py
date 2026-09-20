@@ -942,6 +942,14 @@ def _field(odoo, model, name, vals):
     fid = odoo.ref("p2field", f"{model}.{name}")
     if fid:
         return fid
+    # The field may already exist without our stamp: an earlier run that was
+    # cut off before stamping, or a field somebody added by hand. Odoo refuses
+    # a second field of the same name, so adopt the one that is there.
+    have = odoo.search_read("ir.model.fields", [("model", "=", model), ("name", "=", name)], ["id"], limit=1)
+    if have:
+        odoo.stamp("p2field", f"{model}.{name}", "ir.model.fields", have[0]["id"])
+        log.info("  adopted the existing field %s.%s", model, name)
+        return have[0]["id"]
     fid, _ = odoo.upsert("p2field", f"{model}.{name}", "ir.model.fields",
                          dict(vals, name=name, model_id=_model_id(odoo, model), model=model,
                               state="manual"), update=False)
@@ -1809,8 +1817,11 @@ def install_card_rules(odoo):
     sync = odoo.ref("p2action", "lead_sync")
     gate = odoo.ref("p2action", "stage_gate")
     stage = odoo.search_read("crm.stage", [("name", "ilike", "Sent to Execution Team")], ["id"], limit=1)
+    # The handoff automation this one replaces is archived by the first run, so
+    # look past active=True or every later run would find nothing and skip.
     route = odoo.search_read("base.automation", [("model_id.model", "=", "crm.lead"), ("trigger", "=", "on_stage_set"),
-                                                 ("name", "ilike", "Sent to Execution Team")], ["id", "action_server_ids"], limit=1)
+                                                 ("name", "ilike", "Sent to Execution Team")], ["id", "action_server_ids"],
+                             limit=1, context={"active_test": False})
     if not (sync and gate and stage and route and route[0]["action_server_ids"]):
         log.warning("  card rules not installed: sync=%s gate=%s stage=%s route=%s", sync, gate, stage, route)
         return
