@@ -657,9 +657,19 @@ else:
             raise UserError("The contract number sequence %s is not set up." % seq_code)
         order.write({'client_order_ref': number})
     file_no = order.client_order_ref.strip()
+    # A combined entrepreneur file is two separate agreements, one per company.
+    # Each takes the next number of its own company's series, so the pair never
+    # shares digits (client's request, 2026-09-20). The Sparkbridge number is
+    # the one on the order; the Sugimoto one is drawn once and kept on re-sends.
+    sug_no = (order.x_sugimoto_no or '').strip()
+    if 'ENT' in kinds and any(k.startswith('SB-') for k in kinds) and not sug_no:
+        sug_no = env['ir.sequence'].sudo().next_by_code('x_sugimoto_file')
+        if not sug_no:
+            raise UserError("The contract number sequence x_sugimoto_file is not set up.")
+        order.write({'x_sugimoto_no': sug_no})
     def file_no_for(kind):
-        if kind == 'ENT' and file_no.startswith('SB0000'):
-            return 'SG0000' + file_no[6:]
+        if kind == 'ENT' and sug_no:
+            return sug_no
         return file_no
 
     # One agreement per kind (the entrepreneur streams send two: Sugimoto + Sparkbridge).
@@ -852,6 +862,7 @@ else:
         # never has to reassemble a client from four models.
         'x_sheet_company': 'SB' if any(k.startswith('SB-') for k in kinds) else 'SG',
         'x_sheet_contract_no': file_no,
+        'x_sugimoto_no': sug_no,
         'x_sheet_display': partner.name or '',
         'x_sheet_name': names[0] if names else '',
         'x_sheet_family': names[1] if len(names) > 1 else '',
@@ -964,9 +975,12 @@ def _field(odoo, model, name, vals):
 
 PREVIEW_TAIL = r"""
     file_no = (order.client_order_ref or '').strip() or 'DRAFT'
+    # Preview never draws a number: it shows the Sugimoto one only once the
+    # agreement has been sent and the pair's second number exists.
+    sug_no = (order.x_sugimoto_no or '').strip()
     def file_no_for(kind):
-        if kind == 'ENT' and file_no.startswith('SB0000'):
-            return 'SG0000' + file_no[6:]
+        if kind == 'ENT' and sug_no:
+            return sug_no
         return file_no
 
     _att = env['ir.attachment'].sudo()
@@ -2125,6 +2139,10 @@ SHEET_FIELDS = [
     ("x_sheet_sent_date", "date", "Sheet: contract sent on"),
     ("x_sheet_synced", "char", "Sheet: written to Google Sheet at"),
     ("x_sheet_company", "char", "Sheet: company (SG/SB)"), ("x_sheet_contract_no", "char", "Sheet: contract no"),
+    # A combined entrepreneur file signs two agreements, one per company. This
+    # holds the Sugimoto one's own number; the Sparkbridge one stays in
+    # client_order_ref / x_sheet_contract_no.
+    ("x_sugimoto_no", "char", "Sugimoto contract no (entrepreneur pair)"),
     ("x_sheet_display", "char", "Sheet: contract name"), ("x_sheet_name", "char", "Sheet: first name"),
     ("x_sheet_family", "char", "Sheet: family name"), ("x_sheet_email", "char", "Sheet: email"),
     ("x_sheet_phone", "char", "Sheet: phone"), ("x_sheet_address", "char", "Sheet: address"),
