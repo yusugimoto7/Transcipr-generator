@@ -14,6 +14,7 @@ import base64
 import json
 import logging
 import pathlib
+import re
 
 from odoo_client import OdooError
 
@@ -1746,14 +1747,6 @@ if not env.context.get('skip_stage_gate'):
             # Counted, not read: the image itself can be several megabytes.
             if not Lead.search_count([('id', '=', lead.id), ('x_studio_copy_pass_info', '!=', False)]):
                 missing.append("the passport copy (Passport Image (Main Applicant))")
-            if 'x_studio_nationality_1' in lead._fields and not lead.x_studio_nationality_1:
-                missing.append("the nationality (Iranian / Non-Iranian)")
-            # The description is HTML: an "empty" editor still holds <p><br></p>.
-            desc = lead.description or ''
-            for junk in ('<p>', '</p>', '<br>', '<br/>', '<br />', '&nbsp;', '\n', '\r', '\t', ' '):
-                desc = desc.replace(junk, '')
-            if not desc:
-                missing.append("the description (the notes on the card: what the client wants and the agreed terms)")
             if missing:
                 raise UserError(
                     "This card cannot move to '%s' until the client's information is complete.\n\n"
@@ -2206,6 +2199,38 @@ def install_sign_mail(odoo):
 
 
 
+# Studio made Description and Nationality mandatory from "12- Need to Receive
+# Draft Contract" onwards, which blocks a card the moment it reaches drafting
+# even though neither value is used in the agreement. The requirement is
+# dropped (client's request, 2026-09-20); the fields stay on the card.
+RELAXED_CARD_FIELDS = ["x_studio_description", "x_studio_nationality_1"]
+
+
+def relax_card_required(odoo, fields=None):
+    """Drop the stage-driven required= on the card fields listed in RELAXED_CARD_FIELDS."""
+    fields = fields or RELAXED_CARD_FIELDS
+    views = odoo.search_read("ir.ui.view", [("model", "=", "crm.lead"), ("type", "=", "form")], ["id", "name"])
+    touched = 0
+    for v in views:
+        arch = odoo.search_read("ir.ui.view", [("id", "=", v["id"])], ["arch_db"])[0]["arch_db"] or ""
+        new = arch
+        for name in fields:
+            # Only the required attribute of that one field tag; everything
+            # else on the tag (options, invisible, widget) is left alone.
+            for m in re.finditer(r'<field name="%s"[^>]*?/?>' % re.escape(name), new):
+                tag = m.group(0)
+                stripped = re.sub(r'\s+required="[^"]*"', '', tag)
+                if stripped != tag:
+                    new = new.replace(tag, stripped)
+        if new != arch:
+            odoo.write("ir.ui.view", [v["id"]], {"arch_db": new})
+            touched += 1
+            log.info("  required= dropped for %s in view %s (%s)", ", ".join(fields), v["id"], v["name"])
+    if not touched:
+        log.info("  no view required %s any more", ", ".join(fields))
+    return touched
+
+
 # A quotation's taxes follow the customer's province through the fiscal
 # position, but Odoo only picks the fiscal position when the customer is set
 # on the order. Correcting the province afterwards (on the card, which the
@@ -2306,4 +2331,5 @@ def install(odoo, rcic_email):
     install_state_dropdown(odoo)
     install_tax_refresh(odoo)
     install_mail_cc(odoo)
+    relax_card_required(odoo)
     return ids
