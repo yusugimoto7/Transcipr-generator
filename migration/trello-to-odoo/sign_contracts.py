@@ -675,6 +675,13 @@ else:
         if u and u.id != env.user.id and u.id not in [a.id for a in agents]:
             agents.append(u)
     cc_ids = [u.partner_id.id for u in agents if u.partner_id]
+    # The agents on the file also go on CC of the client's own e-mail and on
+    # its Reply-To (picked up by the "contract e-mail CC" automation while the
+    # mail is being created), so the client sees them and a reply reaches them.
+    cc_emails = []
+    for u in [order.user_id, lead.user_id if lead else False]:
+        if u and u.email and u.email.lower() not in [e.lower() for e in cc_emails]:
+            cc_emails.append(u.email)
     requests = []
     sent_atts = []
     for kind in kinds:
@@ -799,7 +806,11 @@ else:
         # puts the agents on it, and gets them the signed original.
         if cc_ids:
             req.sudo().message_subscribe(partner_ids=cc_ids)
-        req.send_signature_accesses()
+        mail_ctx = {}
+        if cc_emails:
+            mail_ctx = {'p2_mail_cc': ', '.join(cc_emails),
+                        'p2_mail_reply_to': ', '.join(([sender.email_formatted] if sender and sender.email else []) + cc_emails)}
+        req.with_context(**mail_ctx).send_signature_accesses()
         requests.append(req)
     order.write({'x_sign_request_id': requests[0].id, 'x_sign_request2_id': requests[1].id if len(requests) > 1 else False,
                  'x_agreement_kinds': ', '.join(kinds)})
@@ -1735,6 +1746,14 @@ if not env.context.get('skip_stage_gate'):
             # Counted, not read: the image itself can be several megabytes.
             if not Lead.search_count([('id', '=', lead.id), ('x_studio_copy_pass_info', '!=', False)]):
                 missing.append("the passport copy (Passport Image (Main Applicant))")
+            if 'x_studio_nationality_1' in lead._fields and not lead.x_studio_nationality_1:
+                missing.append("the nationality (Iranian / Non-Iranian)")
+            # The description is HTML: an "empty" editor still holds <p><br></p>.
+            desc = lead.description or ''
+            for junk in ('<p>', '</p>', '<br>', '<br/>', '<br />', '&nbsp;', '\n', '\r', '\t', ' '):
+                desc = desc.replace(junk, '')
+            if not desc:
+                missing.append("the description (the notes on the card: what the client wants and the agreed terms)")
             if missing:
                 raise UserError(
                     "This card cannot move to '%s' until the client's information is complete.\n\n"
@@ -2186,6 +2205,91 @@ def install_sign_mail(odoo):
             log.warning("  no identity user for %s (%s); signature not set", param, email)
 
 
+
+# A quotation's taxes follow the customer's province through the fiscal
+# position, but Odoo only picks the fiscal position when the customer is set
+# on the order. Correcting the province afterwards (on the card, which the
+# card rules copy to the customer, or on the customer directly) left GST on
+# an Ontario file and HST on a BC one. This keeps every open quotation of the
+# customer in step with the address.
+TAX_REFRESH_CODE = r"""
+Order = env['sale.order'].sudo()
+FP = env['account.fiscal.position'].sudo()
+for partner in records:
+    orders = Order.search([('partner_id', '=', partner.id), ('state', 'in', ('draft', 'sent'))])
+    for order in orders:
+        fpos = FP.with_company(order.company_id)._get_fiscal_position(order.partner_id, order.partner_shipping_id)
+        before = {l.id: l.tax_id.ids for l in order.order_line}
+        if order.fiscal_position_id != fpos:
+            order.write({'fiscal_position_id': fpos.id})
+        order.order_line.filtered(lambda l: not l.display_type)._compute_tax_id()
+        changed = [l for l in order.order_line if before.get(l.id) != l.tax_id.ids]
+        if changed:
+            where = ', '.join(filter(None, [partner.state_id.name or '', partner.country_id.name or ''])) or 'no address'
+            order.message_post(
+                body='Taxes updated to match the customer\'s address (%s): %s.' % (
+                    where, '; '.join('%s: %s' % (l.name, ', '.join(l.tax_id.mapped('name')) or 'no tax') for l in changed)),
+                message_type='comment', subtype_xmlid='mail.mt_note')
+""".strip()
+
+
+def install_tax_refresh(odoo):
+    """Re-map the taxes of open quotations when the customer's province or country changes."""
+    act_id = _server_action(odoo, "tax_refresh", {
+        "name": "Quotation taxes follow the customer's address",
+        "model_id": _model_id(odoo, "res.partner"), "state": "code",
+        "code": TAX_REFRESH_CODE, "binding_model_id": False})
+    fields = odoo.search_read("ir.model.fields", [("model", "=", "res.partner"),
+                                                  ("name", "in", ["state_id", "country_id"])], ["id"])
+    auto_vals = {"name": "Phase 2: quotation taxes follow the customer's address",
+                 "model_id": _model_id(odoo, "res.partner"), "trigger": "on_write",
+                 "trigger_field_ids": [(6, 0, [f["id"] for f in fields])],
+                 "filter_domain": "[]", "action_server_ids": [(6, 0, [act_id])], "active": True}
+    auto = odoo.ref("p2auto", "tax_refresh")
+    if auto:
+        odoo.write("base.automation", [auto], auto_vals)
+    else:
+        odoo.upsert("p2auto", "tax_refresh", "base.automation", auto_vals)
+    log.info("  tax refresh automation active (res.partner state/country -> open quotations)")
+
+
+# Odoo Sign writes the client's e-mail itself (From, To and Reply-To come from
+# the request's author) and sends it at once, so there is no template to put
+# a CC on. Send Contract therefore passes the agents' addresses in the context
+# of send_signature_accesses(); this automation runs inside mail.mail.create(),
+# before the mail leaves, and adds them as CC and to the Reply-To. A client's
+# "Reply" then reaches the legal@/contract@ mailbox and the agents together.
+MAIL_CC_CODE = r"""
+cc = env.context.get('p2_mail_cc')
+if cc:
+    reply_to = env.context.get('p2_mail_reply_to')
+    for mail in records:
+        vals = {}
+        if not mail.email_cc:
+            vals['email_cc'] = cc
+        if reply_to:
+            vals['reply_to'] = reply_to
+        if vals:
+            mail.sudo().write(vals)
+""".strip()
+
+
+def install_mail_cc(odoo):
+    """CC the agents on the client's contract e-mail (see MAIL_CC_CODE)."""
+    act_id = _server_action(odoo, "mail_cc", {
+        "name": "Contract e-mail: CC the agents", "model_id": _model_id(odoo, "mail.mail"),
+        "state": "code", "code": MAIL_CC_CODE, "binding_model_id": False})
+    auto_vals = {"name": "Phase 2: contract e-mail CC", "model_id": _model_id(odoo, "mail.mail"),
+                 "trigger": "on_create", "filter_domain": "[]",
+                 "action_server_ids": [(6, 0, [act_id])], "active": True}
+    auto = odoo.ref("p2auto", "mail_cc")
+    if auto:
+        odoo.write("base.automation", [auto], auto_vals)
+    else:
+        odoo.upsert("p2auto", "mail_cc", "base.automation", auto_vals)
+    log.info("  contract e-mail CC automation active")
+
+
 def install(odoo, rcic_email):
     ids = {}
     install_send_button(odoo, rcic_email)
@@ -2200,4 +2304,6 @@ def install(odoo, rcic_email):
     install_line_discounts(odoo)
     install_card_rules(odoo)
     install_state_dropdown(odoo)
+    install_tax_refresh(odoo)
+    install_mail_cc(odoo)
     return ids

@@ -75,17 +75,38 @@ def _iso(s):
 # into <t t-esc="expr"/>. The marker survives html escaping, so it can be
 # passed through every clause builder like an ordinary string.
 def V(expr):  return f"\x00{expr}\x00"
+# Data lists whose items are the client's particulars (contact lines, the
+# payment schedule, the instalments): printed bold like the scalar values.
+BOLD_LISTS = {"contact_en", "contact_fa", "schedule_en", "schedule_fa", "inst_en", "inst_fa", "services_en", "services_fa"}
+def _bold_list(expr):
+    m = re.match(r"^d\['([a-z_0-9]+)'\]$", expr)
+    return bool(m and m.group(1) in BOLD_LISTS)
 def DL(expr):
     """A list whose items come from the data (one bullet per item)."""
-    return f'<div class="dl"><t t-foreach="{expr}" t-as="i"><p class="li">• <t t-esc="i"/></p></t></div>'
+    tag = '<b><t t-esc="i"/></b>' if _bold_list(expr) else '<t t-esc="i"/>'
+    return f'<div class="dl"><t t-foreach="{expr}" t-as="i"><p class="li">• {tag}</p></t></div>'
 def NL(expr):
     """A numbered list from the data."""
-    return f'<div class="dl"><t t-foreach="{expr}" t-as="i"><p class="li"><t t-esc="i_index + 1"/>. <t t-esc="i"/></p></t></div>'
+    tag = '<b><t t-esc="i"/></b>' if _bold_list(expr) else '<t t-esc="i"/>'
+    return f'<div class="dl"><t t-foreach="{expr}" t-as="i"><p class="li"><t t-esc="i_index + 1"/>. {tag}</p></t></div>'
 def FEE_D(rows_expr, total_label, total_expr):
-    return (f'<table class="fee"><t t-foreach="{rows_expr}" t-as="r"><tr><td><t t-esc="r[0]"/></td><td class="n"><t t-esc="r[1]"/></td></tr></t>'
+    return (f'<table class="fee"><t t-foreach="{rows_expr}" t-as="r"><tr><td><t t-esc="r[0]"/></td><td class="n"><b><t t-esc="r[1]"/></b></td></tr></t>'
             f'<tr class="tot"><td>{esc(total_label)}</td><td class="n"><t t-esc="{total_expr}"/></td></tr></table>')
+# The client's own particulars are printed bold so whoever checks a draft can
+# find every filled-in value at a glance (client's request, 2026-09-20).
+# Everything else (titles, currency names, the RCIC's address) stays regular.
+BOLD_KEYS = {"client_en", "client_fa", "addr_en", "addr_fa", "phone", "email", "nid",
+             "date_en", "date_fa", "file_no", "parties_en", "parties_fa", "companions_en", "companions_fa",
+             "country_en", "country_fa", "subject_en", "subject_fa", "ref", "letter_date", "deadline",
+             "internal_deadline", "fee_total", "p1", "p2", "total", "sponsor_en"}
+_KEY = re.compile(r"^d\['([a-z_0-9]+)'\]$")
 def finalize(arch):
-    return re.sub("\x00(.*?)\x00", lambda m: f'<t t-esc="{m.group(1)}"/>', arch)
+    def sub(m):
+        expr = m.group(1)
+        k = _KEY.match(expr)
+        tag = f'<t t-esc="{expr}"/>'
+        return f"<b>{tag}</b>" if k and k.group(1) in BOLD_KEYS else tag
+    return re.sub("\x00(.*?)\x00", sub, arch)
 
 # ---------- inline builders (return XHTML) ----------
 def P(text, cls=""):   return f'<p class="{cls}">{_iso(text)}</p>' if cls else f"<p>{_iso(text)}</p>"
