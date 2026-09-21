@@ -202,7 +202,7 @@ def sbc_body(country_en, country_fa, fee_total, inst, embassy_note=True, compani
     return rows
 
 # ---------- SB-D: BC business advisory ----------
-def sbd_body(fee_total, p1, p2):
+def sbd_body(fee_total, p1, p2, p1_note="", p2_note="", p1_note_fa="", p2_note_fa=""):
     return [
       (H("1. Background") + PS("The Client intends to establish, acquire, or develop a business venture in the Province of British Columbia and requires professional advisory, analytical, and implementation services to support the commercial viability and operational readiness of such business.",
           "Sparkbridge Incubator Ltd. is engaged in the business of providing business advisory and incubation services, including business concept development, market research, site and target selection, business planning, financial modeling, competitive analysis, and digital presence development.",
@@ -240,7 +240,7 @@ def sbd_body(fee_total, p1, p2):
           "۴.۵ مشتری متعهد می‌گردد که در رابطه با فعالیت تجاری خود، کلیه قوانین، مقررات و استانداردهای صنعتی مربوطه (در کانادا و بریتیش کلمبیا) را رعایت نماید.")),
       (H("5. Payment Terms and Obligations") + PS(f"5.1 In consideration for the services to be provided under this Agreement, the Client agrees to pay Sparkbridge total professional fees in the amount of CAD {fee_total} (the “Fees”).",
           "5.2 The Fees shall be payable in the following installments:") +
-       OL([f"CAD {p1} upon execution of this Agreement, covering Phase 1 services;", f"CAD {p2} upon commencement of Phase 2 services."]) +
+       OL([f"CAD {p1} upon execution of this Agreement, covering Phase 1 services{p1_note};", f"CAD {p2} upon commencement of Phase 2 services{p2_note}."]) +
        PS("5.3 All payments shall be made in Canadian dollars to the bank account designated by Sparkbridge in writing. Payments shall be due within seven (7) days of issuance of an invoice or written payment request.",
           "5.4 The Fees are exclusive of all applicable taxes, government charges, third-party costs, and out-of-pocket expenses, which, if applicable, shall be borne by the Client unless expressly stated otherwise in writing.",
           "5.5 Late payments may, at Sparkbridge’s discretion, result in suspension of services until payment is received in full. Sparkbridge shall not be liable for any delays or consequences arising from such suspension.",
@@ -248,7 +248,7 @@ def sbd_body(fee_total, p1, p2):
           "5.7 The Client acknowledges that commencement of Phase 2 services shall constitute acceptance that Phase 1 services have been substantially completed."),
        H("۵. مبلغ قرارداد و شرایط پرداخت") + PS(f"۵.۱ در ازای خدماتی که طبق این قرارداد ارائه می‌شود، مشتری موافقت می‌نماید مبلغ کل {fee_total} دلار کانادا را به‌عنوان حق‌الزحمه حرفه‌ای (Fees) به شرکت Sparkbridge پرداخت نماید.",
           "۵.۲ حق‌الزحمه مذکور در اقساط زیر قابل پرداخت خواهد بود:") +
-       OL([f"مبلغ {p1} دلار کانادا هم‌زمان با امضای این قرارداد، جهت پوشش خدمات فاز ۱؛", f"مبلغ {p2} دلار کانادا هم‌زمان با شروع خدمات فاز ۲."]) +
+       OL([f"مبلغ {p1} دلار کانادا هم‌زمان با امضای این قرارداد، جهت پوشش خدمات فاز ۱{p1_note_fa}؛", f"مبلغ {p2} دلار کانادا هم‌زمان با شروع خدمات فاز ۲{p2_note_fa}."]) +
        PS("۵.۳ کلیه پرداخت‌ها باید به دلار کانادا و به حساب بانکی که توسط Sparkbridge کتباً اعلام می‌شود، واریز گردد. مهلت پرداخت وجه، حداکثر ۷ روز پس از صدور صورت‌حساب (فاکتور) یا درخواست کتبی پرداخت می‌باشد.",
           "۵.۴ مبالغ ذکر شده شامل مالیات‌های متعلقه، عوارض دولتی، هزینه‌های اشخاص ثالث و هزینه‌های جاری (Out-of-pocket expenses) نمی‌باشد؛ پرداخت این موارد بر عهده مشتری است، مگر آنکه کتباً به‌گونه دیگری توافق شده باشد.",
           "۵.۵ در صورت تأخیر در پرداخت، شرکت Sparkbridge مجاز است به تشخیص خود، ارائه خدمات را تا زمان تسویه کامل متوقف نماید. شرکت هیچ‌گونه مسئولیتی در قبال تأخیرها یا پیامدهای ناشی از این توقف خدمات نخواهد داشت.",
@@ -259,7 +259,7 @@ def sbd_body(fee_total, p1, p2):
     ]
 
 # ---------- SB-E: Alberta start-up DA letter of recommendation ----------
-def sbe_body(total, p1, p2):
+def sbe_body(total, p1, p2, p1_note="", p2_note="", p1_note_fa="", p2_note_fa=""):
     return [
       (H("1. Background") + PS("a. The Client intends to establish an innovative startup in Province of Alberta.", "b. The Consultant has the expertise in the Canadian startup ecosystem and is able to provide technical, marketing, and sales services related to product."),
        H("۱. پیش زمینه") + PS("الف- مشتری در نظر دارد یک کسب‌وکار نوپا (استارت‌آپ) نوآورانه را در استان آلبرتا راه‌اندازی نموده و یا خریداری نماید.", "ب- مشاور دارای تخصص لازم در اکوسیستم استارتاپی کانادا بوده و توانایی ارائه خدمات فنی، بازاریابی و مارکتینگ مربوط به محصول را دارا می باشد.")),

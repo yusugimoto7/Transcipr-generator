@@ -458,19 +458,20 @@
     ],
     "terms": "Sparkbridge 28,000: 8,000 at signing (business idea, summary business plan, landing page, pitch deck, preliminary LOR approval); 20,000 after delivery (letter of recommendation, final business plan, financial model, competitive analysis, website). Sugimoto 12,000: 2,000 + 200 gov at signing (file opening, EOI); 2,000 + 3,500 gov on invitation to submit; 8,000 + 155 gov before the work-permit application. GST/PST on Sugimoto fees: 600.\nاسپارک‌بریج ۲۸٬۰۰۰: ۸٬۰۰۰ همراه با امضا (ایده تجاری، خلاصه طرح کسب‌وکار، صفحه فرود، پیچ‌دک، تأیید اولیه توصیه‌نامه)؛ ۲۰٬۰۰۰ پس از تحویل (توصیه‌نامه، طرح تجاری نهایی، مدل مالی، تحلیل رقابتی، وب‌سایت). سوگیموتو ۱۲٬۰۰۰: ۲٬۰۰۰ + ۲۰۰ دولتی همراه با امضا (تشکیل پرونده، EOI)؛ ۲٬۰۰۰ + ۳٬۵۰۰ دولتی پس از دعوت‌نامه؛ ۸٬۰۰۰ + ۱۵۵ دولتی قبل از درخواست مجوز کار. مالیات حق‌الزحمه سوگیموتو: ۶۰۰.",
     "template": true,
-    "plan": "custom:10000:signing;custom:20000:lor;custom:2000:ita;rest:0:sub_wp",
     "components": [
       {
         "code": "AB-ENT-SB",
         "name": "Sparkbridge – business development fees · اسپارک‌بریج – خدمات توسعه کسب‌وکار",
         "price": 28000,
-        "contract": "SB-E"
+        "contract": "SB-E",
+        "plan": "custom:8000:signing::business idea, summary business plan, landing page, pitch deck, preliminary LoR approval|ایده تجاری، خلاصه طرح کسب‌وکار، صفحه فرود، پیچ‌دک، تأیید اولیه توصیه‌نامه;rest:0:lor::letter of recommendation, final business plan, financial model, competitive analysis, website|توصیه‌نامه، طرح تجاری نهایی، مدل مالی، تحلیل رقابتی، وب‌سایت"
       },
       {
         "code": "AB-ENT-SV",
         "name": "Sugimoto Visa – RCIC professional fees · سوگیموتو ویزا – حق‌الزحمه مشاور",
         "price": 12000,
-        "contract": "ENT"
+        "contract": "ENT",
+        "plan": "custom:2000:signing:200:the agreement, file opening and the Expression of Interest (EOI)|قرارداد، تشکیل پرونده و ابراز علاقه‌مندی (EOI);custom:2000:ita:3500:the invitation to submit and the provincial application|دعوت‌نامه و درخواست استانی;rest:0:sub_wp:155:the work permit application|درخواست مجوز کار"
       }
     ]
   },
@@ -488,19 +489,20 @@
     ],
     "terms": "Sparkbridge 26,000: 8,000 at signing (Phase 1); 18,000 at the start of Phase 2. Sugimoto 12,000: 2,000 + 400 gov at signing (file opening, provincial profile/EOI); 2,000 + 3,500 gov on ITA from BC (full provincial application); 8,000 + 800 gov before the work-permit application (performance agreement, WP support letter, filing).\nاسپارک‌بریج ۲۶٬۰۰۰: ۸٬۰۰۰ همراه با امضا (فاز ۱)؛ ۱۸٬۰۰۰ در شروع فاز ۲. سوگیموتو ۱۲٬۰۰۰: ۲٬۰۰۰ + ۴۰۰ دولتی همراه با امضا (تشکیل پرونده، پروفایل استانی/EOI)؛ ۲٬۰۰۰ + ۳٬۵۰۰ دولتی پس از ITA از BC (درخواست کامل استانی)؛ ۸٬۰۰۰ + ۸۰۰ دولتی قبل از درخواست مجوز کار (توافق‌نامه عملکرد، نامه پشتیبانی، ثبت درخواست).",
     "template": true,
-    "plan": "custom:10000:signing;custom:18000:phase2;custom:2000:ita;rest:0:sub_wp",
     "components": [
       {
         "code": "BC-ENT-SB",
         "name": "Sparkbridge – business development fees · اسپارک‌بریج – خدمات توسعه کسب‌وکار",
         "price": 26000,
-        "contract": "SB-D"
+        "contract": "SB-D",
+        "plan": "custom:8000:signing::agreement, business concept, market research, site and target selection|قرارداد، مفهوم کسب‌وکار، تحقیقات بازار، مکان‌یابی و انتخاب بازار هدف;rest:0:phase2::business plan, financial model, competitive analysis, website design|طرح کسب‌وکار، مدل مالی، تحلیل رقابتی، طراحی وب‌سایت"
       },
       {
         "code": "BC-ENT-SV",
         "name": "Sugimoto Visa – RCIC professional fees · سوگیموتو ویزا – حق‌الزحمه مشاور",
         "price": 12000,
-        "contract": "ENT"
+        "contract": "ENT",
+        "plan": "custom:2000:signing:400:the agreement and the BC PNP registration (EOI)|قرارداد و ثبت‌نام BC PNP (پروفایل استانی);custom:2000:ita:3500:the ITA and the full provincial application submission|دعوت‌نامه (ITA) و ارسال درخواست کامل استانی;rest:0:sub_wp:800:the Performance Agreement, the work permit support letter and the work permit application|توافق‌نامه عملکرد، نامه پشتیبانی مجوز کار و درخواست مجوز کار"
       }
     ]
   },

@@ -348,7 +348,7 @@ def install(odoo, stage_needle, currency_check=True):
             # component, each becomes its own quotation line.
             variants[key] = []
             for comp in spec["components"]:
-                cpid, cvid, created = make_product(comp["code"], comp["name"], comp["price"], plan=spec.get("plan", ""))
+                cpid, cvid, created = make_product(comp["code"], comp["name"], comp["price"], plan=comp.get("plan", spec.get("plan", "")))
                 if comp.get("contract"):
                     odoo.write("product.template", [cpid], {"product_tag_ids": [(4, kind_tags[comp["contract"]])]})
                 variants[key].append((cvid, comp["name"], comp["price"]))

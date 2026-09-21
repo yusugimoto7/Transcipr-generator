@@ -169,7 +169,7 @@ DOCS["SB-C"] = dict(company="SB", title=D("title"), file_label=D("file_label"), 
 # ---------------- SB-D BC business advisory / SB-E Alberta DA LoR (bilingual) ----------------
 for _k, _body in (("SB-D", sb.sbd_body), ("SB-E", sb.sbe_body)):
     _rows = sb.retainer_head(D("file_no"), D("date_en"), D("date_fa"), D("client_en"), D("client_fa"), D("nid"), D("addr_en"), D("addr_fa"), D("phone"), D("email"))[1:]
-    _rows += _body(D("fee_total"), D("p1"), D("p2"))
+    _rows += _body(D("fee_total"), D("p1"), D("p2"), D("p1_note"), D("p2_note"), D("p1_note_fa"), D("p2_note_fa"))
     _rows += [sb.validation_sb(), SIG_SB_BI]
     DOCS[_k] = dict(company="SB", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=_rows)
 

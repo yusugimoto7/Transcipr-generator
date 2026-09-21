@@ -336,11 +336,24 @@ PLANS = {
     "SPON-CHILD": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
     "SPON-PARENT": [("25", 0, "signing"), ("25", 0, "m1"), ("25", 0, "m2"), ("rest", 0, "sub_pr")],
     "SPON-REFUSED": [("50", 0, "signing"), ("rest", 0, "sub_pr")],
-    # Entrepreneur streams: Sparkbridge phases + Sugimoto milestones combined
-    # (SB000026110/26112 + SG000026112: 8,000 + 2,000 at signing, 20,000 on the
-    # LoR / 18,000 at Phase 2, 2,000 at ITA, 8,000 before the work permit).
-    "AB-ENT": [("custom", 10000, "signing"), ("custom", 20000, "lor"), ("custom", 2000, "ita"), ("rest", 0, "sub_wp")],
-    "BC-ENT": [("custom", 10000, "signing"), ("custom", 18000, "phase2"), ("custom", 2000, "ita"), ("rest", 0, "sub_wp")],
+    # Entrepreneur streams: one plan per company, keyed by the component
+    # product, since each company signs its own agreement (SB000026113 +
+    # SG000026113 for BC, SB000026112 + SG000026112 for Alberta). A row is
+    # (share, amount, due, government fees with it, "covers: English|Farsi").
+    "BC-ENT-SV": [
+        ("custom", 2000, "signing", 400, "the agreement and the BC PNP registration (EOI)|قرارداد و ثبت‌نام BC PNP (پروفایل استانی)"),
+        ("custom", 2000, "ita", 3500, "the ITA and the full provincial application submission|دعوت‌نامه (ITA) و ارسال درخواست کامل استانی"),
+        ("rest", 0, "sub_wp", 800, "the Performance Agreement, the work permit support letter and the work permit application|توافق‌نامه عملکرد، نامه پشتیبانی مجوز کار و درخواست مجوز کار")],
+    "BC-ENT-SB": [
+        ("custom", 8000, "signing", 0, "agreement, business concept, market research, site and target selection|قرارداد، مفهوم کسب‌وکار، تحقیقات بازار، مکان‌یابی و انتخاب بازار هدف"),
+        ("rest", 0, "phase2", 0, "business plan, financial model, competitive analysis, website design|طرح کسب‌وکار، مدل مالی، تحلیل رقابتی، طراحی وب‌سایت")],
+    "AB-ENT-SV": [
+        ("custom", 2000, "signing", 200, "the agreement, file opening and the Expression of Interest (EOI)|قرارداد، تشکیل پرونده و ابراز علاقه‌مندی (EOI)"),
+        ("custom", 2000, "ita", 3500, "the invitation to submit and the provincial application|دعوت‌نامه و درخواست استانی"),
+        ("rest", 0, "sub_wp", 155, "the work permit application|درخواست مجوز کار")],
+    "AB-ENT-SB": [
+        ("custom", 8000, "signing", 0, "business idea, summary business plan, landing page, pitch deck, preliminary LoR approval|ایده تجاری، خلاصه طرح کسب‌وکار، صفحه فرود، پیچ‌دک، تأیید اولیه توصیه‌نامه"),
+        ("rest", 0, "lor", 0, "letter of recommendation, final business plan, financial model, competitive analysis, website|توصیه‌نامه، طرح تجاری نهایی، مدل مالی، تحلیل رقابتی، وب‌سایت")],
     # Litigation-type services still offered.
     "PFL": [("100", 0, "signing")],
     # Europe (EUR): SUV in three steps (SB000025304: 5k / 5k / 5k), study 50/50

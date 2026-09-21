@@ -190,6 +190,7 @@ PLAN_FIELD = "x_pay_plan_ids"
 
 SHARES = [("100", "100% – full amount"), ("50", "50%"), ("33", "A third"),
           ("25", "25%"), ("custom", "Custom amount"), ("rest", "Remainder")]
+PLAN_COMPANIES = [("sg", "Sugimoto Visa"), ("sb", "Sparkbridge")]
 
 # key -> (English label, Farsi label). Printed on the contract after the amount.
 DUE = {
@@ -270,9 +271,29 @@ for order in records:
         if set(line.tax_id.ids) != set(taxes.ids):
             line.write({'tax_id': [(6, 0, taxes.ids)]})
 
-    # 2. Contract total: everything but government fees.
+    # 2. Contract total: everything but government fees. A combined
+    #    entrepreneur file (Sugimoto + Sparkbridge lines) is two agreements,
+    #    so its instalments are planned per company.
     lines = order.order_line.filtered(lambda l: not l.display_type and not is_gov(l))
     total = round(sum(lines.mapped('price_total')), 2)
+    def company_of(l):
+        tags = l.product_id.product_tmpl_id.product_tag_ids.mapped('name')
+        return 'sb' if any(t.startswith('SB-') for t in tags) else 'sg'
+    # Each company's instalments add up to its professional fees; tax is
+    # charged on top (the Sparkbridge agreement says fees are exclusive of
+    # taxes, the Sugimoto one lists the tax as its own row of the fee table).
+    total_by = {'sg': 0.0, 'sb': 0.0}
+    for l in lines:
+        total_by[company_of(l)] += l.price_subtotal
+    total_by = {c: round(v, 2) for c, v in total_by.items()}
+    combined = all(total_by.values())
+    def parse_spec(spec):
+        plan = []
+        for part in spec.split(';'):
+            share, amount, due, govf, note = (part.split(':') + ['', '', '', ''])[:5]
+            plan.append((share.strip() or 'custom', float(amount or 0), due.strip() or 'signing',
+                         float(govf or 0), note.strip()))
+        return plan
 
     # 3. A default plan when there is none yet.
     Plan = env['x_pay_plan'].sudo()
@@ -282,18 +303,26 @@ for order in records:
                  if l.product_uom_qty and (l.product_uom_qty * (l.price_unit or 0.0)) >= 0]
         main = codes[0] if codes else ''
         tags = order.order_line.mapped('product_id.product_tmpl_id.product_tag_ids.name')
-        # The service's default plan ("share:amount:due;..." on the product),
-        # taken from the first billable line that has one.
+        # The service's default plan ("share:amount:due:gov:note;..." on the
+        # product), taken from the first billable line that has one; on a
+        # combined file from every line, each row marked with its company.
         spec = ''
-        for l in lines:
-            if l.product_uom_qty and (l.product_id.product_tmpl_id.x_default_plan or '').strip():
-                spec = l.product_id.product_tmpl_id.x_default_plan.strip()
-                break
+        plan = []
+        if combined:
+            for l in lines:
+                ps = (l.product_id.product_tmpl_id.x_default_plan or '').strip() if l.product_uom_qty else ''
+                if ps:
+                    plan += [row + (company_of(l),) for row in parse_spec(ps)]
+            spec = 'combined' if plan else ''
+        else:
+            for l in lines:
+                if l.product_uom_qty and (l.product_id.product_tmpl_id.x_default_plan or '').strip():
+                    spec = l.product_id.product_tmpl_id.x_default_plan.strip()
+                    break
+            if spec:
+                plan = parse_spec(spec)
         if spec:
-            plan = []
-            for part in spec.split(';'):
-                share, amount, due = (part.split(':') + ['', ''])[:3]
-                plan.append((share.strip() or 'custom', float(amount or 0), due.strip() or 'signing'))
+            pass
         elif 'PR' in tags:
             due2 = 'ita' if main in ('EE', 'PNP-EE') else 'sub_pr'
             plan = [('custom', min(1500.0, total), 'signing'), ('rest', 0.0, due2)]
@@ -305,30 +334,41 @@ for order in records:
             plan = [('50', 0.0, 'signing'), ('rest', 0.0, due2)]
         else:
             plan = [('100', 0.0, 'signing')]
-        for i, (share, amount, due) in enumerate(plan, start=1):
-            Plan.create({'x_order_id': order.id, 'x_sequence': i, 'x_share': share,
-                         'x_amount': amount, 'x_due': due})
+        for i, row in enumerate(plan, start=1):
+            share, amount, due = row[0], row[1], row[2]
+            vals = {'x_order_id': order.id, 'x_sequence': i, 'x_share': share, 'x_amount': amount, 'x_due': due}
+            if len(row) > 3:
+                vals['x_gov'] = row[3]
+                vals['x_note'] = row[4]
+            if len(row) > 5:
+                vals['x_company'] = row[5]
+            Plan.create(vals)
         rows = Plan.search([('x_order_id', '=', order.id)], order='x_sequence, id')
 
-    # 4. Amounts from the shares; "Remainder" rows split what is left.
-    fixed = 0.0
-    rest = []
-    for row in rows:
-        share = row.x_share or 'custom'
-        if share == 'rest':
-            rest.append(row)
-            continue
-        amount = row.x_amount if share == 'custom' else round(total / 3.0 if share == '33' else total * float(share) / 100.0, 2)
-        if row.x_amount != amount:
-            row.write({'x_amount': amount})
-        fixed += amount
-    if rest:
-        remaining = round(total - fixed, 2)
-        each = round(remaining / len(rest), 2)
-        for i, row in enumerate(rest):
-            amount = each if i < len(rest) - 1 else round(remaining - each * (len(rest) - 1), 2)
+    # 4. Amounts from the shares; "Remainder" rows split what is left. On a
+    #    combined file each company's rows are resolved against that
+    #    company's own total.
+    groups = [('sg', rows.filtered(lambda r: r.x_company == 'sg'), total_by['sg']),
+              ('sb', rows.filtered(lambda r: r.x_company == 'sb'), total_by['sb'])] if combined else [('', rows, total)]
+    for _c, grp, gtotal in groups:
+        fixed = 0.0
+        rest = []
+        for row in grp:
+            share = row.x_share or 'custom'
+            if share == 'rest':
+                rest.append(row)
+                continue
+            amount = row.x_amount if share == 'custom' else round(gtotal / 3.0 if share == '33' else gtotal * float(share) / 100.0, 2)
             if row.x_amount != amount:
                 row.write({'x_amount': amount})
+            fixed += amount
+        if rest:
+            remaining = round(gtotal - fixed, 2)
+            each = round(remaining / len(rest), 2)
+            for i, row in enumerate(rest):
+                amount = each if i < len(rest) - 1 else round(remaining - each * (len(rest) - 1), 2)
+                if row.x_amount != amount:
+                    row.write({'x_amount': amount})
 """.strip()
 
 
@@ -481,36 +521,99 @@ else:
         disc += gross * (l.discount or 0.0) / 100.0
     tax = sum(l.price_tax for l in order.order_line if not l.display_type and not (l.product_id.default_code or '').startswith('GOV-'))
     total = round(pro - disc + tax, 2)
+    # A combined entrepreneur file is two agreements, one per company, each
+    # printing its own fees, tax and instalments. Government fees stay with
+    # the RCIC's (Sugimoto) agreement: the RCIC forwards them to IRCC.
+    def company_of(l):
+        tags = l.product_id.product_tmpl_id.product_tag_ids.mapped('name')
+        return 'sb' if any(t.startswith('SB-') for t in tags) else 'sg'
+    by = {'sg': {'pro': 0.0, 'disc': 0.0, 'tax': 0.0, 'gov': gov}, 'sb': {'pro': 0.0, 'disc': 0.0, 'tax': 0.0, 'gov': 0.0}}
+    for l in order.order_line:
+        if l.display_type or not l.product_id or (l.product_id.default_code or '').startswith('GOV-'):
+            continue
+        c = company_of(l)
+        gross = l.product_uom_qty * l.price_unit
+        if gross < 0:
+            by[c]['disc'] += -gross
+        else:
+            by[c]['pro'] += gross
+            by[c]['disc'] += gross * (l.discount or 0.0) / 100.0
+        by[c]['tax'] += l.price_tax
+    for c in by:
+        by[c]['total'] = round(by[c]['pro'] - by[c]['disc'] + by[c]['tax'], 2)
+    combined = 'ENT' in kinds and any(k.startswith('SB-') for k in kinds)
     rows = env['x_pay_plan'].sudo().search([('x_order_id', '=', order.id)], order='x_sequence, id')
     if not rows:
         raise UserError("The payment plan is empty. Add at least one instalment on the Payment plan tab.")
-    if abs(sum(rows.mapped('x_amount')) - total) > 0.05:
+    if combined:
+        if rows.filtered(lambda r: not r.x_company):
+            raise UserError("This file signs two agreements (Sugimoto Visa and Sparkbridge). On the Payment plan tab, "
+                            "set the Agreement column on every instalment.")
+        # The instalments of each agreement are its professional fees; tax is
+        # charged on top and printed separately.
+        for c, label in (('sg', 'Sugimoto Visa'), ('sb', 'Sparkbridge')):
+            rc = rows.filtered(lambda r: r.x_company == c)
+            if not rc:
+                raise UserError("There is no %s instalment on the Payment plan tab; each agreement needs its own." % label)
+            fees = round(by[c]['pro'] - by[c]['disc'], 2)
+            if abs(sum(rc.mapped('x_amount')) - fees) > 0.05:
+                raise UserError("The %s instalments add up to %s but that agreement's professional fees are %s. Fix the amounts "
+                                "on the Payment plan tab (or use 'Remainder' on its last row)." % (label, money(sum(rc.mapped('x_amount'))), money(fees)))
+        # Government fees are collected with the RCIC's instalments; when the
+        # quotation carries no government-fee line, the fee table sums them.
+        if not by['sg']['gov']:
+            by['sg']['gov'] = round(sum(rows.filtered(lambda r: r.x_company == 'sg').mapped('x_gov')), 2)
+    elif abs(sum(rows.mapped('x_amount')) - total) > 0.05:
         raise UserError("The payment plan adds up to %s but the contract total is %s. Fix the amounts on the Payment plan tab (or use 'Remainder' on the last row)." % (money(sum(rows.mapped('x_amount'))), money(total)))
+    rows_by = {'sg': rows.filtered(lambda r: r.x_company == 'sg'), 'sb': rows.filtered(lambda r: r.x_company == 'sb')} if combined else {'sg': rows, 'sb': rows}
     due = __DUE__
     ord_en = __ORD_EN__
     ord_fa = __ORD_FA__
-    plan_en, plan_fa, plan_fa_html = [], [], []
-    for i, row in enumerate(rows):
-        when_en, when_fa = due.get(row.x_due, due['sub_app'])
-        if row.x_due == 'date':
-            ds = row.x_due_date.strftime('%B %d, %Y') if row.x_due_date else '…'
-            when_en, when_fa = when_en.format(date=ds), when_fa.format(date=ds)
-        note = (' – ' + row.x_note) if row.x_note else ''
-        plan_en.append('%s Payment – %s – %s%s' % (ord_en[i] if i < len(ord_en) else str(i + 1), money(row.x_amount), when_en, note))
-        plan_fa.append('پرداخت %s – %s – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
-        # For the e-mail: the amount as an LTR run, so "$1,260.00 CAD" is not
-        # reordered by the surrounding right-to-left text.
-        plan_fa_html.append('پرداخت %s – <span dir="ltr">%s</span> – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), when_fa, note))
-    fee_rows_en, fee_rows_fa = [['Professional Fees', money(pro)]], [['هزینه‌های حرفه‌ای', money(pro)]]
-    if gov:
-        fee_rows_en.append(['Government Fees', money(gov)]); fee_rows_fa.append(['هزینه‌های دولتی', money(gov)])
-    if disc:
-        fee_rows_en.append(['Discount', '(%s)' % money(disc)]); fee_rows_fa.append(['تخفیف', '(%s)' % money(disc)])
-    if tax:
-        fee_rows_en.append(['Applicable Tax', money(tax)]); fee_rows_fa.append(['مالیات', money(tax)])
-    if gov:
-        fee_rows_en.append(['Total Professional Fees + Tax (excluding government fees)', money(total)])
-        fee_rows_fa.append(['جمع حق‌الزحمه و مالیات (بدون هزینه‌های دولتی)', money(total)])
+    def note_of(row, fa=False):
+        # The note holds what the instalment covers, as "English|Farsi".
+        t = (row.x_note or '').strip()
+        en, _s, fa_t = t.partition('|')
+        return (fa_t.strip() or en.strip()) if fa else en.strip()
+    def fmt_plan(rs):
+        plan_en, plan_fa, plan_fa_html = [], [], []
+        for i, row in enumerate(rs):
+            when_en, when_fa = due.get(row.x_due, due['sub_app'])
+            if row.x_due == 'date':
+                ds = row.x_due_date.strftime('%B %d, %Y') if row.x_due_date else '…'
+                when_en, when_fa = when_en.format(date=ds), when_fa.format(date=ds)
+            gov_en = (' + %s government fees' % money(row.x_gov)) if row.x_gov else ''
+            gov_fa = (' + %s هزینه دولتی' % money(row.x_gov)) if row.x_gov else ''
+            n_en, n_fa = note_of(row), note_of(row, fa=True)
+            note_en = (' – covers: ' + n_en) if n_en else ''
+            note_fa = (' – شامل: ' + n_fa) if n_fa else ''
+            plan_en.append('%s Payment – %s%s – %s%s' % (ord_en[i] if i < len(ord_en) else str(i + 1), money(row.x_amount), gov_en, when_en, note_en))
+            plan_fa.append('پرداخت %s – %s%s – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), gov_fa, when_fa, note_fa))
+            # For the e-mail: the amount as an LTR run, so "$1,260.00 CAD" is not
+            # reordered by the surrounding right-to-left text.
+            plan_fa_html.append('پرداخت %s – <span dir="ltr">%s%s</span> – %s%s' % (ord_fa[i] if i < len(ord_fa) else str(i + 1), money(row.x_amount), gov_fa, when_fa, note_fa))
+        return plan_en, plan_fa, plan_fa_html
+    def fee_rows_for(f):
+        fee_rows_en, fee_rows_fa = [['Professional Fees', money(f['pro'])]], [['هزینه‌های حرفه‌ای', money(f['pro'])]]
+        if f['gov']:
+            fee_rows_en.append(['Government Fees', money(f['gov'])]); fee_rows_fa.append(['هزینه‌های دولتی', money(f['gov'])])
+        if f['disc']:
+            fee_rows_en.append(['Discount', '(%s)' % money(f['disc'])]); fee_rows_fa.append(['تخفیف', '(%s)' % money(f['disc'])])
+        if f['tax']:
+            fee_rows_en.append(['Applicable Tax', money(f['tax'])]); fee_rows_fa.append(['مالیات', money(f['tax'])])
+        if f['gov']:
+            fee_rows_en.append(['Total Professional Fees + Tax (excluding government fees)', money(f['total'])])
+            fee_rows_fa.append(['جمع حق‌الزحمه و مالیات (بدون هزینه‌های دولتی)', money(f['total'])])
+        return fee_rows_en, fee_rows_fa
+    def phase_notes(rs):
+        out = {}
+        for i, key in enumerate(('p1', 'p2')):
+            n_en = note_of(rs[i]) if len(rs) > i else ''
+            n_fa = note_of(rs[i], fa=True) if len(rs) > i else ''
+            out[key + '_note'] = (' (%s)' % n_en) if n_en else ''
+            out[key + '_note_fa'] = (' (%s)' % n_fa) if n_fa else ''
+        return out
+    plan_en, plan_fa, plan_fa_html = fmt_plan(rows)
+    fee_rows_en, fee_rows_fa = fee_rows_for({'pro': pro, 'disc': disc, 'tax': tax, 'gov': gov, 'total': total})
 
     # People. Names/addresses in Farsi come from the customer (or the card).
     def fa(rec, field, fallback):
@@ -636,6 +739,19 @@ else:
         'inst_en': ['%s Euro %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[0]) for r in rows],
         'inst_fa': ['مبلغ %s یورو %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[1]) for r in rows],
     }
+    d.update(phase_notes(rows))
+    def apply_kind(kind):
+        # On a combined file each agreement prints its own company's money.
+        if not combined:
+            return
+        c = 'sb' if kind.startswith('SB-') else 'sg'
+        f, rs = by[c], rows_by[c]
+        fe, ff = fee_rows_for(f)
+        pe, pf, _h = fmt_plan(rs)
+        d.update({'fee_rows_en': fe, 'fee_rows_fa': ff, 'total': money(f['total'] + f['gov']) if f['gov'] else money(f['total']),
+                  'schedule_en': pe, 'schedule_fa': pf, 'fee_total': num(f['pro'] - f['disc']),
+                  'p1': num(rs[0].x_amount) if rs else '', 'p2': num(rs[1].x_amount) if len(rs) > 1 else ''})
+        d.update(phase_notes(rs))
     if 'PR' in kinds and not order.x_agr_subject:
         d['program_en'] = 'Permanent Residence Application by following the program: %s' % (services_en[0] if services_en else '')
     if 'SPON' in kinds:
@@ -701,6 +817,7 @@ else:
         d['title'] = 'Service Agreement' if kind in ('SB-A', 'SB-F') else ('Retainer Agreement' if kind != 'ENT' else 'Retainer Agreement / قرارداد مشاوره')
         d['file_no'] = file_no_for(kind)
         d['file_label'] = ('Contract No %s' % d['file_no']) if is_sb else ('RCIC R713046 · Client File %s' % d['file_no'])
+        apply_kind(kind)
         def _render():
             pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
             if not pdf or not bytes(pdf).startswith(b'%PDF') or not bytes(pdf).rstrip().endswith(b'%%EOF'):
@@ -841,11 +958,20 @@ else:
         accompanying = 'Single + %dKid%s' % (n_kids, '' if n_kids == 1 else 's')
     kids = fam.filtered(lambda f: f.x_relation == 'child')
     spouse_row = fam.filtered(lambda f: f.x_relation == 'spouse')[:1]
-    plan_short = ' + '.join('%s %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[0]) for r in rows)
-    order.sudo().write({
-        'x_sheet_pro': pro, 'x_sheet_gov': gov, 'x_sheet_disc': disc,
-        'x_sheet_tax': tax, 'x_sheet_total': total,
-        'x_sheet_plan': plan_short[:255],
+    def short_plan(rs):
+        return ' + '.join('%s %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[0]) for r in rs)
+    plan_short = short_plan(rows)
+    sheet_money = {'x_sheet_pro': pro, 'x_sheet_gov': gov, 'x_sheet_disc': disc, 'x_sheet_tax': tax,
+                   'x_sheet_total': total, 'x_sheet_plan': plan_short[:255],
+                   'x_sug_pro': 0.0, 'x_sug_gov': 0.0, 'x_sug_tax': 0.0, 'x_sug_total': 0.0, 'x_sug_plan': ''}
+    if combined:
+        # Each company's finance sheet gets that company's own figures.
+        sheet_money.update({
+            'x_sheet_pro': by['sb']['pro'], 'x_sheet_gov': 0.0, 'x_sheet_disc': by['sb']['disc'],
+            'x_sheet_tax': by['sb']['tax'], 'x_sheet_total': by['sb']['total'], 'x_sheet_plan': short_plan(rows_by['sb'])[:255],
+            'x_sug_pro': by['sg']['pro'], 'x_sug_gov': by['sg']['gov'], 'x_sug_tax': by['sg']['tax'],
+            'x_sug_total': by['sg']['total'], 'x_sug_plan': short_plan(rows_by['sg'])[:255]})
+    order.sudo().write(dict(sheet_money, **{
         'x_sheet_kinds': ', '.join(kinds),
         'x_sheet_accompanying': accompanying,
         'x_sheet_type': (codes[0] if codes else ''),
@@ -877,7 +1003,7 @@ else:
         'x_sheet_spouse_fa': (spouse_row.x_name_fa or '') if spouse_row else '',
         'x_sheet_child1_fa': (kids[0].x_name_fa or '') if len(kids) > 0 else '',
         'x_sheet_child2_fa': (kids[1].x_name_fa or '') if len(kids) > 1 else '',
-    })
+    }))
 
     summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees %s, excluded). Payment plan: %s' % (
         money(pro), money(disc), money(tax), money(total), money(gov), '; '.join(plan_en))
@@ -990,6 +1116,7 @@ PREVIEW_TAIL = r"""
         d['title'] = 'Service Agreement' if kind in ('SB-A', 'SB-F') else ('Retainer Agreement' if kind != 'ENT' else 'Retainer Agreement / قرارداد مشاوره')
         d['file_no'] = file_no_for(kind)
         d['file_label'] = ('Contract No %s' % d['file_no']) if is_sb else ('RCIC R713046 · Client File %s' % d['file_no'])
+        apply_kind(kind)
         pdf, _t = env['ir.actions.report'].sudo()._render_qweb_pdf('x_agreement.' + kind, [order.id], data={'d': d})
         if not pdf or not bytes(pdf).startswith(b'%PDF'):
             raise UserError("The %s agreement did not render into a valid PDF." % kind)
@@ -1066,6 +1193,36 @@ def _server_action(odoo, key, vals):
     return act_id
 
 
+def plan_spec(rows):
+    """DEFAULT_PLANS rows -> the product's x_default_plan text (share:amount:due:gov:note)."""
+    parts = []
+    for row in rows:
+        row = list(row) + ['', ''][:max(0, 5 - len(row))]
+        share, amount, due = row[0], row[1], row[2]
+        govf = row[3] if len(row) > 3 and row[3] not in ('', None) else ''
+        note = row[4] if len(row) > 4 else ''
+        p = '%s:%s:%s' % (share, ('%g' % amount) if amount else '0', due)
+        if govf != '' or note:
+            p += ':%s:%s' % (('%g' % govf) if govf else '', note or '')
+        parts.append(p)
+    return ';'.join(parts)
+
+
+def install_default_plans(odoo):
+    """Write every service's default plan onto its product (matched by internal reference)."""
+    from pricelist_data import PLANS as DEFAULT_PLANS
+    n = 0
+    for code, rows in DEFAULT_PLANS.items():
+        prod = odoo.search_read("product.template", [("default_code", "=", code)], ["id", "x_default_plan"], limit=1)
+        if not prod:
+            continue
+        spec = plan_spec(rows)
+        if (prod[0]["x_default_plan"] or "") != spec:
+            odoo.write("product.template", [prod[0]["id"]], {"x_default_plan": spec})
+            n += 1
+    log.info("  default payment plans written on %d products", n)
+
+
 def install_pay_plan(odoo):
     """The payment-plan table: its model, fields, access, and the Recalculate action."""
     model_id = odoo.ref("p2model", PLAN_MODEL)
@@ -1089,13 +1246,22 @@ def install_pay_plan(odoo):
     _sync_selection(odoo, PLAN_MODEL, "x_due", DUE_LABELS)
     _field(odoo, PLAN_MODEL, "x_due_date", {"field_description": "Date", "ttype": "date"})
     _field(odoo, PLAN_MODEL, "x_note", {"field_description": "Note (printed)", "ttype": "char"})
+    # A combined entrepreneur file signs one agreement per company, each with
+    # its own instalments: every row says which agreement it belongs to, and
+    # the government fees collected with that instalment are printed next to it.
+    _field(odoo, PLAN_MODEL, "x_company", {
+        "field_description": "Agreement", "ttype": "selection",
+        "selection_ids": [(0, 0, {"value": v, "name": n, "sequence": i}) for i, (v, n) in enumerate(PLAN_COMPANIES)]})
+    _sync_selection(odoo, PLAN_MODEL, "x_company", PLAN_COMPANIES)
+    _field(odoo, PLAN_MODEL, "x_gov", {"field_description": "Government fees (with this instalment)", "ttype": "float"})
     _field(odoo, "sale.order", PLAN_FIELD, {
         "field_description": "Payment plan", "ttype": "one2many", "relation": PLAN_MODEL,
         "relation_field": "x_order_id", "copied": True})
     _field(odoo, "product.template", "x_default_plan", {
         "field_description": "Default payment plan",
-        "help": "Proposed on new quotations: share:amount:due per instalment, separated by ';'. "
-                "share = percentage, rest or custom; due = a key of the plan's Due list.",
+        "help": "Proposed on new quotations: share:amount:due:gov:note per instalment, separated by ';'. "
+                "share = percentage, rest or custom; due = a key of the plan's Due list; gov = government "
+                "fees collected with the instalment; note = what it covers (English|Farsi).",
         "ttype": "char"})
     group = odoo.search_read("ir.model.data", [("module", "=", "base"), ("name", "=", "group_user")],
                              ["res_id"], limit=1)[0]["res_id"]
@@ -1486,7 +1652,9 @@ def install_send_button(odoo, rcic_email):
             '<field name="x_amount" sum="Total"/>'
             '<field name="x_due"/>'
             '<field name="x_due_date" invisible="x_due != \'date\'"/>'
-            '<field name="x_note" optional="hide"/>'
+            '<field name="x_company" optional="show"/>'
+            '<field name="x_gov" optional="show"/>'
+            '<field name="x_note" optional="show"/>'
             '</tree></field>'
             '</page>'
             '</xpath>'
@@ -2143,6 +2311,11 @@ SHEET_FIELDS = [
     # holds the Sugimoto one's own number; the Sparkbridge one stays in
     # client_order_ref / x_sheet_contract_no.
     ("x_sugimoto_no", "char", "Sugimoto contract no (entrepreneur pair)"),
+    # The Sugimoto half's money on a combined file (the x_sheet_* figures are
+    # then the Sparkbridge half's), so each company's sheet gets its own row.
+    ("x_sug_pro", "float", "Sheet: Sugimoto professional fees (pair)"), ("x_sug_gov", "float", "Sheet: Sugimoto government fees (pair)"),
+    ("x_sug_tax", "float", "Sheet: Sugimoto tax (pair)"), ("x_sug_total", "float", "Sheet: Sugimoto total (pair)"),
+    ("x_sug_plan", "char", "Sheet: Sugimoto payment plan (pair)"),
     ("x_sheet_display", "char", "Sheet: contract name"), ("x_sheet_name", "char", "Sheet: first name"),
     ("x_sheet_family", "char", "Sheet: family name"), ("x_sheet_email", "char", "Sheet: email"),
     ("x_sheet_phone", "char", "Sheet: phone"), ("x_sheet_address", "char", "Sheet: address"),
@@ -2361,4 +2534,5 @@ def install(odoo, rcic_email):
     install_tax_refresh(odoo)
     install_mail_cc(odoo)
     relax_card_required(odoo)
+    install_default_plans(odoo)
     return ids
