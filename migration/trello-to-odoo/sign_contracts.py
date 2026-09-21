@@ -882,6 +882,9 @@ else:
         # The client's e-mail (template C2 of the e-mail catalogue). Odoo Sign
         # renders it as the body of the signing e-mail, above the Sign button;
         # the layout around it is the __trello__ override of the Sign template.
+        # It never repeats the fees or the instalments: those are in the
+        # agreement itself, and a figure quoted twice is a figure that can
+        # disagree with the signed document (client's request, 2026-09-21).
         if is_sb:
             signer_fa = 'شرکت <span dir="ltr">Sparkbridge Incubator Ltd.</span>'
             signer_en = 'Sparkbridge Incubator Ltd.'
@@ -897,7 +900,6 @@ else:
             '<p>لطفاً روی دکمه «امضای قرارداد» در همین ایمیل کلیک کرده، قرارداد را مطالعه و به‌صورت آنلاین امضا بفرمایید. '
             'نیازی به چاپ، اسکن یا ارسال مجدد فایل نیست. پس از امضای شما، قرارداد از سوی %(signer_fa)s امضا می‌شود و '
             'نسخه نهایی امضاشده به‌صورت خودکار برای شما ایمیل خواهد شد.</p>'
-            '<p><b>مبلغ قرارداد:</b> <span dir="ltr">%(total)s</span><br/><b>برنامه پرداخت:</b></p><ul>%(plan_fa)s</ul>'
             '<p>نکته: اگر صفحه امضا در مرورگر شما باز نشد، لطفاً با مرورگر Chrome امتحان کنید یا با پاسخ به همین ایمیل به ما اطلاع دهید.</p>'
             '<p>در صورت هرگونه سؤال، با پاسخ به همین ایمیل در خدمت شما هستیم.</p>'
             '</div>'
@@ -907,7 +909,6 @@ else:
             '<p>Your %(title)s No. <b>%(no)s</b> for "%(service_en)s" is ready for your electronic signature. '
             'Click "Sign document" below to review and sign it online; there is nothing to print or scan. '
             'After you sign, %(signer_en)s countersigns and the final signed copy is e-mailed to you automatically.</p>'
-            '<p><b>Contract amount:</b> %(total)s<br/><b>Payment plan:</b></p><ul>%(plan_en)s</ul>'
             '<p>If the signing page does not open, please try Google Chrome or reply to this e-mail.</p>'
             '</div>'
             '%(pay)s'
@@ -918,9 +919,6 @@ else:
                 'phase2.sb_payment_html' if is_sb else 'phase2.sg_payment_html') or '',
             'client_fa': client_fa, 'client_en': client_name, 'no': d['file_no'], 'title': d['title'],
             'service_fa': service_fa, 'service_en': service_en, 'signer_fa': signer_fa, 'signer_en': signer_en,
-            'total': money(total),
-            'plan_fa': ''.join('<li>%s</li>' % p for p in plan_fa_html),
-            'plan_en': ''.join('<li>%s</li>' % p for p in plan_en),
         }
         req = Request.with_context(no_sign_mail=True).create({
             'template_id': tmpl.id,
