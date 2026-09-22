@@ -69,7 +69,7 @@ async function detectBatch(entries) {
 }
 
 /**
- * @param {Record<string,string>} thumbs - { pageNumber: pngPath }
+ * @param {Record<string, string|Buffer>} thumbs - { pageNumber: pngPath | pngBase64 }
  * @returns {Promise<{rotate: Record<string, number>, mirrored: number[]}>}
  *   rotate   - { pageNumber: clockwiseDegrees } for rotated pages
  *   mirrored - page numbers that are left-right flipped (unfixable by rotation)
@@ -82,12 +82,18 @@ export async function detectOrientations(thumbs) {
     .slice(0, MAX_PAGES);
   if (!pages.length) return { rotate: {}, mirrored: [] };
 
-  // Load thumbnails, skipping any that can't be read.
+  // Thumbnails arrive as base64 PNG strings (in-memory pipeline) or file
+  // paths; skip any that can't be read.
   const entries = [];
   for (const page of pages) {
+    const v = thumbs[String(page)];
     try {
-      const buf = await fs.readFile(thumbs[String(page)]);
-      entries.push({ page, b64: buf.toString('base64') });
+      if (typeof v === 'string' && !v.startsWith('/') && !v.startsWith('.')) {
+        entries.push({ page, b64: v });
+      } else {
+        const buf = await fs.readFile(v);
+        entries.push({ page, b64: buf.toString('base64') });
+      }
     } catch {
       /* skip */
     }

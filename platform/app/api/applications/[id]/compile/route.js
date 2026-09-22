@@ -4,8 +4,7 @@ import { renderDocPdf, textToBlocks } from '@/lib/pdf';
 import { generateSop, selectSopDocs } from '@/lib/generators/sop';
 import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
 import { compilePackage, PACKAGES, PACKAGE_CATEGORIES } from '@/lib/compile';
-import { analyzePages } from '@/lib/generators/blankdetect';
-import { normalizeImage } from '@/lib/images';
+import { prepareDocument } from '@/lib/packageDocs';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -88,45 +87,15 @@ export async function POST(req, { params }) {
 
   const EMBEDDABLE = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 
+  // Every upload — PDF of any geometry, or a photo — becomes a list of upright
+  // page pictures (lib/packageDocs.js). The compiler just places pictures.
   const loadDoc = async (d) => {
     const bytes = await readUpload(app.id, d.stored);
-
-    // Uploaded photos: bake in EXIF orientation and vision-check the pixels.
-    // (PDF embedding ignores EXIF, so phone photos otherwise come out rotated.)
-    if (d.mime === 'image/jpeg' || d.mime === 'image/png' || d.mime === 'image/webp') {
-      const fixed = await normalizeImage(bytes, d.mime, { vision: fixRotation });
-      if (fixed.rotated) rotatedTotal++;
-      return { bytes: fixed.bytes, mime: fixed.mime, filename: d.filename };
-    }
-
-    let keepPages = null;
-    let pageRotations = null;
-    if (d.mime === 'application/pdf' && (cleanPages || fixRotation)) {
-      // Rasterize once: measure ink (blank pages) and check orientation.
-      const { pages, blank, rotate, mirrored } = await analyzePages(bytes, {
-        detectOrientation: fixRotation,
-      });
-      if (pages > 0) {
-        // Drop blank pages and mirrored scan artifacts (no rotation fixes a
-        // mirrored page) — but never every page of a document.
-        const drop = new Set();
-        if (cleanPages) blank.forEach((n) => drop.add(n));
-        if (fixRotation) mirrored.forEach((n) => drop.add(n));
-        let kept = Array.from({ length: pages }, (_, i) => i + 1);
-        if (drop.size > 0 && drop.size < pages) {
-          kept = kept.filter((n) => !drop.has(n));
-          droppedTotal += blank.filter((n) => drop.has(n)).length;
-          mirroredTotal += mirrored.filter((n) => drop.has(n) && !blank.includes(n)).length;
-          keepPages = kept;
-        }
-        // Rotations must line up with the pages actually kept.
-        if (rotate && Object.keys(rotate).length) {
-          pageRotations = kept.map((n) => Number(rotate[String(n)] || 0));
-          rotatedTotal += Object.keys(rotate).length;
-        }
-      }
-    }
-    return { bytes, mime: d.mime, filename: d.filename, keepPages, pageRotations };
+    const prepared = await prepareDocument({ bytes, mime: d.mime }, { cleanPages, fixRotation });
+    droppedTotal += prepared.dropped;
+    mirroredTotal += prepared.mirrored;
+    rotatedTotal += prepared.rotated;
+    return prepared.pages.map((p) => ({ kind: 'picture', ...p, filename: d.filename }));
   };
 
   // Resolve one node's (section or child) content items.
@@ -170,9 +139,10 @@ export async function POST(req, { params }) {
         continue;
       }
       try {
-        items.push(await loadDoc(d));
+        items.push(...(await loadDoc(d)));
         usedDocIds.add(d.id);
-      } catch {
+      } catch (e) {
+        console.error(`[compile] could not prepare "${d.filename}": ${e.message}`);
         skippedFiles.push(d.filename);
         usedDocIds.add(d.id);
       }

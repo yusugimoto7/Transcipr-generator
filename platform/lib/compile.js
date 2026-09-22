@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 /**
  * Compile a submission package: merge section content (generated docs + uploaded
@@ -35,75 +35,54 @@ function wrapText(page, font, text, x, y, size, maxWidth, color) {
   return cy;
 }
 
+// Pictures (rendered scan pages, photos) are placed inside this box: a small
+// margin all round and a clear band at the bottom for the "Page N of M" footer.
+const PIC_MARGIN = 18;
+const FOOTER_BAND = 40;
+
 // Add one item's pages to the package. Returns true on success; false means the
 // item could NOT be embedded — the caller reports it to the applicant instead
 // of shipping a placeholder page inside a file meant for a visa officer.
+//
+// Two kinds of item:
+//   { kind: 'picture', buffer, width, height }  a JPEG page picture (uploads)
+//   { mime: 'application/pdf', bytes }           a PDF the platform generated
+// Uploaded PDFs never reach here as PDFs — they're rendered to pictures first
+// (see lib/packageDocs.js), which is what makes cropping impossible.
 async function addContent(doc, font, item) {
-  const { bytes, mime, filename, keepPages } = item;
-  if (mime === 'application/pdf') {
+  if (item.kind === 'picture') {
     try {
-      const src = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
-      let pages = src.getPages();
-      if (Array.isArray(keepPages) && keepPages.length) {
-        pages = keepPages.filter((n) => n >= 1 && n <= pages.length).map((n) => src.getPage(n - 1));
-      }
-      // Embed via each page's CropBox (what viewers display) and normalize to
-      // Letter. Source pages carry a /Rotate flag that viewers apply but
-      // embedPages does not — so we re-apply it here, otherwise 90° scans get
-      // cut off and 180° scans come out upside down.
-      const boxes = pages.map((p) => {
-        const cb = p.getCropBox();
-        return { left: cb.x, bottom: cb.y, right: cb.x + cb.width, top: cb.y + cb.height };
-      });
-      // Total correction per page = the page's own /Rotate plus any extra
-      // rotation detected from the scan's content (upside-down photos have no
-      // /Rotate flag at all).
-      const extra = Array.isArray(item.pageRotations) ? item.pageRotations : [];
-      const rotations = pages.map((p, i) => {
-        const own = p.getRotation().angle;
-        const add = Number(extra[i] || 0);
-        return (((own + add) % 360) + 360) % 360;
-      });
-      const embedded = await doc.embedPages(pages, boxes);
-      embedded.forEach((ep, i) => {
-        const rot = rotations[i];
-        // Visual dimensions after rotation is applied.
-        const visW = rot === 90 || rot === 270 ? ep.height : ep.width;
-        const visH = rot === 90 || rot === 270 ? ep.width : ep.height;
-        const scale = Math.min(PAGE_W / visW, PAGE_H / visH);
-        const w = visW * scale;
-        const h = visH * scale;
-        const page = doc.addPage([PAGE_W, PAGE_H]);
-        const originX = (PAGE_W - w) / 2;
-        const originY = (PAGE_H - h) / 2;
-        // PDF /Rotate is CLOCKWISE; pdf-lib's `rotate` is counter-clockwise —
-        // so negate. drawPage rotates about the origin, so shift the origin per
-        // angle to keep the rotated content inside the target box.
-        const opts = { width: ep.width * scale, height: ep.height * scale, rotate: degrees(-rot) };
-        if (rot === 90) Object.assign(opts, { x: originX, y: originY + h });
-        else if (rot === 180) Object.assign(opts, { x: originX + w, y: originY + h });
-        else if (rot === 270) Object.assign(opts, { x: originX + w, y: originY });
-        else Object.assign(opts, { x: originX, y: originY });
-        page.drawPage(ep, opts);
+      const img = await doc.embedJpg(item.buffer);
+      const boxW = PAGE_W - PIC_MARGIN * 2;
+      const boxH = PAGE_H - PIC_MARGIN - FOOTER_BAND;
+      const s = Math.min(boxW / img.width, boxH / img.height);
+      const w = img.width * s;
+      const h = img.height * s;
+      const page = doc.addPage([PAGE_W, PAGE_H]);
+      page.drawImage(img, {
+        x: (PAGE_W - w) / 2,
+        y: FOOTER_BAND + (boxH - h) / 2,
+        width: w,
+        height: h,
       });
       return true;
     } catch {
       return false;
     }
   }
-  if (mime === 'image/jpeg' || mime === 'image/png') {
+  const { bytes, mime } = item;
+  if (mime === 'application/pdf') {
     try {
-      const img = mime === 'image/jpeg' ? await doc.embedJpg(bytes) : await doc.embedPng(bytes);
-      const page = doc.addPage([PAGE_W, PAGE_H]);
-      const maxW = PAGE_W - MARGIN * 2;
-      const maxH = PAGE_H - MARGIN * 2;
-      const s = Math.min(maxW / img.width, maxH / img.height, 1);
-      page.drawImage(img, {
-        x: (PAGE_W - img.width * s) / 2,
-        y: (PAGE_H - img.height * s) / 2,
-        width: img.width * s,
-        height: img.height * s,
-      });
+      const src = await PDFDocument.load(bytes, { ignoreEncryption: true, throwOnInvalidObject: false });
+      const embedded = await doc.embedPages(src.getPages());
+      for (const ep of embedded) {
+        // Generated documents are Letter portrait already; fit defensively.
+        const s = Math.min(PAGE_W / ep.width, PAGE_H / ep.height);
+        const w = ep.width * s;
+        const h = ep.height * s;
+        const page = doc.addPage([PAGE_W, PAGE_H]);
+        page.drawPage(ep, { x: (PAGE_W - w) / 2, y: (PAGE_H - h) / 2, width: w, height: h });
+      }
       return true;
     } catch {
       return false;
