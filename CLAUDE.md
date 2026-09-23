@@ -2,15 +2,19 @@
 
 Next.js 14 (App Router, JSX, `runtime = "nodejs"`) content tool for a Persian-language Canadian/European immigration brand (@sugimotovisa). It ingests real immigration news, turns it into Farsi topic cards, and generates video scripts, clean Telegram news posts, and Farsi SEO blog articles (WordPress drafts). A separate module auto-posts Canadian immigration draws.
 
-Deployed on Render from `main` (auto-deploy on push). Two people work on this repo, each with their own Claude Code session.
+Deployed on Render from `main` (auto-deploy on push). Two people work on this repo on the same branch, each with their own Claude Code session.
 
-## Branch workflow (two people — follow this)
+## Branch workflow (two people, one branch)
 
-- `main` is production. **Never commit to it directly.** Render deploys every push to it.
-- Work on your own branch named `<yourname>/<topic>` (e.g. `sara/page-watch`).
-- Open a pull request into `main`. CI runs `npm run build`; do not merge red.
-- Rebase on `origin/main` before opening the PR. Keep PRs to one topic.
-- If two branches touch the same file, coordinate before merging, not after.
+Both people work directly on `main`. Render deploys every push to it, so the
+discipline is about not stepping on each other and not shipping a broken build:
+
+- `git pull --rebase origin main` before you start work and again right before every push.
+- `npm run build` must pass before every push. A broken push goes straight to production.
+- Push small commits often. Do not sit on a day of local changes.
+- If a push is rejected, `git pull --rebase origin main`, resolve, build, push again.
+- CI also runs the build on every push to `main`. If it goes red, fix it immediately.
+- Before starting a lane of work, say which files you are about to change so the other person is not editing the same ones at the same time.
 
 ## Safety rules — read before running anything locally
 
