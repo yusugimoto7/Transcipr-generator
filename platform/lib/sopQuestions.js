@@ -122,6 +122,22 @@ const VISIT = [
   { id: 'travel', question: 'Travel history', options: ['Visited Canada before and left on time', 'Travelled to the US / UK / Schengen', 'First international trip', 'A previous refusal to explain'] },
 ];
 
+const STUDY_INSIDE = [
+  { id: 'reason', question: 'What are you asking for?', options: ['More time to finish my current program', 'Moving to a different school', 'Moving to a higher level of study', 'Restoring my status after it lapsed'] },
+  { id: 'progress', question: 'How have your studies gone so far?', options: ['Good academic standing throughout', 'Full-time every semester', 'Had an authorized leave / reduced load', 'Repeated or deferred some courses'] },
+  { id: 'why', question: 'Why do you need the extra time or the change?', options: ['Program is longer than my permit', 'Co-op / work term extends my end date', 'Changed program after reassessing my goals', 'The new school suits my field better', 'Course availability delayed my graduation'] },
+  { id: 'funds', question: 'How are the remaining studies funded?', options: ['Own savings in Canada', 'Family support from home', 'Scholarship / assistantship', 'Part-time work allowed on my permit'] },
+  { id: 'after', question: 'What will you do after graduating?', options: ['Apply for a PGWP', 'Return home to a job or business', 'Continue to a higher level of study'] },
+];
+
+const VISITOR_RECORD = [
+  { id: 'reason', question: 'Why do you need to stay longer?', options: ['Continue visiting family', 'Medical treatment or recovery', 'Caring for a relative', 'Waiting on another IRCC application', 'Travel plans changed', 'Accompanying a family member studying or working here'] },
+  { id: 'howLong', question: 'How much longer do you need?', options: ['A few weeks', 'A few months', 'Up to six months', 'Until a specific event or appointment'] },
+  { id: 'support', question: 'How will you support yourself?', options: ['My own savings', 'My host / family in Canada pays', 'My spouse supports me', 'Pension / income from home'] },
+  { id: 'status', question: 'Your current status', options: ['Status still valid — applying before it expires', 'Applying to restore status (within 90 days)', 'I hold a work or study permit and am changing to visitor'] },
+  { id: 'ties', question: 'What guarantees you will leave?', options: ['Home, property or business at home', 'Job I must return to', 'Family waiting at home', 'Return ticket booked', 'Left Canada on time on previous visits'] },
+];
+
 const PGWP = [
   { id: 'program', question: 'About your program', options: ['Completed on time, full-time', 'Program was 2+ years (3-year PGWP eligible)', 'Program under 2 years', 'Had an authorized leave / break'] },
   { id: 'work', question: 'Your work plans', options: ['Job offer in my field', 'Currently working part-time with the same employer', 'Looking for work in my field'] },
@@ -138,6 +154,8 @@ const RECONSIDERATION = [
 export const QUESTION_SETS = {
   study: STUDY,
   'study-minor': STUDY_MINOR,
+  'study-inside': STUDY_INSIDE,
+  'visitor-record': VISITOR_RECORD,
   owp: OWP,
   visit: VISIT,
   pgwp: PGWP,

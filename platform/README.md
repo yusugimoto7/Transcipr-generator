@@ -76,10 +76,26 @@ person's work.
 
 ## Application types
 
-Defined in `lib/appTypes.js`, derived from the firm's real client files: study
-permit (outside Canada), study permit for a minor, spousal open work permit
-(inside / outside Canada), PGWP, visitor visa (outside / inside Canada) and a
-reconsideration request. Each type declares its intake steps, IRCC forms
+Defined in `lib/appTypes.js`, derived from the firm's real client files:
+
+| Type | Form | Where decided |
+|---|---|---|
+| Study permit (outside Canada) | IMM 1294 | Visa office abroad |
+| Study permit — minor child | IMM 1294 | Visa office abroad |
+| Study permit — extend / change conditions (inside Canada) | IMM 5709 | Inside Canada |
+| Spousal open work permit (inside Canada) | IMM 5710 | Inside Canada |
+| Spousal open work permit (outside Canada) | IMM 1295 | Visa office abroad |
+| PGWP | IMM 5710 | Inside Canada |
+| Visitor visa / TRV (outside Canada) | IMM 5257 | Visa office abroad |
+| **Visitor visa / TRV — applying from inside Canada** | IMM 5257 | Visa office abroad — issues a **counterfoil** in the passport for re-entry; does not change status |
+| **Visitor Record — extend stay as a visitor** | IMM 5708 | Inside Canada — issues a **status document**; no passport submitted, no photo |
+| Reconsideration request | IMM 5744 (ATIP) | — |
+
+The last two are deliberately separate types: a TRV lets someone re-enter
+Canada after travelling, a Visitor Record lets them stay longer. Different
+form, different office, different documents, different letter.
+
+Each type declares its intake steps, IRCC forms
 (with the firm's 1xx document codes), checklist, compiled packages, letters and
 process stages. Adding a type is a data change in that file.
 

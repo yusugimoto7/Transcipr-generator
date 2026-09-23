@@ -34,6 +34,8 @@ const DOC_CATS = {
   owp: ['spouse-status', 'inviter-docs', 'marriage-cert', 'status-in-canada', 'cv', 'employment-letter'],
   visit: ['invitation-letter', 'host-docs', 'employment-letter', 'flight', 'accommodation', 'cv', 'title-deeds'],
   pgwp: ['completion-letter', 'transcripts', 'status-in-canada', 'job-offer', 'employment-letter'],
+  'study-inside': ['status-in-canada', 'loa', 'transcripts', 'deposit', 'last-entry'],
+  'visitor-record': ['status-in-canada', 'last-entry', 'ties-docs', 'proof-of-funds', 'host-docs'],
   reconsideration: ['refusal-letter', 'sop', 'proof-of-funds', 'employment-letter'],
   invitation: ['host-docs', 'invitation-letter'],
   explanation: ['refusal-letter'],
@@ -119,6 +121,38 @@ ${facts}${builderNote}${docsNote}`,
 **Strong ties to my home country** — job / business / approved leave, property, family members staying behind, travel history and compliance with previous visas.
 **Conclusion** — commitment to respect the conditions of stay and leave Canada by ${isOwp ? 'the end of my authorized period' : d.visitTo || '[date]'}.
 Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'study-inside') {
+    return {
+      system: `You draft first-person Statements of Purpose for study permit applications made from INSIDE Canada (IMM 5709): extensions, changes of school or level, changes of conditions, and restorations of status. The officer's concerns are different from a first application: whether the applicant actively pursued studies on the permit they already hold, why more time or a change is needed, that funds remain sufficient, and that the stay stays temporary. This is an in-Canada decision — there is no visa counterfoil and no port-of-entry exam. ${NO_INVENT}`,
+      instruction: `Write a "Statement of Purpose" (800-1,200 words) addressed "Dear Officer,", first person as ${name || 'the applicant'}. Sections:
+**My current status and what I am applying for** — study permit expiring ${d.permitExpiry || '[date]'}, last entry ${d.lastEntryDate || '[date]'}, and the request: ${d.studyInsideReason || '[reason]'}.
+**How I have pursued my studies** — ${d.currentDli || '[school]'}: semesters completed (${d.semestersCompleted || '[n]'}), academic standing (${d.academicStanding || '[standing]'}), full-time enrolment; explain any break honestly${d.studyGapExplanation ? ` (${d.studyGapExplanation})` : ''}.
+**Why I need this extension or change** — the concrete reason (program length, co-op, course availability, a better-suited program or school${d.newDli ? `, moving to ${d.newDli}` : ''}), and the new end date ${d.newProgramEnd || '[date]'}.
+${d.restorationReason ? '**Restoration of status** — how and when my status lapsed, that I am applying within 90 days, and what I have done since.\n' : ''}**Financial capacity for the remaining studies** — tuition still owing, living costs, and who pays.
+**My plans after graduation** — and my commitment to comply with the conditions of the permit and leave Canada at the end of my authorized stay.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'visitor-record') {
+    return {
+      system: `You draft first-person letters asking IRCC to EXTEND A STAY IN CANADA AS A VISITOR (IMM 5708, Visitor Record). This is an in-Canada status application decided by a Canadian processing centre — it issues a Visitor Record, NOT a visa, and the passport is not submitted for a counterfoil. Never describe it as a visa application or mention re-entry to Canada. The officer's concerns: a genuine and temporary reason to stay longer, enough money for the extended stay, and that the applicant will leave at the end. ${NO_INVENT}`,
+      instruction: `Write a "Letter of Explanation — Extension of Stay" (600-900 words) addressed "Dear Officer,", first person as ${name || 'the applicant'}. Sections:
+**My current status** — how and when I entered Canada (${d.lastEntryDate || '[date]'}), my current status (${d.currentStatusCanada || '[status]'}) and when it expires (${d.permitExpiry || '[date]'}); confirm this application is made before that date${d.extendUntil ? '' : ''}.
+**Why I am asking to stay longer** — ${d.extendReason || '[reason]'}: ${d.extendReasonDetail || '[explain]'}. Be specific and attach-referencing (name the supporting document).
+**How long I need** — until ${d.extendUntil || '[date]'}, and why that date.
+**How I will support myself** — ${d.extendSupport || '[who pays]'}, CAD ${d.extendFunds || '[amount]'} available; I will not work or study in Canada on visitor status.
+**My departure plan and ties** — ${d.extendDeparturePlan || '[plan]'}; family, property, work or business waiting at home.
+Close by confirming I will respect the conditions of my stay and leave Canada at the end of the authorized period, then "Sincerely, ${name || '[name]'}".
 
 Facts:
 ${facts}${builderNote}${docsNote}`,

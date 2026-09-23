@@ -111,6 +111,35 @@ try {
   ok(r.status === 200 && r.data.answers.purpose && !r.data.answers.whyCanada, 'TRV builder keeps visit questions, drops study ones');
   ok(r.data.generated.find((g) => g.key === 'sop')?.filename.startsWith('Purpose of Travel'), 'TRV primary letter is Purpose of Travel');
 
+  // --- the three inside-Canada types are genuinely distinct ------------------
+  const mk = async (type, title) => (await admin('POST', '/api/applications', { type, title })).data.application.id;
+  const spInsideId = await mk('study-permit-inside', 'SP inside');
+  const trvInId = await mk('trv-inside', 'TRV inside');
+  const vrId = await mk('visitor-record', 'Visitor record');
+
+  r = await admin('POST', `/api/applications/${spInsideId}/generate`, { docs: ['sop', 'imm5709'] });
+  let k = (r.data?.produced || []).map((p) => p.key);
+  ok(r.status === 200 && k.includes('imm5709'), 'study permit inside uses IMM 5709');
+
+  r = await admin('POST', `/api/applications/${trvInId}/generate`, { docs: ['imm5257'] });
+  ok(r.status === 200 && r.data.produced.some((p) => p.key === 'imm5257'), 'TRV inside uses IMM 5257');
+  r = await admin('POST', `/api/applications/${trvInId}/generate`, { docs: ['imm5708'] });
+  ok(r.status === 502 || !(r.data?.produced || []).some((p) => p.key === 'imm5708'), 'TRV inside refuses IMM 5708');
+
+  r = await admin('POST', `/api/applications/${vrId}/generate`, { docs: ['imm5708'] });
+  ok(r.status === 200 && r.data.produced.some((p) => p.key === 'imm5708'), 'visitor record uses IMM 5708');
+  r = await admin('POST', `/api/applications/${vrId}/generate`, { docs: ['imm5257'] });
+  ok(r.status === 502 || !(r.data?.produced || []).some((p) => p.key === 'imm5257'), 'visitor record refuses IMM 5257');
+
+  // Different primary letters, and question sets that do not bleed across types
+  r = await admin('POST', `/api/applications/${vrId}/sop`, { answers: { reason: { selected: ['Medical treatment or recovery'] }, whyProgram: { selected: ['nope'] } } });
+  ok(r.data.answers.reason && !r.data.answers.whyProgram, 'visitor record keeps its own questions only');
+  ok(r.data.generated.find((g) => g.key === 'sop')?.filename.startsWith('Letter of Explanation'), 'visitor record primary letter is the extension letter');
+  r = await admin('POST', `/api/applications/${trvInId}/sop`, { answers: { purpose: { selected: ['Tourism'] } } });
+  ok(r.data.generated.find((g) => g.key === 'sop')?.filename.startsWith('Purpose of Travel'), 'TRV inside primary letter is Purpose of Travel');
+  r = await admin('POST', `/api/applications/${spInsideId}/sop`, { answers: { reason: { selected: ['More time to finish my current program'] } } });
+  ok(r.data.generated.find((g) => g.key === 'sop')?.filename.startsWith('Statement of Purpose'), 'study permit inside primary letter is a Statement of Purpose');
+
   // Self-registered applicant: no rep documents, own files only
   r = await applicant('POST', '/api/auth/register', { email: 'client@x.test', password: 'password123', name: 'Client' });
   r = await applicant('POST', '/api/applications', { type: 'pgwp', clientNumber: 'HACK', representation: 'firm' });
