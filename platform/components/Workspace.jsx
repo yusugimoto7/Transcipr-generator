@@ -6,16 +6,19 @@ import IntakePanel from '@/components/panels/IntakePanel';
 import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
 import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
+import { primaryLetter, getAppType } from '@/lib/appTypes';
 
-const TABS = [
-  { id: 'documents', label: '1. Documents' },
-  { id: 'intake', label: '2. Intake' },
-  { id: 'sop', label: '3. Study Plan' },
-  { id: 'review', label: '4. Review' },
-  { id: 'generate', label: '5. Generate' },
-];
+const TAB_IDS = ['documents', 'intake', 'sop', 'review', 'generate'];
 
-const TAB_IDS = TABS.map((t) => t.id);
+function tabsFor(type) {
+  return [
+    { id: 'documents', label: '1. Documents' },
+    { id: 'intake', label: '2. Intake' },
+    { id: 'sop', label: `3. ${primaryLetter(type).title.replace(/ \(.*\)$/, '')}` },
+    { id: 'review', label: '4. Review' },
+    { id: 'generate', label: '5. Generate' },
+  ];
+}
 
 /** Read "#tab" or "#tab:substep" from the URL. */
 function readHash() {
@@ -27,9 +30,11 @@ function readHash() {
 
 export default function Workspace({ initialApp, schema, initialChecklist }) {
   const [app, setApp] = useState(initialApp);
+  const TABS = tabsFor(app.type);
   const [tab, setTabState] = useState('documents');
   const [intakeStep, setIntakeStepState] = useState(null);
-  const [saveState, setSaveState] = useState('saved'); // saved | saving | error
+  const [saveState, setSaveState] = useState('saved'); // saved | saving | error | conflict
+  const versionRef = useRef(initialApp.version || 0);
   const saveTimer = useRef(null);
 
   // Restore the position from the URL on load, and follow browser back/forward.
@@ -84,9 +89,21 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
           const res = await fetch(`/api/applications/${app.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data }),
+            body: JSON.stringify({ data, baseVersion: versionRef.current }),
           });
+          if (res.status === 409) {
+            // Someone else saved this file first: keep their copy, tell the user.
+            const d = await res.json();
+            if (d.application) {
+              versionRef.current = d.application.version || 0;
+              setApp((a) => ({ ...a, ...d.application }));
+            }
+            setSaveState('conflict');
+            return;
+          }
           if (!res.ok) throw new Error();
+          const d = await res.json();
+          versionRef.current = d.application?.version ?? versionRef.current;
           setSaveState('saved');
         } catch {
           setSaveState('error');
@@ -114,7 +131,11 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
         <SaveBadge state={saveState} />
       </div>
       <p className="muted small" style={{ marginBottom: 18 }}>
-        {schema.title} · single applicant · <a href="/dashboard">← all applications</a>
+        {getAppType(app.type).title}
+        {app.clientNumber ? ` · File ${app.clientNumber}` : ''}
+        {app.applicantRole && app.applicantRole !== 'main' ? ` · ${app.applicantRole}` : ''}
+        {' · '}
+        <a href="/dashboard">← all files</a>
       </p>
 
       <div className="steps">
@@ -157,5 +178,6 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
 function SaveBadge({ state }) {
   if (state === 'saving') return <span className="chip">Saving…</span>;
   if (state === 'error') return <span className="chip danger">Save failed</span>;
+  if (state === 'conflict') return <span className="chip danger" title="Another account manager saved this file after you opened it. Their version has been loaded — re-apply your last change.">Updated by someone else — reloaded</span>;
   return <span className="chip ok">Saved</span>;
 }

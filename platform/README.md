@@ -53,12 +53,35 @@ npm run dev                   # http://localhost:3001
 |---|---|---|
 | `OPENAI_API_KEY` | yes | OpenAI (GPT) API key (server only) |
 | `AUTH_SECRET` | yes | Long random string to sign session cookies |
+| `ADMIN_EMAIL` | yes (for staff use) | Email(s) that are always admin — the account that manages staff and assigns files |
 | `OPENAI_MODEL` | no | Defaults to `gpt-4.1`. Must support image + PDF input |
 | `OPENAI_BASE_URL` | no | Only for Azure OpenAI / a gateway / an OpenAI-compatible proxy |
 | `DATA_DIR` | no | Where accounts/applications JSON live (default `./data`) |
 | `UPLOAD_DIR` | no | Where uploaded & generated files live (default `./uploads`) |
 
 `data/` and `uploads/` hold applicant data and are git-ignored — never commit them.
+
+## Roles
+
+| Role | How they get it | What they see |
+|---|---|---|
+| **Admin** | Registers with an email listed in `ADMIN_EMAIL` | Everything, plus `/admin`: create account managers, deactivate/reset, assign files |
+| **Account manager** | Created by an admin in `/admin` | Files assigned to them (and files they created) |
+| **Applicant** | Self-registers | Only their own applications; cannot set a client number or firm representation |
+
+Two managers can work on the same file at once: every save carries the version it
+was based on, and a save built on a stale version is rejected with a
+"Updated by someone else — reloaded" notice instead of overwriting the other
+person's work.
+
+## Application types
+
+Defined in `lib/appTypes.js`, derived from the firm's real client files: study
+permit (outside Canada), study permit for a minor, spousal open work permit
+(inside / outside Canada), PGWP, visitor visa (outside / inside Canada) and a
+reconsideration request. Each type declares its intake steps, IRCC forms
+(with the firm's 1xx document codes), checklist, compiled packages, letters and
+process stages. Adding a type is a data change in that file.
 
 ## Project layout
 

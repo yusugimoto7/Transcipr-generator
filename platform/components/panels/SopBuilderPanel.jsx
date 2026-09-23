@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { SOP_QUESTIONS } from '@/lib/sopQuestions';
+import { questionsFor } from '@/lib/sopQuestions';
+import { primaryLetter } from '@/lib/appTypes';
 
 export default function SopBuilderPanel({ app, patchLocal }) {
+  const letter = primaryLetter(app.type);
+  const QUESTIONS = questionsFor(letter.kind);
   const [answers, setAnswers] = useState(app.sopAnswers || {});
   const [text, setText] = useState(app.sop?.text || '');
   const [busy, setBusy] = useState(false);
@@ -96,16 +99,16 @@ export default function SopBuilderPanel({ app, patchLocal }) {
   return (
     <>
       <div className="card">
-        <h2>Study Plan / SOP builder</h2>
+        <h2>{letter.title} builder</h2>
         <p className="muted small" style={{ marginTop: -6 }}>
           Answer up to 7 quick questions — tap the answers that fit and add notes in your own
           words. We combine them with your intake details to write a full Statement of Purpose.
           <br />
-          <span className="chip" style={{ marginTop: 8 }}>{answered}/{SOP_QUESTIONS.length} answered</span>
+          <span className="chip" style={{ marginTop: 8 }}>{answered}/{QUESTIONS.length} answered</span>
         </p>
 
         <div style={{ marginTop: 12 }}>
-          {SOP_QUESTIONS.map((q, i) => {
+          {QUESTIONS.map((q, i) => {
             const cur = answers[q.id] || { selected: [], note: '' };
             return (
               <div key={q.id} style={{ padding: '14px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
@@ -139,7 +142,7 @@ export default function SopBuilderPanel({ app, patchLocal }) {
 
         <div className="btn-row" style={{ marginTop: 16 }}>
           <button onClick={generate} disabled={busy}>
-            {busy ? <span className="spinner" /> : text ? 'Re-generate study plan' : 'Generate my study plan'}
+            {busy ? <span className="spinner" /> : text ? `Re-generate ${letter.title}` : `Generate my ${letter.title}`}
           </button>
         </div>
         {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
@@ -148,7 +151,7 @@ export default function SopBuilderPanel({ app, patchLocal }) {
       {text && (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ marginBottom: 0 }}>Your study plan</h2>
+            <h2 style={{ marginBottom: 0 }}>Your {letter.title}</h2>
             <div className="btn-row" style={{ gap: 6 }}>
               <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`}>↓ PDF</a>
               <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop?format=docx`}>↓ Word</a>

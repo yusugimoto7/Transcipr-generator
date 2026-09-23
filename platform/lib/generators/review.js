@@ -8,9 +8,9 @@ import { requiredMissing } from '../schema';
  */
 export async function reviewApplication(app) {
   const data = app.data || {};
-  const checklist = buildChecklist(data);
+  const checklist = buildChecklist(data, app.type);
   const uploadedKeys = (app.documents || []).map((d) => d.category).filter(Boolean);
-  const missingRequiredFields = requiredMissing(data).map((f) => f.label);
+  const missingRequiredFields = requiredMissing(data, app.type).map((f) => f.label);
 
   const system = `You are a senior Canadian study permit case reviewer. You assess an
 applicant's file for completeness and for common refusal risks under IRPA s.216

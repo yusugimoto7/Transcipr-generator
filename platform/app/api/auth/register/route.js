@@ -1,4 +1,4 @@
-import { createUser } from '@/lib/store';
+import { createUser, adminEmails } from '@/lib/store';
 import { hashPassword, createSession } from '@/lib/auth';
 import { json, error } from '@/lib/api';
 
@@ -18,7 +18,8 @@ export async function POST(req) {
 
   try {
     const hash = await hashPassword(password);
-    const user = await createUser({ email, name, passwordHash: hash });
+    const role = adminEmails().includes(email) ? 'admin' : 'applicant';
+    const user = await createUser({ email, name, passwordHash: hash, role });
     await createSession(user.id);
     return json({ id: user.id, email: user.email, name: user.name }, 201);
   } catch (e) {

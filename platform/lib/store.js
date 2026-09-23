@@ -12,6 +12,11 @@ import crypto from 'crypto';
  * Layout:
  *   <DATA_DIR>/users.json                  -> array of user records
  *   <DATA_DIR>/applications/<id>.json      -> one application per file
+ *
+ * Concurrency: every read-modify-write of a file goes through a per-file
+ * queue (withLock) so two staff members saving the same file at once can't
+ * interleave. On top of that, applications carry a `version` counter that
+ * the PATCH route uses for optimistic checks ("someone else saved first").
  */
 
 const DATA_DIR = process.env.DATA_DIR
@@ -20,6 +25,8 @@ const DATA_DIR = process.env.DATA_DIR
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const APPS_DIR = path.join(DATA_DIR, 'applications');
+
+export const ROLES = ['admin', 'manager', 'applicant'];
 
 // Serialize writes to a given file to avoid interleaved read-modify-write races.
 const locks = new Map();
@@ -68,9 +75,28 @@ function nowIso() {
 
 /* ----------------------------- Users ----------------------------- */
 
+function normEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+/** The configured admin email(s) — ADMIN_EMAIL=a@x.com,b@y.com. */
+export function adminEmails() {
+  return String(process.env.ADMIN_EMAIL || '')
+    .split(',')
+    .map(normEmail)
+    .filter(Boolean);
+}
+
+/** Role a user record effectively has (admin email always wins). */
+export function effectiveRole(user) {
+  if (!user) return null;
+  if (adminEmails().includes(user.email)) return 'admin';
+  return ROLES.includes(user.role) ? user.role : 'applicant';
+}
+
 export async function getUserByEmail(email) {
   const users = await readJson(USERS_FILE, []);
-  const norm = String(email || '').trim().toLowerCase();
+  const norm = normEmail(email);
   return users.find((u) => u.email === norm) || null;
 }
 
@@ -79,8 +105,14 @@ export async function getUserById(id) {
   return users.find((u) => u.id === id) || null;
 }
 
-export async function createUser({ email, name, passwordHash }) {
-  const norm = String(email).trim().toLowerCase();
+export async function listUsers() {
+  const users = await readJson(USERS_FILE, []);
+  // eslint-disable-next-line no-unused-vars
+  return users.map(({ passwordHash, ...u }) => ({ ...u, role: effectiveRole(u) }));
+}
+
+export async function createUser({ email, name, passwordHash, role = 'applicant', createdBy = null }) {
+  const norm = normEmail(email);
   return withLock(USERS_FILE, async () => {
     const users = await readJson(USERS_FILE, []);
     if (users.some((u) => u.email === norm)) {
@@ -93,11 +125,30 @@ export async function createUser({ email, name, passwordHash }) {
       email: norm,
       name: name || '',
       passwordHash,
+      role: ROLES.includes(role) ? role : 'applicant',
+      active: true,
+      createdBy,
       createdAt: nowIso(),
     };
     users.push(user);
     await writeJson(USERS_FILE, users);
     return user;
+  });
+}
+
+/** Update a user's role / active flag / name / password hash. */
+export async function updateUser(id, patch) {
+  return withLock(USERS_FILE, async () => {
+    const users = await readJson(USERS_FILE, []);
+    const u = users.find((x) => x.id === id);
+    if (!u) return null;
+    if (patch.role && ROLES.includes(patch.role)) u.role = patch.role;
+    if (typeof patch.active === 'boolean') u.active = patch.active;
+    if (typeof patch.name === 'string') u.name = patch.name.trim();
+    if (typeof patch.passwordHash === 'string') u.passwordHash = patch.passwordHash;
+    u.updatedAt = nowIso();
+    await writeJson(USERS_FILE, users);
+    return u;
   });
 }
 
@@ -107,7 +158,7 @@ function appFile(id) {
   return path.join(APPS_DIR, `${id}.json`);
 }
 
-export async function listApplications(userId) {
+async function readAllApplications() {
   await ensureDirs();
   let files = [];
   try {
@@ -119,23 +170,67 @@ export async function listApplications(userId) {
   for (const f of files) {
     if (!f.endsWith('.json')) continue;
     const app = await readJson(path.join(APPS_DIR, f), null);
-    if (app && app.userId === userId) apps.push(app);
+    if (app) apps.push(app);
   }
   apps.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   return apps;
+}
+
+/** Can this user open this application? */
+export function canAccess(user, app) {
+  if (!user || !app) return false;
+  const role = effectiveRole(user);
+  if (role === 'admin') return true;
+  if (app.userId === user.id || app.createdBy === user.id) return true;
+  if (role === 'manager') return (app.assignedTo || []).includes(user.id);
+  return false;
+}
+
+/** Applications visible to a user: admin = all; manager = assigned/created; applicant = own. */
+export async function listApplicationsFor(user) {
+  const all = await readAllApplications();
+  return all.filter((a) => canAccess(user, a));
+}
+
+/** Back-compat: an applicant's own applications. */
+export async function listApplications(userId) {
+  const all = await readAllApplications();
+  return all.filter((a) => a.userId === userId);
+}
+
+export async function listAllApplications() {
+  return readAllApplications();
 }
 
 export async function getApplication(id) {
   return readJson(appFile(id), null);
 }
 
-export async function createApplication({ userId, type, title }) {
+export async function createApplication({
+  userId,
+  type,
+  title,
+  createdBy = null,
+  clientNumber = '',
+  applicantRole = 'main',
+  groupId = null,
+  representation = 'self',
+  assignedTo = [],
+}) {
   const app = {
     id: newId(),
     userId,
+    createdBy: createdBy || userId,
+    assignedTo: Array.isArray(assignedTo) ? assignedTo : [],
     type: type || 'study-permit',
     title: title || 'Study Permit Application',
+    clientNumber: String(clientNumber || '').trim(),
+    applicantRole, // main | spouse | child
+    groupId, // links the applications of one family file
+    representation, // self | firm (adds IMM 5476 + Submission Letter)
+    stage: 'documents',
     status: 'draft',
+    version: 1,
     data: {},            // intake answers keyed by field id
     documents: [],       // uploaded files metadata
     generated: [],       // generated output files metadata
@@ -150,13 +245,18 @@ export async function createApplication({ userId, type, title }) {
 /**
  * Apply a mutation to an application under a per-file lock and persist it.
  * `mutator` receives the current app and may mutate it in place or return a new one.
+ * Every successful write bumps `version` and records who saved (`opts.by`).
  */
-export async function updateApplication(id, mutator) {
+export async function updateApplication(id, mutator, opts = {}) {
   return withLock(appFile(id), async () => {
     const app = await readJson(appFile(id), null);
     if (!app) return null;
-    const next = (await mutator(app)) || app;
+    const result = await mutator(app);
+    if (result === false) return app; // mutator declined (e.g. version conflict): nothing written
+    const next = result || app;
+    next.version = (Number(next.version) || 0) + 1;
     next.updatedAt = nowIso();
+    if (opts.by) next.lastEditedBy = opts.by;
     await writeJson(appFile(id), next);
     return next;
   });

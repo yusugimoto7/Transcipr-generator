@@ -2,9 +2,9 @@
 
 import { useState, useRef } from 'react';
 import { buildChecklist } from '@/lib/checklist';
-import { allFields } from '@/lib/schema';
+import { everyField } from '@/lib/schema';
 
-const FIELD_LABELS = Object.fromEntries(allFields().map((f) => [f.id, f.label]));
+const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
 
 const CATEGORY_LABELS = {
   passport: 'Passport',
@@ -38,6 +38,19 @@ const CATEGORY_LABELS = {
   accommodation: 'Accommodation',
   medical: 'Medical exam',
   'family-info': 'Family information',
+  'marriage-cert': 'Marriage certificate',
+  'spouse-status': "Spouse's permit in Canada",
+  'inviter-docs': "Spouse's / inviter's documents (employment, income, lease)",
+  'host-docs': "Host's status & documents",
+  'invitation-letter': 'Invitation letter',
+  'status-in-canada': 'My current permit in Canada',
+  'last-entry': 'Proof of last entry to Canada',
+  'completion-letter': 'Completion of studies letter',
+  'consent-letter': "Parents' consent letter",
+  'custody-doc': 'Custody / guardianship document',
+  'refusal-letter': 'Previous refusal / GCMS notes / old application',
+  insurance: 'Social insurance records',
+  'travel-history': 'Previous visas & travel history',
   internal: 'Internal / intake form (never compiled)',
   other: 'Other',
 };
@@ -59,7 +72,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   const fileRef = useRef(null);
   const docs = app.documents || [];
 
-  const checklist = buildChecklist(app.data || {});
+  const checklist = buildChecklist(app.data || {}, app.type);
   const uploadedKeys = new Set(docs.map((d) => d.category).filter(Boolean));
   const missing = checklist.filter((c) => !uploadedKeys.has(c.key));
 

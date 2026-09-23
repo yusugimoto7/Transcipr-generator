@@ -51,7 +51,7 @@ export async function resolveLatestPdfUrl(key) {
       const html = await res.text();
       // Find the versioned PDF link for this exact form on the page.
       const re = new RegExp(
-        `https://www\\.canada\\.ca/content/dam/ircc/[^"']*?/forms/${key}/\\d{2}-\\d{2}-\\d{4}/${key}e\\.pdf`,
+        `https://www\\.canada\\.ca/content/dam/ircc/[^"']*?/forms/${key}/\\d{2}-\\d{2}-\\d{4}/${form.pdfBase || key + 'e'}\\.pdf`,
         'i'
       );
       const m = html.match(re);

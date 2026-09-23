@@ -1,23 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import { getAppType } from '@/lib/appTypes';
 
-const PKGS = [
-  {
-    pkg: 'client-info',
-    key: 'client-info-package',
-    title: 'Client Information',
-    desc: 'One PDF with TOC: SOP, CV, degree & transcripts, employment/job offer/leave/internship letters, certificates, ties, birth certificate/ID, flight, accommodation.',
-  },
-  {
-    pkg: 'financial-proof',
-    key: 'financial-proof-package',
-    title: 'Financial Support Proof',
-    desc: "One PDF with TOC: cover letter, summary report, deposit, my bank statement (+ source of my money), my title deeds, supporter's documents (affidavit, bank, pay slips, deeds, ID).",
-  },
-];
+function pkgsFor(type) {
+  return getAppType(type).packages.map((p) => ({
+    pkg: p.key,
+    key: `${p.key}-package`,
+    title: p.title,
+    desc: `One PDF with a table of contents: ${p.sections.map((s) => s.name).join(', ')}.`,
+  }));
+}
 
 export default function CompiledPackages({ app, patchLocal }) {
+  const PKGS = pkgsFor(app.type);
   const [busy, setBusy] = useState(null);
   const [msg, setMsg] = useState(null);
   const [cleanPages, setCleanPages] = useState(true);

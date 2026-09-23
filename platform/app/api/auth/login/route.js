@@ -16,6 +16,7 @@ export async function POST(req) {
   if (!user) return error('Incorrect email or password.', 401);
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return error('Incorrect email or password.', 401);
+  if (user.active === false) return error('This account has been deactivated. Contact your administrator.', 403);
 
   await createSession(user.id);
   return json({ id: user.id, email: user.email, name: user.name });

@@ -9,7 +9,7 @@ import { requiredMissing } from '../schema';
  */
 export function buildNextStepsNote(app) {
   const data = app.data || {};
-  const checklist = buildChecklist(data);
+  const checklist = buildChecklist(data, app.type);
   const uploaded = new Set((app.documents || []).map((d) => d.category).filter(Boolean));
   const missingDocuments = checklist.filter((c) => !uploaded.has(c.key));
   const missingFields = requiredMissing(data, app.type);

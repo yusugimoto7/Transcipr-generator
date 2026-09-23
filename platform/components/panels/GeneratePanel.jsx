@@ -4,18 +4,23 @@ import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
 import CompiledPackages from '@/components/CompiledPackages';
 import { requiredMissing } from '@/lib/schema';
+import { lettersFor, formsFor } from '@/lib/appTypes';
 
-const DOCS = [
-  { key: 'sop', label: 'Statement of Purpose / Study Plan', desc: 'AI-drafted, tailored to your answers.', word: true },
-  { key: 'financial-cover-letter', label: 'Financial Cover Letter', desc: 'First-person letter: funds, source of funds, transfer method.', word: true },
-  { key: 'financial-summary', label: 'Financial Summary Report', desc: 'Expense + sources-of-funds + assets tables.', word: true },
-  { key: 'imm1294', label: 'IMM 1294 — Study Permit data sheet', desc: 'Field-by-field values to transcribe into the official form.' },
-  { key: 'imm1294-filled', label: 'IMM 1294 — pre-filled official form (beta)', desc: 'The latest official IMM 1294, pre-filled. Open in Adobe Reader, review, and click Validate.', beta: true },
-  { key: 'imm5257', label: 'IMM 5257 — TRV / Schedule 1 data sheet', desc: 'Temporary Resident Visa application values.' },
-  { key: 'imm5645', label: 'IMM 5645 — Family Information data sheet', desc: 'Family details layout for the official form.' },
-];
+/** Documents this application can produce, from the type registry. */
+function docsFor(app) {
+  const docs = [];
+  for (const l of lettersFor(app)) {
+    docs.push({ key: l.key, label: l.title, desc: l.primary ? 'AI-drafted from your intake, guided answers and documents.' : 'AI-drafted from your intake.', word: l.word });
+  }
+  for (const f of formsFor(app)) {
+    docs.push({ key: f.key, label: `${f.label} — data sheet`, desc: 'Field-by-field values to transcribe into the official form.' });
+    docs.push({ key: `${f.key}-filled`, label: `${f.label} — pre-filled official form (beta)`, desc: 'The latest official form, pre-filled. Open in Adobe Reader, review, and click Validate.', beta: true });
+  }
+  return docs;
+}
 
 export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
+  const DOCS = docsFor(app);
   // Beta docs (e.g. pre-filled official form) are opt-in, not selected by default.
   const [selected, setSelected] = useState(DOCS.filter((d) => !d.beta).map((d) => d.key));
   const [busy, setBusy] = useState(false);
@@ -31,7 +36,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
   const hasGenerated = (key) => generated.some((g) => g.key === key);
 
   // Fields that make the official forms complete. If missing, warn before generating.
-  const missingRequired = requiredMissing(app.data || {}).map((f) => f.label);
+  const missingRequired = requiredMissing(app.data || {}, app.type).map((f) => f.label);
 
   function generate() {
     if (!selected.length) return;

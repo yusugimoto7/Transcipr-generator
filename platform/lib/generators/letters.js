@@ -1,0 +1,242 @@
+import { complete } from '../ai';
+import { factsText } from '../schema';
+import { getAppType, lettersFor, primaryLetter } from '../appTypes';
+import { answersToText } from '../sopQuestions';
+import { pronouns, BOILERPLATE } from '../applicant';
+import { getFirm, signatureBlock } from '../firm';
+import { buildChecklist } from '../checklist';
+import { buildSopPrompt } from './sop';
+import { generateFinancialCoverLetter, generateFinancialSummary, generateSubmissionLetter } from './coverdocs';
+
+/**
+ * One entry point for every letter the platform drafts, for every application
+ * type. The type registry (lib/appTypes.js) says which letters apply; this
+ * module knows how to write each `kind`.
+ *
+ * Study-permit letters keep their proven house-style prompts (sop.js,
+ * coverdocs.js). Everything else is built here from the intake facts, the
+ * guided-question answers and, when attached, the applicant's documents.
+ */
+
+const NO_INVENT = `You NEVER invent facts — use only the details provided, and where a
+detail is genuinely missing write a neutral placeholder in [SQUARE BRACKETS] for the
+applicant to complete. Plain text with **bold** section headings, no preamble.`;
+
+/** The letter definition for a generated-document key, or null. */
+export function letterSpec(app, key) {
+  return lettersFor(app).find((l) => l.key === key) || null;
+}
+
+/** Upload categories most useful for a given letter kind. */
+const DOC_CATS = {
+  study: ['cv', 'loa', 'transcripts', 'certificates', 'job-offer', 'language', 'sop'],
+  'study-minor': ['loa', 'transcripts', 'spouse-status', 'consent-letter'],
+  owp: ['spouse-status', 'inviter-docs', 'marriage-cert', 'status-in-canada', 'cv', 'employment-letter'],
+  visit: ['invitation-letter', 'host-docs', 'employment-letter', 'flight', 'accommodation', 'cv', 'title-deeds'],
+  pgwp: ['completion-letter', 'transcripts', 'status-in-canada', 'job-offer', 'employment-letter'],
+  reconsideration: ['refusal-letter', 'sop', 'proof-of-funds', 'employment-letter'],
+  invitation: ['host-docs', 'invitation-letter'],
+  explanation: ['refusal-letter'],
+};
+
+export function selectLetterDocs(app, letter, max = 8) {
+  const docs = app.documents || [];
+  const cats = DOC_CATS[letter.kind] || [];
+  const relevant = docs.filter((d) => cats.includes(d.category));
+  return (relevant.length ? relevant : docs).slice(0, max);
+}
+
+function header(app) {
+  const d = app.data || {};
+  const t = getAppType(app.type);
+  const p = pronouns(d);
+  return {
+    d,
+    t,
+    p,
+    name: `${d.givenName || ''} ${d.familyName || ''}`.trim(),
+    facts: factsText(d, app.type),
+    builder: answersToText(app.sopAnswers || {}, primaryLetter(app.type).kind),
+  };
+}
+
+/** Build { system, instruction } for a letter. Shared by buffered + streaming paths. */
+export function buildLetterPrompt(app, letter, hasDocs = false) {
+  if (letter.kind === 'study') return buildSopPrompt(app, hasDocs);
+
+  const { d, t, p, name, facts, builder } = header(app);
+  const docsNote = hasDocs
+    ? "\n\nThe applicant's uploaded documents are attached — read them and pull concrete facts (names, dates, employers, amounts, permit numbers) so the letter is specific and true."
+    : '';
+  const builderNote = builder
+    ? `\n\nThe applicant answered these guided questions — weave the selections and their own words naturally into the letter (do not list them verbatim):\n${builder}`
+    : '';
+
+  const K = letter.kind;
+
+  if (K === 'study-minor') {
+    return {
+      system: `You draft Study Plans for MINOR children applying for Canadian study permits, written in the first person by the accompanying parent on the child's behalf. ${NO_INVENT}`,
+      instruction: `Write a "Study Plan" (600-900 words) addressed "Dear Visa Officer,". Sections:
+**About my child and our family** — the child, the accompanying parent's status in Canada (${d.parentStatusCanada || '[status]'}), the other parent's consent, who cares for the child.
+**School arrangements in Canada** — school/board, grade, start date, why this school.
+**Why studying in Canada now** — keeping the family together while the parent studies/works; the child's educational continuity.
+**Financial support** — who pays tuition and living costs, with amounts.
+**Return plans** — the family's intention at the end of the parent's authorized stay.
+Close respectfully, signed by the parent for the child.
+
+Application type: ${t.title}
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'owp') {
+    return {
+      system: `You are an expert Canadian immigration consultant drafting first-person Statements of Purpose for SPOUSAL OPEN WORK PERMIT applications made inside Canada (IMM 5710). You address the officer's core concerns: a genuine relationship, the spouse's qualifying status (full-time DLI student at an eligible level, or skilled worker), the applicant's own lawful status, and temporary intent. ${NO_INVENT}`,
+      instruction: `Write an EXTENSIVE "Statement of Purpose" (900-1,300 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — who I am, my current status in Canada (${d.currentStatusCanada || '[status]'}, expiring ${d.permitExpiry || '[date]'}), and what I am applying for.
+**My relationship with my spouse** — how we met, marriage date (${d.marriageDate || '[date]'}), cohabitation, children; genuine and continuing.
+**My spouse's status in Canada** — ${d.inviterName || '[spouse]'}: ${d.inviterStatus || '[status]'} at ${d.inviterInstitution || '[institution/employer]'}, ${d.inviterProgramOrJob || '[program/job]'}; why this makes me eligible (cite the eligibility criteria plainly).
+**My background and what I will do in Canada** — education, work experience, the kind of work I intend to do, how I will support our household.
+**Our plans and ties** — what we will do when my spouse's permit ends; family, property and commitments at home; commitment to comply with Canadian law.
+Close with "Sincerely, ${name || '[name]'}". Use pronouns ${p.subj}/${p.pos} for the applicant where third person is needed.
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'visit') {
+    const isOwp = t.key === 'owp-outside';
+    return {
+      system: `You are an expert Canadian immigration consultant drafting first-person "Purpose of Travel" letters for ${isOwp ? 'accompanying-spouse work permit applications made from outside Canada' : 'visitor visa (TRV) applications'}. You address the officer's concerns: a clear purpose, sufficient funds, and strong ties proving the applicant will leave Canada at the end of the authorized stay (IRPA s.179/s.216). ${NO_INVENT}`,
+      instruction: `Write an EXTENSIVE "Purpose of Travel" letter (900-1,300 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — who I am, citizenship, occupation, and what I am applying for.
+**Purpose of my ${isOwp ? 'travel and work' : 'visit'}** — ${isOwp ? `joining my spouse ${d.inviterName || '[spouse]'} (${d.inviterStatus || '[status]'} at ${d.inviterInstitution || '[institution/employer]'}); what I will do in Canada` : `${d.visitPurpose || '[purpose]'}; dates ${d.visitFrom || '[from]'} to ${d.visitTo || '[to]'}; itinerary; who I am visiting (${d.hostName || 'no host'}${d.hostRelationship ? ', my ' + d.hostRelationship : ''})`}.
+**My background** — education and employment history with employers, roles and dates.
+**Financial capacity** — who pays, funds available, assets; ${BOILERPLATE.sanctionsTransfer}
+**Strong ties to my home country** — job / business / approved leave, property, family members staying behind, travel history and compliance with previous visas.
+**Conclusion** — commitment to respect the conditions of stay and leave Canada by ${isOwp ? 'the end of my authorized period' : d.visitTo || '[date]'}.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'pgwp') {
+    return {
+      system: `You draft first-person Statements of Purpose for Post-Graduation Work Permit applications (IMM 5710). You address eligibility precisely: DLI, eligible program length, full-time continuous study, application within 180 days of the completion letter, valid status. ${NO_INVENT}`,
+      instruction: `Write a "Statement of Purpose" (600-900 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**My studies in Canada** — ${d.pgwpProgram || '[program]'} (${d.pgwpLevel || '[credential]'}, ${d.pgwpProgramLength || '[n]'} months) at ${d.pgwpInstitution || '[DLI]'}, completed ${d.pgwpCompletionDate || '[date]'}; full-time throughout; tuition paid.
+**My eligibility** — walk through each PGWP requirement and how it is met, citing the completion letter and transcript.
+**My status** — current study permit (expires ${d.permitExpiry || '[date]'}), last entry ${d.lastEntryDate || '[date]'}, application timing.
+**My work plans** — job or job offer (${d.pgwpJobOffer || '[none yet]'}), field, how it relates to my studies.
+**Closing** — commitment to comply with the conditions of the permit.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'reconsideration') {
+    return {
+      system: `You are an experienced Canadian immigration consultant writing REQUESTS FOR RECONSIDERATION of refused temporary resident applications. You are precise, respectful and evidence-based: you quote the officer's reasons, show what the record already contained or what was misapprehended, and ask for the decision to be reopened. You cite the duty to consider evidence and procedural fairness where warranted. ${NO_INVENT}`,
+      instruction: `Write a "Request for Reconsideration" letter (900-1,400 words) to the responsible IRCC office, RE: ${d.refusalAppType || '[application type]'} refused on ${d.refusalDate || '[date]'}${d.refusalAppNumber ? `, application/UCI ${d.refusalAppNumber}` : ''}, applicant ${name || '[name]'}. Structure:
+**Summary of the request** — what was refused, what is being asked.
+**The officer's reasons** — quote/paraphrase each stated reason.
+**Why the reasons do not reflect the record** — for EACH reason: the evidence already submitted (name the document), what was overlooked or misread, and the correct conclusion. Use GCMS notes if provided.
+**New or clarifying evidence** — list what is attached now.
+**Request** — reopen and reconsider on the corrected record; note the intention to seek judicial review if refused, politely.
+Sign as the applicant (or representative if the facts say so).
+
+Refusal reasons (verbatim): ${d.refusalReasons || '[paste]'}
+GCMS notes: ${d.gcmsNotes || '[none]'}
+What went wrong: ${d.reconsiderationError || '[explain]'}
+New evidence: ${d.newEvidence || '[none]'}
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'webform') {
+    return {
+      system: `You write concise IRCC webform messages (max ~1,500 characters) that accompany a reconsideration request or additional documents. Neutral, factual, polite. ${NO_INVENT}`,
+      instruction: `Write the IRCC webform text for ${name || '[name]'} (UCI/application ${d.refusalAppNumber || d.uci || '[number]'}): state that a request for reconsideration of the ${d.refusalAppType || '[type]'} refused on ${d.refusalDate || '[date]'} is attached, summarize in 2-3 sentences what was overlooked, and list the attached documents. No headings, plain paragraphs.
+
+Facts:
+${facts}`,
+    };
+  }
+
+  if (K === 'pal-exemption') {
+    return {
+      system: `You write short "Letter of Explanation — PAL/TAL Exemption" notes for study permit applications, in the first person, citing the applicable exemption category in plain language. ${NO_INVENT}`,
+      instruction: `Write a "Letter of Explanation – Provincial Attestation Letter Exemption" (250-400 words) addressed "Dear Visa Officer,". State the program (${d.programName || '[program]'}, ${d.levelOfStudy || '[level]'}) at ${d.schoolName || '[DLI]'}, the exemption reason (${d.palExemptReason || '[reason]'}), and that no PAL/TAL is therefore required; reference the Letter of Acceptance enclosed. Close "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}`,
+    };
+  }
+
+  if (K === 'invitation') {
+    return {
+      system: `You draft Invitation Letters for Canadian visitor visa applications, written by the HOST in Canada in the first person, for the host to sign. ${NO_INVENT}`,
+      instruction: `Write an "Invitation Letter" (400-600 words) from ${d.hostName || '[host name]'} (${d.hostStatus || '[status]'}, ${d.hostOccupation || '[occupation]'}, ${d.hostAddress || '[address]'}) to IRCC, inviting ${name || '[applicant]'} (my ${d.hostRelationship || '[relationship]'}, passport ${d.passportNumber || '[number]'}) to visit from ${d.visitFrom || '[from]'} to ${d.visitTo || '[to]'}. Cover: purpose of the visit, where the visitor will stay (${d.hostProvidesLodging ? 'with me' : '[accommodation]'}), who covers expenses (${d.visitPayer || '[payer]'}), the host's status and employment, and an assurance the visitor will return home. Include a signature block with name, address, phone (${d.hostPhone || '[phone]'}) and email (${d.hostEmail || '[email]'}) and a line for the date.
+
+Facts:
+${facts}`,
+    };
+  }
+
+  if (K === 'explanation') {
+    return {
+      system: `You write first-person "Letters of Explanation" addressing a previous visa refusal in a new application: honest, specific, non-defensive, showing what changed. ${NO_INVENT}`,
+      instruction: `Write a "Letter of Explanation" (400-700 words) addressed "Dear Visa Officer," for ${name || '[name]'}. Explain the previous refusal (${d.refusalDetails || '[details]'}), address each concern directly with the evidence now provided, and confirm what is different in this application. Close "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${docsNote}`,
+    };
+  }
+
+  if (K === 'submission') {
+    const firm = getFirm();
+    const checklist = buildChecklist(d, app.type).map((c) => c.label);
+    return {
+      system: `You are ${firm.repName}, a Regulated Canadian Immigration Consultant (RCIC# ${firm.rcicNumber}) at ${firm.company}. You write formal, persuasive submission letters to IRCC on behalf of your client for ${t.title} applications. Honest and specific; cite the governing provisions and, where apt, Federal Court precedents. ${NO_INVENT} Refer to the client as ${p.honorific ? p.honorific + ' ' : ''}${d.familyName || '[surname]'} with pronouns ${p.subj}/${p.obj}/${p.pos}.`,
+      instruction: `Write the full "Submission Letter" (1,000-1,500 words): RE line (application type, applicant name, DOB ${d.dob || '[DOB]'}, UCI ${d.uci || '-'}), introduction as RCIC, **Background**, **Purpose of the Application** (eligibility walk-through for ${t.title}), **Ties and Temporary Intent**, **Financial Support**, **Enclosed Documents** (numbered list from: ${checklist.join('; ')}), closing request, then this exact signature block:
+${signatureBlock()}
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  // Unknown kind: generic letter from facts.
+  return {
+    system: `You draft supporting letters for Canadian immigration applications. ${NO_INVENT}`,
+    instruction: `Write "${letter.title}" for ${name || '[name]'} (${t.title}).\n\nFacts:\n${facts}${builderNote}${docsNote}`,
+  };
+}
+
+/** Generate a letter's text (buffered). */
+export async function generateLetter(app, key, docBlocks = []) {
+  const letter = letterSpec(app, key);
+  if (!letter) throw new Error(`Letter "${key}" does not apply to this application`);
+
+  // Study-permit finance + submission letters keep their dedicated generators.
+  if (app.type === 'study-permit' || app.type === 'study-permit-minor') {
+    if (letter.kind === 'financial-cover') return generateFinancialCoverLetter(app);
+    if (letter.kind === 'financial-summary') return generateFinancialSummary(app);
+    if (letter.kind === 'submission' && app.type === 'study-permit') return generateSubmissionLetter(app);
+  }
+  if (letter.kind === 'financial-cover') return generateFinancialCoverLetter(app);
+  if (letter.kind === 'financial-summary') return generateFinancialSummary(app);
+
+  const { system, instruction } = buildLetterPrompt(app, letter, docBlocks.length > 0);
+  const content = docBlocks.length ? [{ type: 'text', text: instruction }, ...docBlocks] : instruction;
+  return complete({ system, content, maxTokens: letter.primary ? 5000 : 3000 });
+}

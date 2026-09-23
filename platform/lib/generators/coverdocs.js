@@ -76,7 +76,7 @@ export async function generateSubmissionLetter(app) {
   const d = app.data || {};
   const firm = getFirm();
   const p = pronouns(d);
-  const checklist = buildChecklist(d).map((c) => c.label);
+  const checklist = buildChecklist(d, app.type).map((c) => c.label);
   const sopAnswers = app.sopAnswers || {};
 
   const system = `You are ${firm.repName}, a Regulated Canadian Immigration Consultant

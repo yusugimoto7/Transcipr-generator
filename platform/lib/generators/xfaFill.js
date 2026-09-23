@@ -5,6 +5,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { getFormPdf } from '../forms/fetchForms';
 import { FIELD_MAPS } from '../forms/fieldmaps/imm1294';
+import { autoFieldMap } from '../forms/fieldmaps/auto';
 
 const FILLER = path.join(process.cwd(), 'lib', 'forms', 'fill_form.py');
 const DUMPER = path.join(process.cwd(), 'lib', 'forms', 'dump_schema.py');
@@ -79,10 +80,17 @@ function runFiller(templatePath, outPath, instructions) {
  * to the data sheet.
  */
 export async function fillOfficialForm(formKey, app) {
-  const fieldMap = FIELD_MAPS[formKey];
-  if (!fieldMap) throw new Error(`no field map for ${formKey}`);
-
   const { bytes: templateBytes, meta } = await getFormPdf(formKey);
+
+  // Hand-verified map when we have one; otherwise derive a best-effort map
+  // from the form's own field paths (IRCC reuses field names across forms).
+  let fieldMap = FIELD_MAPS[formKey];
+  if (!fieldMap) {
+    const schema = await dumpFormSchema(formKey);
+    if (!schema?.ok || !Array.isArray(schema.paths)) throw new Error(`cannot read fields of ${formKey}`);
+    fieldMap = autoFieldMap(schema.paths);
+    if (!fieldMap.length) throw new Error(`no recognizable fields on ${formKey}`);
+  }
 
   const tmp = path.join(os.tmpdir(), `xfa-${crypto.randomBytes(6).toString('hex')}`);
   const templatePath = `${tmp}-tpl.pdf`;

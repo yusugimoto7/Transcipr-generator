@@ -34,6 +34,63 @@ export const IRCC_FORMS = {
     fallbackPdf:
       'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5645/01-01-2021/imm5645e.pdf',
   },
+  imm1295: {
+    code: 'IMM 1295',
+    title: 'Application for a Work Permit Made Outside of Canada',
+    role: 'form',
+    page: `${PAGE}/imm1295.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm1295/01-06-2026/imm1295e.pdf',
+  },
+  imm5710: {
+    code: 'IMM 5710',
+    title: 'Application to Change Conditions, Extend My Stay or Remain in Canada as a Worker',
+    role: 'form',
+    page: `${PAGE}/imm5710.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5710/01-06-2026/imm5710e.pdf',
+  },
+  imm5709: {
+    code: 'IMM 5709',
+    title: 'Application to Change Conditions, Extend My Stay or Remain in Canada as a Student',
+    role: 'form',
+    page: `${PAGE}/imm5709.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5709/01-06-2026/imm5709e.pdf',
+  },
+  imm5708: {
+    code: 'IMM 5708',
+    title: 'Application to Change Conditions or Extend Your Stay in Canada as a Visitor',
+    role: 'form',
+    page: `${PAGE}/imm5708.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5708/01-06-2026/imm5708e.pdf',
+  },
+  imm5257b: {
+    code: 'IMM 5257B',
+    title: 'Schedule 1 — Application for a Temporary Resident Visa Made Outside Canada',
+    role: 'form',
+    pdfBase: 'imm5257b_1e',
+    page: `${PAGE}/imm5257b.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5257b/01-01-2021/imm5257b_1e.pdf',
+  },
+  imm5476: {
+    code: 'IMM 5476',
+    title: 'Use of a Representative',
+    role: 'form',
+    page: `${PAGE}/imm5476.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5476/01-09-2023/imm5476e.pdf',
+  },
+  imm5744: {
+    code: 'IMM 5744',
+    title: 'Consent for an Access to Information and Personal Information Request',
+    role: 'form',
+    page: `${PAGE}/imm5744.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5744/01-01-2021/imm5744e.pdf',
+  },
   imm5483: {
     code: 'IMM 5483',
     title: 'Document Checklist: Study Permit',

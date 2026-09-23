@@ -3,6 +3,8 @@ import fs from 'fs/promises';
 import { renderDocPdf } from '../pdf';
 import { getFirm } from '../firm';
 import { composeAddress, composePhone } from '../applicant';
+import { getSchema } from '../schema';
+import { IRCC_FORMS } from '../forms/registry';
 
 /**
  * Official IRCC form support.
@@ -203,7 +205,21 @@ function yesNo(v) {
 }
 
 /** Build a data-sheet PDF for an official form. */
+/** Data sheet for any registered form without a bespoke layout: every intake
+ *  section laid out in order, so the values can be transcribed field by field. */
+function genericMap(app) {
+  return getSchema(app.type).steps.map((s) => ({
+    section: s.title,
+    rows: s.fields.map((f) => [f.label, (d) => (d[f.id] === true ? 'Yes' : d[f.id] === false ? 'No' : d[f.id])]),
+  }));
+}
+
 export async function generateFormDataSheet(formKey, app) {
+  if (!FORMS[formKey]) {
+    const reg = IRCC_FORMS[formKey];
+    if (!reg) throw new Error(`Unknown form ${formKey}`);
+    FORMS[formKey] = { title: `${reg.code} — ${reg.title} (data sheet)`, map: genericMap(app) };
+  }
   const form = FORMS[formKey];
   if (!form) throw new Error(`Unknown form: ${formKey}`);
   const d = app.data || {};

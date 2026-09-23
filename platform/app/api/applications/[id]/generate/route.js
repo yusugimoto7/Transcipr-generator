@@ -1,36 +1,32 @@
 import { updateApplication } from '@/lib/store';
-import { saveGenerated } from '@/lib/uploads';
+import { saveGenerated, buildDocBlocks } from '@/lib/uploads';
 import { renderDocPdf, textToBlocks } from '@/lib/pdf';
-import { generateSop, selectSopDocs } from '@/lib/generators/sop';
-import { buildDocBlocks } from '@/lib/uploads';
-import {
-  generateFinancialSummary,
-  generateFinancialCoverLetter,
-} from '@/lib/generators/coverdocs';
+import { generateLetter, letterSpec, selectLetterDocs } from '@/lib/generators/letters';
 import { generateFormDataSheet } from '@/lib/generators/forms';
 import { fillOfficialForm } from '@/lib/generators/xfaFill';
 import { buildNextStepsNote } from '@/lib/generators/nextsteps';
-import { buildChecklist } from '@/lib/checklist';
+import { lettersFor, formsFor } from '@/lib/appTypes';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const maxDuration = 180;
 
-const DOC_TITLES = {
-  sop: 'Statement of Purpose (Study Plan)',
-  'financial-cover-letter': 'Financial Cover Letter',
-  'financial-summary': 'Financial Summary Report',
-  imm1294: 'IMM 1294 — Data Sheet',
-  imm5257: 'IMM 5257 — Data Sheet',
-  imm5645: 'IMM 5645 — Data Sheet',
-  'imm1294-filled': 'IMM 1294 — Pre-filled Official Form',
-  'next-steps': 'Missing Documents & Next Steps',
-};
+const NEXT_STEPS_TITLE = 'Missing Documents & Next Steps';
+
+/** Every document key this application can produce, with its title. */
+function catalogue(app) {
+  const out = {};
+  for (const l of lettersFor(app)) out[l.key] = l.title;
+  for (const f of formsFor(app)) {
+    out[f.key] = `${f.label} — Data Sheet`;
+    out[`${f.key}-filled`] = `${f.label} — Pre-filled Official Form`;
+  }
+  return out;
+}
 
 /**
- * Generate one or more output documents.
- * Body: { docs: ["sop","financial-summary","imm1294","imm5257","imm5645"] }
- * Defaults to all.
+ * Generate one or more output documents for this application's type.
+ * Body: { docs: [keys] } — defaults to every applicable letter + data sheet.
  */
 export async function POST(req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);
@@ -42,9 +38,10 @@ export async function POST(req, { params }) {
   } catch {
     /* optional */
   }
+  const titles = catalogue(app);
   const requested = Array.isArray(body.docs) && body.docs.length
-    ? body.docs
-    : ['sop', 'financial-cover-letter', 'financial-summary', 'imm1294', 'imm5257', 'imm5645'];
+    ? body.docs.filter((k) => titles[k])
+    : Object.keys(titles).filter((k) => !k.endsWith('-filled'));
 
   const produced = [];
   const errors = [];
@@ -53,39 +50,32 @@ export async function POST(req, { params }) {
     try {
       let bytes;
       let text = null; // captured for text docs so they can also export as .docx
-      if (key === 'sop') {
-        let sopDocs = [];
+      const letter = letterSpec(app, key);
+      if (letter) {
+        let docBlocks = [];
         try {
-          sopDocs = await buildDocBlocks(app.id, selectSopDocs(app));
+          docBlocks = await buildDocBlocks(app.id, selectLetterDocs(app, letter));
         } catch {
-          sopDocs = [];
+          docBlocks = [];
         }
-        text = await generateSop(app, sopDocs);
-        bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES.sop) });
-      } else if (key === 'financial-cover-letter') {
-        text = await generateFinancialCoverLetter(app);
-        bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
-      } else if (key === 'financial-summary') {
-        text = await generateFinancialSummary(app);
-        bytes = await renderDocPdf({ blocks: textToBlocks(text, DOC_TITLES[key]) });
-      } else if (key === 'imm1294' || key === 'imm5257' || key === 'imm5645') {
-        bytes = await generateFormDataSheet(key, app);
-      } else if (key === 'imm1294-filled') {
-        // Pre-fill the latest official IMM 1294 (XFA). Falls back to the data
-        // sheet if python/pikepdf or the template is unavailable.
+        text = await generateLetter(app, key, docBlocks);
+        bytes = await renderDocPdf({ blocks: textToBlocks(text, titles[key]) });
+      } else if (key.endsWith('-filled')) {
+        // Pre-fill the latest official XFA form. Falls back to the data sheet
+        // if python/pikepdf or the template is unavailable.
         try {
-          const filled = await fillOfficialForm('imm1294', app);
+          const filled = await fillOfficialForm(key.replace(/-filled$/, ''), app);
           bytes = filled.bytes;
         } catch (e) {
           errors.push({ key, message: `pre-fill unavailable (${e.message}); use the data sheet` });
           continue;
         }
       } else {
-        continue;
+        bytes = await generateFormDataSheet(key, app);
       }
       const meta = await saveGenerated(app.id, {
         key,
-        filename: `${DOC_TITLES[key] || key}.pdf`,
+        filename: `${titles[key] || key}.pdf`,
         bytes: Buffer.from(bytes),
         ...(text ? { text } : {}),
       });
@@ -107,13 +97,13 @@ export async function POST(req, { params }) {
   const note = buildNextStepsNote(appForNote);
   try {
     const noteBytes = await renderDocPdf({
-      blocks: textToBlocks(note.text, DOC_TITLES['next-steps']),
-      meta: { title: DOC_TITLES['next-steps'] },
+      blocks: textToBlocks(note.text, NEXT_STEPS_TITLE),
+      meta: { title: NEXT_STEPS_TITLE },
     });
     produced.push(
       await saveGenerated(app.id, {
         key: 'next-steps',
-        filename: `${DOC_TITLES['next-steps']}.pdf`,
+        filename: `${NEXT_STEPS_TITLE}.pdf`,
         bytes: Buffer.from(noteBytes),
         text: note.text,
       })

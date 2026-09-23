@@ -1,5 +1,5 @@
 import { chat } from '@/lib/ai';
-import { getApplication, updateApplication } from '@/lib/store';
+import { getApplication, updateApplication, canAccess } from '@/lib/store';
 import { buildChecklist } from '@/lib/checklist';
 import { json, error, requireUser } from '@/lib/api';
 
@@ -44,10 +44,10 @@ export async function POST(req) {
   let ownedApp = null;
   if (body.appId) {
     const app = await getApplication(body.appId);
-    if (app && app.userId === user.id) {
+    if (app && canAccess(user, app)) {
       ownedApp = app;
       const d = app.data || {};
-      const checklist = buildChecklist(d);
+      const checklist = buildChecklist(d, app.type);
       const uploaded = new Set((app.documents || []).map((x) => x.category).filter(Boolean));
       const missing = checklist.filter((c) => !uploaded.has(c.key)).map((c) => c.label);
       context = `\n\nCurrent applicant file (their own data, for your reference):

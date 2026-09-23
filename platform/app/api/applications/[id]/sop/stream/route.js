@@ -1,20 +1,18 @@
 import { updateApplication } from '@/lib/store';
 import { streamText } from '@/lib/ai';
-import { buildSopPrompt, selectSopDocs } from '@/lib/generators/sop';
+import { buildLetterPrompt, selectLetterDocs } from '@/lib/generators/letters';
 import { buildDocBlocks } from '@/lib/uploads';
-import { SOP_QUESTIONS } from '@/lib/sopQuestions';
+import { primaryLetter } from '@/lib/appTypes';
+import { cleanAnswers } from '@/lib/sopQuestions';
 import { error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-const QIDS = new Set(SOP_QUESTIONS.map((q) => q.id));
-
 /**
- * Stream the Study Plan / SOP as plain-text chunks so long generations don't
- * time out on mobile. Saves the builder answers first; the client persists the
- * final text (and renders the PDF) via POST /sop with { editedText }.
- * Body: { answers: { <qid>: { selected:[], note:'' } } }
+ * Stream the type's primary narrative letter as plain-text chunks so long
+ * generations don't time out on mobile. Saves the builder answers first; the
+ * client persists the final text (and renders the PDF) via POST /sop.
  */
 export async function POST(req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);
@@ -26,32 +24,22 @@ export async function POST(req, { params }) {
   } catch {
     return error('Invalid request body.');
   }
-
-  const answers = {};
-  if (body.answers && typeof body.answers === 'object') {
-    for (const [qid, a] of Object.entries(body.answers)) {
-      if (!QIDS.has(qid) || !a) continue;
-      answers[qid] = {
-        selected: Array.isArray(a.selected) ? a.selected.map(String).slice(0, 12) : [],
-        note: typeof a.note === 'string' ? a.note.slice(0, 2000) : '',
-      };
-    }
-  }
+  const letter = primaryLetter(app.type);
+  const answers = cleanAnswers(body.answers, letter.kind);
 
   const withAnswers = await updateApplication(app.id, (a) => {
     a.sopAnswers = answers;
     return a;
   });
 
-  // Read the applicant's relevant uploaded documents so the letter is specific.
   let docBlocks = [];
   try {
-    docBlocks = await buildDocBlocks(app.id, selectSopDocs(withAnswers));
+    docBlocks = await buildDocBlocks(app.id, selectLetterDocs(withAnswers, letter));
   } catch {
     docBlocks = [];
   }
 
-  const { system, instruction } = buildSopPrompt(withAnswers, docBlocks.length > 0);
+  const { system, instruction } = buildLetterPrompt(withAnswers, letter, docBlocks.length > 0);
   const content = docBlocks.length ? [{ type: 'text', text: instruction }, ...docBlocks] : instruction;
   const encoder = new TextEncoder();
 

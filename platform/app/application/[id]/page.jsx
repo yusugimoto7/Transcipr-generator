@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { getApplication } from '@/lib/store';
+import { getApplication, canAccess } from '@/lib/store';
 import { getSchema } from '@/lib/schema';
 import { buildChecklist } from '@/lib/checklist';
 import TopBar from '@/components/TopBar';
@@ -15,10 +15,10 @@ export default async function ApplicationPage({ params }) {
 
   const app = await getApplication(params.id);
   if (!app) notFound();
-  if (app.userId !== user.id) redirect('/dashboard');
+  if (!canAccess(user, app)) redirect('/dashboard');
 
   const schema = getSchema(app.type);
-  const checklist = buildChecklist(app.data || {}).map((c) => ({
+  const checklist = buildChecklist(app.data || {}, app.type).map((c) => ({
     ...c,
     uploaded: (app.documents || []).some((d) => d.category === c.key),
   }));

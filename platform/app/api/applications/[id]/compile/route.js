@@ -1,20 +1,13 @@
 import { updateApplication } from '@/lib/store';
 import { readGenerated, readUpload, saveGenerated, buildDocBlocks } from '@/lib/uploads';
 import { renderDocPdf, textToBlocks } from '@/lib/pdf';
-import { generateSop, selectSopDocs } from '@/lib/generators/sop';
-import { generateFinancialCoverLetter, generateFinancialSummary } from '@/lib/generators/coverdocs';
-import { compilePackage, PACKAGES, PACKAGE_CATEGORIES } from '@/lib/compile';
+import { generateLetter, letterSpec, selectLetterDocs } from '@/lib/generators/letters';
+import { compilePackage, getPackages, packageCategories } from '@/lib/compile';
 import { prepareDocument } from '@/lib/packageDocs';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
-
-const GEN_TITLE = {
-  sop: 'Statement of Purpose (Study Plan)',
-  'financial-cover-letter': 'Financial Cover Letter',
-  'financial-summary': 'Financial Summary Report',
-};
 
 // Generate a text sub-document if it isn't already present, and return the app.
 async function ensureGenerated(app, key) {
@@ -27,24 +20,17 @@ async function ensureGenerated(app, key) {
       /* file missing — regenerate */
     }
   }
-  let text;
-  if (key === 'sop') {
-    let docBlocks = [];
-    try {
-      docBlocks = await buildDocBlocks(app.id, selectSopDocs(app));
-    } catch {
-      docBlocks = [];
-    }
-    text = await generateSop(app, docBlocks);
-  } else if (key === 'financial-cover-letter') {
-    text = await generateFinancialCoverLetter(app);
-  } else if (key === 'financial-summary') {
-    text = await generateFinancialSummary(app);
-  } else {
-    return app;
+  const letter = letterSpec(app, key);
+  if (!letter) return app; // this letter doesn't apply to the type
+  let docBlocks = [];
+  try {
+    docBlocks = await buildDocBlocks(app.id, selectLetterDocs(app, letter));
+  } catch {
+    docBlocks = [];
   }
-  const bytes = await renderDocPdf({ blocks: textToBlocks(text, GEN_TITLE[key]) });
-  const meta = await saveGenerated(app.id, { key, filename: `${GEN_TITLE[key]}.pdf`, bytes: Buffer.from(bytes), text });
+  const text = await generateLetter(app, key, docBlocks);
+  const bytes = await renderDocPdf({ blocks: textToBlocks(text, letter.title) });
+  const meta = await saveGenerated(app.id, { key, filename: `${letter.title}.pdf`, bytes: Buffer.from(bytes), text });
   return updateApplication(app.id, (a) => {
     const m = new Map((a.generated || []).map((g) => [g.key, g]));
     m.set(key, meta);
@@ -64,7 +50,7 @@ export async function POST(req, { params }) {
   } catch {
     return error('Invalid request body.');
   }
-  const def = PACKAGES[body.pkg];
+  const def = getPackages(app.type)[body.pkg];
   if (!def) return error('Unknown package.', 404);
   const cleanPages = body.cleanPages !== false; // default: remove blank pages
   const fixRotation = body.fixRotation !== false; // default: auto-correct sideways/upside-down scans
@@ -118,7 +104,7 @@ export async function POST(req, { params }) {
     if (node.catchAll) {
       // Anything belonging to this package (or uncategorized) not already used.
       // 'internal' (agency intake forms, templates) must NEVER reach a package.
-      const owned = new Set(PACKAGE_CATEGORIES[body.pkg] || []);
+      const owned = new Set(packageCategories(app.type)[body.pkg] || []);
       docs = (app.documents || []).filter(
         (d) =>
           !usedDocIds.has(d.id) &&

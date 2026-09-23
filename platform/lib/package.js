@@ -15,9 +15,9 @@ const DOC_ORDER = [
 
 function manifest(app) {
   const d = app.data || {};
-  const checklist = buildChecklist(d);
+  const checklist = buildChecklist(d, app.type);
   const uploaded = new Set((app.documents || []).map((x) => x.category));
-  const missingFields = requiredMissing(d).map((f) => f.label);
+  const missingFields = requiredMissing(d, app.type).map((f) => f.label);
   const generatedKeys = new Set((app.generated || []).map((g) => g.key));
 
   const lines = [];
