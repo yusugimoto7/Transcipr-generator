@@ -1,0 +1,24 @@
+# Build check for every pull request and every push to main.
+#
+# Render deploys main automatically, so with two people merging a broken
+# build would take production down for both. This is the gate: a PR whose
+# build fails stays red and should not be merged. Needs no secrets — every
+# integration in the app is optional and the build runs with none set.
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
