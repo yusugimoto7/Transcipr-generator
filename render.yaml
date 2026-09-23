@@ -26,3 +26,7 @@ services:
       # Render generates a strong random value automatically.
       - key: AUTH_SECRET
         generateValue: true
+      # Your email address. The account registered with this email is ADMIN:
+      # it manages account managers and assigns files. Comma-separate for more.
+      - key: ADMIN_EMAIL
+        sync: false
