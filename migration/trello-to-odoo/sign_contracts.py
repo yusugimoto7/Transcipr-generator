@@ -2515,6 +2515,163 @@ def install_mail_cc(odoo):
     log.info("  contract e-mail CC automation active")
 
 
+# --- Followers straight from the project kanban -----------------------------
+# The project cards had no way in: Studio removed the card's three-dot menu, so
+# the "Settings" entry that leads to the project form (and its chatter) is gone
+# and a follower can only be edited by digging the project record out by hand.
+# This puts a people icon with the follower count on every card; it opens a
+# small dialog that lists the current followers and saves what you leave in it.
+#
+# Followers are written through mail.followers with no subtypes, the same way
+# the boards were set up by hand: on a board whose visibility is "Invited
+# internal users" that is exactly what grants access, without signing the
+# person up for an e-mail on every task.
+
+FOLLOWERS_MODEL = "x_project_followers"
+
+FOLLOWERS_OPEN_CODE = r"""
+proj = env['project.project'].browse(env.context.get('active_id'))
+if proj:
+    wiz = env['%(model)s'].create({
+        'x_project_id': proj.id,
+        'x_partner_ids': [(6, 0, proj.message_partner_ids.ids)],
+    })
+    action = {
+        'type': 'ir.actions.act_window',
+        'name': 'Followers of %%s' %% proj.display_name,
+        'res_model': '%(model)s',
+        'view_mode': 'form',
+        'views': [(env.ref('__trello__.p2view_project_followers').id, 'form')],
+        'res_id': wiz.id,
+        'target': 'new',
+    }
+""" % {"model": FOLLOWERS_MODEL}
+
+FOLLOWERS_APPLY_CODE = r"""
+wiz = env['%(model)s'].browse(env.context.get('active_id'))
+proj = wiz.x_project_id
+if proj:
+    have = proj.message_partner_ids
+    want = wiz.x_partner_ids
+    drop = (have - want).ids
+    add = (want - have).ids
+    if drop:
+        proj.sudo().message_unsubscribe(partner_ids=drop)
+    if add:
+        # No subtypes: the follower gets the access the board's visibility
+        # setting keys off, and none of the notification traffic.
+        env['mail.followers'].sudo().create([{
+            'res_model': 'project.project', 'res_id': proj.id,
+            'partner_id': pid, 'subtype_ids': [(6, 0, [])],
+        } for pid in add])
+action = {'type': 'ir.actions.act_window_close'}
+""" % {"model": FOLLOWERS_MODEL}
+
+
+def install_project_followers(odoo):
+    """People icon on each project card -> edit that board's followers."""
+    # 1. the throwaway model the dialog is built on
+    model_id = odoo.ref("p2model", "project_followers")
+    if not model_id:
+        have = odoo.search_read("ir.model", [("model", "=", FOLLOWERS_MODEL)], ["id"], limit=1)
+        if have:
+            model_id = have[0]["id"]
+            odoo.stamp("p2model", "project_followers", "ir.model", model_id)
+        else:
+            model_id, _ = odoo.upsert("p2model", "project_followers", "ir.model", {
+                "name": "Project followers", "model": FOLLOWERS_MODEL,
+                "state": "manual", "transient": True}, update=False)
+
+    _field(odoo, FOLLOWERS_MODEL, "x_project_id", {
+        "field_description": "Project", "ttype": "many2one", "relation": "project.project",
+        "required": True, "on_delete": "cascade"})
+    _field(odoo, FOLLOWERS_MODEL, "x_partner_ids", {
+        "field_description": "Followers", "ttype": "many2many", "relation": "res.partner",
+        "relation_table": "x_project_followers_partner_rel",
+        "column1": "wizard_id", "column2": "partner_id"})
+
+    # Everybody may open the dialog as far as the model is concerned; who
+    # actually sees the button is decided on the kanban card below.
+    acc_vals = {"name": "x_project_followers.user", "model_id": model_id,
+                "group_id": 1, "perm_read": True, "perm_write": True,
+                "perm_create": True, "perm_unlink": True}
+    acc = odoo.ref("p2access", "project_followers")
+    if acc:
+        odoo.write("ir.model.access", [acc], acc_vals)
+    else:
+        odoo.upsert("p2access", "project_followers", "ir.model.access", acc_vals)
+
+    # 2. the two halves of the dialog: open it, and save what it holds
+    apply_id = _server_action(odoo, "project_followers_apply", {
+        "name": "Save the project's followers", "model_id": model_id,
+        "state": "code", "code": FOLLOWERS_APPLY_CODE, "binding_model_id": False})
+
+    arch = ('<form>'
+            '<field name="x_project_id" invisible="1"/>'
+            '<group>'
+            '<field name="x_partner_ids" widget="many2many_tags" nolabel="1"'
+            ' domain="[(\'user_ids.share\', \'=\', False)]"'
+            ' options="{\'no_create\': True, \'no_quick_create\': True}"'
+            ' placeholder="Type a name to add somebody, click the x to remove them"/>'
+            '</group>'
+            '<p class="text-muted">'
+            'On a board set to &quot;Invited internal users&quot; this list is who can open it. '
+            'Followers added here are not e-mailed about the board\'s activity.'
+            '</p>'
+            '<footer>'
+            '<button name="%d" type="action" string="Save" class="btn-primary"/>'
+            '<button string="Cancel" class="btn-secondary" special="cancel"/>'
+            '</footer>'
+            '</form>') % apply_id
+    view_vals = {"name": "project.followers.wizard", "model": FOLLOWERS_MODEL,
+                 "type": "form", "arch_db": arch, "priority": 16}
+    view_id = odoo.ref("p2view", "project_followers")
+    if view_id:
+        odoo.write("ir.ui.view", [view_id], view_vals)
+    else:
+        view_id, _ = odoo.upsert("p2view", "project_followers", "ir.ui.view", view_vals)
+
+    open_id = _server_action(odoo, "project_followers_open", {
+        "name": "Followers", "model_id": _model_id(odoo, "project.project"),
+        "state": "code", "code": FOLLOWERS_OPEN_CODE, "binding_model_id": False})
+
+    # 3. the button itself, next to the task count at the bottom of the card
+    # Several kanban views are registered for project.project; the dashboard one
+    # (the card grid the Project app opens on) is the one carrying the task-count
+    # boxes, so find it by that rather than by a name two of them share.
+    cands = odoo.search_read("ir.ui.view", [("model", "=", "project.project"), ("type", "=", "kanban"),
+                                            ("inherit_id", "=", False)], ["id", "arch_db"])
+    parent = [c for c in cands if "o_project_kanban_boxes" in (c.get("arch_db") or "")]
+    if not parent:
+        log.warning("  the project dashboard kanban was not found; no follower button placed")
+        return
+    kanban_arch = (
+        '<data>'
+        '<xpath expr="/kanban" position="inside">'
+        '<field name="message_partner_ids"/>'
+        '</xpath>'
+        '<xpath expr="//div[hasclass(\'o_project_kanban_boxes\')]/a[@name=\'action_view_tasks\']"'
+        ' position="after">'
+        '<a class="o_kanban_inline_block btn-link text-dark small ms-3" role="button" type="action"'
+        ' name="%d" groups="project.group_project_manager" title="Followers of this project">'
+        '<span class="fa fa-users me-1"/>'
+        '<t t-esc="record.message_partner_ids.raw_value.length"/>'
+        '</a>'
+        '</xpath>'
+        '</data>') % open_id
+    kv = {"name": "project.project.kanban.followers", "model": "project.project",
+          "inherit_id": parent[0]["id"], "arch_db": kanban_arch, "priority": 2100}
+    kid = odoo.ref("p2view", "project_kanban_followers")
+    try:
+        if kid:
+            odoo.write("ir.ui.view", [kid], kv)
+        else:
+            odoo.upsert("p2view", "project_kanban_followers", "ir.ui.view", kv)
+        log.info("  follower button placed on the project cards")
+    except OdooError as exc:
+        log.warning("  project kanban: %s", str(exc)[-200:])
+
+
 def install(odoo, rcic_email):
     ids = {}
     install_send_button(odoo, rcic_email)
@@ -2531,6 +2688,7 @@ def install(odoo, rcic_email):
     install_state_dropdown(odoo)
     install_tax_refresh(odoo)
     install_mail_cc(odoo)
+    install_project_followers(odoo)
     relax_card_required(odoo)
     install_default_plans(odoo)
     return ids
