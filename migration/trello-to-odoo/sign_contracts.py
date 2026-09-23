@@ -2659,6 +2659,34 @@ def install_project_followers(odoo):
         '</a>'
         '</xpath>'
         '</data>') % open_id
+    # 4. the same button on the project form, which is where the cog beside the
+    # board's name in the breadcrumb lands: that cog is drawn by the web client
+    # itself and cannot be reached from the database, so the nearest place a
+    # view can put the button is the form the cog opens.
+    form_arch = ('<data>'
+                 '<xpath expr="//div[@name=\'button_box\']" position="inside">'
+                 '<button class="oe_stat_button" type="action" name="%d" icon="fa-users"'
+                 ' groups="project.group_project_manager">'
+                 '<div class="o_stat_info"><span class="o_stat_text">Followers</span></div>'
+                 '</button>'
+                 '</xpath>'
+                 '</data>') % open_id
+    pform = odoo.search_read("ir.ui.view", [("model", "=", "project.project"), ("type", "=", "form"),
+                                            ("inherit_id", "=", False),
+                                            ("arch_db", "like", "button_box")], ["id"], limit=1)
+    if pform:
+        fv = {"name": "project.project.form.followers", "model": "project.project",
+              "inherit_id": pform[0]["id"], "arch_db": form_arch, "priority": 2100}
+        fid = odoo.ref("p2view", "project_form_followers")
+        try:
+            if fid:
+                odoo.write("ir.ui.view", [fid], fv)
+            else:
+                odoo.upsert("p2view", "project_form_followers", "ir.ui.view", fv)
+            log.info("  Followers button placed on the project form")
+        except OdooError as exc:
+            log.warning("  project form: %s", str(exc)[-200:])
+
     kv = {"name": "project.project.kanban.followers", "model": "project.project",
           "inherit_id": parent[0]["id"], "arch_db": kanban_arch, "priority": 2100}
     kid = odoo.ref("p2view", "project_kanban_followers")
