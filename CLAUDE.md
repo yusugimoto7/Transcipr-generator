@@ -37,7 +37,8 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 | Area | Files |
 |---|---|
-| News ingest, feed list, dedupe, YouTube resolution | `lib/news.js` |
+| **Feed list — add sources here** | `lib/feeds.js` |
+| News ingest logic: parsing, dedupe, YouTube resolution | `lib/news.js` |
 | Topic generation pipeline, caching, cost caps | `app/api/topics/route.js` |
 | All LLM prompts + output parsing | `lib/prompts.js` |
 | Model selection per job (env-overridable) | `lib/openai.js`, `lib/anthropic.js` |
