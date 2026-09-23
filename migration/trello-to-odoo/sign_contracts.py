@@ -2530,7 +2530,15 @@ def install_mail_cc(odoo):
 FOLLOWERS_MODEL = "x_project_followers"
 
 FOLLOWERS_OPEN_CODE = r"""
-proj = env['project.project'].browse(env.context.get('active_id'))
+ctx = env.context
+if ctx.get('active_model') == 'project.project' and ctx.get('active_id'):
+    proj = env['project.project'].browse(ctx['active_id'])
+else:
+    # the Followers button in a board's toolbar: the tasks action carries the
+    # board as default_project_id, the tasks themselves are not what we want
+    proj = env['project.project'].browse(ctx.get('default_project_id') or [])
+if not proj:
+    raise UserError("Open a project board first, then click Followers.")
 if proj:
     wiz = env['%(model)s'].create({
         'x_project_id': proj.id,
@@ -2686,6 +2694,36 @@ def install_project_followers(odoo):
             log.info("  Followers button placed on the project form")
         except OdooError as exc:
             log.warning("  project form: %s", str(exc)[-200:])
+
+    # 5. inside a board: a Followers button in the toolbar of the tasks view.
+    # The cog beside the board's name only offers dashboard/spreadsheet on this
+    # install, so the toolbar is the one place a view can put it. The same open
+    # action serves; it reads the board from the tasks action's default_project_id.
+    task_open_id = _server_action(odoo, "project_followers_open_task", {
+        "name": "Followers", "model_id": _model_id(odoo, "project.task"),
+        "state": "code", "code": FOLLOWERS_OPEN_CODE, "binding_model_id": False})
+    task_arch = ('<data>'
+                 '<xpath expr="/kanban/templates" position="before">'
+                 '<header>'
+                 '<button name="%d" type="action" string="Followers" display="always"'
+                 ' icon="fa-users" class="btn-secondary" groups="project.group_project_manager"/>'
+                 '</header>'
+                 '</xpath>'
+                 '</data>') % task_open_id
+    tk = odoo.search_read("ir.ui.view", [("model", "=", "project.task"), ("type", "=", "kanban"),
+                                         ("inherit_id", "=", False)], ["id", "priority"], order="priority, id")
+    if tk:
+        tv = {"name": "project.task.kanban.followers", "model": "project.task",
+              "inherit_id": tk[0]["id"], "arch_db": task_arch, "priority": 2100}
+        tid = odoo.ref("p2view", "task_kanban_followers")
+        try:
+            if tid:
+                odoo.write("ir.ui.view", [tid], tv)
+            else:
+                odoo.upsert("p2view", "task_kanban_followers", "ir.ui.view", tv)
+            log.info("  Followers button placed in the board toolbar")
+        except OdooError as exc:
+            log.warning("  task kanban: %s", str(exc)[-200:])
 
     kv = {"name": "project.project.kanban.followers", "model": "project.project",
           "inherit_id": parent[0]["id"], "arch_db": kanban_arch, "priority": 2100}
