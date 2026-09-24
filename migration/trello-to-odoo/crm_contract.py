@@ -238,10 +238,15 @@ def install_automations(odoo):
         "trigger_field_ids": [(6, 0, _field_ids(odoo, "sale.order.line", [
             "price_unit", "product_uom_qty", "discount", "product_id"]))],
         "action_server_ids": [(6, 0, [push_line])], "active": True})
+    # A server action belongs to one automation only (base_automation_id), so
+    # the unlink trigger needs its own copy of the action.
+    push_unlink = _server_action(odoo, "contract_push_line_unlink", {
+        "name": "Quotation line removed -> contract numbers on the card", "model_id": sol_model,
+        "state": "code", "code": PUSH_CODE, "binding_model_id": False})
     _automation(odoo, "contract_push_line_unlink", {
         "name": "Phase 2: quotation line removed -> card contract numbers", "model_id": sol_model,
         "trigger": "on_unlink", "filter_domain": "[]",
-        "action_server_ids": [(6, 0, [push_line])], "active": True})
+        "action_server_ids": [(6, 0, [push_unlink])], "active": True})
 
     lead_model = _model_id(odoo, LEAD)
     total = _server_action(odoo, "contract_total", {
