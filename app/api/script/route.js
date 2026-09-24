@@ -1,6 +1,6 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiScript } from "../../../lib/openai";
-import { scriptPrompt } from "../../../lib/prompts";
+import { scriptPrompt, reelPromptEn } from "../../../lib/prompts";
 import { fetchArticleText } from "../../../lib/news";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request) {
   try {
     const { topic, lang } = await request.json();
-    if (!topic || (lang !== "fa" && lang !== "en")) {
+    if (!topic || !["fa", "en", "reel_en"].includes(lang)) {
       return Response.json({ error: "bad request" }, { status: 400 });
     }
 
@@ -22,7 +22,8 @@ export async function POST(request) {
     }
     if (!sourceText && topic.snippet) sourceText = String(topic.snippet);
 
-    const prompt = scriptPrompt(topic, lang, sourceText);
+    const prompt =
+      lang === "reel_en" ? reelPromptEn(topic, sourceText) : scriptPrompt(topic, lang, sourceText);
 
     let text = "";
     let provider = "anthropic";

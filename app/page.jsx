@@ -929,7 +929,33 @@ function ScriptBody({ text, tab }) {
 
 function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, onSaveArticle, tgState = "idle", tgMsg = "", onRetryTelegram }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
-  const active = tab === "fa" ? scripts.fa : scripts.en;
+
+  // English Reel script for the English-market channel. On-demand like the
+  // article, so approving a topic costs nothing extra and the Telegram
+  // auto-send stays Farsi + companion English only.
+  const [reel, setReel] = useState("");
+  const [reelState, setReelState] = useState("idle"); // idle | generating | ready | error
+  const [reelCopied, setReelCopied] = useState(false);
+  const openReel = async () => {
+    setTab("reel");
+    if (reelState === "generating" || reelState === "ready") return;
+    setReelState("generating");
+    try {
+      setReel(await fetchScript(topic, "reel_en"));
+      setReelState("ready");
+    } catch (e) {
+      setReel("");
+      setReelState("error");
+    }
+  };
+  const copyReel = () => {
+    if (!reel) return;
+    navigator.clipboard?.writeText(reel);
+    setReelCopied(true);
+    setTimeout(() => setReelCopied(false), 1400);
+  };
+
+  const active = tab === "fa" ? scripts.fa : tab === "reel" ? reel : scripts.en;
 
   // Blog article (on-demand). Seeded from a saved item when opened via Library.
   const [artState, setArtState] = useState(initialArticle ? "ready" : "idle"); // idle | generating | ready | error
@@ -1097,6 +1123,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <Tab active={tab === "fa"} onClick={() => setTab("fa")} label="سناریو فارسی" />
         <Tab active={tab === "en"} onClick={() => setTab("en")} label="English script" />
+        <Tab active={tab === "reel"} onClick={openReel} label="English Reel" />
       </div>
 
       <div style={{ flex: 1, background: "rgba(242,229,192,0.05)", border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, minHeight: 300 }}>
@@ -1108,12 +1135,32 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
           </div>
         ) : error ? (
           <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.orange, direction: "rtl", textAlign: "right" }}>{error}</div>
+        ) : tab === "reel" && reelState !== "ready" ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 260, gap: 14, fontFamily: "'Space Grotesk', sans-serif", fontSize: 13, color: reelState === "error" ? C.orange : "rgba(242,229,192,0.6)" }}>
+            {reelState === "error" ? (
+              <>
+                <div>Could not write the English Reel script.</div>
+                <button onClick={openReel} style={{ background: "rgba(241,114,18,0.15)", color: C.orange, border: `1px solid rgba(241,114,18,0.35)`, borderRadius: 9, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Try again</button>
+              </>
+            ) : (
+              <>
+                <div style={{ width: 30, height: 30, border: `3px solid rgba(242,229,192,0.2)`, borderTopColor: C.orange, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
+                <div>Writing the English Reel script…</div>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+              </>
+            )}
+          </div>
         ) : (
           <div>
             <div style={{ display: "flex", justifyContent: tab === "fa" ? "flex-start" : "flex-end", marginBottom: 12 }}>
-              <button onClick={() => onCopy(tab)} style={{ background: copied === tab ? C.orangeDeep : "rgba(241,114,18,0.15)", color: copied === tab ? "#fff" : C.orange, border: `1px solid rgba(241,114,18,0.35)`, borderRadius: 9, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
-                {copied === tab ? "Copied ✓" : "Copy"}
-              </button>
+              {(() => {
+                const done = tab === "reel" ? reelCopied : copied === tab;
+                return (
+                  <button onClick={() => (tab === "reel" ? copyReel() : onCopy(tab))} style={{ background: done ? C.orangeDeep : "rgba(241,114,18,0.15)", color: done ? "#fff" : C.orange, border: `1px solid rgba(241,114,18,0.35)`, borderRadius: 9, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
+                    {done ? "Copied ✓" : "Copy"}
+                  </button>
+                );
+              })()}
             </div>
             <ScriptBody text={active} tab={tab} />
           </div>
