@@ -46,9 +46,16 @@ STATUS_MAP = {
 STATUS_RANK = {"other": 0, "draft_sent": 1, "sent": 2, "signed": 3, "paid_only": 3, "signed_partial": 4,
                "paid": 5, "terminated": 6}
 # Stage a card is created in when the contract has no card yet.
-STATUS_STAGE = {"draft_sent": 41, "sent": 45, "signed": 14, "signed_partial": 25, "paid_only": 25,
-                "paid": 17, "terminated": 46, "other": 45}
-WON_STAGE = 17
+# Stage a card is created in when the contract has no card yet. Two stages
+# are avoided on purpose: "20- Contract Signed" posts a webhook to Trello and
+# "22- Sent to Execution Team" opens an execution task, and neither should
+# happen for a contract from years ago. Signed-but-unpaid contracts therefore
+# sit in "18- Main Contract Sent" and paid ones in "Won"; the Contract status
+# field carries the real situation either way.
+STATUS_STAGE = {"draft_sent": 41, "sent": 45, "signed": 45, "signed_partial": 25, "paid_only": 25,
+                "paid": 61, "terminated": 46, "other": 45}
+WON_STAGE = 17            # the live pipeline's won stage (22- Sent to Execution Team)
+WON_STAGES = (17, 61)     # 22- Sent to Execution Team, Won
 
 FILE_NO = re.compile(r"\b(S[GB]?[A-Z]*\d{5,9}|C\d{4}|S\d\d-C\d{4})\b", re.I)
 
@@ -79,6 +86,11 @@ def money(v):
 
 
 def as_date(v):
+    d = _as_date(v)
+    return d if d and 2015 <= d.year <= 2030 else None
+
+
+def _as_date(v):
     if isinstance(v, datetime.datetime):
         return v.date()
     if isinstance(v, datetime.date):
@@ -219,7 +231,7 @@ class Index:
         # Several cards for one person: the one that is furthest along, then newest.
         def key(i):
             l = self.leads[i]
-            return (l["stage_id"][0] == WON_STAGE, l["active"], i)
+            return (bool(l["stage_id"]) and l["stage_id"][0] in WON_STAGES, l["active"], i)
         return sorted(ids, key=key)[-1]
 
 
@@ -256,12 +268,39 @@ def plan(odoo, sg_path, sb_path):
     for c in contracts:
         lid, how = idx.find(c)
         c["how"] = how
+        # A test card never takes a contract on the strength of a shared
+        # e-mail or phone number alone.
+        if lid and how in ("email", "phone") and "test" in (idx.leads[lid]["name"] or "").lower():
+            lid, how = None, "no card (only a test card shares its e-mail/phone)"
+            c["how"] = how
         if lid:
             per_lead[lid].append(c)
         elif how.startswith("name matches"):
             manual.append(c)
         else:
             unmatched.append(c)
+    # One card, one contract. Family members often share an e-mail, so a card
+    # can attract several contracts; merging them would keep only one fee. The
+    # card keeps its own (the one it was found by contract number, else the
+    # first), and every other contract gets a card of its own. The two halves
+    # of an entrepreneur pair share a key (the Sparkbridge row names its
+    # Sugimoto number) and stay together.
+    def pair_key(c):
+        return (c["no_sg"] if c["company"] == "sb" and c["no_sg"] else c["no_sg"] or c["no_sb"])
+    for lid in list(per_lead):
+        rows = per_lead[lid]
+        groups = collections.OrderedDict()
+        for c in rows:
+            groups.setdefault(pair_key(c), []).append(c)
+        if len(groups) < 2:
+            continue
+        own = next((k for k, g in groups.items() if any(c["how"].startswith("contract no") for c in g)), next(iter(groups)))
+        per_lead[lid] = groups[own]
+        for k, g in groups.items():
+            if k != own:
+                for c in g:
+                    c["how"] = "own card (shared %s with another contract's card)" % c["how"]
+                    unmatched.append(c)
     writes, conflicts = [], []
     for lid, rows in per_lead.items():
         lead = idx.leads[lid]
@@ -362,54 +401,104 @@ def review_workbook(p, path):
 
 def _user_by_name(odoo):
     users = odoo.search_read("res.users", [("share", "=", False)], ["name"], context={"active_test": False})
-    return {norm_name(u["name"]): u["id"] for u in users}
+    out = {norm_name(u["name"]): u["id"] for u in users}
+    # The sheets often name the agent by first name only ("Rahil", "Ken"):
+    # accept a first name when exactly one user carries it.
+    firsts = collections.defaultdict(list)
+    for u in users:
+        parts = (u["name"] or "").split()
+        if parts:
+            firsts[norm_name(parts[0])].append(u["id"])
+    for k, ids in firsts.items():
+        if len(ids) == 1 and k and k not in out:
+            out[k] = ids[0]
+    return out
 
 
-def apply(odoo, p, create=True):
-    """Write the plan. Returns (updated, created)."""
+QUIET = {"mail_create_nolog": True, "mail_create_nosubscribe": True, "mail_notrack": True,
+         "tracking_disable": True, "mail_auto_subscribe_no_notify": True}
+
+
+def _card_vals(v):
+    fee_sg, fee_sb = v["fee_sg"] or 0.0, v["fee_sb"] or 0.0
+    vals = {"x_fee_sg": fee_sg, "x_fee_sb": fee_sb, "x_fee_total": round(fee_sg + fee_sb, 2),
+            "x_fee_currency": v["currency"], "x_fee_source": "sheet", "x_contract_status": v["status"],
+            "x_contract_no_sg": v["no_sg"] or False, "x_contract_no_sb": v["no_sb"] or False,
+            "x_contract_sent_on": v["sent"] and v["sent"].isoformat() or False,
+            "x_contract_signed_on": v["signed"] and v["signed"].isoformat() or False,
+            "x_contract_paid_on": v["paid"] and v["paid"].isoformat() or False}
+    if v["currency"] == "CAD":
+        vals["expected_revenue"] = vals["x_fee_total"]
+    return vals
+
+
+BACKUP_FIELDS = ["x_fee_sg", "x_fee_sb", "x_fee_total", "x_fee_currency", "x_fee_source", "x_contract_status",
+                 "x_contract_no_sg", "x_contract_no_sb", "x_contract_sent_on", "x_contract_signed_on",
+                 "x_contract_paid_on", "expected_revenue"]
+
+
+def apply(odoo, p, create=True, limit=None, journal=None):
+    """Write the plan. Returns (updated, created).
+
+    Nothing is deleted or archived: existing cards get only the Contract
+    fields and Expected Revenue, and every contract without a card gets a new
+    one. `journal` (a path) records each card's values before the write and
+    the ids of the cards created, so the run can be audited or undone.
+    """
+    import json
     users = _user_by_name(odoo)
+    me = odoo.uid
+    log_rows = {"updated": [], "created": []}
+
+    def flush():
+        if journal:
+            with open(journal, "w") as f:
+                json.dump(log_rows, f, default=str)
+
+    writes = p["writes"][:limit] if limit else p["writes"]
     n_up = 0
-    for v in p["writes"]:
-        vals = {"x_fee_sg": v["fee_sg"] or 0.0, "x_fee_sb": v["fee_sb"] or 0.0,
-                "x_fee_total": round((v["fee_sg"] or 0.0) + (v["fee_sb"] or 0.0), 2),
-                "x_fee_currency": v["currency"], "x_fee_source": "sheet", "x_contract_status": v["status"],
-                "x_contract_no_sg": v["no_sg"] or False, "x_contract_no_sb": v["no_sb"] or False,
-                "x_contract_sent_on": v["sent"] and v["sent"].isoformat() or False,
-                "x_contract_signed_on": v["signed"] and v["signed"].isoformat() or False,
-                "x_contract_paid_on": v["paid"] and v["paid"].isoformat() or False}
-        if v["currency"] == "CAD":
-            vals["expected_revenue"] = vals["x_fee_total"]
+    for i, v in enumerate(writes, 1):
+        before = odoo.search_read("crm.lead", [("id", "=", v["lead_id"])], BACKUP_FIELDS,
+                                  context={"active_test": False})
         try:
-            odoo.write("crm.lead", [v["lead_id"]], vals)
+            odoo.write("crm.lead", [v["lead_id"]], _card_vals(v), context=QUIET)
             n_up += 1
+            log_rows["updated"].append(before[0] if before else {"id": v["lead_id"]})
         except OdooError as exc:
             log.warning("  lead %s: %s", v["lead_id"], str(exc)[-160:])
+        if i % 50 == 0:
+            flush()
+            log.info("  updated %d / %d", i, len(writes))
+    flush()
     n_new = 0
     if create:
-        for v in p["creates"]:
+        creates = p["creates"][:limit] if limit else p["creates"]
+        for i, v in enumerate(creates, 1):
             no = v["no_sg"] or v["no_sb"]
-            vals = {"name": "%s - %s" % (no, v["name"]) if v["name"] else no, "type": "opportunity",
-                    "company_id": 1, "active": False, "stage_id": v["stage_id"],
-                    "email_from": v["email"] or False, "phone": v["phone"] or False,
-                    "x_fee_sg": v["fee_sg"] or 0.0, "x_fee_sb": v["fee_sb"] or 0.0,
-                    "x_fee_total": round((v["fee_sg"] or 0.0) + (v["fee_sb"] or 0.0), 2),
-                    "x_fee_currency": v["currency"], "x_fee_source": "sheet", "x_contract_status": v["status"],
-                    "x_contract_no_sg": v["no_sg"] or False, "x_contract_no_sb": v["no_sb"] or False,
-                    "x_contract_sent_on": v["sent"] and v["sent"].isoformat() or False,
-                    "x_contract_signed_on": v["signed"] and v["signed"].isoformat() or False,
-                    "x_contract_paid_on": v["paid"] and v["paid"].isoformat() or False,
-                    "description": "Created from the finance sheet (%s); no CRM card existed for this contract." % ", ".join(v["sources"])}
-            uid = users.get(norm_name(v["agent"]))
-            if uid:
-                vals["user_id"] = uid
-            if v["currency"] == "CAD":
-                vals["expected_revenue"] = vals["x_fee_total"]
-            if v["stage_id"] == WON_STAGE and v["paid"]:
+            vals = dict(_card_vals(v), **{
+                "name": "%s - %s" % (no, v["name"]) if v["name"] else no, "type": "opportunity",
+                "company_id": 1, "active": False, "stage_id": v["stage_id"],
+                "email_from": v["email"] or False, "phone": v["phone"] or False,
+                # Created under the API user: the "Survey" automation opens a
+                # call-centre task for every new card except that user's.
+                "user_id": me,
+                "description": "Created from the finance sheet (%s); no CRM card existed for this contract."
+                               % ", ".join(v["sources"])})
+            if v["stage_id"] in WON_STAGES and v["paid"]:
                 vals["date_closed"] = v["paid"].isoformat()
             try:
-                odoo.create("crm.lead", vals, context={"mail_create_nolog": True, "mail_notrack": True, "tracking_disable": True})
+                lid = odoo.create("crm.lead", vals, context=QUIET)
                 n_new += 1
+                log_rows["created"].append(lid)
+                # Then the agent from the sheet, silently (no "assigned to you" e-mail).
+                uid = users.get(norm_name(v["agent"]))
+                if uid and uid != me:
+                    odoo.write("crm.lead", [lid], {"user_id": uid}, context=QUIET)
             except OdooError as exc:
                 log.warning("  create %s: %s", no, str(exc)[-160:])
+            if i % 50 == 0:
+                flush()
+                log.info("  created %d / %d", i, len(creates))
+    flush()
     log.info("  updated %d cards, created %d", n_up, n_new)
     return n_up, n_new
