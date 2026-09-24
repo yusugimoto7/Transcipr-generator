@@ -22,7 +22,7 @@ Everything is stamped with external ids, so rerunning updates in place.
 import logging
 
 from odoo_client import OdooError
-from sign_contracts import _field, _model_id, _server_action, _sync_selection
+from sign_contracts import PAID_STAGE_IDS, _field, _model_id, _server_action, _sync_selection, install_card_rules
 
 log = logging.getLogger(__name__)
 
@@ -41,9 +41,6 @@ STATUSES = [
 SOURCES = [("odoo", "Quotation"), ("sheet", "Google Sheet"), ("manual", "Entered by hand")]
 CURRENCIES = [("CAD", "CAD"), ("EUR", "EUR")]
 
-# Stages whose reach means the client has paid (payment receipt sent, handed
-# to execution, handed to finance).
-PAID_STAGE_IDS = (25, 17, 48)
 
 FIELDS = [
     ("x_contract_no_sg", {"field_description": "Contract no. (Sugimoto)", "ttype": "char"}),
@@ -127,30 +124,6 @@ for order in orders:
     lead.sudo().write(vals)
 """ % {"paid_stages": PAID_STAGE_IDS}
 
-TOTAL_CODE = r"""
-for lead in records:
-    total = round((lead.x_fee_sg or 0.0) + (lead.x_fee_sb or 0.0), 2)
-    if lead.x_fee_total != total:
-        lead.write({'x_fee_total': total})
-"""
-
-STAGE_CODE = r"""
-today = datetime.date.today()
-for lead in records:
-    if lead.stage_id.id not in %(paid_stages)r:
-        continue
-    if not (lead.x_fee_sg or lead.x_fee_sb):
-        continue
-    vals = {}
-    if not lead.x_contract_paid_on:
-        vals['x_contract_paid_on'] = today
-    if lead.x_contract_status in (False, 'draft_sent', 'sent', 'signed', 'signed_partial'):
-        vals['x_contract_status'] = 'paid'
-    if lead.x_contract_status == 'paid_only':
-        vals['x_contract_status'] = 'paid'
-    if vals:
-        lead.sudo().write(vals)
-""" % {"paid_stages": PAID_STAGE_IDS}
 
 
 def _automation(odoo, key, vals):
@@ -248,24 +221,17 @@ def install_automations(odoo):
         "trigger": "on_unlink", "filter_domain": "[]",
         "action_server_ids": [(6, 0, [push_unlink])], "active": True})
 
-    lead_model = _model_id(odoo, LEAD)
-    total = _server_action(odoo, "contract_total", {
-        "name": "Card fees -> total", "model_id": lead_model,
-        "state": "code", "code": TOTAL_CODE, "binding_model_id": False})
-    _automation(odoo, "contract_total", {
-        "name": "Phase 2: card fees -> total", "model_id": lead_model,
-        "trigger": "on_create_or_write", "filter_domain": "[]",
-        "trigger_field_ids": [(6, 0, _field_ids(odoo, LEAD, ["x_fee_sg", "x_fee_sb"]))],
-        "action_server_ids": [(6, 0, [total])], "active": True})
-    stage = _server_action(odoo, "contract_stage", {
-        "name": "Card stage -> paid", "model_id": lead_model,
-        "state": "code", "code": STAGE_CODE, "binding_model_id": False})
-    _automation(odoo, "contract_stage", {
-        "name": "Phase 2: payment receipt stage -> paid on the card", "model_id": lead_model,
-        "trigger": "on_write", "filter_domain": "[]",
-        "trigger_field_ids": [(6, 0, _field_ids(odoo, LEAD, ["stage_id"]))],
-        "action_server_ids": [(6, 0, [stage])], "active": True})
-    log.info("  quotation -> card and stage -> paid automations active")
+    # The card side (total follows the fees, payment stage stamps the paid
+    # date) lives in the card-rules dispatcher: every extra automation on the
+    # card multiplies the cost of each save (see CARD_RULES_CODE), and two of
+    # them took a card save from 1 s to 9 s on production.
+    for key in ("contract_total", "contract_stage"):
+        auto = odoo.ref("p2auto", key)
+        if auto:
+            odoo.write("base.automation", [auto], {"active": False})
+            log.info("  retired the separate %s automation", key)
+    install_card_rules(odoo)
+    log.info("  quotation -> card automations active; card rules carry the total and paid date")
     return push
 
 

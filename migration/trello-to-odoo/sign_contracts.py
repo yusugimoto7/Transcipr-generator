@@ -1964,6 +1964,12 @@ def install_stage_gate(odoo):
 
 ADDRESS_FIELDS = ["street", "street2", "city", "zip", "state_id", "country_id",
                   "x_name_fa", "x_address_fa", "x_national_id"]
+# Stages whose reach means the client has paid: 21- Payment Receipt Sent,
+# 22- Sent to Execution Team, 25- Sent to Finance Unit.
+PAID_STAGE_IDS = (25, 17, 48)
+# The Contract block's own fields (crm_contract.py); the dispatcher watches
+# the two fees so the total follows them.
+FEE_FIELDS = ["x_fee_sg", "x_fee_sb"]
 
 # One automation for every Phase-2 rule on the card, plus the customer's
 # stage-22 handoff.  Odoo 17's automation engine writes date_automation_last
@@ -1985,10 +1991,26 @@ for lead in records:
         # Stage gate: a contract must be sent before Need to Receive Draft Contract.
         Action.browse(__GATE__).with_context(**ctx).run()
         # Execution handoff: the card just arrived in 22- Sent to Execution Team.
-        if lead.stage_id.id == __EXEC_STAGE__:
+        if __ROUTE__ and lead.stage_id.id == __EXEC_STAGE__:
             Action.browse(__ROUTE__).with_context(**ctx).run()
-    elif changed is None and lead.stage_id.id == __EXEC_STAGE__:
+    elif __ROUTE__ and changed is None and lead.stage_id.id == __EXEC_STAGE__:
         Action.browse(__ROUTE__).with_context(**ctx).run()
+    # Contract block (crm_contract.py): the total follows the two fees, and a
+    # payment stage stamps the paid date. Done here rather than as automations
+    # of their own, for the reason in the comment above.
+    if 'x_fee_sg' in lead._fields:
+        vals = {}
+        if changed is None or 'x_fee_sg' in changed or 'x_fee_sb' in changed:
+            total = round((lead.x_fee_sg or 0.0) + (lead.x_fee_sb or 0.0), 2)
+            if lead.x_fee_total != total:
+                vals['x_fee_total'] = total
+        if (changed is None or 'stage_id' in changed) and lead.stage_id.id in __PAID_STAGES__ and (lead.x_fee_sg or lead.x_fee_sb):
+            if not lead.x_contract_paid_on:
+                vals['x_contract_paid_on'] = datetime.date.today()
+            if lead.x_contract_status in (False, 'draft_sent', 'sent', 'signed', 'signed_partial', 'paid_only'):
+                vals['x_contract_status'] = 'paid'
+        if vals:
+            lead.write(vals)
 """.strip()
 
 
@@ -2002,16 +2024,19 @@ def install_card_rules(odoo):
     route = odoo.search_read("base.automation", [("model_id.model", "=", "crm.lead"), ("trigger", "=", "on_stage_set"),
                                                  ("name", "ilike", "Sent to Execution Team")], ["id", "action_server_ids"],
                              limit=1, context={"active_test": False})
-    if not (sync and gate and stage and route and route[0]["action_server_ids"]):
-        log.warning("  card rules not installed: sync=%s gate=%s stage=%s route=%s", sync, gate, stage, route)
+    if not (sync and gate and stage):
+        log.warning("  card rules not installed: sync=%s gate=%s stage=%s", sync, gate, stage)
         return
+    # A database without the Trello-era handoff automation (the test copy)
+    # simply has no execution handoff to dispatch to.
+    route_action = route[0]["action_server_ids"][0] if route and route[0]["action_server_ids"] else 0
     code = (CARD_RULES_CODE.replace("__ADDRESS_FIELDS__", repr(ADDRESS_FIELDS)).replace("__SYNC__", str(sync))
             .replace("__GATE__", str(gate)).replace("__EXEC_STAGE__", str(stage[0]["id"]))
-            .replace("__ROUTE__", str(route[0]["action_server_ids"][0])))
+            .replace("__ROUTE__", str(route_action)).replace("__PAID_STAGES__", repr(PAID_STAGE_IDS)))
     act_id = _server_action(odoo, "card_rules", {"name": "CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
                                                  "state": "code", "code": code, "binding_model_id": False})
     fields = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"),
-                                                  ("name", "in", ADDRESS_FIELDS + ["partner_id", "stage_id"])], ["id"])
+                                                  ("name", "in", ADDRESS_FIELDS + FEE_FIELDS + ["partner_id", "stage_id"])], ["id"])
     auto_vals = {"name": "Phase 2: CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
                  "trigger": "on_create_or_write", "trigger_field_ids": [(6, 0, [f["id"] for f in fields])],
                  "filter_domain": "[]", "action_server_ids": [(6, 0, [act_id])], "active": True}
@@ -2021,7 +2046,7 @@ def install_card_rules(odoo):
     else:
         odoo.upsert("p2auto", "card_rules", "base.automation", auto_vals)
     # The three automations it replaces must not run alongside it.
-    retired = [odoo.ref("p2auto", "lead_sync"), odoo.ref("p2auto", "stage_gate"), route[0]["id"]]
+    retired = [odoo.ref("p2auto", "lead_sync"), odoo.ref("p2auto", "stage_gate"), route[0]["id"] if route else None]
     retired = [r for r in retired if r]
     active = odoo.search_read("base.automation", [("id", "in", retired), ("active", "=", True)], ["id"])
     if active:
