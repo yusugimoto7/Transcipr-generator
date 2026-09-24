@@ -87,12 +87,18 @@ for order in orders:
         c = 'sb' if any(t.startswith('SB-') for t in tags) else 'sg'
         fee[c] += l.price_subtotal
     fee = {c: round(v, 2) for c, v in fee.items()}
-    kinds = order.x_agreement_kinds or ''
     both = fee['sg'] and fee['sb']
-    no_sg = (order.x_sugimoto_no or '').strip() if both else ((order.client_order_ref or '').strip() if fee['sg'] else '')
-    no_sb = (order.client_order_ref or '').strip() if fee['sb'] else ''
-    if fee['sg'] and not fee['sb'] and not no_sg:
-        no_sg = (order.client_order_ref or '').strip()
+    # Before Send Contract draws a number, client_order_ref may hold the
+    # customer's name: only a real file number counts as a contract number.
+    def file_no(v):
+        v = (v or '').strip().upper()
+        head = v.rstrip('0123456789')
+        digits = v[len(head):]
+        ok = head in ('S', 'SB', 'SG', 'SBSUV', 'SGSUV', 'SBEU', 'SBBICT', 'SGBICT', 'C') and 4 <= len(digits) <= 9
+        return v if ok else ''
+    ref = file_no(order.client_order_ref)
+    no_sg = file_no(order.x_sugimoto_no) if both else (ref if fee['sg'] else '')
+    no_sb = ref if fee['sb'] else ''
     cur = order.currency_id.name if order.currency_id.name in ('CAD', 'EUR') else 'CAD'
     vals = {
         'x_fee_sg': fee['sg'], 'x_fee_sb': fee['sb'], 'x_fee_total': round(fee['sg'] + fee['sb'], 2), 'x_fee_currency': cur,
