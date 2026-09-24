@@ -439,6 +439,10 @@ action = tmpl.go_to_custom_template()
 
 # --- Send Contract ---------------------------------------------------------
 
+# Personal mailboxes that get no copy of contract e-mails (the owner asked
+# for the sending mailbox, legal@ / contract@, to hold the copy instead).
+NO_COPY_EMAILS = ["yusugimoto7@gmail.com"]
+
 SEND_CONTRACT_CODE = r"""
 order = record
 lead = order.opportunity_id
@@ -797,9 +801,11 @@ else:
     # e-mail (each signer gets a private signing link), so they get their own
     # copy of the very same PDF below, and they are on "Copy to" of the
     # signature request so Odoo sends them the signed original automatically.
+    # Personal addresses that must never receive a copy (see NO_COPY_EMAILS).
+    no_copy = __NO_COPY__
     agents = []
     for u in [order.user_id, lead.user_id if lead else False]:
-        if u and u.id != env.user.id and u.id not in [a.id for a in agents]:
+        if u and u.id != env.user.id and u.id not in [a.id for a in agents] and (u.email or '').lower() not in no_copy:
             agents.append(u)
     cc_ids = [u.partner_id.id for u in agents if u.partner_id]
     # The agents on the file also go on CC of the client's own e-mail and on
@@ -807,7 +813,7 @@ else:
     # mail is being created), so the client sees them and a reply reaches them.
     cc_emails = []
     for u in [order.user_id, lead.user_id if lead else False]:
-        if u and u.email and u.email.lower() not in [e.lower() for e in cc_emails]:
+        if u and u.email and u.email.lower() not in [e.lower() for e in cc_emails] and u.email.lower() not in no_copy:
             cc_emails.append(u.email)
     requests = []
     sent_atts = []
@@ -932,9 +938,15 @@ else:
         # puts the agents on it, and gets them the signed original.
         if cc_ids:
             req.sudo().message_subscribe(partner_ids=cc_ids)
+        # The sending mailbox (legal@ / contract@) is always on CC, so it keeps
+        # a copy of exactly what the client received: the proof that the
+        # contract went out, in the inbox the team reads.
+        cc_here = list(cc_emails)
+        if sender_email and sender_email.lower() not in [e.lower() for e in cc_here]:
+            cc_here.append(sender_email)
         mail_ctx = {}
-        if cc_emails:
-            mail_ctx = {'p2_mail_cc': ', '.join(cc_emails),
+        if cc_here:
+            mail_ctx = {'p2_mail_cc': ', '.join(cc_here),
                         'p2_mail_reply_to': ', '.join(([sender.email_formatted] if sender and sender.email else []) + cc_emails)}
         req.with_context(**mail_ctx).send_signature_accesses()
         requests.append(req)
@@ -1038,7 +1050,7 @@ else:
             lead.sudo().with_context(skip_stage_gate=True).write({'stage_id': sent_stage.id})
     action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': requests[0].id,
               'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
-""".strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA)).replace("__KINDS__", repr(KINDS)).replace("__SCOPE__", repr(ENT_SCOPE)).replace("__BOXES__", repr(SIGN_BOXES))
+""".strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA)).replace("__KINDS__", repr(KINDS)).replace("__SCOPE__", repr(ENT_SCOPE)).replace("__BOXES__", repr(SIGN_BOXES)).replace("__NO_COPY__", repr(NO_COPY_EMAILS))
 
 
 # When everyone has signed: confirm the quotation (the existing automation
