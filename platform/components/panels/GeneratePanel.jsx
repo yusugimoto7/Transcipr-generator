@@ -19,6 +19,16 @@ function docsFor(app) {
   return docs;
 }
 
+/** Parse a JSON reply; a proxy / crash page gets a readable message. */
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`The server did not answer properly (HTTP ${res.status}) — it may be restarting. Wait a minute and try again.`);
+  }
+}
+
 export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
   const DOCS = docsFor(app);
   // Beta docs (e.g. pre-filled official form) are opt-in, not selected by default.
@@ -57,7 +67,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docs: [key] }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Generation failed.');
       patchLocal({ generated: data.generated });
       setNote(data.note || null);
@@ -79,7 +89,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ docs }),
       });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Generation failed.');
       patchLocal({ generated: data.generated });
       setNote(data.note || null);
@@ -172,7 +182,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
               {missingModal.fields.map((f, i) => <li key={i}>{f}</li>)}
             </ul>
             <div className="btn-row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={doGenerate}>Generate anyway</button>
+              <button className="btn-secondary" onClick={() => doGenerate()}>Generate anyway</button>
               <button onClick={() => { setMissingModal(null); onGoIntake && onGoIntake(); }}>
                 Complete in Intake →
               </button>
