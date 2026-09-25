@@ -2821,6 +2821,7 @@ def install(odoo, rcic_email):
     install_state_dropdown(odoo)
     install_tax_refresh(odoo)
     install_mail_cc(odoo)
+    set_quotation_prefix(odoo)
     install_project_followers(odoo)
     relax_card_required(odoo)
     install_default_plans(odoo)
@@ -2870,3 +2871,13 @@ def bump_sequences(odoo, year=None):
         out[code] = {"highest_in_use": top, "was_next": cur, "now_next": max(target, cur or 0), "ignored": outliers}
         log.info("  %s: highest in use %s, next %s -> %s", code, top, cur, out[code]["now_next"])
     return out
+
+
+def set_quotation_prefix(odoo, prefix="Q"):
+    """Odoo's own quotation numbers (S00093) looked like contract numbers
+    (S26281); quotations are numbered Q00094, Q00095, ... from now on."""
+    seqs = odoo.search_read("ir.sequence", [("code", "=", "sale.order")], ["id", "prefix"], context={"active_test": False})
+    todo = [s["id"] for s in seqs if s["prefix"] != prefix]
+    if todo:
+        odoo.write("ir.sequence", todo, {"prefix": prefix})
+    log.info("  quotation numbers now start with %s", prefix)
