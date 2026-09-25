@@ -446,6 +446,9 @@ NO_COPY_EMAILS = ["yusugimoto7@gmail.com"]
 SEND_CONTRACT_CODE = r"""
 order = record
 lead = order.opportunity_id
+# "Send Manually" runs this same code with p2_manual_send: everything but the
+# Odoo Sign request and its e-mail (see MANUAL_SEND_CODE).
+manual = bool(env.context.get('p2_manual_send'))
 partner = order.partner_id
 order.write({'x_pending_approval': False})
 _acts = env['mail.activity'].sudo().search(['&', ('res_model', '=', 'sale.order'), ('res_id', '=', order.id),
@@ -857,6 +860,13 @@ else:
             return pdf
         fname = '%s - %s - %s.pdf' % (d['file_no'], d['title'], client_name)
         pdf = _render()
+        if manual:
+            # Sent by hand: the agent e-mails this very PDF from their own
+            # mailbox, so it is kept on the quotation and Odoo Sign is skipped.
+            sent_atts.append(env['ir.attachment'].sudo().create({
+                'name': 'SENT %s' % fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf',
+                'res_model': 'sale.order', 'res_id': order.id}))
+            continue
         att = env['ir.attachment'].sudo().create({'name': fname, 'datas': b64encode(pdf), 'mimetype': 'application/pdf', 'res_model': 'sign.template'})
         tmpl = env['sign.template'].sudo().create({'attachment_id': att.id, 'name': '%s – %s – %s' % (d['file_no'], kind, client_name)})
         att.write({'res_id': tmpl.id})
@@ -975,8 +985,12 @@ else:
                         'p2_mail_reply_to': ', '.join(([sender.email_formatted] if sender and sender.email else []) + cc_emails)}
         req.with_context(**mail_ctx).send_signature_accesses()
         requests.append(req)
-    order.write({'x_sign_request_id': requests[0].id, 'x_sign_request2_id': requests[1].id if len(requests) > 1 else False,
-                 'x_agreement_kinds': ', '.join(kinds)})
+    if manual:
+        order.write({'x_sign_request_id': False, 'x_sign_request2_id': False,
+                     'x_agreement_kinds': ', '.join(kinds), 'x_manual_sent': True})
+    else:
+        order.write({'x_sign_request_id': requests[0].id, 'x_sign_request2_id': requests[1].id if len(requests) > 1 else False,
+                     'x_agreement_kinds': ', '.join(kinds), 'x_manual_sent': False})
     # The finance sheet's row, worked out here rather than in n8n so the fee and
     # payment-plan logic lives in exactly one place. n8n reads these fields and
     # pushes the row; it clears nothing and recomputes nothing.
@@ -1042,10 +1056,16 @@ else:
 
     summary = 'Professional fees %s, discount %s, tax %s, contract total %s (government fees %s, excluded). Payment plan: %s' % (
         money(pro), money(disc), money(tax), money(total), money(gov), '; '.join(plan_en))
-    order.message_post(body='Agreement(s) %s generated and sent for signature (the client signs first, then %s): %s. %s' % (
-        ', '.join(kinds), rcic.name, '; '.join(r.reference for r in requests), summary), message_type='comment', subtype_xmlid='mail.mt_note')
+    if manual:
+        order.message_post(body='Agreement(s) %s generated for sending by e-mail by %s (no Odoo Sign request). '
+                                'Once the client returns it signed, upload it under Signed contract and press '
+                                'Accept Signed Contract. %s' % (', '.join(kinds), env.user.name, summary),
+                           attachment_ids=[a.id for a in sent_atts], message_type='comment', subtype_xmlid='mail.mt_note')
+    else:
+        order.message_post(body='Agreement(s) %s generated and sent for signature (the client signs first, then %s): %s. %s' % (
+            ', '.join(kinds), rcic.name, '; '.join(r.reference for r in requests), summary), message_type='comment', subtype_xmlid='mail.mt_note')
     # A copy for the agents who own the file, with the same PDF the client got.
-    if agents:
+    if agents and not manual:
         base_url = env['ir.config_parameter'].sudo().get_param('web.base.url') or ''
         agent_body = ('<p>The %s for <strong>%s</strong> (%s) has been e-mailed to '
                       '<strong>%s</strong> for signature.</p>'
@@ -1065,7 +1085,8 @@ else:
                 'attachment_ids': [(6, 0, [a.id for a in sent_atts])],
             }).send()
     if lead:
-        lead.sudo().message_post(body='Agreement sent for signature: %s' % '; '.join(r.reference for r in requests),
+        lead.sudo().message_post(body=('Agreement prepared for sending by e-mail (%s): %s' % (env.user.name, ', '.join(a.name for a in sent_atts)))
+                                 if manual else ('Agreement sent for signature: %s' % '; '.join(r.reference for r in requests)),
                                  message_type='comment', subtype_xmlid='mail.mt_note')
         # The client is the first signer, so the agreement is in their inbox now:
         # move the card on to "13- Draft Contract Sent". Forward only, so
@@ -1073,8 +1094,13 @@ else:
         sent_stage = env['crm.stage'].sudo().search([('name', '=like', '13-%')], limit=1)
         if sent_stage and lead.stage_id and lead.stage_id.sequence < sent_stage.sequence:
             lead.sudo().with_context(skip_stage_gate=True).write({'stage_id': sent_stage.id})
-    action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': requests[0].id,
-              'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
+    if manual:
+        # Straight into the agent's downloads, ready to attach to their e-mail
+        # (an entrepreneur pair's second agreement is in the quotation's chatter).
+        action = {'type': 'ir.actions.act_url', 'url': '/web/content/%d?download=true' % sent_atts[0].id, 'target': 'self'}
+    else:
+        action = {'type': 'ir.actions.act_window', 'res_model': 'sign.request', 'res_id': requests[0].id,
+                  'view_mode': 'form', 'views': [[False, 'form']], 'target': 'current'}
 """.strip().replace("__DUE__", repr(DUE)).replace("__ORD_EN__", repr(ORDINALS_EN)).replace("__ORD_FA__", repr(ORDINALS_FA)).replace("__KINDS__", repr(KINDS)).replace("__SCOPE__", repr(ENT_SCOPE)).replace("__BOXES__", repr(SIGN_BOXES)).replace("__NO_COPY__", repr(NO_COPY_EMAILS))
 
 
@@ -1592,6 +1618,8 @@ def install_send_button(odoo, rcic_email):
     _field(odoo, "sale.order", "x_sign_request_id", {
         "field_description": "Retainer agreement", "ttype": "many2one",
         "relation": "sign.request", "on_delete": "set null"})
+    _field(odoo, "sale.order", "x_manual_sent", {
+        "field_description": "Sent manually (by e-mail)", "ttype": "boolean", "copied": False})
     _field(odoo, "sale.order", "x_custom_agreement", {
         "field_description": "Custom agreement (PDF)", "ttype": "binary", "copied": False})
     _field(odoo, "sale.order", "x_custom_agreement_filename", {
@@ -2808,6 +2836,7 @@ def install_project_followers(odoo):
 def install(odoo, rcic_email):
     ids = {}
     install_send_button(odoo, rcic_email)
+    install_manual_route(odoo)
     install_sheet_fields(odoo)
     install_sign_mail(odoo)
     relax_partner_accounting(odoo)
@@ -2881,3 +2910,117 @@ def set_quotation_prefix(odoo, prefix="Q"):
     if todo:
         odoo.write("ir.sequence", todo, {"prefix": prefix})
     log.info("  quotation numbers now start with %s", prefix)
+
+
+# --- Manual sending and uploaded signed contracts ---------------------------
+# For the stretch when a client cannot use the online signature: the agent
+# e-mails the agreement from their own mailbox and later uploads what the
+# client sends back. Everything else (numbering, finance sheet, card stages,
+# Contract block) behaves exactly as with Odoo Sign.
+
+MANUAL_SEND_CODE = r"""
+order = record
+if order.x_custom_agreement:
+    # A custom agreement is already a file: hand it over as it is.
+    att = env['ir.attachment'].sudo().create({
+        'name': 'SENT %s' % (order.x_custom_agreement_filename or 'custom agreement.pdf'),
+        'datas': order.x_custom_agreement, 'res_model': 'sale.order', 'res_id': order.id})
+    order.write({'x_manual_sent': True, 'x_sheet_sent_date': datetime.date.today()})
+    order.message_post(body='Custom agreement prepared for sending by e-mail by %s.' % env.user.name,
+                       attachment_ids=[att.id], message_type='comment', subtype_xmlid='mail.mt_note')
+    lead = order.opportunity_id
+    stage = env['crm.stage'].sudo().search([('name', '=like', '13-%')], limit=1)
+    if lead and stage and lead.stage_id and lead.stage_id.sequence < stage.sequence:
+        lead.sudo().with_context(skip_stage_gate=True).write({'stage_id': stage.id})
+    action = {'type': 'ir.actions.act_url', 'url': '/web/content/%d?download=true' % att.id, 'target': 'self'}
+elif (order.x_custom_agreement_url or '').strip():
+    raise UserError("This quotation points at a Google Docs / Drive agreement: e-mail that document yourself, "
+                    "then upload the signed copy under Signed contract and press Accept Signed Contract.")
+else:
+    send = env.ref('__trello__.p2action_send_contract')
+    action = send.with_context(p2_manual_send=True, active_model='sale.order',
+                               active_id=order.id, active_ids=order.ids).run()
+""".strip()
+
+ACCEPT_SIGNED_CODE = r"""
+order = record
+if not order.x_signed_upload:
+    raise UserError("Upload the signed contract first (Signed contract, on the quotation), then press this button again.")
+data = b64decode(order.x_signed_upload)
+if not (data[:5] == b'%PDF-' or data[:3] == b'\xff\xd8\xff' or data[:8] == b'\x89PNG\r\n\x1a\n'):
+    raise UserError("The signed contract must be a PDF, JPG or PNG file. The uploaded file is none of these.")
+Att = env['ir.attachment'].sudo()
+name = order.x_signed_upload_filename or 'signed contract.pdf'
+fname = 'SIGNED %s - %s' % ((order.client_order_ref or order.name), name)
+previous = order.x_signed_attachment_id
+new_att = Att.create({'name': fname, 'datas': order.x_signed_upload, 'res_model': 'sale.order', 'res_id': order.id})
+if previous and previous.checksum == new_att.checksum:
+    new_att.unlink()
+    raise UserError("This is the same file that was already accepted. Upload the corrected file first, then press Replace Signed Contract.")
+replacing = bool(order.x_signed_accepted_on)
+note = ('Signed contract replaced by %s: %s (the earlier upload stays in the history above).' if replacing
+        else 'Signed contract uploaded and accepted by %s: %s.') % (env.user.name, name)
+order.sudo().message_post(body=note, attachment_ids=[new_att.id], message_type='comment', subtype_xmlid='mail.mt_note')
+lead = order.opportunity_id
+if lead:
+    card_att = new_att.copy({'res_model': 'crm.lead', 'res_id': lead.id})
+    lead.sudo().message_post(body=note, attachment_ids=[card_att.id], message_type='comment', subtype_xmlid='mail.mt_note')
+# The signed copy came back another way: any online request still waiting is withdrawn.
+for req in [order.x_sign_request_id, order.x_sign_request2_id]:
+    if req and req.state not in ('signed', 'canceled'):
+        req.sudo().cancel()
+order.sudo().write({'x_signed_accepted_on': datetime.datetime.now(), 'x_signed_attachment_id': new_att.id})
+# Confirming the quotation is what the rest of the system reads as "signed":
+# the card moves to 20- Contract Signed and its Contract block says Signed.
+if order.state in ('draft', 'sent'):
+    order.action_confirm()
+""".strip()
+
+
+def install_manual_route(odoo):
+    """Send Manually + upload / accept / replace the signed contract."""
+    for name, vals in (
+            ("x_manual_sent", {"field_description": "Sent manually (by e-mail)", "ttype": "boolean", "copied": False}),
+            ("x_signed_upload", {"field_description": "Signed contract", "ttype": "binary", "copied": False}),
+            ("x_signed_upload_filename", {"field_description": "Signed contract file name", "ttype": "char", "copied": False}),
+            ("x_signed_accepted_on", {"field_description": "Signed contract accepted on", "ttype": "datetime", "copied": False}),
+            ("x_signed_attachment_id", {"field_description": "Accepted signed contract", "ttype": "many2one",
+                                        "relation": "ir.attachment", "on_delete": "set null", "copied": False})):
+        _field(odoo, "sale.order", name, vals)
+    so = _model_id(odoo, "sale.order")
+    manual_id = _server_action(odoo, "send_manual", {
+        "name": "Send Manually", "model_id": so, "state": "code", "code": MANUAL_SEND_CODE, "binding_model_id": False})
+    accept_id = _server_action(odoo, "accept_signed", {
+        "name": "Accept Signed Contract", "model_id": so, "state": "code", "code": ACCEPT_SIGNED_CODE, "binding_model_id": False})
+    parent = odoo.ref("p2view", "so_send_contract")
+    arch = ('<data>'
+            '<xpath expr="//header" position="inside">'
+            f'<button name="{manual_id}" type="action" string="Send Manually" class="btn-secondary" '
+            'invisible="state in (\'sale\', \'cancel\')" groups="__trello__.p2group_contract_approvers" '
+            'confirm="This builds the agreement from the quotation, marks the contract as sent and downloads the PDF '
+            'for you to e-mail to the client yourself. No Odoo Sign e-mail is sent. Continue?"/>'
+            f'<button name="{accept_id}" type="action" string="Accept Signed Contract" class="btn-primary" '
+            'invisible="not x_signed_upload or x_signed_accepted_on or state == \'cancel\'" '
+            'groups="__trello__.p2group_contract_approvers"/>'
+            f'<button name="{accept_id}" type="action" string="Replace Signed Contract" class="btn-secondary" '
+            'invisible="not x_signed_accepted_on or state == \'cancel\'" '
+            'groups="__trello__.p2group_contract_approvers" '
+            'confirm="First upload the corrected file under Signed contract. The earlier file stays in the history. Continue?"/>'
+            '</xpath>'
+            '<xpath expr="//field[@name=\'x_custom_agreement_url\']" position="before">'
+            '<field name="x_manual_sent" readonly="1" invisible="not x_manual_sent"/>'
+            '<field name="x_signed_upload_filename" invisible="1"/>'
+            '<field name="x_signed_upload" widget="binary" filename="x_signed_upload_filename" '
+            'invisible="state == \'cancel\'" '
+            'help="The contract the client signed and sent back (PDF, JPG or PNG). Upload it, then press Accept Signed Contract."/>'
+            '<field name="x_signed_accepted_on" readonly="1" invisible="not x_signed_accepted_on"/>'
+            '</xpath>'
+            '</data>')
+    vals = {"name": "sale.order.form.manual_contract", "model": "sale.order", "inherit_id": parent,
+            "arch_db": arch, "priority": 100}
+    vid = odoo.ref("p2view", "so_manual_contract")
+    if vid:
+        odoo.write("ir.ui.view", [vid], vals)
+    else:
+        odoo.upsert("p2view", "so_manual_contract", "ir.ui.view", vals)
+    log.info("  Send Manually and Accept / Replace Signed Contract placed on the quotation")
