@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { buildChecklist } from '@/lib/checklist';
+import { checklistStatus } from '@/lib/checklist';
+import { getAppType } from '@/lib/appTypes';
+import DriveImport from '@/components/DriveImport';
 import { everyField } from '@/lib/schema';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
@@ -51,6 +53,21 @@ const CATEGORY_LABELS = {
   'refusal-letter': 'Previous refusal / GCMS notes / old application',
   insurance: 'Social insurance records',
   'travel-history': 'Previous visas & travel history',
+  'enrolment-letter': 'Enrolment letter / school enrolment certificate',
+  'residence-abroad': 'Residence in another country',
+  'relationship-proof': 'Proof of relationship to the inviter',
+  'medical-insurance': 'Medical insurance (Super Visa)',
+  scholarship: 'Funding / scholarship letter',
+  'co-op-letter': 'Co-op letter',
+  'research-proposal': 'Research proposal',
+  'business-docs': 'Business documents (registration, licences)',
+  'business-financials': 'Business financial statements & tax returns',
+  'business-contracts': 'Business contracts & partnership agreements',
+  'business-employees': 'Business employees & employment contracts',
+  'business-premises': 'Business premises (deeds / leases)',
+  'business-plan': 'Canadian business plan & job offer',
+  questionnaire: 'Questionnaire (111 SOP / POT) — used to write the letter',
+  'rep-form': 'IRCC form (IMM 5476, 5713…)',
   internal: 'Internal / intake form (never compiled)',
   other: 'Other',
 };
@@ -62,7 +79,7 @@ function accepted(file) {
   return ACCEPT.some((ext) => name.endsWith(ext));
 }
 
-export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake }) {
+export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake, staff }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
   const [comparison, setComparison] = useState(null);
@@ -72,9 +89,14 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   const fileRef = useRef(null);
   const docs = app.documents || [];
 
-  const checklist = buildChecklist(app.data || {}, app.type);
-  const uploadedKeys = new Set(docs.map((d) => d.category).filter(Boolean));
-  const missing = checklist.filter((c) => !uploadedKeys.has(c.key));
+  const checklist = checklistStatus(app);
+  const missing = checklist.filter((c) => !c.provided && c.party !== 'firm');
+  const service = getAppType(app.type);
+  const groups = [
+    ['applicant', 'Applicant'],
+    ['principal', 'Spouse / parent / host / sponsor'],
+    ['firm', 'Prepared by the firm'],
+  ].map(([party, title]) => ({ party, title, items: checklist.filter((c) => c.party === party) })).filter((g) => g.items.length);
 
   function addFiles(fileList) {
     const incoming = Array.from(fileList || []);
@@ -228,31 +250,45 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake 
   return (
     <>
       <div className="card">
-        <h2>Document checklist</h2>
+        <h2>
+          Document checklist{service.service ? <span className="muted small" style={{ fontWeight: 400 }}> · {service.service}</span> : null}
+        </h2>
         <p className="muted small" style={{ marginTop: -6 }}>
-          These are the documents your application needs. Upload files below — the platform
-          identifies what each file is and checks it off automatically.
+          Name each file with its code and document name (e.g. <em>101-Birth Certificate</em>) — a
+          file is matched to its box by the code. <strong>TR</strong> = English translation with the
+          translator&apos;s seal + Persian copy with seal + Persian original, in one PDF.
         </p>
-        <div style={{ marginTop: 8 }}>
-          {checklist.map((c) => {
-            const done = uploadedKeys.has(c.key);
-            return (
-              <div className="row" key={c.key}>
+        {groups.map((g) => (
+          <div key={g.party} style={{ marginTop: 10 }}>
+            <div className="small" style={{ fontWeight: 700, margin: '6px 0' }}>{g.title}</div>
+            {g.items.map((c) => (
+              <div className="row" key={c.id}>
                 <div>
-                  <div style={{ fontWeight: 600 }}>{done ? '✅' : '⬜'} {c.label}</div>
-                  <div className="muted small">{c.hint}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {c.provided ? '✅' : c.party === 'firm' ? '🗂️' : '⬜'}{' '}
+                    <span className="muted" style={{ fontWeight: 400 }}>{/^\d/.test(c.code) ? c.code : c.code.toUpperCase()}</span>{' '}
+                    {c.label}
+                    {c.tr && <span className="chip" style={{ marginLeft: 6 }} title="Certified translation bundle required">TR</span>}
+                  </div>
+                  {(c.cond || c.hint) && (
+                    <div className="muted small">{c.cond ? <em>{c.cond}. </em> : null}{c.hint}</div>
+                  )}
                 </div>
-                <span className={`chip ${done ? 'ok' : 'warn'}`}>{done ? 'Provided' : 'Missing'}</span>
+                <span className={`chip ${c.provided ? 'ok' : c.party === 'firm' ? '' : 'warn'}`}>
+                  {c.provided ? 'Provided' : c.party === 'firm' ? 'Firm prepares' : 'Missing'}
+                </span>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        ))}
         <div className="hint-box" style={{ marginTop: 14 }}>
           {missing.length === 0
             ? '🎉 All checklist documents are provided.'
-            : `${missing.length} document(s) still missing: ${missing.map((m) => m.label).join(', ')}.`}
+            : `${missing.length} document(s) still missing: ${missing.map((m) => `${m.code} ${m.label}`).join(', ')}.`}
         </div>
       </div>
+
+      {staff && <DriveImport app={app} patchLocal={patchLocal} onImported={() => extract()} />}
 
       <div className="card">
         <h2>Upload files</h2>

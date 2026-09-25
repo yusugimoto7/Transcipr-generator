@@ -46,14 +46,14 @@ async function docxToText(buffer) {
 }
 
 /** Save a file for an application. Returns metadata to store on the application. */
-export async function saveUpload(appId, { buffer, filename, mime, category }) {
+export async function saveUpload(appId, { buffer, filename, mime, category, maxBytes = MAX_BYTES, extra = {} }) {
   if (!isAllowedType(mime)) {
     const e = new Error('Unsupported file type. Upload PDF, DOCX, JPG, PNG or WEBP.');
     e.status = 400;
     throw e;
   }
-  if (buffer.length > MAX_BYTES) {
-    const e = new Error('File is too large (max 12 MB).');
+  if (buffer.length > maxBytes) {
+    const e = new Error(`File is too large (max ${Math.round(maxBytes / 1024 / 1024)} MB).`);
     e.status = 400;
     throw e;
   }
@@ -71,6 +71,7 @@ export async function saveUpload(appId, { buffer, filename, mime, category }) {
     size: buffer.length,
     category: category || null,
     uploadedAt: new Date().toISOString(),
+    ...extra,
   };
 }
 

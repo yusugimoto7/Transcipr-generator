@@ -138,6 +138,38 @@ const VISITOR_RECORD = [
   { id: 'ties', question: 'What guarantees you will leave?', options: ['Home, property or business at home', 'Job I must return to', 'Family waiting at home', 'Return ticket booked', 'Left Canada on time on previous visits'] },
 ];
 
+const BUSINESS_VISIT = [
+  { id: 'purpose', question: 'What is the business purpose?', options: ['Meetings with a Canadian company', 'Attending a conference or trade show', 'Negotiating or signing a contract', 'Site visit / equipment inspection', 'Exploring the Canadian market'] },
+  { id: 'counterpart', question: 'Who are you meeting?', options: ['An existing client or supplier', 'A prospective partner', 'Event organisers / exhibitors', 'Our Canadian branch or affiliate'] },
+  { id: 'role', question: 'Your position in your company', options: ['Owner / co-owner', 'Senior manager sent by my employer', 'Technical specialist', 'Sales / business development'] },
+  { id: 'funding', question: 'Who pays for the trip?', options: ['My company', 'Myself', 'The Canadian company'] },
+  { id: 'ties', question: 'Why you will return', options: ['I run / own the business at home', 'My job continues on return (approved leave)', 'Family at home', 'Property and assets', 'Previous visas used and respected'] },
+];
+
+const C11 = [
+  { id: 'plan', question: 'What are you doing in Canada?', options: ['Starting a new business', 'Buying an existing business', 'Opening a Canadian branch of my company', 'Expanding a business I already started'] },
+  { id: 'benefit', question: 'The significant benefit to Canada', options: ['Creating jobs for Canadians / PRs', 'Substantial investment', 'New technology or know-how', 'Exports / new markets', 'Benefit to a smaller or regional community'] },
+  { id: 'experience', question: 'Your track record', options: ['I own and run a profitable business at home', 'Many years of management experience in this industry', 'Relevant degree and professional licences', 'Existing clients or contracts linked to Canada'] },
+  { id: 'progress', question: 'What is already done?', options: ['Canadian company incorporated', 'Business plan completed', 'Premises leased', 'Funds transferred to a Canadian account', 'Offer of employment submitted in the Employer Portal', 'First hires or invoices'] },
+  { id: 'intent', question: 'Your intentions', options: ['Grow the business while it needs my presence', 'Keep my home business running in parallel', 'Apply for permanent residence later through an eligible program'] },
+];
+
+const SUPER_VISA = [
+  { id: 'purpose', question: 'Why are you visiting?', options: ['Spend time with my children and grandchildren', 'Help with a newborn grandchild', 'Support my child during an illness or life event', 'Holidays and family celebrations'] },
+  { id: 'length', question: 'How long do you plan to stay?', options: ['Several months at a time', 'About a year', 'Longer visits spread over several years'] },
+  { id: 'host', question: 'Your host', options: ["My child — a Canadian citizen", "My child — a permanent resident", 'My grandchild', 'They have a stable, well-paid job'] },
+  { id: 'insurance', question: 'Insurance and medical', options: ['Canadian insurance bought, $100,000+ coverage', 'Insurance quote ready, will buy before travel', 'Medical exam done by a panel physician'] },
+  { id: 'ties', question: 'Why you will return home', options: ['Home and property at home', 'Spouse / other children at home', 'Pension or income at home', 'Visited Canada or other countries before and returned on time'] },
+];
+
+const IRANIAN_OWP = [
+  { id: 'status', question: 'Your current status in Canada', options: ['Work permit holder', 'Study permit holder', 'Visitor / visitor record', 'On maintained status'] },
+  { id: 'time', question: 'How long have you been in Canada?', options: ['Less than a year', '1–2 years', 'More than 2 years'] },
+  { id: 'why', question: 'Why you need an open work permit', options: ['My current permit is expiring', 'To work for any employer in my field', 'To support my family in Canada', 'Returning home is not safe or practical right now'] },
+  { id: 'work', question: 'Your work in Canada', options: ['Working in my field', 'Job offer in hand', 'Looking for work in my profession'] },
+  { id: 'family', question: 'Family situation', options: ['Spouse / children with me in Canada', 'Family remains in Iran', 'Single'] },
+];
+
 const PGWP = [
   { id: 'program', question: 'About your program', options: ['Completed on time, full-time', 'Program was 2+ years (3-year PGWP eligible)', 'Program under 2 years', 'Had an authorized leave / break'] },
   { id: 'work', question: 'Your work plans', options: ['Job offer in my field', 'Currently working part-time with the same employer', 'Looking for work in my field'] },
@@ -156,6 +188,10 @@ export const QUESTION_SETS = {
   'study-minor': STUDY_MINOR,
   'study-inside': STUDY_INSIDE,
   'visitor-record': VISITOR_RECORD,
+  'business-visit': BUSINESS_VISIT,
+  c11: C11,
+  'super-visa': SUPER_VISA,
+  'iranian-owp': IRANIAN_OWP,
   owp: OWP,
   visit: VISIT,
   pgwp: PGWP,

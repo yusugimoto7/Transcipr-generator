@@ -30,3 +30,8 @@ services:
       # it manages account managers and assigns files. Comma-separate for more.
       - key: ADMIN_EMAIL
         sync: false
+      # Optional — "Import from Google Drive". Paste the whole service-account
+      # JSON key; then share the client-files folder with its email (Viewer).
+      # See platform/README.md → "Import a client's documents from Google Drive".
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false

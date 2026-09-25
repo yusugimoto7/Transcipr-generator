@@ -1,5 +1,6 @@
 import { completeJson } from '../ai';
-import { buildChecklist } from '../checklist';
+import { checklistStatus } from '../checklist';
+import { getAppType } from '../appTypes';
 import { requiredMissing } from '../schema';
 
 /**
@@ -8,16 +9,17 @@ import { requiredMissing } from '../schema';
  */
 export async function reviewApplication(app) {
   const data = app.data || {};
-  const checklist = buildChecklist(data, app.type);
+  const checklist = checklistStatus(app);
   const uploadedKeys = (app.documents || []).map((d) => d.category).filter(Boolean);
+  const service = getAppType(app.type);
   const missingRequiredFields = requiredMissing(data, app.type).map((f) => f.label);
 
-  const system = `You are a senior Canadian study permit case reviewer. You assess an
+  const system = `You are a senior Canadian temporary-residence case reviewer (this file: ${service.title}${service.service ? `, service ${service.service}` : ''}). You assess an
 applicant's file for completeness and for common refusal risks under IRPA s.216
 (dual intent, funds, ties to home country, purpose of visit, study plan credibility).
 Be concrete and practical. Do not give legal advice or guarantees.`;
 
-  const instruction = `Review this study permit file and return JSON:
+  const instruction = `Review this ${service.title} file and return JSON:
 {
   "readinessScore": 0-100,
   "summary": "2-3 sentence plain-language assessment",
@@ -35,7 +37,7 @@ Applicant data:
 ${JSON.stringify(data, null, 2)}
 
 Checklist (required for this applicant):
-${checklist.map((c) => `- ${c.label} [key:${c.key}]`).join('\n')}
+${checklist.map((c) => `- ${c.code} ${c.label}${c.cond ? ` (${c.cond})` : ''} — ${c.provided ? 'PROVIDED' : c.party === 'firm' ? 'prepared by the firm' : 'MISSING'}`).join('\n')}
 
 Uploaded document categories: ${uploadedKeys.length ? uploadedKeys.join(', ') : '(none yet)'}
 

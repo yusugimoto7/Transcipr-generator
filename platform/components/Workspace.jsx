@@ -28,7 +28,7 @@ function readHash() {
   return TAB_IDS.includes(tab) ? { tab, sub: sub || null } : {};
 }
 
-export default function Workspace({ initialApp, schema, initialChecklist }) {
+export default function Workspace({ initialApp, schema, initialChecklist, viewerRole }) {
   const [app, setApp] = useState(initialApp);
   const TABS = tabsFor(app.type);
   const [tab, setTabState] = useState('documents');
@@ -152,7 +152,7 @@ export default function Workspace({ initialApp, schema, initialChecklist }) {
       </div>
 
       {tab === 'documents' && (
-        <DocumentsPanel app={app} patchLocal={patchLocal} onExtracted={onFieldChange} goIntake={() => setTab('intake')} />
+        <DocumentsPanel app={app} patchLocal={patchLocal} onExtracted={onFieldChange} goIntake={() => setTab('intake')} staff={viewerRole === 'admin' || viewerRole === 'manager'} />
       )}
       {tab === 'intake' && (
         <IntakePanel

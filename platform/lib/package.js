@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { readGenerated } from './uploads';
-import { buildChecklist } from './checklist';
+import { checklistStatus } from './checklist';
 import { requiredMissing } from './schema';
 
 const DOC_ORDER = [
@@ -15,7 +15,7 @@ const DOC_ORDER = [
 
 function manifest(app) {
   const d = app.data || {};
-  const checklist = buildChecklist(d, app.type);
+  const checklist = checklistStatus(app);
   const uploaded = new Set((app.documents || []).map((x) => x.category));
   const missingFields = requiredMissing(d, app.type).map((f) => f.label);
   const generatedKeys = new Set((app.generated || []).map((g) => g.key));
@@ -47,7 +47,7 @@ function manifest(app) {
   lines.push('DOCUMENT CHECKLIST (upload these to IRCC)');
   lines.push('----------------------------------------');
   for (const c of checklist) {
-    lines.push(`${uploaded.has(c.key) ? '[x]' : '[ ]'} ${c.label}`);
+    lines.push(`${c.provided ? '[x]' : c.party === 'firm' ? '[firm]' : '[ ]'} ${c.code} ${c.label}${c.cond ? ` (${c.cond})` : ''}`);
     lines.push(`      ${c.hint}`);
   }
   if (missingFields.length) {

@@ -1,6 +1,6 @@
 import { updateApplication } from '@/lib/store';
 import { reviewApplication } from '@/lib/generators/review';
-import { buildChecklist } from '@/lib/checklist';
+import { checklistStatus } from '@/lib/checklist';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -22,16 +22,13 @@ export async function POST(_req, { params }) {
     return a;
   });
 
-  return json({ review, checklist: buildChecklist(app.data || {}, app.type) });
+  return json({ review, checklist: checklistStatus(app) });
 }
 
 // Return the personalized checklist and last review without re-running AI.
 export async function GET(_req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
-  const checklist = buildChecklist(app.data || {}, app.type).map((c) => ({
-    ...c,
-    uploaded: (app.documents || []).some((d) => d.category === c.key),
-  }));
+  const checklist = checklistStatus(app);
   return json({ checklist, review: app.review || null });
 }

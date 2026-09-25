@@ -1,5 +1,6 @@
-import { buildChecklist } from '../checklist';
+import { checklistStatus } from '../checklist';
 import { requiredMissing } from '../schema';
+import { getAppType, formsFor } from '../appTypes';
 
 /**
  * Build the "Missing documents & next steps" note for an application.
@@ -9,9 +10,8 @@ import { requiredMissing } from '../schema';
  */
 export function buildNextStepsNote(app) {
   const data = app.data || {};
-  const checklist = buildChecklist(data, app.type);
-  const uploaded = new Set((app.documents || []).map((d) => d.category).filter(Boolean));
-  const missingDocuments = checklist.filter((c) => !uploaded.has(c.key));
+  // Items the firm prepares (flight/hotel bookings, letters) are not the client's to send.
+  const missingDocuments = checklistStatus(app).filter((c) => !c.provided && c.party !== 'firm');
   const missingFields = requiredMissing(data, app.type);
   const generatedKeys = new Set((app.generated || []).map((g) => g.key));
 
@@ -22,7 +22,7 @@ export function buildNextStepsNote(app) {
     );
   }
   for (const m of missingDocuments) {
-    nextSteps.push(`Obtain and upload: ${m.label} — ${m.hint}`);
+    nextSteps.push(`Obtain and upload: ${m.code} ${m.label}${m.hint ? ` — ${m.hint}` : ''}`);
   }
   if (!generatedKeys.has('sop')) {
     nextSteps.push('Generate your Statement of Purpose, then personalize it in your own words.');
@@ -33,8 +33,10 @@ export function buildNextStepsNote(app) {
   nextSteps.push(
     'Transcribe the IMM data-sheet values into the official IRCC fillable PDFs, then click "Validate" on each form to produce the barcode page.'
   );
+  const t = getAppType(app.type);
+  const forms = formsFor(app).map((f) => f.label.split(' — ')[0]).join(', ');
   nextSteps.push(
-    'Create/sign in to your IRCC secure account, upload the documents, pay the study permit fee (CAD 150) and biometrics fee (CAD 85), and give biometrics at a collection point when instructed.'
+    `Sign in to the IRCC account, upload the documents${forms ? ` and forms (${forms})` : ''}, pay the current IRCC fee for ${t.title}${t.where === 'outside' ? ' and the biometrics fee if biometrics are required' : ''}, and follow the instructions IRCC sends.`
   );
   if (missingDocuments.some((m) => m.key === 'medical')) {
     nextSteps.push(
@@ -50,7 +52,7 @@ export function buildNextStepsNote(app) {
   const lines = [];
   lines.push('# Missing documents');
   if (missingDocuments.length) {
-    for (const m of missingDocuments) lines.push(`- ${m.label} — ${m.hint}`);
+    for (const m of missingDocuments) lines.push(`- ${m.code} ${m.label}${m.cond ? ` (${m.cond})` : ''}${m.hint ? ` — ${m.hint}` : ''}`);
   } else {
     lines.push('All checklist documents have been uploaded. Well done.');
   }
@@ -68,7 +70,7 @@ export function buildNextStepsNote(app) {
   );
 
   return {
-    missingDocuments: missingDocuments.map((m) => m.label),
+    missingDocuments: missingDocuments.map((m) => `${m.code} ${m.label}${m.cond ? ` (${m.cond})` : ''}`),
     missingFields: missingFields.map((f) => f.label),
     nextSteps,
     text: lines.join('\n'),

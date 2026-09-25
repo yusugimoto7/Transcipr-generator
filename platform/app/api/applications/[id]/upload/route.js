@@ -29,7 +29,7 @@ export async function POST(req, { params }) {
         buffer,
         filename: file.name,
         mime: file.type,
-        category: classifyByFilename(file.name),
+        category: classifyByFilename(file.name, app.type),
       });
       saved.push(meta);
     }

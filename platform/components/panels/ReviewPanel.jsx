@@ -38,11 +38,11 @@ export default function ReviewPanel({ app, initialChecklist, patchLocal }) {
             <div className="row" key={c.key}>
               <div>
                 <div style={{ fontWeight: 600 }}>
-                  {c.uploaded ? '✅ ' : '⬜ '}{c.label}
+                  {c.provided ? '✅ ' : c.party === 'firm' ? '🗂️ ' : '⬜ '}<span className="muted">{c.code}</span> {c.label}
                 </div>
                 <div className="muted small">{c.hint}</div>
               </div>
-              <span className={`chip ${c.uploaded ? 'ok' : ''}`}>{c.uploaded ? 'Uploaded' : 'Missing'}</span>
+              <span className={`chip ${c.provided ? 'ok' : ''}`}>{c.provided ? 'Provided' : c.party === 'firm' ? 'Firm prepares' : 'Missing'}</span>
             </div>
           ))}
         </div>

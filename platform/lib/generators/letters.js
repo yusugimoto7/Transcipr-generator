@@ -30,14 +30,19 @@ export function letterSpec(app, key) {
 /** Upload categories most useful for a given letter kind. */
 const DOC_CATS = {
   study: ['cv', 'loa', 'transcripts', 'certificates', 'job-offer', 'language', 'sop'],
-  'study-minor': ['loa', 'transcripts', 'spouse-status', 'consent-letter'],
-  owp: ['spouse-status', 'inviter-docs', 'marriage-cert', 'status-in-canada', 'cv', 'employment-letter'],
-  visit: ['invitation-letter', 'host-docs', 'employment-letter', 'flight', 'accommodation', 'cv', 'title-deeds'],
-  pgwp: ['completion-letter', 'transcripts', 'status-in-canada', 'job-offer', 'employment-letter'],
-  'study-inside': ['status-in-canada', 'loa', 'transcripts', 'deposit', 'last-entry'],
-  'visitor-record': ['status-in-canada', 'last-entry', 'ties-docs', 'proof-of-funds', 'host-docs'],
+  'study-minor': ['loa', 'transcripts', 'spouse-status', 'consent-letter', 'questionnaire'],
+  owp: ['spouse-status', 'inviter-docs', 'marriage-cert', 'status-in-canada', 'cv', 'employment-letter', 'questionnaire'],
+  visit: ['invitation-letter', 'host-docs', 'employment-letter', 'flight', 'accommodation', 'cv', 'title-deeds', 'questionnaire'],
+  pgwp: ['completion-letter', 'transcripts', 'status-in-canada', 'job-offer', 'employment-letter', 'questionnaire'],
+  'study-inside': ['status-in-canada', 'loa', 'transcripts', 'deposit', 'last-entry', 'questionnaire'],
+  'visitor-record': ['status-in-canada', 'last-entry', 'ties-docs', 'proof-of-funds', 'host-docs', 'questionnaire'],
   reconsideration: ['refusal-letter', 'sop', 'proof-of-funds', 'employment-letter'],
-  invitation: ['host-docs', 'invitation-letter'],
+  invitation: ['host-docs', 'invitation-letter', 'inviter-docs', 'spouse-status', 'supporter-income'],
+  'business-visit': ['invitation-letter', 'business-docs', 'employment-letter', 'business-financials', 'flight', 'accommodation', 'questionnaire'],
+  'business-invitation': ['invitation-letter', 'business-docs'],
+  c11: ['business-plan', 'business-docs', 'business-financials', 'business-contracts', 'business-employees', 'business-premises', 'cv', 'questionnaire'],
+  'super-visa': ['host-docs', 'inviter-docs', 'medical-insurance', 'invitation-letter', 'supporter-income', 'ties-docs', 'questionnaire'],
+  'iranian-owp': ['status-in-canada', 'last-entry', 'employment-letter', 'job-offer', 'cv', 'questionnaire'],
   explanation: ['refusal-letter'],
 };
 
@@ -210,6 +215,114 @@ ${facts}`,
     return {
       system: `You write short "Letter of Explanation — PAL/TAL Exemption" notes for study permit applications, in the first person, citing the applicable exemption category in plain language. ${NO_INVENT}`,
       instruction: `Write a "Letter of Explanation – Provincial Attestation Letter Exemption" (250-400 words) addressed "Dear Visa Officer,". State the program (${d.programName || '[program]'}, ${d.levelOfStudy || '[level]'}) at ${d.schoolName || '[DLI]'}, the exemption reason (${d.palExemptReason || '[reason]'}), and that no PAL/TAL is therefore required; reference the Letter of Acceptance enclosed. Close "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}`,
+    };
+  }
+
+  if (K === 'business-visit') {
+    return {
+      system: `You are an expert Canadian immigration consultant drafting first-person "Purpose of Travel" letters for BUSINESS VISITOR visa applications (TRV, business visitor under R187). A business visitor must not enter the Canadian labour market: no hands-on work for a Canadian employer, remuneration and the main place of business stay outside Canada. You make the business purpose concrete (who, where, what, when) and show strong ties and a return home. ${NO_INVENT}`,
+      instruction: `Write an EXTENSIVE "Purpose of Travel" letter (900-1,300 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — who I am, my position (${d.applicantRole || '[position]'}) at ${d.applicantCompany || '[company]'}${d.ownsBusiness ? ', which I own' : ''}, and that I am applying for a visitor visa for business.
+**My company and my role** — what the company does, how long it has operated, my responsibilities and authority.
+**Purpose of the business trip** — ${d.businessPurpose || '[purpose]'}; the Canadian counterpart ${d.canadianCounterpart || '[company / event]'}${d.canadianCounterpartAddress ? ` (${d.canadianCounterpartAddress})` : ''}; dates ${d.visitFrom || '[from]'} to ${d.visitTo || '[to]'}; the meetings or events planned and the expected outcome for my company.
+**Business visitor, not a worker** — state plainly that I will not work for a Canadian employer or be paid from a Canadian source, and my salary and main place of business remain outside Canada.
+**Financial capacity** — who pays (${d.businessWhoPays || '[payer]'}), funds available; ${BOILERPLATE.sanctionsTransfer}
+**Strong ties to my home country** — the business I run or my continuing job, family, property, travel history.
+**Conclusion** — commitment to leave Canada by ${d.visitTo || '[date]'}.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'business-invitation') {
+    return {
+      system: `You draft business invitation letters from a CANADIAN COMPANY to a foreign business visitor, for the company's authorised signatory to put on letterhead and sign. ${NO_INVENT}`,
+      instruction: `Write a "Business Invitation Letter" (350-550 words) from ${d.canadianCounterpart || '[Canadian company]'}${d.canadianCounterpartAddress ? `, ${d.canadianCounterpartAddress}` : ''} to IRCC, inviting ${name || '[applicant]'} (${d.applicantRole || '[position]'}, ${d.applicantCompany || '[company]'}, passport ${d.passportNumber || '[number]'}). Cover: the relationship between the two companies; the purpose (${d.businessPurpose || '[purpose]'}); the dates (${d.visitFrom || '[from]'} to ${d.visitTo || '[to]'}) and a short schedule; who pays for travel and lodging (${d.businessWhoPays || '[payer]'}); a clear statement that the visitor will not be employed or paid by the Canadian company and will return to their employer abroad. End with a signature block: [Signatory name], [Title], company, address, phone, email, and a date line. Mark it "[To be printed on company letterhead]" at the top.
+
+Facts:
+${facts}`,
+    };
+  }
+
+  if (K === 'c11') {
+    return {
+      system: `You are an experienced Canadian immigration consultant drafting first-person Statements of Purpose for C11 (R205(a), significant benefit) entrepreneur / self-employed work permit applications (IMM 1295, LMIA-exempt). The officer assesses: a viable business that is genuinely under way, the applicant's ownership (generally 50%+) and ability to run it, a significant economic, social or cultural benefit to Canada (jobs, investment, innovation, regional development), and that the stay is temporary or tied to an eligible path. Be concrete with figures; never promise outcomes. ${NO_INVENT}`,
+      instruction: `Write an EXTENSIVE "Statement of Purpose" (1,100-1,600 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — who I am and that I apply for a C11 work permit to establish and operate ${d.c11BusinessName || '[business]'}.
+**My business experience** — ${d.c11HomeBusiness || '[home business]'}; my track record, roles and results.
+**The Canadian business** — what it does (${d.c11Activity || '[activity]'}), location (${d.c11BusinessAddress || '[address]'}), my ownership (${d.c11Ownership || '[n]'}%), investment CAD ${d.c11Investment || '[amount]'}; the offer of employment number ${d.c11OfferNumber || '[number]'}.
+**Steps already taken** — ${d.c11Progress || '[incorporation, lease, bank account, hiring…]'}; reference the enclosed evidence.
+**Significant benefit to Canada** — ${d.c11Benefit || '[benefit]'}; jobs for Canadians/PRs (${d.c11Jobs || '[n]'} in the first two years), suppliers, exports, innovation, community impact.
+**Why my presence in Canada is essential** — why the business cannot be run remotely.
+**My plans and ties** — the home business continuing, family, and my commitment to the conditions of the permit.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'super-visa') {
+    return {
+      system: `You draft first-person "Purpose of Travel" letters for PARENT AND GRANDPARENT SUPER VISA applications. The officer checks: the host child/grandchild is a Canadian citizen, PR or registered Indian; the host's written promise of financial support and income at or above the LICO for the household; Canadian medical insurance of at least $100,000 valid for at least one year from entry; an immigration medical exam; and that the parent is a genuine visitor who will leave. Do not state LICO figures — refer to "the required minimum income for the household size". ${NO_INVENT}`,
+      instruction: `Write an EXTENSIVE "Purpose of Travel" letter (800-1,200 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — who I am and that I apply for a Super Visa to visit my ${(d.svHostRelation || '[child]').toLowerCase()} ${d.hostName || '[host]'} (${d.svHostStatus || '[status]'}).
+**Purpose and length of my visits** — why we want longer visits (family, grandchildren, support), planned arrival ${d.visitFrom || '[date]'} and stay length; what I will do in Canada.
+**My host's support** — ${d.hostName || '[host]'}, ${d.hostOccupation || '[occupation]'}, household of ${d.svHousehold || '[n]'} people, income CAD ${d.svHostIncome || '[amount]'} for the last tax year; the enclosed letter of invitation and promise of financial support.
+**Medical insurance and exam** — insurance with ${d.svInsurer || '[insurer]'}, coverage CAD ${d.svCoverage || '[amount]'}${d.svInsuranceStart ? ` from ${d.svInsuranceStart}` : ''}, valid for at least one year from entry; medical exam ${d.svMedicalDone ? 'completed with a panel physician' : '[status]'}.
+**My life and ties at home** — spouse and other family, home and property, income or pension, previous travel and compliance.
+**Conclusion** — I will respect the length of stay authorized at entry and return home.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'iranian-owp') {
+    return {
+      system: `You draft first-person Statements of Purpose for Iranian nationals in Canada applying from inside Canada for an OPEN WORK PERMIT under a temporary public policy for Iranian nationals (IMM 5710). Public policies change: do NOT state policy names, dates, deadlines or eligibility thresholds as facts — write "[public policy name and date — confirm current version]" where a reference is needed. Focus on the applicant's lawful status, their history in Canada and why an open work permit is needed. ${NO_INVENT}`,
+      instruction: `Write a "Statement of Purpose" (700-1,000 words) addressed "Dear Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — I am a citizen of Iran in Canada and apply for an open work permit under [public policy name and date — confirm current version].
+**My status in Canada** — current status ${d.currentStatusCanada || '[status]'} expiring ${d.permitExpiry || '[date]'}, last entry ${d.lastEntryDate || '[date]'}; that I apply while in status (or on maintained status).
+**My time in Canada** — what I have been doing (study, work, family), compliance with every condition.
+**Why I need an open work permit** — the practical reasons, in my own words; how I will support myself and my family.
+**My background and work plans** — education, experience, the work I intend to do.
+**Commitment** — to respect the conditions of the permit and Canadian law.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
+  if (K === 'invitation' && t.key === 'super-visa') {
+    return {
+      system: `You draft Super Visa "Letter of Invitation and Promise of Financial Support" letters, written by the child or grandchild in Canada in the first person, for the host to sign. It must contain the elements IRCC lists: a promise of financial support for the whole length of the visit, the list and number of people in the host's household, and a copy of the host's Canadian status document attached. Do not state LICO figures. ${NO_INVENT}`,
+      instruction: `Write a "Letter of Invitation and Promise of Financial Support" (400-650 words) from ${d.hostName || '[host name]'} (${d.svHostStatus || d.hostStatus || '[status]'}, ${d.hostOccupation || '[occupation / employer]'}, ${d.hostAddress || '[address]'}) inviting my ${d.svHostRelation === 'Grandchild' ? 'grandparent' : 'parent'} ${name || '[applicant]'} (DOB ${d.dob || '[DOB]'}, passport ${d.passportNumber || '[number]'}). Include:
+- the purpose and intended length of the visit, arrival around ${d.visitFrom || '[date]'};
+- an explicit promise: "I promise to provide financial support to my ${d.svHostRelation === 'Grandchild' ? 'grandparent' : 'parent'} for the entire duration of their stay in Canada";
+- my income for the last tax year (CAD ${d.svHostIncome || '[amount]'}) and that it meets the minimum required for my household;
+- "My household consists of ${d.svHousehold || '[n]'} persons:" followed by a list with [name — relationship — DOB] placeholders for each;
+- that my ${d.svHostStatus || '[status]'} document is enclosed, along with my NOA / T4 and employment letter;
+- that the visitor holds Canadian medical insurance of at least $100,000;
+- lodging with me; assurance of return.
+Signature block with name, address, phone (${d.hostPhone || '[phone]'}), email (${d.hostEmail || '[email]'}) and a date line.
+
+Facts:
+${facts}`,
+    };
+  }
+
+  if (K === 'invitation' && t.key === 'study-permit-child-of-worker') {
+    return {
+      system: `You draft invitation / support letters from a PARENT working or studying in Canada for their minor child's study permit application, for the parent to sign. ${NO_INVENT}`,
+      instruction: `Write a "Letter of Invitation and Support" (350-550 words) from ${d.accompanyingParent || '[parent name]'} (${d.parentPermitType || '[permit]'} holder, valid until ${d.parentPermitExpiry || '[date]'}, ${d.parentEmployerOrSchool || '[employer / school]'}, ${d.parentAddress || '[address]'}) to IRCC about my child ${name || '[child]'} (DOB ${d.dob || '[DOB]'}). Cover: my status and employment or studies in Canada; that my child will live with me at the address above; the school (${d.schoolName || '[school]'}, grade ${d.gradeInCanada || '[grade]'}); that I will pay tuition and all living costs (income CAD ${d.parentIncome || '[amount]'} per year); ${d.travelsWith ? `the child travels with ${d.travelsWith.toLowerCase()}; ` : ''}the other parent's consent${d.otherParentName ? ` (${d.otherParentName})` : ''}; and that the child will leave Canada with the family at the end of our authorized stay. Signature block with name, address, phone, email and a date line.
 
 Facts:
 ${facts}`,

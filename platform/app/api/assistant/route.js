@@ -1,6 +1,7 @@
 import { chat } from '@/lib/ai';
 import { getApplication, updateApplication, canAccess } from '@/lib/store';
-import { buildChecklist } from '@/lib/checklist';
+import { checklistStatus } from '@/lib/checklist';
+import { getAppType } from '@/lib/appTypes';
 import { json, error, requireUser } from '@/lib/api';
 
 const MAX_HISTORY = 40; // messages kept per application
@@ -9,9 +10,11 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 const SYSTEM = `You are the friendly in-app assistant for a platform that helps people
-prepare a Canadian Study Permit application. You help applicants understand the process,
-what documents they need, how to answer the intake, how to strengthen their file, and how
-to use the platform's features (Documents, Intake, Study Plan builder, Review, Generate).
+prepare Canadian temporary-residence applications (study and work permits, visitor visas,
+visitor records, super visas and related requests). You help with the process, what
+documents are needed, how to answer the intake, how to strengthen the file, and how to use
+the platform's features (Documents, Intake, letter builder, Review, Generate). Answer for
+the application type given in the file context.
 
 Style: warm, concise, practical. Prefer short answers and bullet points. If you are unsure
 or the question needs a lawyer/RCIC, say so. Always add a brief reminder, when relevant,
@@ -47,10 +50,10 @@ export async function POST(req) {
     if (app && canAccess(user, app)) {
       ownedApp = app;
       const d = app.data || {};
-      const checklist = buildChecklist(d, app.type);
-      const uploaded = new Set((app.documents || []).map((x) => x.category).filter(Boolean));
-      const missing = checklist.filter((c) => !uploaded.has(c.key)).map((c) => c.label);
+      const missing = checklistStatus(app).filter((c) => !c.provided && c.party !== 'firm').map((c) => `${c.code} ${c.label}`);
+      const t = getAppType(app.type);
       context = `\n\nCurrent applicant file (their own data, for your reference):
+- Application type: ${t.title}${t.service ? ` (service ${t.service})` : ''}
 - Name: ${d.givenName || ''} ${d.familyName || ''}
 - Citizenship: ${d.citizenship || 'unknown'}
 - Program: ${d.programName || 'unknown'} at ${d.schoolName || 'unknown'} (${d.schoolProvince || ''})

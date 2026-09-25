@@ -1,6 +1,7 @@
 import { updateApplication } from '@/lib/store';
 import { buildDocBlocks } from '@/lib/uploads';
 import { extractFromDocuments } from '@/lib/generators/extract';
+import { codeCategory } from '@/lib/generators/classify';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -103,7 +104,12 @@ export async function POST(req, { params }) {
   if (Object.keys(docCategoryById).length) {
     const updatedApp = await updateApplication(app.id, (a) => {
       for (const d of a.documents || []) {
-        if (docCategoryById[d.id]) d.category = docCategoryById[d.id];
+        const ai = docCategoryById[d.id];
+        if (!ai) continue;
+        // A file named with its checklist code keeps that category — unless the
+        // model saw agency paperwork, which must never reach a package.
+        const coded = codeCategory(d.filename, a.type);
+        d.category = coded && ai !== 'internal' ? coded : ai;
       }
       return a;
     });

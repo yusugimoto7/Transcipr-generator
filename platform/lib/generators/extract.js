@@ -60,8 +60,11 @@ ${CATEGORY_KEYS.join(', ')}
 (passport = passport bio page; loa = letter of acceptance/admission from the school;
 pal = provincial attestation letter; proof-of-funds = bank statements/loans/sponsor
 funds; transcripts = academic records/diplomas; language = IELTS/TOEFL/etc results;
+questionnaire = the firm's SOP / Purpose-of-Travel questionnaire the client filled in
+(the firm writes the letter from it; not submitted);
 internal = agency/consultant paperwork that must NEVER be sent to the visa office —
-immigration firms' client intake questionnaires or information forms (often branded
+immigration firms' client intake or information forms, personal profile /
+background information forms (often branded
 with a consultancy's logo, e.g. pages of empty labelled tables asking for personal
 details), blank templates, sample files. Still extract any FIELD VALUES such forms
 contain — classify the document itself as internal.)

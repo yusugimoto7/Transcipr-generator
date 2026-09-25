@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getApplication, canAccess } from '@/lib/store';
 import { getSchema } from '@/lib/schema';
-import { buildChecklist } from '@/lib/checklist';
+import { checklistStatus } from '@/lib/checklist';
 import TopBar from '@/components/TopBar';
 import Workspace from '@/components/Workspace';
 import AssistantWidget from '@/components/AssistantWidget';
@@ -18,16 +18,13 @@ export default async function ApplicationPage({ params }) {
   if (!canAccess(user, app)) redirect('/dashboard');
 
   const schema = getSchema(app.type);
-  const checklist = buildChecklist(app.data || {}, app.type).map((c) => ({
-    ...c,
-    uploaded: (app.documents || []).some((d) => d.category === c.key),
-  }));
+  const checklist = checklistStatus(app);
 
   return (
     <>
       <TopBar user={user} />
       <div className="container">
-        <Workspace initialApp={app} schema={schema} initialChecklist={checklist} />
+        <Workspace initialApp={app} schema={schema} initialChecklist={checklist} viewerRole={user.role} />
       </div>
       <AssistantWidget appId={app.id} initialHistory={app.assistantHistory || []} />
     </>

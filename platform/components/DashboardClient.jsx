@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { APP_TYPE_LIST, STAGE_LABELS } from '@/lib/appTypes';
+import { APP_TYPE_LIST, STAGE_LABELS, TYPE_GROUPS } from '@/lib/appTypes';
 
 const STATUS_LABEL = {
   draft: { label: 'Draft', cls: '' },
@@ -11,7 +11,10 @@ const STATUS_LABEL = {
   ready: { label: 'Ready', cls: 'ok' },
 };
 
-const GROUPS = [...new Set(APP_TYPE_LIST.map((t) => t.group))];
+// Picker order follows the TR team's service groups; any stray group goes last.
+const GROUPS = [...new Set([...TYPE_GROUPS, ...APP_TYPE_LIST.map((t) => t.group)])].filter((g) =>
+  APP_TYPE_LIST.some((t) => t.group === g)
+);
 
 export default function DashboardClient({ initialApps, user }) {
   const router = useRouter();
@@ -102,6 +105,7 @@ export default function DashboardClient({ initialApps, user }) {
                       <input type="radio" name="type" checked={type === t.key} onChange={() => setType(t.key)} style={{ width: 16, marginRight: 8 }} />
                       <span>
                         <span style={{ fontWeight: 600 }}>{t.title}</span>
+                        {t.service && <span className="muted small" style={{ marginLeft: 8 }}>{t.service}</span>}
                         <div className="muted small">{t.description}</div>
                       </span>
                     </label>

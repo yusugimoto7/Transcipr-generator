@@ -58,6 +58,8 @@ npm run dev                   # http://localhost:3001
 | `OPENAI_BASE_URL` | no | Only for Azure OpenAI / a gateway / an OpenAI-compatible proxy |
 | `DATA_DIR` | no | Where accounts/applications JSON live (default `./data`) |
 | `UPLOAD_DIR` | no | Where uploaded & generated files live (default `./uploads`) |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | no | Service-account key for **Import from Google Drive** (raw JSON or base64) — see below |
+| `DRIVE_MAX_FILE_MB` / `DRIVE_MAX_TOTAL_MB` / `DRIVE_MAX_FILES` | no | Drive import limits (defaults 25 / 400 / 300) |
 
 `data/` and `uploads/` hold applicant data and are git-ignored — never commit them.
 
@@ -74,26 +76,71 @@ was based on, and a save built on a stale version is rejected with a
 "Updated by someone else — reloaded" notice instead of overwriting the other
 person's work.
 
+## Import a client's documents from Google Drive
+
+On a file's **Documents** tab, staff paste the link of the client's Drive folder
+and click **Import**. The platform downloads every usable file (PDF, JPG, PNG,
+WEBP, DOCX), follows per-person subfolders and shortcuts, unpacks `.zip`
+archives, exports Google Docs to PDF, files each document under its checklist
+item by its code, and then reads them with AI to fill the intake. Backup
+folders (`bk`, `old`, `used`, `Recovered files`…) are skipped unless ticked.
+Anything it can't use (HEIC photos, RAR archives, `.doc`, oversize scans) is
+listed with the reason. **Sync again** fetches only what changed in Drive.
+
+Only admins and account managers see this — never applicants.
+
+**One-time setup (admin, ~10 minutes):**
+
+1. Go to <https://console.cloud.google.com/>, create a project (e.g. "Visa platform").
+2. *APIs & Services → Library* → enable **Google Drive API**.
+3. *IAM & Admin → Service accounts → Create service account* (no roles needed).
+   Open it → *Keys → Add key → Create new key → JSON*. A `.json` file downloads.
+4. On Render → the service → *Environment* → add `GOOGLE_SERVICE_ACCOUNT_JSON`
+   and paste the **whole contents** of that file. Save (Render redeploys).
+5. In Google Drive, share the firm's client-files folder with the service
+   account's email (`…@….iam.gserviceaccount.com`, shown on the Import box) as
+   **Viewer**. Every client subfolder under it is then importable; the folders
+   stay private. The access is read-only.
+
+The server only ever calls the Google API with the ID taken from the pasted link
+— it never fetches the pasted URL itself.
+
 ## Application types
 
-Defined in `lib/appTypes.js`, derived from the firm's real client files:
+Defined in `lib/appTypes.js`, one per service in the TR Visa team's checklists
+(`100-3xx` = applied from outside Canada, `100-4xx` = from inside Canada). Each
+service has its own document codes (`103` passport, `107-1` PAL, `119-3`
+business employees…) — clients name files with them, and the checklist ticks
+items off by that code. IMM 5476 (and IMM 5713 for family) are added
+automatically when the firm represents the client.
 
-| Type | Form | Where decided |
-|---|---|---|
-| Study permit (outside Canada) | IMM 1294 | Visa office abroad |
-| Study permit — minor child | IMM 1294 | Visa office abroad |
-| Study permit — extend / change conditions (inside Canada) | IMM 5709 | Inside Canada |
-| Spousal open work permit (inside Canada) | IMM 5710 | Inside Canada |
-| Spousal open work permit (outside Canada) | IMM 1295 | Visa office abroad |
-| PGWP | IMM 5710 | Inside Canada |
-| Visitor visa / TRV (outside Canada) | IMM 5257 | Visa office abroad |
-| **Visitor visa / TRV — applying from inside Canada** | IMM 5257 | Visa office abroad — issues a **counterfoil** in the passport for re-entry; does not change status |
-| **Visitor Record — extend stay as a visitor** | IMM 5708 | Inside Canada — issues a **status document**; no passport submitted, no photo |
-| Reconsideration request | IMM 5744 (ATIP) | — |
+| Service | Type | IRCC forms | Group |
+|---|---|---|---|
+| 100-301 | Study Permit — Main Applicant | IMM 1294, IMM 5257B, IMM 5645 | Study — outside Canada |
+| 100-305 | Study Permit — Child of a Student | IMM 1294, IMM 5645 | Study — outside Canada |
+| 100-306 | Study Permit — Child of a Worker (parent's permit) | IMM 1294, IMM 5645, IMM 5646 | Study — outside Canada |
+| 100-405 | Study Permit — Child, inside Canada (parent's permit) | IMM 5709 | Study — inside Canada |
+| 100-406 | Study Permit — inside Canada (own LOA) | IMM 5709 | Study — inside Canada |
+| 100-302 | Work Permit — Spouse of a Student | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
+| 100-304 | Work Permit — Spouse of a Foreign Worker | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
+| 100-311 | Work Permit — IMP C11 (Entrepreneur / Significant Benefit) | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
+| 100-401 | Open Work Permit — Iranian Nationals (public policy) | IMM 5710 | Work — inside Canada |
+| 100-402 | Post-Graduation Work Permit (PGWP) | IMM 5710 | Work — inside Canada |
+| — | Spousal Open Work Permit (inside Canada) | IMM 5710 | Work — inside Canada |
+| 100-303 | Visitor Visa — Child of a Student | IMM 5257 | Visit — outside Canada |
+| 100-307 | Visitor Visa (TRV) | IMM 5257, IMM 5257B, IMM 5645 | Visit — outside Canada |
+| 100-308 | Visitor Visa — Accompanying Spouse | IMM 5257, IMM 5257B, IMM 5645 | Visit — outside Canada |
+| 100-309 | Visitor Visa — Accompanying Child | IMM 5257 | Visit — outside Canada |
+| 100-310 | Visitor Visa — Business | IMM 5257, IMM 5257B, IMM 5645 | Visit — outside Canada |
+| 100-312 | Super Visa (Parents & Grandparents) | IMM 5257, IMM 5257B, IMM 5645 | Visit — outside Canada |
+| 100-403 | Visitor Visa (TRV) — for Work / Study Permit Holders | IMM 5257, IMM 5645 | Visit — inside Canada |
+| 100-404 | Visitor Record — extend stay as a visitor | IMM 5708 | Visit — inside Canada |
+| — | Reconsideration request (after refusal) | IMM 5744 | After a decision |
 
-The last two are deliberately separate types: a TRV lets someone re-enter
-Canada after travelling, a Visitor Record lets them stay longer. Different
-form, different office, different documents, different letter.
+TRV-from-inside (100-403) and Visitor Record (100-404) are deliberately separate:
+a TRV lets someone re-enter Canada after travelling (counterfoil, visa office),
+a Visitor Record lets them stay longer (status document, in-Canada office) —
+different form, office, documents and letter.
 
 Each type declares its intake steps, IRCC forms
 (with the firm's 1xx document codes), checklist, compiled packages, letters and

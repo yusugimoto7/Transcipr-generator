@@ -91,6 +91,21 @@ export const IRCC_FORMS = {
     fallbackPdf:
       'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5744/01-01-2021/imm5744e.pdf',
   },
+  imm5713: {
+    code: 'IMM 5713',
+    title: 'Use of a Family Member Representative (online applications)',
+    role: 'form',
+    page: `${PAGE}/imm5713.html`,
+    fallbackPdf: 'https://ircc.canada.ca/english/pdf/kits/forms/imm5713e.pdf',
+  },
+  imm5646: {
+    code: 'IMM 5646',
+    title: 'Custodianship Declaration — Custodian for Minors Studying in Canada',
+    role: 'form',
+    page: `${PAGE}/imm5646.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5646/01-01-2023/imm5646e.pdf',
+  },
   imm5483: {
     code: 'IMM 5483',
     title: 'Document Checklist: Study Permit',
