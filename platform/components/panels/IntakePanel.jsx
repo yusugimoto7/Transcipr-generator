@@ -73,25 +73,54 @@ export default function IntakePanel({ app, schema, onFieldChange, onFinish, acti
 
   const step = schema.steps[stepIdx];
 
-  const stepComplete = (s) =>
-    s.fields.filter((f) => f.required).every((f) => String(app.data?.[f.id] ?? '').trim());
+  const filled = (f) => {
+    const v = app.data?.[f.id];
+    return typeof v === 'boolean' || String(v ?? '').trim() !== '';
+  };
+  // done: every required field answered (a section with none required counts
+  // once anything in it is filled); partial: started but required fields left.
+  const status = (s) => {
+    const req = s.fields.filter((f) => f.required);
+    const left = req.filter((f) => !filled(f)).length;
+    const any = s.fields.some(filled);
+    if (req.length ? left === 0 : any) return { state: 'done', text: 'Complete' };
+    if (any) return { state: 'partial', text: `${left} required left` };
+    return { state: 'todo', text: req.length ? `${req.length} required` : 'Optional' };
+  };
+  const statuses = schema.steps.map(status);
+  const doneCount = statuses.filter((x) => x.state === 'done').length;
 
   return (
-    <>
-      <div className="steps">
-        {schema.steps.map((s, i) => (
-          <div
-            key={s.id}
-            className={`step-pill ${i === stepIdx ? 'active' : stepComplete(s) ? 'done' : ''}`}
-            onClick={() => setStepIdx(i)}
-            role="button"
-          >
-            {s.title}
-          </div>
-        ))}
-      </div>
+    <div className="intake-layout">
+      <nav className="stepper" aria-label="Intake sections">
+        <div className="stepper-head">
+          <span>Intake progress</span>
+          <strong>{doneCount} of {schema.steps.length} complete</strong>
+        </div>
+        <div className="progress" style={{ marginBottom: 14 }}>
+          <div className="progress-fill" style={{ width: `${Math.round((doneCount / schema.steps.length) * 100)}%`, background: 'var(--ok)' }} />
+        </div>
+        <ol>
+          {schema.steps.map((s, i) => {
+            const st = statuses[i];
+            const current = i === stepIdx;
+            return (
+              <li key={s.id} className={`stepper-item ${st.state}${current ? ' current' : ''}`}>
+                <button type="button" onClick={() => setStepIdx(i)} aria-current={current ? 'step' : undefined}>
+                  <span className="stepper-dot" aria-hidden="true">{st.state === 'done' && !current ? '✓' : i + 1}</span>
+                  <span className="stepper-text">
+                    <span className="stepper-title">{s.title}</span>
+                    <span className="stepper-sub">{st.text}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
-      <div className="card">
+      <div className="card intake-card">
+        <div className="stepper-eyebrow">Step {stepIdx + 1} of {schema.steps.length}</div>
         <h2>{step.title}</h2>
         {step.help && <p className="muted small" style={{ marginTop: -6 }}>{step.help}</p>}
 
@@ -120,6 +149,6 @@ export default function IntakePanel({ app, schema, onFieldChange, onFinish, acti
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

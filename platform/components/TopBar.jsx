@@ -20,7 +20,7 @@ export default function TopBar({ user }) {
           <Link href="/admin" className="small" style={{ color: '#fff', fontWeight: 600 }}>Admin</Link>
         )}
         {user?.email && (
-          <span className="small" style={{ color: '#cfd6e6' }}>
+          <span className="small topbar-email" style={{ color: '#cfd6e6' }}>
             {user.email}{user.role && user.role !== 'applicant' ? ` · ${user.role}` : ''}
           </span>
         )}
