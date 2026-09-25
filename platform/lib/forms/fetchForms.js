@@ -31,11 +31,21 @@ async function writeManifest(m) {
   await fs.writeFile(MANIFEST, JSON.stringify(m, null, 2));
 }
 
-async function fetchWithTimeout(url, opts = {}, ms = 20000) {
+/**
+ * Point IRCC hosts somewhere else (tests run a stub IRCC). Only the two
+ * official hosts are ever rewritten.
+ */
+export function irccUrl(url) {
+  return String(url)
+    .replace(/^https:\/\/www\.canada\.ca/, process.env.IRCC_CANADA_ORIGIN || 'https://www.canada.ca')
+    .replace(/^https:\/\/ircc\.canada\.ca/, process.env.IRCC_LEGACY_ORIGIN || 'https://ircc.canada.ca');
+}
+
+export async function fetchWithTimeout(url, opts = {}, ms = 20000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    return await fetch(url, { ...opts, signal: ctrl.signal, headers: { 'User-Agent': UA, ...(opts.headers || {}) } });
+    return await fetch(irccUrl(url), { ...opts, signal: ctrl.signal, headers: { 'User-Agent': UA, ...(opts.headers || {}) } });
   } finally {
     clearTimeout(t);
   }

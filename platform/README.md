@@ -58,6 +58,7 @@ npm run dev                   # http://localhost:3001
 | `OPENAI_BASE_URL` | no | Only for Azure OpenAI / a gateway / an OpenAI-compatible proxy |
 | `DATA_DIR` | no | Where accounts/applications JSON live (default `./data`) |
 | `UPLOAD_DIR` | no | Where uploaded & generated files live (default `./uploads`) |
+| `IRCC_CHECK_HOURS` | no | How often IRCC checklists are re-checked (default 24) |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | no | Service-account key for **Import from Google Drive** (raw JSON or base64) — see below |
 | `DRIVE_MAX_FILE_MB` / `DRIVE_MAX_TOTAL_MB` / `DRIVE_MAX_FILES` | no | Drive import limits (defaults 25 / 400 / 300) |
 
@@ -104,6 +105,28 @@ Only admins and account managers see this — never applicants.
 
 The server only ever calls the Google API with the ID taken from the pasted link
 — it never fetches the pasted URL itself.
+
+## IRCC's current checklists
+
+Every file is checked against what IRCC itself currently asks for, not only the
+firm's own checklist:
+
+- **General checklist** for the kind of application — IMM 5484 (visitor visa, super
+  visa), IMM 5483 (study), IMM 5488 (work) from outside Canada; IMM 5555 / 5556 /
+  5558 (student / worker / visitor) inside Canada. The newest version is found
+  through the form's canada.ca page.
+- **Visa office instructions** for the country the client applies from (intake:
+  *Country of current residence*), e.g. Iran → Ankara: IMM 5855 (visit), IMM 5816
+  (study), IMM 5896 (work).
+
+Each source is re-checked when a file needs it and its copy is older than
+`IRCC_CHECK_HOURS` (default 24). Only a changed text is read again by the AI; the
+documents IRCC added or dropped are recorded. On a file's **Documents** tab,
+*IRCC's current requirements* shows the sources, versions and recent changes, and
+anything IRCC asks for that the firm's checklist lacks is added to that file's
+checklist under **Also required by IRCC** (conditional items as *If applicable*).
+Admins see every source and its history under **Admin → IRCC checklists**, with
+**Check IRCC now**.
 
 ## Application types
 

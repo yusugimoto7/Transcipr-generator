@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STAGE_LABELS } from '@/lib/appTypes';
+import AdminIrcc from '@/components/AdminIrcc';
 
 /**
  * Admin console: staff accounts and file assignments.
  *  - Users: create account managers, deactivate/reactivate, reset passwords.
  *  - Files: every application in the system, with which managers may work on it.
+ *  - IRCC checklists: what IRCC currently requires, and what it changed.
  */
 export default function AdminClient() {
   const [tab, setTab] = useState('files');
@@ -82,8 +84,11 @@ export default function AdminClient() {
       <div className="steps" style={{ marginBottom: 16 }}>
         <div className={`step-pill ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')} role="button">Files ({apps.length})</div>
         <div className={`step-pill ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')} role="button">Users ({users.length})</div>
+        <div className={`step-pill ${tab === 'ircc' ? 'active' : ''}`} onClick={() => setTab('ircc')} role="button">IRCC checklists</div>
       </div>
       {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginBottom: 14 }}>{msg.text}</div>}
+
+      {tab === 'ircc' && <AdminIrcc />}
 
       {tab === 'users' && (
         <>

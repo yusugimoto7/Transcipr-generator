@@ -114,6 +114,46 @@ export const IRCC_FORMS = {
     fallbackPdf:
       'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5483/01-08-2025/imm5483e.pdf',
   },
+  // General IRCC document checklists, one per line of business. The platform
+  // reads them (lib/irccChecklists.js) and adds anything IRCC requires that the
+  // firm's own checklist doesn't cover.
+  imm5484: {
+    code: 'IMM 5484',
+    title: 'Document Checklist: Temporary Resident Visa (Visitor Visa) outside Canada',
+    role: 'checklist',
+    page: `${PAGE}/imm5484.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5484/01-05-2026/imm5484e.pdf',
+  },
+  imm5488: {
+    code: 'IMM 5488',
+    title: 'Document Checklist: Work Permit (outside Canada)',
+    role: 'checklist',
+    page: `${PAGE}/imm5488.html`,
+    fallbackPdf: 'https://www.canada.ca/content/dam/ircc/migration/ircc/english/pdf/kits/forms/imm5488e.pdf',
+  },
+  imm5555: {
+    code: 'IMM 5555',
+    title: 'Document Checklist: Student (in Canada applicant)',
+    role: 'checklist',
+    page: `${PAGE}/imm5555.html`,
+    fallbackPdf: 'https://www.canada.ca/content/dam/ircc/migration/ircc/english/pdf/kits/forms/imm5555e.pdf',
+  },
+  imm5556: {
+    code: 'IMM 5556',
+    title: 'Document Checklist: Worker (in Canada applicant)',
+    role: 'checklist',
+    page: `${PAGE}/imm5556.html`,
+    fallbackPdf: 'https://www.canada.ca/content/dam/ircc/migration/ircc/english/pdf/kits/forms/imm5556e.pdf',
+  },
+  imm5558: {
+    code: 'IMM 5558',
+    title: 'Document Checklist: Visitor (in Canada applicant)',
+    role: 'checklist',
+    page: `${PAGE}/imm5558.html`,
+    fallbackPdf:
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5558/01-08-2018/imm5558e.pdf',
+  },
 };
 
 /** The forms (not checklists) required for a study permit application. */

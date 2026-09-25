@@ -1,6 +1,6 @@
 import { chat } from '@/lib/ai';
 import { getApplication, updateApplication, canAccess } from '@/lib/store';
-import { checklistStatus } from '@/lib/checklist';
+import { checklistStatus, missingItems } from '@/lib/checklist';
 import { getAppType } from '@/lib/appTypes';
 import { json, error, requireUser } from '@/lib/api';
 
@@ -50,7 +50,7 @@ export async function POST(req) {
     if (app && canAccess(user, app)) {
       ownedApp = app;
       const d = app.data || {};
-      const missing = checklistStatus(app).filter((c) => !c.provided && c.party !== 'firm').map((c) => `${c.code} ${c.label}`);
+      const missing = missingItems(checklistStatus(app)).map((c) => `${c.code} ${c.label}`);
       const t = getAppType(app.type);
       context = `\n\nCurrent applicant file (their own data, for your reference):
 - Application type: ${t.title}${t.service ? ` (service ${t.service})` : ''}

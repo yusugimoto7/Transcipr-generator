@@ -40,7 +40,11 @@ export function buildChecklist(data = {}, type = 'study-permit') {
  * are reported as such rather than as missing.
  */
 export function checklistStatus(app) {
-  const items = buildChecklist(app?.data || {}, app?.type);
+  const firm = buildChecklist(app?.data || {}, app?.type);
+  // Documents IRCC's current checklists ask for that the firm's list lacks
+  // (lib/irccChecklists.js, saved on the file when its Documents tab loads).
+  const ircc = (app?.ircc?.extra || []).filter((i) => !firm.some((f) => f.key && f.key === i.key));
+  const items = [...firm, ...ircc];
   const docs = app?.documents || [];
   const codes = new Set();
   const cats = new Set();
@@ -52,7 +56,7 @@ export function checklistStatus(app) {
     }
     if (d.category) cats.add(d.category);
   }
-  const keyCount = items.reduce((m, i) => m.set(i.key, (m.get(i.key) || 0) + 1), new Map());
+  const keyCount = firm.reduce((m, i) => m.set(i.key, (m.get(i.key) || 0) + 1), new Map());
   const subCodes = new Set(items.filter((i) => i.code.includes('-')).map((i) => i.code));
 
   return items.map((i) => {
@@ -66,7 +70,13 @@ export function checklistStatus(app) {
     } else if (i.key === 'rep-form') {
       provided = docs.some((d) => new RegExp(i.code.replace('imm', 'imm ?'), 'i').test(d.filename));
     }
-    if (!provided && keyCount.get(i.key) === 1) provided = cats.has(i.key);
+    if (!provided && i.party === 'ircc') provided = Boolean(i.key) && cats.has(i.key);
+    else if (!provided && keyCount.get(i.key) === 1) provided = cats.has(i.key);
     return { ...i, provided, uploaded: provided };
   });
+}
+
+/** Items the client still has to send (not the firm's, not merely conditional IRCC items). */
+export function missingItems(status) {
+  return status.filter((c) => !c.provided && c.party !== 'firm' && !c.optional);
 }

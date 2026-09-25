@@ -1,4 +1,4 @@
-import { checklistStatus } from '../checklist';
+import { checklistStatus, missingItems } from '../checklist';
 import { requiredMissing } from '../schema';
 import { getAppType, formsFor } from '../appTypes';
 
@@ -11,7 +11,7 @@ import { getAppType, formsFor } from '../appTypes';
 export function buildNextStepsNote(app) {
   const data = app.data || {};
   // Items the firm prepares (flight/hotel bookings, letters) are not the client's to send.
-  const missingDocuments = checklistStatus(app).filter((c) => !c.provided && c.party !== 'firm');
+  const missingDocuments = missingItems(checklistStatus(app));
   const missingFields = requiredMissing(data, app.type);
   const generatedKeys = new Set((app.generated || []).map((g) => g.key));
 

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { checklistStatus } from '@/lib/checklist';
+import { checklistStatus, missingItems } from '@/lib/checklist';
 import { getAppType } from '@/lib/appTypes';
 import DriveImport from '@/components/DriveImport';
 import ProgressBar from '@/components/ProgressBar';
+import IrccRequirements from '@/components/IrccRequirements';
 import { everyField } from '@/lib/schema';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
@@ -119,11 +120,12 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
   const docs = app.documents || [];
 
   const checklist = checklistStatus(app);
-  const missing = checklist.filter((c) => !c.provided && c.party !== 'firm');
+  const missing = missingItems(checklist);
   const service = getAppType(app.type);
   const groups = [
     ['applicant', 'Applicant'],
     ['principal', 'Spouse / parent / host / sponsor'],
+    ['ircc', "Also required by IRCC's current checklists"],
     ['firm', 'Prepared by the firm'],
   ].map(([party, title]) => ({ party, title, items: checklist.filter((c) => c.party === party) })).filter((g) => g.items.length);
 
@@ -350,7 +352,11 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
                 <div>
                   <div style={{ fontWeight: 600 }}>
                     {c.provided ? '✅' : c.party === 'firm' ? '🗂️' : '⬜'}{' '}
-                    <span className="muted" style={{ fontWeight: 400 }}>{/^\d/.test(c.code) ? c.code : c.code.toUpperCase()}</span>{' '}
+                    {c.party === 'ircc' ? (
+                      <span className="chip" title="From IRCC's current checklist or visa office instructions">{c.source || 'IRCC'}</span>
+                    ) : (
+                      <span className="muted" style={{ fontWeight: 400 }}>{/^\d/.test(c.code) ? c.code : c.code.toUpperCase()}</span>
+                    )}{' '}
                     {c.label}
                     {c.tr && <span className="chip" style={{ marginLeft: 6 }} title="Certified translation bundle required">TR</span>}
                   </div>
@@ -358,8 +364,8 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
                     <div className="muted small">{c.cond ? <em>{c.cond}. </em> : null}{c.hint}</div>
                   )}
                 </div>
-                <span className={`chip ${c.provided ? 'ok' : c.party === 'firm' ? '' : 'warn'}`}>
-                  {c.provided ? 'Provided' : c.party === 'firm' ? 'Firm prepares' : 'Missing'}
+                <span className={`chip ${c.provided ? 'ok' : c.party === 'firm' || c.optional ? '' : 'warn'}`}>
+                  {c.provided ? 'Provided' : c.party === 'firm' ? 'Firm prepares' : c.optional ? 'If applicable' : 'Missing'}
                 </span>
               </div>
             ))}
@@ -371,6 +377,8 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
             : `${missing.length} document(s) still missing: ${missing.map((m) => `${m.code} ${m.label}`).join(', ')}.`}
         </div>
       </div>
+
+      <IrccRequirements app={app} patchLocal={patchLocal} />
 
       {staff && <DriveImport app={app} patchLocal={patchLocal} onImported={() => extract()} />}
 
