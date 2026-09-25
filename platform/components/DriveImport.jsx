@@ -1,11 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import ProgressBar from '@/components/ProgressBar';
 
 /**
  * Staff-only: import every document from a client's Google Drive folder
  * (normally the "01 - Documents" folder the client's files were saved to).
+ * The import runs as a server job; this polls it and shows progress, and picks
+ * a running import back up after a page reload.
  */
+
+const mb = (n) => `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const e = new Error(`The server did not answer properly (HTTP ${res.status}) — it may be restarting. Wait a minute and press Sync again; files already imported are skipped.`);
+    e.transient = true;
+    throw e;
+  }
+}
+
+function progressView(job) {
+  if (!job || job.phase === 'listing' || !job.total) {
+    return { value: null, label: `Looking through the Drive folder…${job?.found ? ` ${job.found} file(s) found so far` : ''}` };
+  }
+  const byBytes = job.totalBytes > 0;
+  const value = byBytes ? job.bytesDone / job.totalBytes : job.done / job.total;
+  const label = `Importing file ${Math.min(job.done + 1, job.total)} of ${job.total}${
+    byBytes ? ` · ${mb(job.bytesDone)} of ${mb(job.totalBytes)}` : ''
+  }${job.saved ? ` · ${job.saved} new or changed saved` : ''}${job.current ? ` — ${job.current}` : ''}`;
+  return { value, label };
+}
+
 export default function DriveImport({ app, patchLocal, onImported }) {
   const [status, setStatus] = useState(null); // { drive: {mode,email}, source }
   const [url, setUrl] = useState(app.driveSource?.url || '');
@@ -16,37 +45,79 @@ export default function DriveImport({ app, patchLocal, onImported }) {
   const [err, setErr] = useState('');
   const source = app.driveSource;
 
+  const [job, setJob] = useState(null);
+  const pollTimer = useRef(null);
+  const readAfterRef = useRef(readAfter);
+  readAfterRef.current = readAfter;
+
   useEffect(() => {
+    let cancelled = false;
     fetch(`/api/applications/${app.id}/drive-import`)
-      .then((r) => r.json())
-      .then(setStatus)
+      .then(readJson)
+      .then((d) => {
+        if (cancelled) return;
+        setStatus(d);
+        if (d.job?.status === 'running') {
+          setBusy(true);
+          setJob(d.job);
+          poll(0);
+        }
+      })
       .catch(() => setStatus(null));
+    return () => {
+      cancelled = true;
+      clearTimeout(pollTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app.id]);
+
+  function finish(data) {
+    patchLocal({ documents: data.documents, driveSource: data.source });
+    setResult(data);
+    setBusy(false);
+    setJob(null);
+    if (readAfterRef.current && (data.added.length || data.updated.length)) onImported?.();
+  }
+
+  function poll(errors) {
+    clearTimeout(pollTimer.current);
+    pollTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/applications/${app.id}/drive-import`);
+        const d = await readJson(res);
+        if (!res.ok) throw new Error(d.error || 'Could not check the import.');
+        if (!d.job) throw new Error('The import was interrupted (the server restarted). Press Sync again — files already imported are skipped.');
+        setJob(d.job);
+        if (d.job.status === 'running') return poll(0);
+        if (d.job.status === 'failed') throw new Error(d.job.error || 'Import failed.');
+        finish(d.job.result);
+      } catch (e) {
+        // A network blip or a restarting server: keep trying for a while.
+        if ((e.transient || e instanceof TypeError) && errors < 8) return poll(errors + 1);
+        setErr(e.message);
+        setBusy(false);
+        setJob(null);
+      }
+    }, 1500);
+  }
 
   async function run(link) {
     setBusy(true);
     setErr('');
     setResult(null);
+    setJob(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/drive-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: link, includeBackups }),
       });
-      const text = await res.text();
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(`The server did not answer properly (HTTP ${res.status}) — it may be restarting. Wait a minute and press Sync again; files already imported are skipped.`);
-      }
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Import failed.');
-      patchLocal({ documents: data.documents, driveSource: data.source });
-      setResult(data);
-      if (readAfter && (data.added.length || data.updated.length)) onImported?.();
+      setJob(data.job);
+      poll(0);
     } catch (e) {
       setErr(e.message);
-    } finally {
       setBusy(false);
     }
   }
@@ -99,7 +170,12 @@ export default function DriveImport({ app, patchLocal, onImported }) {
         </label>
       </div>
 
-      {source && !result && (
+      {busy && (() => {
+        const p = progressView(job);
+        return <ProgressBar value={p.value} label={p.label} />;
+      })()}
+
+      {source && !result && !busy && (
         <p className="muted small" style={{ marginTop: 10 }}>
           Last imported from <strong>{source.rootName}</strong> on {new Date(source.lastImportAt).toLocaleString()}.{' '}
           <a href="#" onClick={(e) => { e.preventDefault(); run(source.url); }}>Sync again</a> — only new or changed files are downloaded.

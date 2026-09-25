@@ -54,16 +54,19 @@ const human = (n) => `${(n / 1024 / 1024).toFixed(1)} MB`;
  * @param {object} opts
  *   known           Map<driveId, modifiedTime> of files already imported
  *   includeBackups  also descend into bk/old/used folders
+ *   onProgress      ({phase:'listing', found} | {phase:'downloading', done, total,
+ *                   bytesDone, totalBytes, current}) => void
+ *   root            the already-fetched root item (see resolveRoot)
  *   onFile          async (file) => void — called with each file as it is downloaded;
  *                   the returned `files` then carry no buffers
  * @returns {{ root, files: [{buffer, filename, mime, driveId, driveModified, drivePath}],
  *            unchanged: [...], skipped: [{name, reason}] }}
  */
-export async function collectDriveFiles(link, { known = new Map(), includeBackups = false, onFile = null } = {}) {
-  const parsed = parseDriveLink(link);
-  if (!parsed) throw new DriveError('That does not look like a Google Drive link.');
-
-  const root = await getItem(parsed.id);
+export async function collectDriveFiles(
+  link,
+  { known = new Map(), includeBackups = false, onFile = null, onProgress = () => {}, root = null } = {}
+) {
+  if (!root) root = await resolveRoot(link);
   const files = [];
   const unchanged = [];
   const skipped = [];
@@ -83,20 +86,6 @@ export async function collectDriveFiles(link, { known = new Map(), includeBackup
     if (files.length >= LIMITS.files) {
       skipped.push({ name: `${dir}${item.name}`, reason: `import limit of ${LIMITS.files} files reached` });
       return;
-    }
-    if (item.mimeType === SHORTCUT_MIME && item.shortcutDetails?.targetId) {
-      if (item.shortcutDetails.targetMimeType === FOLDER_MIME) {
-        return walk({ id: item.shortcutDetails.targetId, name: item.name }, `${dir}${item.name}/`, 1);
-      }
-      // Use the target's own name, size and modified time: the shortcut's name
-      // ("Shortcut to LOA") has no extension or checklist code, and its
-      // modified time doesn't change when the real file does.
-      try {
-        item = await getItem(item.shortcutDetails.targetId);
-      } catch (e) {
-        skipped.push({ name: `${dir}${item.name}`, reason: `shortcut target unavailable: ${e.message}` });
-        return;
-      }
     }
     const { id, mimeType, name } = item;
     const drivePath = `${dir}${name}`;
@@ -167,16 +156,51 @@ export async function collectDriveFiles(link, { known = new Map(), includeBackup
         }
         const target = c.mimeType === SHORTCUT_MIME ? { id: c.shortcutDetails.targetId, name: c.name } : c;
         await walk(target, `${dir}${c.name}/`, depth + 1);
+      } else if (c.mimeType === SHORTCUT_MIME && c.shortcutDetails?.targetId) {
+        // Use the target's own name, size and modified time: the shortcut's name
+        // ("Shortcut to LOA") has no extension or checklist code, and its
+        // modified time doesn't change when the real file does.
+        try {
+          queue.push({ item: await getItem(c.shortcutDetails.targetId), dir });
+        } catch (e) {
+          skipped.push({ name: `${dir}${c.name}`, reason: `shortcut target unavailable: ${e.message}` });
+        }
       } else {
-        await take(c, dir);
+        queue.push({ item: c, dir });
       }
     }
+    onProgress({ phase: 'listing', found: queue.length });
   };
 
+  // Phase 1: list every folder (metadata only — quick), so progress has a total.
+  const queue = [];
+  onProgress({ phase: 'listing', found: 0 });
   if (root.mimeType === FOLDER_MIME) await walk(root, '', 1);
-  else await take(root, '');
+  else queue.push({ item: root, dir: '' });
+
+  // Phase 2: download what is new or changed, reporting as each file lands.
+  const totalBytes = queue.reduce((n, q) => n + Number(q.item.size || 0), 0);
+  let done = 0;
+  let bytesDone = 0;
+  const report = (current) =>
+    onProgress({ phase: 'downloading', done, total: queue.length, bytesDone, totalBytes, current });
+  report(null);
+  for (const { item, dir } of queue) {
+    report(`${dir}${item.name}`);
+    await take(item, dir);
+    done++;
+    bytesDone += Number(item.size || 0);
+  }
+  report(null);
 
   return { root: { id: root.id, name: root.name, isFolder: root.mimeType === FOLDER_MIME }, files, unchanged, skipped };
+}
+
+/** The Drive item a link points at; throws a DriveError the user can act on. */
+export async function resolveRoot(link) {
+  const parsed = parseDriveLink(link);
+  if (!parsed) throw new DriveError('That does not look like a Google Drive link.');
+  return getItem(parsed.id);
 }
 
 function reasonForType(mimeType, ext) {

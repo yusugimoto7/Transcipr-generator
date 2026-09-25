@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { checklistStatus } from '@/lib/checklist';
 import { getAppType } from '@/lib/appTypes';
 import DriveImport from '@/components/DriveImport';
+import ProgressBar from '@/components/ProgressBar';
 import { everyField } from '@/lib/schema';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
@@ -438,15 +439,12 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
           </button>
         </div>
         {extracting && progress && (
-          <div style={{ marginTop: 10 }}>
-            <div className="small muted">
-              Reading {progress.docCount} document(s) — part {Math.min(progress.done + 1, progress.total)} of {progress.total}
-              {progress.failed ? ` · ${progress.failed} part(s) failed` : ''}. You can keep working; this page updates when it is done.
-            </div>
-            <div style={{ height: 6, background: 'var(--line, #e5e7eb)', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}>
-              <div style={{ width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%`, height: '100%', background: 'var(--brand)', transition: 'width .4s' }} />
-            </div>
-          </div>
+          <ProgressBar
+            value={progress.total ? progress.done / progress.total : null}
+            label={`Reading ${progress.docCount} document(s) with AI — part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${
+              progress.failed ? ` · ${progress.failed} part(s) failed` : ''
+            }. You can keep working; this page updates when it is done.`}
+          />
         )}
         {readMsg && (
           <div className={`alert ${readMsg.type === 'err' ? 'err' : readMsg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 10 }}>

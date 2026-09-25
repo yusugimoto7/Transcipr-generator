@@ -101,6 +101,7 @@ const google = http.createServer(async (req, res) => {
   }
   if (u.searchParams.get('alt') === 'media') {
     stats.downloads.set(node.meta.id, (stats.downloads.get(node.meta.id) || 0) + 1);
+    await new Promise((r) => setTimeout(r, 200)); // slow enough to watch progress
     return send(res, 200, node.bytes, 'application/octet-stream');
   }
   return send(res, 200, node.meta);
@@ -142,6 +143,23 @@ function client() {
   };
 }
 
+// Start an import and poll it to the end, keeping every progress snapshot.
+async function importAndWait(as, appId, body) {
+  const t0 = Date.now();
+  const start = await as('POST', `/api/applications/${appId}/drive-import`, body);
+  const startMs = Date.now() - t0;
+  if (start.status !== 202) return { ...start, startMs, snapshots: [] };
+  const snapshots = [start.data.job];
+  for (let i = 0; i < 400; i++) {
+    await new Promise((res) => setTimeout(res, 50));
+    const r = await as('GET', `/api/applications/${appId}/drive-import`);
+    snapshots.push(r.data.job);
+    if (r.data.job?.status === 'done') return { status: 200, data: r.data.job.result, startMs, snapshots };
+    if (r.data.job?.status === 'failed') return { status: 500, data: { error: r.data.job.error }, startMs, snapshots };
+  }
+  throw new Error('import never finished');
+}
+
 try {
   await waitUp();
   const admin = client(), applicant = client();
@@ -168,8 +186,14 @@ try {
   ok(r.status === 404 && r.data.error.includes(SA_EMAIL), 'unshared folder explains which address to share with');
 
   // --- first import ---------------------------------------------------------
-  r = await admin('POST', `/api/applications/${appId}/drive-import`, { url: 'https://drive.google.com/drive/folders/rootFolder0001?usp=sharing' });
+  r = await importAndWait(admin, appId, { url: 'https://drive.google.com/drive/folders/rootFolder0001?usp=sharing' });
   ok(r.status === 200, `import succeeds (${r.status} ${r.data?.error || ''})`);
+  ok(r.startMs < 2000, `the Import button returns at once and the download runs in the background (${r.startMs} ms)`);
+  const dl = r.snapshots.filter((j) => j?.phase === 'downloading' && j.status === 'running');
+  ok(dl.length > 1 && dl.every((j) => j.total === 9), `progress reports the file total while downloading (${dl.length} updates)`);
+  ok(dl.some((j) => j.done > 0 && j.done < j.total && j.bytesDone > 0 && j.totalBytes > j.bytesDone), 'progress moves through files and megabytes');
+  ok(dl.some((j) => typeof j.current === 'string' && j.current.length), 'progress names the file being downloaded');
+  ok(r.snapshots.at(-1).done === r.snapshots.at(-1).total, 'progress ends at 100%');
   const docs = r.data.documents || [];
   const byName = Object.fromEntries(docs.map((d) => [d.filename, d]));
   const names = Object.keys(byName).sort();
@@ -195,7 +219,7 @@ try {
 
   // --- sync again: nothing changed -> nothing downloaded -------------------
   const before = stats.downloads.get('filePass0001');
-  r = await admin('POST', `/api/applications/${appId}/drive-import`, {});
+  r = await importAndWait(admin, appId, {});
   ok(r.status === 200 && r.data.added.length === 0 && r.data.updated.length === 0 && r.data.unchanged === 6, `sync again with no changes re-downloads nothing (unchanged=${r.data?.unchanged})`);
   ok(stats.downloads.get('filePass0001') === before && stats.downloads.get('fileZip00001') === 1, 'unchanged files and zips are not fetched again');
 
@@ -205,7 +229,7 @@ try {
   ok(r.status === 200, 'staff re-categorise an imported file');
   tree.filePass0001.meta.modifiedTime = '2026-09-20T10:00:00.000Z';
   tree.filePass0001.bytes = Buffer.from('%PDF-1.4 passport v2');
-  r = await admin('POST', `/api/applications/${appId}/drive-import`, {});
+  r = await importAndWait(admin, appId, {});
   const passNow = r.data.documents.filter((d) => d.driveId === 'filePass0001');
   ok(r.data.updated.length === 1 && r.data.updated[0] === '103 - Passport.pdf' && passNow.length === 1 && passNow[0].id !== passDoc.id, 'changed file replaces the old copy (no duplicate)');
   ok(passNow[0]?.category === 'national-id', 'the replacement keeps the category staff set by hand');
