@@ -520,11 +520,14 @@ def apply(odoo, p, create=True, limit=None, journal=None, skip_ids=()):
                 n_new += 1
                 log_rows["created"].append(lid)
                 # Then the agent from the sheet, silently (no "assigned to you" e-mail).
+                # Agent first, while the card is still live, then the archive:
+                # one write carrying both matches one automation more ("BD
+                # Account" on the agent, "Lost" on the archive) and costs ten
+                # times as much.
                 uid = users.get(norm_name(v["agent"]))
-                last = {"active": False}
                 if uid and uid != me:
-                    last["user_id"] = uid
-                _retry(lambda: odoo.write("crm.lead", [lid], last, context=QUIET), "archive %s" % no)
+                    _retry(lambda: odoo.write("crm.lead", [lid], {"user_id": uid}, context=QUIET), "agent %s" % no)
+                _retry(lambda: odoo.write("crm.lead", [lid], {"active": False}, context=QUIET), "archive %s" % no)
             except OdooError as exc:
                 log.warning("  create %s: %s", no, str(exc)[-160:])
             if i % 50 == 0:
