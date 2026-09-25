@@ -494,7 +494,11 @@ def apply(odoo, p, create=True, limit=None, journal=None, skip_ids=()):
             no = v["no_sg"] or v["no_sb"]
             vals = dict(_card_vals(v), **{
                 "name": "%s - %s" % (no, v["name"]) if v["name"] else no, "type": "opportunity",
-                "company_id": 1, "active": False, "stage_id": v["stage_id"],
+                # Created live, archived by the next write: while a card is
+                # archived, the old "Lost" automation also matches it, and each
+                # extra automation multiplies the cost of the create (20 s
+                # instead of 2 s on production).
+                "company_id": 1, "active": True, "stage_id": v["stage_id"],
                 "email_from": v["email"] or False, "phone": v["phone"] or False,
                 # Created under the API user: the "Survey" automation opens a
                 # call-centre task for every new card except that user's.
@@ -517,8 +521,10 @@ def apply(odoo, p, create=True, limit=None, journal=None, skip_ids=()):
                 log_rows["created"].append(lid)
                 # Then the agent from the sheet, silently (no "assigned to you" e-mail).
                 uid = users.get(norm_name(v["agent"]))
+                last = {"active": False}
                 if uid and uid != me:
-                    _retry(lambda: odoo.write("crm.lead", [lid], {"user_id": uid}, context=QUIET), "agent %s" % no)
+                    last["user_id"] = uid
+                _retry(lambda: odoo.write("crm.lead", [lid], last, context=QUIET), "archive %s" % no)
             except OdooError as exc:
                 log.warning("  create %s: %s", no, str(exc)[-160:])
             if i % 50 == 0:
