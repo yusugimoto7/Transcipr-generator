@@ -33,7 +33,13 @@ export default function DriveImport({ app, patchLocal, onImported }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: link, includeBackups }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`The server did not answer properly (HTTP ${res.status}) — it may be restarting. Wait a minute and press Sync again; files already imported are skipped.`);
+      }
       if (!res.ok) throw new Error(data.error || 'Import failed.');
       patchLocal({ documents: data.documents, driveSource: data.source });
       setResult(data);

@@ -54,10 +54,12 @@ const human = (n) => `${(n / 1024 / 1024).toFixed(1)} MB`;
  * @param {object} opts
  *   known           Map<driveId, modifiedTime> of files already imported
  *   includeBackups  also descend into bk/old/used folders
+ *   onFile          async (file) => void — called with each file as it is downloaded;
+ *                   the returned `files` then carry no buffers
  * @returns {{ root, files: [{buffer, filename, mime, driveId, driveModified, drivePath}],
  *            unchanged: [...], skipped: [{name, reason}] }}
  */
-export async function collectDriveFiles(link, { known = new Map(), includeBackups = false } = {}) {
+export async function collectDriveFiles(link, { known = new Map(), includeBackups = false, onFile = null } = {}) {
   const parsed = parseDriveLink(link);
   if (!parsed) throw new DriveError('That does not look like a Google Drive link.');
 
@@ -66,6 +68,16 @@ export async function collectDriveFiles(link, { known = new Map(), includeBackup
   const unchanged = [];
   const skipped = [];
   let total = 0;
+  // With onFile, each file is handed over (and saved) as soon as it arrives,
+  // so a 100-file folder never sits in memory all at once.
+  const emit = async (f) => {
+    if (onFile) {
+      await onFile(f);
+      files.push({ ...f, buffer: undefined });
+    } else {
+      files.push(f);
+    }
+  };
 
   const take = async (item, dir) => {
     if (files.length >= LIMITS.files) {
@@ -112,14 +124,14 @@ export async function collectDriveFiles(link, { known = new Map(), includeBackup
       if (GOOGLE_NATIVE.test(mimeType)) {
         const buffer = await exportFile(id, 'application/pdf');
         total += buffer.length;
-        files.push({ buffer, filename: `${name}.pdf`, mime: 'application/pdf', driveId: id, driveModified: item.modifiedTime, drivePath });
+        await emit({ buffer, filename: `${name}.pdf`, mime: 'application/pdf', driveId: id, driveModified: item.modifiedTime, drivePath });
         return;
       }
       const ext = path.extname(name).toLowerCase();
       if (ZIP.test(mimeType) || ext === '.zip') {
         const buffer = await downloadFile(id);
         total += buffer.length;
-        await unzipInto(buffer, { id, name, drivePath, modified: item.modifiedTime }, files, skipped);
+        await unzipInto(buffer, { id, name, drivePath, modified: item.modifiedTime }, emit, skipped);
         return;
       }
       const mime = BY_MIME[mimeType] || BY_EXT[ext];
@@ -133,7 +145,7 @@ export async function collectDriveFiles(link, { known = new Map(), includeBackup
         return;
       }
       total += buffer.length;
-      files.push({ buffer, filename: name, mime, driveId: id, driveModified: item.modifiedTime, drivePath });
+      await emit({ buffer, filename: name, mime, driveId: id, driveModified: item.modifiedTime, drivePath });
     } catch (e) {
       skipped.push({ name: drivePath, reason: `download failed: ${e.message}` });
     }
@@ -174,7 +186,7 @@ function reasonForType(mimeType, ext) {
   return `unsupported type (${mimeType || ext || 'unknown'})`;
 }
 
-async function unzipInto(buffer, zipInfo, files, skipped) {
+async function unzipInto(buffer, zipInfo, emit, skipped) {
   const { default: JSZip } = await import('jszip');
   let zip;
   try {
@@ -197,7 +209,7 @@ async function unzipInto(buffer, zipInfo, files, skipped) {
       skipped.push({ name: entryPath, reason: `too large (${human(data.length)})` });
       continue;
     }
-    files.push({
+    await emit({
       buffer: data,
       filename: base,
       mime,

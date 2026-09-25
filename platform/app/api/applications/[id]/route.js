@@ -11,12 +11,16 @@ export async function GET(_req, { params }) {
 
 /**
  * Update intake data and/or file settings.
- * Body: { data?, title?, status?, stage?, clientNumber?, representation?, type?, baseVersion? }
+ * Body: { data?, title?, status?, stage?, clientNumber?, representation?, type?,
+ *         baseDataVersion?, baseVersion? }
  *
- * Concurrent editing: when `baseVersion` is sent and no longer matches the
- * stored version, nothing is written and 409 is returned with the latest copy,
- * so the client can show "someone else saved this file" instead of silently
- * overwriting their work.
+ * Concurrent editing: the intake answers carry their own `dataVersion`, bumped
+ * only when `data` is saved. When `baseDataVersion` no longer matches it,
+ * someone else saved answers in the meantime: nothing is written and 409 is
+ * returned with the latest copy, instead of silently overwriting their work.
+ * Uploads, imports and generated files change the file's overall `version`
+ * but not `dataVersion`, so they never block someone typing in the intake.
+ * (`baseVersion` still checks the whole-file version for API callers.)
  */
 export async function PATCH(req, { params }) {
   const { user, app, error: err } = await requireAppAccess(params.id);
@@ -36,7 +40,9 @@ export async function PATCH(req, { params }) {
   const updated = await updateApplication(
     app.id,
     (a) => {
-      if (body.baseVersion !== undefined && Number(body.baseVersion) !== Number(a.version || 0)) {
+      const staleData = body.baseDataVersion !== undefined && Number(body.baseDataVersion) !== Number(a.dataVersion || 0);
+      const staleFile = body.baseVersion !== undefined && Number(body.baseVersion) !== Number(a.version || 0);
+      if (staleData || staleFile) {
         conflict = a;
         return false;
       }
@@ -44,6 +50,7 @@ export async function PATCH(req, { params }) {
         for (const [k, v] of Object.entries(body.data)) {
           if (validIds.has(k)) a.data[k] = v;
         }
+        a.dataVersion = (Number(a.dataVersion) || 0) + 1;
       }
       if (typeof body.title === 'string' && body.title.trim()) a.title = body.title.trim();
       if (typeof body.status === 'string') a.status = body.status;

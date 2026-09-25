@@ -46,20 +46,13 @@ export async function POST(req, { params }) {
   const fromDrive = (app.documents || []).filter((d) => d.driveId);
   const known = new Map(fromDrive.map((d) => [d.driveId, d.driveModified]));
 
-  let result;
-  try {
-    result = await collectDriveFiles(url, { known, includeBackups: Boolean(body.includeBackups) });
-  } catch (e) {
-    return error(e.message || 'Drive import failed.', e instanceof DriveError ? e.status : 502);
-  }
-
-  // Save new/changed files. A changed file replaces the old copy but keeps a
-  // category someone already set.
+  // Save new/changed files as they arrive. A changed file replaces the old
+  // copy but keeps a category someone already set.
   const saved = [];
   const replaced = [];
   const failed = [];
   const prevById = new Map(fromDrive.map((d) => [d.driveId, d]));
-  for (const f of result.files) {
+  const onFile = async (f) => {
     const prev = prevById.get(f.driveId);
     try {
       const meta = await saveUpload(app.id, {
@@ -75,6 +68,15 @@ export async function POST(req, { params }) {
     } catch (e) {
       failed.push({ name: f.drivePath, reason: e.message });
     }
+  };
+
+  let result;
+  try {
+    result = await collectDriveFiles(url, { known, includeBackups: Boolean(body.includeBackups), onFile });
+  } catch (e) {
+    // Files saved before the failure are orphaned on disk; remove them.
+    for (const m of saved) await deleteUpload(app.id, m.stored).catch(() => {});
+    return error(e.message || 'Drive import failed.', e instanceof DriveError ? e.status : 502);
   }
 
   const replacedIds = new Set(replaced.map((d) => d.id));

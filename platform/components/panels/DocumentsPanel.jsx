@@ -1,12 +1,31 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { checklistStatus } from '@/lib/checklist';
 import { getAppType } from '@/lib/appTypes';
 import DriveImport from '@/components/DriveImport';
 import { everyField } from '@/lib/schema';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
+
+/**
+ * Parse a JSON response. A proxy or crash page (HTML) gets a readable message
+ * instead of "Unexpected token '<'".
+ */
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const e = new Error(
+      res.status >= 500 || res.status === 0
+        ? `The server did not answer properly (HTTP ${res.status}) — it may be restarting. Wait a minute and try again.`
+        : `Unexpected server response (HTTP ${res.status}).`
+    );
+    e.transient = true;
+    throw e;
+  }
+}
 
 const CATEGORY_LABELS = {
   passport: 'Passport',
@@ -84,6 +103,11 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
   const [msg, setMsg] = useState(null);
   const [comparison, setComparison] = useState(null);
   const [extracting, setExtracting] = useState(false);
+  const [progress, setProgress] = useState(null); // running read job: { done, total, docCount }
+  const [readMsg, setReadMsg] = useState(null);
+  const pollTimer = useRef(null);
+  const appRef = useRef(app);
+  appRef.current = app;
   const [pending, setPending] = useState([]); // File[] chosen but not yet uploaded
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
@@ -143,7 +167,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
     for (const f of pending) fd.append('files', f);
     try {
       const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'POST', body: fd });
-      const data = await res.json();
+      const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Upload failed.');
       patchLocal({ documents: data.documents });
       setPending([]);
@@ -175,60 +199,114 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
     if (res.ok) patchLocal({ documents: data.documents });
   }
 
+  // Reading runs as a server job (it can take minutes for a large file):
+  // start it, then poll for progress. Resumes if the page is reloaded mid-run.
   async function extract() {
     setExtracting(true);
-    setMsg(null);
+    setReadMsg(null);
     setComparison(null);
+    setProgress(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apply: false }),
+        body: JSON.stringify({}),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Extraction failed.');
-      if (data.documents) patchLocal({ documents: data.documents });
-
-      const fields = data.fields || {};
-      const sources = data.sources || {};
-      const conf = data.confidence || {};
-      const entries = Object.entries(fields).filter(([, v]) => v != null && String(v).trim() !== '');
-      if (!entries.length) {
-        setMsg({ type: 'info', text: 'Documents identified. No intake details could be read.' });
-        return;
-      }
-
-      const current = app.data || {};
-      const rows = [];
-      let applied = 0;
-      for (const [k, v] of entries) {
-        const yours = String(current[k] ?? '');
-        let status;
-        if (!yours.trim()) {
-          onExtracted(k, v); // auto-fill empty fields
-          applied++;
-          status = 'added';
-        } else if (yours === String(v)) {
-          status = 'match';
-        } else {
-          status = 'differ';
-        }
-        rows.push({ id: k, label: FIELD_LABELS[k] || k, yours, doc: String(v), source: sources[k] || '', conf: conf[k] || '', status });
-      }
-      setComparison({ rows, notes: data.notes || [] });
-      const differ = rows.filter((r) => r.status === 'differ').length;
-      setMsg({
-        type: 'ok',
-        text: `Filled ${applied} empty field(s) from your documents. See the comparison below${
-          differ ? ` — ${differ} value(s) differ from what you entered.` : '.'
-        }`,
-      });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error(data.error || 'Could not start reading.');
+      setProgress(data.job);
+      poll(0);
     } catch (e2) {
-      setMsg({ type: 'err', text: e2.message });
-    } finally {
+      setReadMsg({ type: 'err', text: e2.message });
       setExtracting(false);
     }
   }
+
+  function poll(errors) {
+    clearTimeout(pollTimer.current);
+    pollTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/applications/${app.id}/extract`);
+        const data = await readJson(res);
+        if (!res.ok) throw new Error(data.error || 'Could not check progress.');
+        const job = data.job;
+        if (!job) throw new Error('Reading was interrupted (the server restarted). Click the button to start again — files already read are skipped.');
+        setProgress(job);
+        if (job.status === 'running') return poll(0);
+        if (job.status === 'failed') throw new Error(job.error || 'Reading failed.');
+        applyResult(job.result || {});
+        setExtracting(false);
+        setProgress(null);
+      } catch (e2) {
+        // A network blip or a restarting server: keep trying for a while.
+        if ((e2.transient || e2 instanceof TypeError) && errors < 8) return poll(errors + 1);
+        setReadMsg({ type: 'err', text: e2.message });
+        setExtracting(false);
+        setProgress(null);
+      }
+    }, 2500);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await readJson(await fetch(`/api/applications/${app.id}/extract`));
+        if (!cancelled && data.job?.status === 'running') {
+          setExtracting(true);
+          setProgress(data.job);
+          poll(0);
+        }
+      } catch {
+        /* nothing running */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      clearTimeout(pollTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app.id]);
+
+  function applyResult(data) {
+    if (data.documents) patchLocal({ documents: data.documents });
+    const fields = data.fields || {};
+    const sources = data.sources || {};
+    const conf = data.confidence || {};
+    const entries = Object.entries(fields).filter(([, v]) => v != null && String(v).trim() !== '');
+    if (!entries.length) {
+      setReadMsg({ type: 'info', text: 'Documents identified. No intake details could be read.' });
+      if (data.notes?.length) setComparison({ rows: [], notes: data.notes });
+      return;
+    }
+
+    const current = appRef.current.data || {}; // latest answers, incl. anything typed while reading
+    const rows = [];
+    let applied = 0;
+    for (const [k, v] of entries) {
+      const yours = String(current[k] ?? '');
+      let status;
+      if (!yours.trim()) {
+        onExtracted(k, v); // auto-fill empty fields
+        applied++;
+        status = 'added';
+      } else if (yours === String(v)) {
+        status = 'match';
+      } else {
+        status = 'differ';
+      }
+      rows.push({ id: k, label: FIELD_LABELS[k] || k, yours, doc: String(v), source: sources[k] || '', conf: conf[k] || '', status });
+    }
+    setComparison({ rows, notes: data.notes || [] });
+    const differ = rows.filter((r) => r.status === 'differ').length;
+    setReadMsg({
+      type: 'ok',
+      text: `Filled ${applied} empty field(s) from the documents. See the comparison below${
+        differ ? ` — ${differ} value(s) differ from what is already entered.` : '.'
+      }`,
+    });
+  }
+
 
   function useDoc(row) {
     onExtracted(row.id, row.doc);
@@ -359,6 +437,22 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
             {extracting ? <span className="spinner" /> : '✨ Read documents & fill intake'}
           </button>
         </div>
+        {extracting && progress && (
+          <div style={{ marginTop: 10 }}>
+            <div className="small muted">
+              Reading {progress.docCount} document(s) — part {Math.min(progress.done + 1, progress.total)} of {progress.total}
+              {progress.failed ? ` · ${progress.failed} part(s) failed` : ''}. You can keep working; this page updates when it is done.
+            </div>
+            <div style={{ height: 6, background: 'var(--line, #e5e7eb)', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%`, height: '100%', background: 'var(--brand)', transition: 'width .4s' }} />
+            </div>
+          </div>
+        )}
+        {readMsg && (
+          <div className={`alert ${readMsg.type === 'err' ? 'err' : readMsg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 10 }}>
+            {readMsg.text}
+          </div>
+        )}
 
         {docs.length === 0 ? (
           <p className="muted small" style={{ marginTop: 12 }}>No files yet.</p>

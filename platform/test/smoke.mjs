@@ -90,12 +90,12 @@ try {
   ok(r.data.applications.length === 1 && r.data.applications[0].assignedTo.length === 2, 'assigned manager sees the file with co-assignees');
 
   // Concurrent editing: both load version 1; Ana saves; Ben's stale save is rejected
-  const v = (await mgr('GET', `/api/applications/${appId}`)).data.application.version;
-  r = await mgr('PATCH', `/api/applications/${appId}`, { data: { givenName: 'Maryam' }, baseVersion: v });
-  ok(r.status === 200 && r.data.application.version === v + 1, 'first save bumps version');
-  r = await mgr2('PATCH', `/api/applications/${appId}`, { data: { givenName: 'WRONG' }, baseVersion: v });
+  const v = (await mgr('GET', `/api/applications/${appId}`)).data.application.dataVersion || 0;
+  r = await mgr('PATCH', `/api/applications/${appId}`, { data: { givenName: 'Maryam' }, baseDataVersion: v });
+  ok(r.status === 200 && r.data.application.dataVersion === v + 1, 'first save bumps the intake version');
+  r = await mgr2('PATCH', `/api/applications/${appId}`, { data: { givenName: 'WRONG' }, baseDataVersion: v });
   ok(r.status === 409 && r.data.conflict && r.data.application.data.givenName === 'Maryam', 'stale save rejected with 409 and latest copy');
-  r = await mgr2('PATCH', `/api/applications/${appId}`, { data: { familyName: 'Omidbeygi' }, baseVersion: v + 1 });
+  r = await mgr2('PATCH', `/api/applications/${appId}`, { data: { familyName: 'Omidbeygi' }, baseDataVersion: v + 1 });
   ok(r.status === 200 && r.data.application.data.givenName === 'Maryam' && r.data.application.data.familyName === 'Omidbeygi', 'save on the fresh version merges');
 
   // Type-driven generation for a non-study type
@@ -103,6 +103,10 @@ try {
   const keys = (r.data?.produced || []).map((p) => p.key);
   ok(r.status === 200 && keys.includes('sop') && keys.includes('submission-letter') && keys.includes('imm5710'), `SOWP generates its letters + IMM 5710 data sheet (${keys.join(',')})`);
   ok(r.data.produced.find((p) => p.key === 'sop')?.filename.startsWith('Statement of Purpose'), 'primary letter title is the SOWP one');
+  // Generating (or uploading / importing) changes the file but not the intake
+  // answers, so an intake save made on the earlier answers must still go through.
+  r = await mgr2('PATCH', `/api/applications/${appId}`, { data: { cityOfBirth: 'Tehran' }, baseDataVersion: v + 2 });
+  ok(r.status === 200 && r.data.application.data.cityOfBirth === 'Tehran', 'generating files does not block the next intake save');
 
   // Guided-letter tab for a TRV type uses the visit question set
   r = await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Ali R.', clientNumber: 'S26186' });

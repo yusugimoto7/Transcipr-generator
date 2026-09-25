@@ -34,7 +34,8 @@ export default function Workspace({ initialApp, schema, initialChecklist, viewer
   const [tab, setTabState] = useState('documents');
   const [intakeStep, setIntakeStepState] = useState(null);
   const [saveState, setSaveState] = useState('saved'); // saved | saving | error | conflict
-  const versionRef = useRef(initialApp.version || 0);
+  // Version of the intake answers this page last saw (see the PATCH route).
+  const versionRef = useRef(initialApp.dataVersion || 0);
   const saveTimer = useRef(null);
 
   // Restore the position from the URL on load, and follow browser back/forward.
@@ -89,13 +90,13 @@ export default function Workspace({ initialApp, schema, initialChecklist, viewer
           const res = await fetch(`/api/applications/${app.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data, baseVersion: versionRef.current }),
+            body: JSON.stringify({ data, baseDataVersion: versionRef.current }),
           });
           if (res.status === 409) {
             // Someone else saved this file first: keep their copy, tell the user.
             const d = await res.json();
             if (d.application) {
-              versionRef.current = d.application.version || 0;
+              versionRef.current = d.application.dataVersion || 0;
               setApp((a) => ({ ...a, ...d.application }));
             }
             setSaveState('conflict');
@@ -103,7 +104,7 @@ export default function Workspace({ initialApp, schema, initialChecklist, viewer
           }
           if (!res.ok) throw new Error();
           const d = await res.json();
-          versionRef.current = d.application?.version ?? versionRef.current;
+          versionRef.current = d.application?.dataVersion ?? versionRef.current;
           setSaveState('saved');
         } catch {
           setSaveState('error');

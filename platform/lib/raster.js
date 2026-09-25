@@ -51,7 +51,7 @@ function run(cmd, args, { timeout = 600000 } = {}) {
  * (CropBox + /Rotate applied).
  * @returns {Promise<Array<{page:number, buffer:Buffer, width:number, height:number}>>}
  */
-export async function rasterizePdf(bytes, { dpi = RASTER_DPI } = {}) {
+export async function rasterizePdf(bytes, { dpi = RASTER_DPI, lastPage = MAX_PAGES } = {}) {
   const stamp = crypto.randomBytes(6).toString('hex');
   const dir = path.join(os.tmpdir(), `raster-${stamp}`);
   await fs.mkdir(dir, { recursive: true });
@@ -62,7 +62,7 @@ export async function rasterizePdf(bytes, { dpi = RASTER_DPI } = {}) {
     await run('pdftoppm', [
       '-cropbox',
       '-r', String(dpi),
-      '-l', String(MAX_PAGES),
+      '-l', String(Math.min(lastPage, MAX_PAGES)),
       '-jpeg',
       '-jpegopt', `quality=${JPEG_QUALITY},optimize=y`,
       pdfPath,
