@@ -298,6 +298,50 @@ export const STUDY_PERMIT_SCHEMA = {
 const STATUS_OPTIONS = ['Student (study permit)', 'Worker (work permit)', 'Visitor', 'Permanent resident', 'Citizen', 'No status / other'];
 
 const EXTRA_STEPS = [
+  // Funds and ties for everything that is not a study permit: the study
+  // versions ask who pays for studies, career goal after graduation and why
+  // this program — meaningless for a work permit, a visit or a status change.
+  {
+    id: 'fundsStay',
+    title: 'Funds & finances',
+    help: 'How you (and any family with you) will be supported in Canada.',
+    fields: [
+      { id: 'totalFunds', label: 'Funds available for your stay (CAD)', type: 'number', required: true },
+      {
+        id: 'supportSource',
+        label: 'Who supports you during your stay?',
+        type: 'select',
+        options: ['Myself', 'My spouse / partner', 'My parents / family', 'My employer', 'My host in Canada', 'Combination'],
+        required: true,
+      },
+      { id: 'sponsorName', label: 'Supporter name & relationship (if not yourself)', type: 'text' },
+      {
+        id: 'fundsDetails',
+        label: 'Brief description of the funds',
+        type: 'textarea',
+        note: 'e.g. "Savings account CAD 28,000; spouse\'s salary in Canada CAD 5,200/month; apartment in Tehran."',
+      },
+    ],
+  },
+  {
+    id: 'tiesReturn',
+    title: 'Ties & intent',
+    help: 'Shows the officer you will respect the conditions of your stay and leave at the end of it.',
+    fields: [
+      {
+        id: 'homeTies',
+        label: 'Your ties to your home country',
+        type: 'textarea',
+        required: true,
+        note: 'Family staying behind, property, job or business to return to, other commitments.',
+      },
+      {
+        id: 'returnPlan',
+        label: 'Your plans when your stay or permit ends',
+        type: 'textarea',
+      },
+    ],
+  },
   {
     id: 'family',
     title: 'Family members',
@@ -557,6 +601,7 @@ export const STEP_ABOUT = {
   superVisa: "the applicant's child or grandchild in Canada who hosts them, and the applicant's Canadian medical insurance",
   minor: "the child applicant's parent in Canada, the other parent and the custodian, and the child's school arrangements",
   finances: "money available for the stay — the applicant's own funds and any sponsor's (spouse, parents)",
+  fundsStay: "money available for the stay — the applicant's own funds and any supporter's (spouse, parents, employer, host)",
 };
 
 /** Steps whose fields may only come from the applicant's OWN documents. */

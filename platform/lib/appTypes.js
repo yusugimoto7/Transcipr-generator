@@ -464,7 +464,7 @@ export const APP_TYPES = {
   'owp-outside': {
     key: 'owp-outside', service: '100-302', title: 'Work Permit — Spouse of a Student', group: 'Work — outside Canada', where: 'outside',
     description: 'The spouse accompanying a student, applying from abroad for an open work permit (IMM 1295).',
-    steps: ['personal', 'passport', 'contact', 'family', 'spouseInCanada', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'spouseInCanada', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm1295, F.imm5257b, F.imm5645, F.imm5476, F.imm5713],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result', { cond: 'not required for the spouse — better to provide if available' }),
@@ -490,7 +490,7 @@ export const APP_TYPES = {
   'owp-worker-spouse': {
     key: 'owp-worker-spouse', service: '100-304', title: 'Work Permit — Spouse of a Foreign Worker', group: 'Work — outside Canada', where: 'outside',
     description: 'The spouse of a worker already in Canada, applying from abroad for an open work permit (IMM 1295).',
-    steps: ['personal', 'passport', 'contact', 'family', 'spouseInCanada', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'spouseInCanada', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm1295, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO,
       I(110, 'language', 'Language test result', { cond: 'not required for the spouse — better to provide if available' }),
@@ -540,7 +540,7 @@ export const APP_TYPES = {
   'trv-outside': {
     key: 'trv-outside', service: '100-307', title: 'Visitor Visa (TRV)', group: 'Visit — outside Canada', where: 'outside',
     description: 'A visit invited by a relative or friend in Canada (IMM 5257).',
-    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB,
       I(107, 'host-docs', 'Invitation letter and the inviter\'s documents', { party: 'principal', hint: "Inviter's passport, Canadian status (PR card / study or work permit), birth certificate, employment letter, 6 months of bank statements, pay slips, property documents, NOA / T4 / T1, and anything explaining the reason for the trip." }),
@@ -555,7 +555,7 @@ export const APP_TYPES = {
   'trv-spouse': {
     key: 'trv-spouse', service: '100-308', title: 'Visitor Visa — Accompanying Spouse', group: 'Visit — outside Canada', where: 'outside',
     description: "The spouse travelling with a visitor-visa applicant (IMM 5257). The inviter's documents sit in the principal's file.",
-    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476, F.imm5713],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB, LANGUAGE_OPT, FINANCIAL, WORK_LETTER, INSURANCE,
       I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
@@ -584,7 +584,7 @@ export const APP_TYPES = {
   'trv-business': {
     key: 'trv-business', service: '100-310', title: 'Visitor Visa — Business', group: 'Visit — outside Canada', where: 'outside',
     description: 'A business visit — meetings, conferences, trade events (IMM 5257). The firm drafts the business invitation.',
-    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'businessVisit', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'businessVisit', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH, NID, passport(1), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB,
       I(107, 'invitation-letter', 'Business invitation letter', { party: 'firm', hint: "Written by the firm to match the applicant's CV and work background." }),
@@ -597,7 +597,7 @@ export const APP_TYPES = {
   'imp-c11': {
     key: 'imp-c11', service: '100-311', title: 'Work Permit — IMP C11 (Entrepreneur / Significant Benefit)', group: 'Work — outside Canada', where: 'outside',
     description: 'A business owner starting or running a business in Canada that brings significant benefit (IMM 1295, LMIA-exempt C11).',
-    steps: ['personal', 'passport', 'contact', 'family', 'c11', 'education', 'language', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'c11', 'education', 'language', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm1295, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result (IELTS / TOEFL / Duolingo)', { cond: 'not required but better to provide' }),
@@ -620,7 +620,7 @@ export const APP_TYPES = {
   'super-visa': {
     key: 'super-visa', service: '100-312', title: 'Super Visa (Parents & Grandparents)', group: 'Visit — outside Canada', where: 'outside',
     description: 'A parent or grandparent of a Canadian citizen or permanent resident — long stays, with Canadian medical insurance and a minimum income for the host (IMM 5257).',
-    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'superVisa', 'history', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'superVisa', 'history', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100,
       I(101, 'invitation-letter', 'Invitation letter from your child or grandchild (citizen / PR)', { party: 'principal', hint: 'Must promise financial support for the whole visit and list the people in their household.' }),
@@ -641,7 +641,7 @@ export const APP_TYPES = {
   'iranian-owp': {
     key: 'iranian-owp', service: '100-401', title: 'Open Work Permit — Iranian Nationals (public policy)', group: 'Work — inside Canada', where: 'inside',
     description: 'An Iranian national in Canada applying for an open work permit under the public policy (IMM 5710).',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5710, F.imm5476],
     checklist: [FORM100, BIRTH, passport(2), PHOTO,
       I(107, 'status-in-canada', 'Your current work permit'),
@@ -657,7 +657,7 @@ export const APP_TYPES = {
   pgwp: {
     key: 'pgwp', service: '100-402', title: 'Post-Graduation Work Permit (PGWP)', group: 'Work — inside Canada', where: 'inside',
     description: 'A graduate of a Canadian DLI applying from inside Canada (IMM 5710).',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'pgwp', 'history', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'pgwp', 'history', 'tiesReturn'],
     forms: [F.imm5710, F.imm5476],
     checklist: [FORM100, BIRTH,
       I(102, 'status-in-canada', 'Study permit'),
@@ -675,7 +675,7 @@ export const APP_TYPES = {
   'trv-inside': {
     key: 'trv-inside', service: '100-403', title: 'Visitor Visa (TRV) — for Work / Study Permit Holders', group: 'Visit — inside Canada', where: 'inside',
     description: 'A permit holder in Canada who needs a visa counterfoil to re-enter after travelling (IMM 5257). Decided by a visa office abroad; does NOT change status in Canada.',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'history', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'history', 'tiesReturn'],
     forms: [F.imm5257, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH,
       I(103, 'passport', 'Passport — every page with a stamp or visa, plus the Canadian visa label', { hint: 'A new passport is needed if it expires in less than 2 years.' }),
@@ -692,7 +692,7 @@ export const APP_TYPES = {
   'visitor-record': {
     key: 'visitor-record', service: '100-404', title: 'Visitor Record — extend stay as a visitor', group: 'Visit — inside Canada', where: 'inside',
     description: 'Extend a stay or change conditions as a visitor while in Canada — often a family member of a permit holder (IMM 5708). Issues a status document, not a visa.',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visitorRecord', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visitorRecord', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5708, F.imm5476],
     checklist: [FORM100, BIRTH, passport(1, true), PHOTO,
       I(105, 'accommodation', 'Residence details — lease, hotel, or the address and contact details of relatives/friends'),
@@ -745,7 +745,7 @@ export const APP_TYPES = {
   'sowp-inside': {
     key: 'sowp-inside', service: null, title: 'Spousal Open Work Permit (inside Canada)', group: 'Work — inside Canada', where: 'inside',
     description: 'Spouse of a student or worker, both already in Canada (IMM 5710). No TR-team checklist yet — built from past client files.',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'spouseInCanada', 'education', 'history', 'finances', 'ties'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'spouseInCanada', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5710, F.imm5476],
     checklist: [FORM100, BIRTH, passport(2), PHOTO,
       I(107, 'status-in-canada', 'Your current permit in Canada'),

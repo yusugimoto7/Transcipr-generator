@@ -18,8 +18,16 @@ const cats = new Set(CATEGORY_KEYS);
 const kindsWithPrompt = new Set([...lettersSrc.matchAll(/K === '([a-z0-9-]+)'/g)].map((m) => m[1]));
 const handledElsewhere = new Set(['study', 'financial-cover', 'financial-summary']);
 
+// Questions that only make sense for a student must never reach other types.
+const STUDY_ONLY = ['fundingSource', 'careerGoal', 'whyProgram', 'whyCanada', 'gicAmount', 'tuitionPaid'];
+
 for (const t of APP_TYPE_LIST) {
   const schema = getSchema(t.key);
+  if (!t.group.startsWith('Study')) {
+    const ids = schema.steps.flatMap((st) => st.fields.map((f) => f.id));
+    const leaked = STUDY_ONLY.filter((id) => ids.includes(id));
+    if (leaked.length) fail(`${t.key}: study-only intake questions ${leaked.join(', ')}`);
+  }
   if (schema.steps.length !== t.steps.length) {
     const have = new Set(schema.steps.map((s) => s.id));
     fail(`${t.key}: unknown intake step(s) ${t.steps.filter((s) => !have.has(s)).join(', ')}`);
