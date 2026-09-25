@@ -36,7 +36,9 @@ export default function AuthForm({ mode }) {
   return (
     <>
       <div className="topbar">
-        <div className="brand"><span className="maple">🍁</span> Canada Visa Platform</div>
+        <div className="brand-logo">
+          <img src="/sugimoto-visa-logo.png" alt="Sugimoto Visa" />
+        </div>
       </div>
       <div className="container narrow">
         <div className="card">

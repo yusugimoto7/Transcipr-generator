@@ -12,8 +12,8 @@ export default function TopBar({ user }) {
   }
   return (
     <div className="topbar">
-      <Link href="/dashboard" className="brand" style={{ color: '#fff' }}>
-        <span className="maple">🍁</span> Canada Visa Platform
+      <Link href="/dashboard" className="brand-logo" aria-label="Sugimoto Visa — dashboard">
+        <img src="/sugimoto-visa-logo.png" alt="Sugimoto Visa" />
       </Link>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         {user?.role === 'admin' && (

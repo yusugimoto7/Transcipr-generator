@@ -37,6 +37,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 # The Python filler + form assets are not traced by Next's standalone output,
 # so copy them explicitly.
 COPY --from=builder /app/lib/forms ./lib/forms
