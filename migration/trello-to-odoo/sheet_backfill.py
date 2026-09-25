@@ -533,3 +533,40 @@ def apply(odoo, p, create=True, limit=None, journal=None, skip_ids=()):
     flush()
     log.info("  updated %d cards, created %d", n_up, n_new)
     return n_up, n_new
+
+
+def reconcile(odoo, p):
+    """Sheet totals vs what the cards now carry, per company, currency and year.
+
+    Read-only. Compares the plan (what the sheets say) with the cards whose
+    fee source is the sheet; a difference points at a write that failed.
+    """
+    def year(d):
+        return d.year if d else "no date"
+
+    want = collections.defaultdict(lambda: [0, 0.0])
+    for v in p["writes"] + p["creates"]:
+        y = year(v["sent"] or v["signed"] or v["paid"])
+        for co, fee in (("Sugimoto", v["fee_sg"]), ("Sparkbridge", v["fee_sb"])):
+            if fee:
+                a = want[(co, v["currency"], y)]
+                a[0] += 1
+                a[1] += fee
+    have = collections.defaultdict(lambda: [0, 0.0])
+    rows = odoo.search_read("crm.lead", [("x_fee_source", "=", "sheet")],
+                            ["x_fee_sg", "x_fee_sb", "x_fee_currency", "x_contract_sent_on",
+                             "x_contract_signed_on", "x_contract_paid_on"], context={"active_test": False})
+    for r in rows:
+        d = r["x_contract_sent_on"] or r["x_contract_signed_on"] or r["x_contract_paid_on"]
+        y = int(d[:4]) if d else "no date"
+        for co, fee in (("Sugimoto", r["x_fee_sg"]), ("Sparkbridge", r["x_fee_sb"])):
+            if fee:
+                a = have[(co, r["x_fee_currency"] or "CAD", y)]
+                a[0] += 1
+                a[1] += fee
+    out = []
+    for k in sorted(set(want) | set(have), key=lambda k: (k[0], k[1], str(k[2]))):
+        w, h = want.get(k, [0, 0.0]), have.get(k, [0, 0.0])
+        out.append(dict(company=k[0], currency=k[1], year=k[2], sheet_n=w[0], sheet_fee=round(w[1], 2),
+                        odoo_n=h[0], odoo_fee=round(h[1], 2), diff=round(h[1] - w[1], 2)))
+    return out, len(rows)
