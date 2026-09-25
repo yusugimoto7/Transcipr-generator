@@ -18,6 +18,8 @@ function Field({ field, value, onChange }) {
         {field.options.map((o) => (
           <option key={o} value={o}>{o}</option>
         ))}
+        {/* Keep a value saved before this became a list (or typed by hand) visible. */}
+        {value && !field.options.includes(value) && <option value={value}>{value}</option>}
       </select>
     );
   } else if (field.type === 'bool') {

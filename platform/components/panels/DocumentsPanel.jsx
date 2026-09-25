@@ -28,6 +28,8 @@ async function readJson(res) {
   }
 }
 
+const OWNER_LABELS = { spouse: 'the spouse', child: 'a child', parent: 'a parent', host: 'the host', sponsor: 'a sponsor', other: 'someone else' };
+
 const CATEGORY_LABELS = {
   passport: 'Passport',
   loa: 'Letter of Acceptance',
@@ -106,6 +108,8 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
   const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState(null); // running read job: { done, total, docCount }
   const [readMsg, setReadMsg] = useState(null);
+  // Whose file this is — a family folder holds several people's documents.
+  const [readFor, setReadFor] = useState(app.readFor || '');
   const pollTimer = useRef(null);
   const appRef = useRef(app);
   appRef.current = app;
@@ -202,7 +206,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
 
   // Reading runs as a server job (it can take minutes for a large file):
   // start it, then poll for progress. Resumes if the page is reloaded mid-run.
-  async function extract() {
+  async function extract(all = false) {
     setExtracting(true);
     setReadMsg(null);
     setComparison(null);
@@ -211,7 +215,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
       const res = await fetch(`/api/applications/${app.id}/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ all, ...(staff && readFor.trim() ? { applicant: readFor.trim() } : {}) }),
       });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Could not start reading.');
@@ -253,6 +257,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
     (async () => {
       try {
         const data = await readJson(await fetch(`/api/applications/${app.id}/extract`));
+        if (!cancelled && data.applicant) setReadFor((cur) => cur || data.applicant);
         if (!cancelled && data.job?.status === 'running') {
           setExtracting(true);
           setProgress(data.job);
@@ -434,10 +439,31 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ marginBottom: 0 }}>Your files ({docs.length})</h2>
-          <button className="btn-secondary" onClick={extract} disabled={extracting || !docs.length}>
+          <button className="btn-secondary" onClick={() => extract()} disabled={extracting || !docs.length}>
             {extracting ? <span className="spinner" /> : '✨ Read documents & fill intake'}
           </button>
         </div>
+        {staff && docs.length > 0 && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+            <label htmlFor="readFor" className="small" style={{ margin: 0, fontWeight: 600 }}>Reading for</label>
+            <input
+              id="readFor"
+              value={readFor}
+              onChange={(e) => setReadFor(e.target.value)}
+              placeholder="Applicant's name, as in the file names"
+              style={{ flex: '1 1 220px', maxWidth: 320, padding: '6px 10px' }}
+              disabled={extracting}
+            />
+            <span className="muted small" style={{ flex: '1 1 260px' }}>
+              The applicant this file is for. Other family members&apos; documents only fill their own sections.
+            </span>
+            {docs.some((d) => d.extractedAt) && !extracting && (
+              <a href="#" className="small" onClick={(e) => { e.preventDefault(); extract(true); }}>
+                Re-read all documents
+              </a>
+            )}
+          </div>
+        )}
         {extracting && progress && (
           <ProgressBar
             value={progress.total ? progress.done / progress.total : null}
@@ -463,7 +489,8 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
                   <div className="muted small">
                     {d.category
                       ? `Detected: ${CATEGORY_LABELS[d.category] || d.category}`
-                      : 'Not identified yet — run "Read with AI"'}{' '}
+                      : 'Not identified yet — run "Read with AI"'}
+                    {d.owner && d.owner !== 'applicant' ? ` · ${OWNER_LABELS[d.owner] || 'someone else'}’s document` : ''}{' '}
                     · {(d.size / 1024).toFixed(0)} KB
                   </div>
                 </div>

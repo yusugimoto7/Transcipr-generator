@@ -17,7 +17,7 @@ let failures = 0;
 const ok = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if (!cond) failures++; };
 
 /* ------------------------------ stub OpenAI ------------------------------ */
-const seen = { calls: 0, inflight: 0, maxInflight: 0, files: 0, images: 0, headers: [] };
+const seen = { calls: 0, inflight: 0, maxInflight: 0, files: 0, images: 0, headers: [], instructions: [] };
 const stub = http.createServer((req, res) => {
   let b = '';
   req.on('data', (c) => (b += c));
@@ -32,16 +32,29 @@ const stub = http.createServer((req, res) => {
     seen.files += parts.filter((p) => p.type === 'file').length;
     seen.images += parts.filter((p) => p.type === 'image_url').length;
     await new Promise((r) => setTimeout(r, 250));
-    // Categorise each document by its code; read a name from the passport.
+    const instruction = parts.find((p) => p.type === 'text' && /Return JSON of the form/.test(p.text))?.text || '';
+    seen.instructions.push(instruction);
+    // Behave like a model reading a family folder: every document has an owner,
+    // and each yields values with the file as their source.
     const cats = {};
+    const owners = {};
     const fields = {};
+    const conf = {};
+    const sources = {};
+    const put = (h, k, v) => { fields[k] = v; conf[k] = 'high'; sources[k] = h.match(/^--- Document \d+: (.+?) ---/)[1]; };
     headers.forEach((h, i) => {
-      if (/103 - Passport/.test(h)) { cats[i + 1] = 'passport'; fields.givenName = 'Zahra'; fields.passportNumber = 'X1234567'; }
-      else if (/113 - /.test(h)) cats[i + 1] = 'certificates'; // the AI guesses wrong; the code must win
-      else if (/Intake/.test(h)) cats[i + 1] = 'internal';
-      else cats[i + 1] = 'other';
+      const n = i + 1;
+      owners[n] = 'applicant';
+      if (/103 - Passport - Zahra/.test(h)) { cats[n] = 'passport'; put(h, 'givenName', 'Zahra'); put(h, 'passportNumber', 'X1234567'); }
+      else if (/103 - Passport - Nima/.test(h)) { cats[n] = 'passport'; owners[n] = 'child'; put(h, 'givenName', 'Nima'); put(h, 'dob', '2011-12-17'); }
+      else if (/106 - School record - Nima/.test(h)) { cats[n] = 'transcripts'; owners[n] = 'child'; put(h, 'lastInstitution', 'Emam Reza High School'); }
+      else if (/105 - Degree - Zahra/.test(h)) { cats[n] = 'transcripts'; put(h, 'highestEducation', 'Bachelor of Science'); put(h, 'lastInstitution', 'University of Tehran'); }
+      else if (/132 - Work permit/.test(h)) { cats[n] = 'spouse-status'; owners[n] = 'spouse'; put(h, 'spouseName', 'Asghar M'); put(h, 'inviterPermitExpiry', '2027-05-01'); }
+      else if (/113 - /.test(h)) cats[n] = 'certificates'; // the AI guesses wrong; the code must win
+      else if (/Intake/.test(h)) cats[n] = 'internal';
+      else cats[n] = 'other';
     });
-    const content = JSON.stringify({ fields, confidence: { givenName: 'high' }, sources: {}, documentCategories: cats, notes: [] });
+    const content = JSON.stringify({ fields, confidence: conf, sources, documentCategories: cats, documentOwners: owners, notes: [] });
     seen.inflight--;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ choices: [{ message: { content } }] }));
@@ -108,7 +121,9 @@ const waitJob = async (appId) => {
 try {
   await waitUp();
   await call('POST', '/api/auth/register', { email: 'boss@firm.test', password: 'password123', name: 'Boss' });
-  let r = await call('POST', '/api/applications', { type: 'owp-worker-spouse', title: 'Big file' });
+  let r = await call('POST', '/api/applications', { type: 'owp-worker-spouse', title: 'S26160' });
+  ok((await call('GET', `/api/applications/${r.data.application.id}/extract`)).data.applicant === '', 'a title that is only a client number is not taken as a name');
+  r = await call('POST', '/api/applications', { type: 'owp-worker-spouse', title: 'Big file' });
   const appId = r.data.application.id;
 
   // 27 small documents + 2 big scans + a photo + the firm's checklist.
@@ -118,6 +133,11 @@ try {
   files.push(['103 - Passport - Zahra.pdf', await bigPdf(), 'application/pdf']);
   files.push(['101 - Birth certificate.pdf', await bigPdf(), 'application/pdf']);
   files.push(['113 - Employment letter.pdf', await smallPdf('employment'), 'application/pdf']);
+  // A family folder: the child's passport and school record, the spouse's permit.
+  files.push(['103 - Passport - Nima.pdf', await smallPdf('child passport'), 'application/pdf']);
+  files.push(['106 - School record - Nima.pdf', await smallPdf('child school'), 'application/pdf']);
+  files.push(['105 - Degree - Zahra.pdf', await smallPdf('degree'), 'application/pdf']);
+  files.push(['132 - Work permit.pdf', await smallPdf('spouse permit'), 'application/pdf']);
   for (let i = 0; i < 26; i++) files.push([`1${String(5 + (i % 20)).padStart(2, '0')} - Doc ${i}.pdf`, await smallPdf(`doc ${i}`), 'application/pdf']);
   r = await upload(appId, files.slice(0, 16));
   r = await upload(appId, files.slice(16));
@@ -125,8 +145,10 @@ try {
 
   const before = (await call('GET', `/api/applications/${appId}`)).data.application;
 
+  r = await call('GET', `/api/applications/${appId}/extract`);
+  ok(r.data.applicant === 'Big file', `before anything is set, the file title is the best guess (${r.data.applicant})`);
   const t0 = Date.now();
-  r = await call('POST', `/api/applications/${appId}/extract`, {});
+  r = await call('POST', `/api/applications/${appId}/extract`, { applicant: 'Zahra Mousavi' });
   const startMs = Date.now() - t0;
   ok(r.status === 202 && r.data.job.status === 'running', 'the button starts a background job');
   ok(startMs < 3000, `and returns at once (${startMs} ms) instead of holding the request open`);
@@ -144,11 +166,26 @@ try {
   ok(seen.files === readCount - 2, 'small PDFs went as PDFs');
   ok(job.result.fields.givenName === 'Zahra' && job.result.fields.passportNumber === 'X1234567', 'values read from the passport are returned');
 
+  // --- family folder: whose document is whose ------------------------------
+  const ins = seen.instructions.join('\n');
+  ok(seen.instructions.every((t) => t.includes('the applicant is Zahra Mousavi')), 'every batch is told whose file it is');
+  ok(/## Your spouse — the student or worker — about the applicant's spouse/.test(ins) && /inviterName and spouseName name the same person/.test(ins), 'the AI is told which section is about the spouse and that the two spouse names are one person');
+  ok(/کارشناسی/.test(ins) && /Bachelor's degree/.test(ins), 'the AI gets the Persian education levels and the fixed list');
+  ok(seen.headers.some((h) => /132 - Work permit\.pdf --- \(checklist 132: .*spouse in Canada/.test(h)), "the spouse's permit is labelled as the spouse's document");
+  ok(job.result.fields.givenName === 'Zahra' && job.result.fields.dob === undefined, "the child's passport does not fill the applicant's name or birth date");
+  ok(job.result.fields.lastInstitution === 'University of Tehran', "the child's school record does not become the applicant's education");
+  ok(job.result.notes.some((n) => /belongs to someone else/.test(n) && /Nima/.test(n)), 'a note says which values were left out and why');
+  ok(job.result.fields.highestEducation === "Bachelor's degree", `education level is matched to the list ("Bachelor of Science" → ${job.result.fields.highestEducation})`);
+  ok(job.result.fields.spouseName === 'Asghar M' && job.result.fields.inviterName === 'Asghar M', 'the spouse read once fills both spouse-name fields');
+  ok(job.result.fields.inviterPermitExpiry === '2027-05-01', "the spouse's permit fills the spouse-in-Canada section");
+
   const after = (await call('GET', `/api/applications/${appId}`)).data.application;
   const doc = (n) => after.documents.find((d) => d.filename.startsWith(n));
   ok(doc('103 - Passport').category === 'passport', 'categories saved');
   ok(doc('113 - Employment').category === 'employment-letter', "the file's checklist code beats a wrong AI guess");
   ok(after.documents.filter((d) => d.extractedAt).length === readCount, 'read documents are marked as read');
+  ok(doc('103 - Passport - Nima').owner === 'child' && doc('132 - Work permit').owner === 'spouse', 'each document remembers whose it is');
+  ok(after.readFor === 'Zahra Mousavi' && (await call('GET', `/api/applications/${appId}/extract`)).data.applicant === 'Zahra Mousavi', 'the applicant name is remembered for next time');
   ok((after.dataVersion || 0) === (before.dataVersion || 0), 'reading does not touch the intake version');
 
   // The page then fills the intake — with the version it loaded before reading.

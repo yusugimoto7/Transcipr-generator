@@ -1,4 +1,4 @@
-import { startExtractJob, getExtractJob } from '@/lib/extractJob';
+import { startExtractJob, getExtractJob, applicantHint } from '@/lib/extractJob';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -9,7 +9,9 @@ export const runtime = 'nodejs';
  * at once, GET reports progress and, when done, the result. Nothing is written
  * to the intake here — the page fills empty fields and shows a comparison.
  *
- * POST body: { all? } — re-read documents that were already read.
+ * POST body: { all?, applicant? } — all: re-read documents already read;
+ * applicant: whose file this is (a family folder holds several people's
+ * documents), remembered on the file.
  */
 export async function POST(req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);
@@ -21,7 +23,10 @@ export async function POST(req, { params }) {
     /* optional */
   }
   try {
-    const job = await startExtractJob(app.id, { all: Boolean(body.all) });
+    const job = await startExtractJob(app.id, {
+      all: Boolean(body.all),
+      applicant: typeof body.applicant === 'string' ? body.applicant : undefined,
+    });
     return json({ job }, 202);
   } catch (e) {
     return error(e.message || 'Could not start reading.', e.status || 500);
@@ -31,5 +36,5 @@ export async function POST(req, { params }) {
 export async function GET(_req, { params }) {
   const { app, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
-  return json({ job: getExtractJob(app.id) });
+  return json({ job: getExtractJob(app.id), applicant: applicantHint(app) });
 }

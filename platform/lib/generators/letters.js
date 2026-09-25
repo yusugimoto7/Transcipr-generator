@@ -104,7 +104,7 @@ ${facts}${builderNote}${docsNote}`,
       instruction: `Write an EXTENSIVE "Statement of Purpose" (900-1,300 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
 **Introduction** — who I am, my current status in Canada (${d.currentStatusCanada || '[status]'}, expiring ${d.permitExpiry || '[date]'}), and what I am applying for.
 **My relationship with my spouse** — how we met, marriage date (${d.marriageDate || '[date]'}), cohabitation, children; genuine and continuing.
-**My spouse's status in Canada** — ${d.inviterName || '[spouse]'}: ${d.inviterStatus || '[status]'} at ${d.inviterInstitution || '[institution/employer]'}, ${d.inviterProgramOrJob || '[program/job]'}; why this makes me eligible (cite the eligibility criteria plainly).
+**My spouse's status in Canada** — ${d.inviterName || d.spouseName || '[spouse]'}: ${d.inviterStatus || '[status]'} at ${d.inviterInstitution || '[institution/employer]'}, ${d.inviterProgramOrJob || '[program/job]'}; why this makes me eligible (cite the eligibility criteria plainly).
 **My background and what I will do in Canada** — education, work experience, the kind of work I intend to do, how I will support our household.
 **Our plans and ties** — what we will do when my spouse's permit ends; family, property and commitments at home; commitment to comply with Canadian law.
 Close with "Sincerely, ${name || '[name]'}". Use pronouns ${p.subj}/${p.pos} for the applicant where third person is needed.
@@ -120,7 +120,7 @@ ${facts}${builderNote}${docsNote}`,
       system: `You are an expert Canadian immigration consultant drafting first-person "Purpose of Travel" letters for ${isOwp ? 'accompanying-spouse work permit applications made from outside Canada' : 'visitor visa (TRV) applications'}. You address the officer's concerns: a clear purpose, sufficient funds, and strong ties proving the applicant will leave Canada at the end of the authorized stay (IRPA s.179/s.216). ${NO_INVENT}`,
       instruction: `Write an EXTENSIVE "Purpose of Travel" letter (900-1,300 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
 **Introduction** — who I am, citizenship, occupation, and what I am applying for.
-**Purpose of my ${isOwp ? 'travel and work' : 'visit'}** — ${isOwp ? `joining my spouse ${d.inviterName || '[spouse]'} (${d.inviterStatus || '[status]'} at ${d.inviterInstitution || '[institution/employer]'}); what I will do in Canada` : `${d.visitPurpose || '[purpose]'}; dates ${d.visitFrom || '[from]'} to ${d.visitTo || '[to]'}; itinerary; who I am visiting (${d.hostName || 'no host'}${d.hostRelationship ? ', my ' + d.hostRelationship : ''})`}.
+**Purpose of my ${isOwp ? 'travel and work' : 'visit'}** — ${isOwp ? `joining my spouse ${d.inviterName || d.spouseName || '[spouse]'} (${d.inviterStatus || '[status]'} at ${d.inviterInstitution || '[institution/employer]'}); what I will do in Canada` : `${d.visitPurpose || '[purpose]'}; dates ${d.visitFrom || '[from]'} to ${d.visitTo || '[to]'}; itinerary; who I am visiting (${d.hostName || 'no host'}${d.hostRelationship ? ', my ' + d.hostRelationship : ''})`}.
 **My background** — education and employment history with employers, roles and dates.
 **Financial capacity** — who pays, funds available, assets; ${BOILERPLATE.sanctionsTransfer}
 **Strong ties to my home country** — job / business / approved leave, property, family members staying behind, travel history and compliance with previous visas.

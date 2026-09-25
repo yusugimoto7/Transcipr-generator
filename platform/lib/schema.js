@@ -14,6 +14,20 @@ import { getAppType } from './appTypes';
 export const COUNTRIES_HINT =
   'Use the full country name in English (e.g. "Iran", "India", "Nigeria").';
 
+/** Standard education levels (Iranian equivalents are mapped in the extraction prompt). */
+export const EDUCATION_LEVELS = [
+  'None',
+  'Primary / middle school',
+  'Secondary school (high school diploma)',
+  'Trade / vocational certificate',
+  'College diploma / associate degree',
+  "Bachelor's degree",
+  'Post-graduate diploma / certificate',
+  "Master's degree",
+  'Doctorate (PhD)',
+  'Professional degree (medicine, dentistry, pharmacy, law)',
+];
+
 export const STUDY_PERMIT_SCHEMA = {
   type: 'study-permit',
   title: 'Study Permit',
@@ -177,7 +191,14 @@ export const STUDY_PERMIT_SCHEMA = {
       title: 'Education history',
       help: 'Most recent studies first.',
       fields: [
-        { id: 'highestEducation', label: 'Highest level completed', type: 'text', required: true },
+        {
+          id: 'highestEducation',
+          label: 'Highest level completed',
+          type: 'select',
+          options: EDUCATION_LEVELS,
+          required: true,
+          note: 'The highest diploma or degree actually completed — not a school currently attended.',
+        },
         { id: 'lastInstitution', label: 'Most recent institution', type: 'text', required: true },
         { id: 'lastFieldOfStudy', label: 'Field of study', type: 'text' },
         { id: 'lastEduFrom', label: 'From (year/month)', type: 'text' },
@@ -521,6 +542,33 @@ export function getSchema(type = 'study-permit') {
     steps: t.steps.map((id) => STEP_BLOCKS[id]).filter(Boolean),
   };
 }
+
+/**
+ * Whom each intake step describes. The AI reads a whole family's folder, so it
+ * must know which fields are the applicant's and which belong to someone else.
+ * Steps not listed describe the applicant.
+ */
+export const STEP_ABOUT = {
+  family:
+    "the applicant's family members — spouse/partner, parents, children, brothers and sisters (from the applicant's birth certificate, marriage certificate and family register, and those people's own IDs)",
+  spouseInCanada:
+    "the applicant's spouse/partner who is (or is going) in Canada as a student or worker — the SAME person as spouseName in Family members. Their work or study permit, employment letter, pay slips, enrolment letter and address in Canada fill these fields",
+  host: 'the host in Canada who invites the applicant',
+  superVisa: "the applicant's child or grandchild in Canada who hosts them, and the applicant's Canadian medical insurance",
+  minor: "the child applicant's parent in Canada, the other parent and the custodian, and the child's school arrangements",
+  finances: "money available for the stay — the applicant's own funds and any sponsor's (spouse, parents)",
+};
+
+/** Steps whose fields may only come from the applicant's OWN documents. */
+export const APPLICANT_ONLY_STEPS = new Set(['personal', 'passport', 'contact', 'education', 'language']);
+
+/**
+ * Fields that name the same person in two sections, per step that makes them
+ * equal: when one is read from the documents the other is filled too.
+ */
+export const SAME_PERSON_FIELDS = [
+  { whenStep: 'spouseInCanada', fields: ['inviterName', 'spouseName'] },
+];
 
 /** Flat list of all fields across steps. */
 export function allFields(type = 'study-permit') {
