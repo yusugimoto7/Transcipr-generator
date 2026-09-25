@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ProgressBar from '@/components/ProgressBar';
+import { requiredMissing } from '@/lib/schema';
 
 const KIND = { form: 'IRCC form', photo: 'Photo (JPG)', package: 'With table of contents', documents: 'Document', letter: 'Letter' };
 const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -10,12 +11,14 @@ const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ma
  * The numbered files that go to the IRCC portal, one per upload slot, named as
  * the team names them ("05 - Client Information - Zahra.pdf"), built in one go.
  */
-export default function FinalFiles({ app, patchLocal }) {
+export default function FinalFiles({ app, patchLocal, onGoIntake }) {
   const [data, setData] = useState(null); // { plan, built, job }
   const [job, setJob] = useState(null);
   const [msg, setMsg] = useState(null);
   const [cleanPages, setCleanPages] = useState(true);
   const [fixRotation, setFixRotation] = useState(true);
+  const [missingModal, setMissingModal] = useState(null); // labels of empty required intake fields
+  const [note, setNote] = useState(null); // missing documents & next steps, from the last build
   const timer = useRef(null);
 
   const load = useCallback(async () => {
@@ -44,6 +47,7 @@ export default function FinalFiles({ app, patchLocal }) {
             else {
               patchLocal({ generated: j.result.generated, finalFiles: d.built });
               setMsg(summary(j.result));
+              setNote(j.result.note || null);
             }
           }
         } catch {
@@ -68,7 +72,15 @@ export default function FinalFiles({ app, patchLocal }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app.id, (app.documents || []).length, (app.generated || []).length]);
 
+  // The forms are filled from the intake: warn first if required answers are empty.
+  function requestBuild() {
+    const missing = requiredMissing(app.data || {}, app.type).map((f) => f.label);
+    if (missing.length) setMissingModal(missing);
+    else buildAll();
+  }
+
   async function buildAll() {
+    setMissingModal(null);
     setMsg(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/final-files`, {
@@ -109,14 +121,15 @@ export default function FinalFiles({ app, patchLocal }) {
           {data?.built?.files?.length > 0 && !job && (
             <a className="btn btn-secondary" href={`/api/applications/${app.id}/final-files/zip`}>↓ Download all (.zip)</a>
           )}
-          <button onClick={buildAll} disabled={Boolean(job) || !plan.length}>
-            {job ? <span className="spinner" /> : data?.built ? 'Rebuild all final files' : 'Build all final files'}
+          <button onClick={requestBuild} disabled={Boolean(job) || !plan.length}>
+            {job ? <span className="spinner" /> : data?.built ? 'Rebuild final files' : 'Build final files'}
           </button>
         </div>
       </div>
       <p className="muted small" style={{ marginTop: 6 }}>
-        One file per upload slot in the portal, numbered and named like the team&apos;s &ldquo;02 - Final Files&rdquo; folders.
-        Documents with their own slot — like the marriage certificate — are left out of Client Information.
+        One button does everything: drafts the letters, pre-fills the IRCC forms and builds one file per upload
+        slot in the portal, numbered and named like the team&apos;s &ldquo;02 - Final Files&rdquo; folders. Documents
+        with their own slot — like the marriage certificate — are left out of Client Information.
       </p>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '6px 0 2px' }}>
         <input type="checkbox" style={{ width: 16 }} checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} />
@@ -136,6 +149,37 @@ export default function FinalFiles({ app, patchLocal }) {
               {msg.list.map((l, i) => <li key={i}>{l}</li>)}
             </ul>
           )}
+        </div>
+      )}
+
+      {note && (note.missingDocuments?.length > 0 || note.missingFields?.length > 0) && (
+        <details style={{ marginTop: 10 }}>
+          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>
+            Still missing: {note.missingDocuments.length} document(s), {note.missingFields.length} intake answer(s)
+          </summary>
+          <ul className="small" style={{ paddingLeft: 18, marginTop: 6 }}>
+            {note.missingDocuments.map((m, i) => <li key={`d${i}`}>{m}</li>)}
+            {note.missingFields.map((m, i) => <li key={`f${i}`}>Intake: {m}</li>)}
+          </ul>
+        </details>
+      )}
+
+      {missingModal && (
+        <div className="modal-overlay" onClick={() => setMissingModal(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: 6 }}>Some required information is missing</h2>
+            <p className="muted small">
+              The forms are filled from the intake. You can complete these answers first, or build now and fill the
+              gaps in the forms by hand.
+            </p>
+            <ul style={{ paddingLeft: 18, marginTop: 10, maxHeight: 220, overflowY: 'auto' }}>
+              {missingModal.map((f, i) => <li key={i}>{f}</li>)}
+            </ul>
+            <div className="btn-row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => buildAll()}>Build anyway</button>
+              <button onClick={() => { setMissingModal(null); onGoIntake && onGoIntake(); }}>Complete in Intake →</button>
+            </div>
+          </div>
         </div>
       )}
 

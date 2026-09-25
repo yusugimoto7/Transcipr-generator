@@ -3,21 +3,7 @@
 import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
 import FinalFiles from '@/components/FinalFiles';
-import { requiredMissing } from '@/lib/schema';
 import { lettersFor, formsFor } from '@/lib/appTypes';
-
-/** Documents this application can produce, from the type registry. */
-function docsFor(app) {
-  const docs = [];
-  for (const l of lettersFor(app)) {
-    docs.push({ key: l.key, label: l.title, desc: l.primary ? 'AI-drafted from your intake, guided answers and documents.' : 'AI-drafted from your intake.', word: l.word });
-  }
-  for (const f of formsFor(app)) {
-    docs.push({ key: f.key, label: `${f.label} — data sheet`, desc: 'Field-by-field values to transcribe into the official form.' });
-    docs.push({ key: `${f.key}-filled`, label: `${f.label} — pre-filled official form (beta)`, desc: 'The latest official form, pre-filled. Open in Adobe Reader, review, and click Validate.', beta: true });
-  }
-  return docs;
-}
 
 /** Parse a JSON reply; a proxy / crash page gets a readable message. */
 async function readJson(res) {
@@ -29,37 +15,31 @@ async function readJson(res) {
   }
 }
 
+/**
+ * Generate tab. One action — "Build final files" — drafts the letters,
+ * pre-fills the forms and builds the numbered files for the IRCC portal.
+ * Below it, the letters and working files, to review, redraft or download
+ * (letters also as Word).
+ */
 export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
-  const DOCS = docsFor(app);
-  // Beta docs (e.g. pre-filled official form) are opt-in, not selected by default.
-  const [selected, setSelected] = useState(DOCS.filter((d) => !d.beta).map((d) => d.key));
-  const [busy, setBusy] = useState(false);
+  return (
+    <>
+      <FinalFiles app={app} patchLocal={patchLocal} onGoIntake={onGoIntake} />
+      <WorkingFiles app={app} patchLocal={patchLocal} />
+      <OfficialFormsPanel />
+    </>
+  );
+}
+
+function WorkingFiles({ app, patchLocal }) {
+  const [busyKey, setBusyKey] = useState(null);
   const [msg, setMsg] = useState(null);
-  const [note, setNote] = useState(null);
-  const [missingModal, setMissingModal] = useState(null); // { fields: [labels] }
-  const [regenKey, setRegenKey] = useState(null);
-  const generated = app.generated || [];
+  const gen = new Map((app.generated || []).map((g) => [g.key, g]));
+  const letters = lettersFor(app);
+  const forms = formsFor(app);
 
-  const toggle = (key) =>
-    setSelected((s) => (s.includes(key) ? s.filter((k) => k !== key) : [...s, key]));
-
-  const hasGenerated = (key) => generated.some((g) => g.key === key);
-
-  // Fields that make the official forms complete. If missing, warn before generating.
-  const missingRequired = requiredMissing(app.data || {}, app.type).map((f) => f.label);
-
-  function generate() {
-    if (!selected.length) return;
-    if (missingRequired.length) {
-      setMissingModal({ fields: missingRequired });
-      return;
-    }
-    doGenerate();
-  }
-
-  // Re-generate a single document (used by the per-row ↻ button).
-  async function regenerateOne(key) {
-    setRegenKey(key);
+  async function redraft(key, title) {
+    setBusyKey(key);
     setMsg(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/generate`, {
@@ -68,173 +48,73 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
         body: JSON.stringify({ docs: [key] }),
       });
       const data = await readJson(res);
-      if (!res.ok) throw new Error(data.error || 'Generation failed.');
+      if (!res.ok) throw new Error(data.error || 'Drafting failed.');
       patchLocal({ generated: data.generated });
-      setNote(data.note || null);
-      setMsg({ type: 'ok', text: `Re-generated: ${DOCS.find((d) => d.key === key)?.label || key}.` });
+      setMsg({ type: 'ok', text: `Redrafted: ${title}. Build the final files again to include it.` });
     } catch (e) {
       setMsg({ type: 'err', text: e.message });
     } finally {
-      setRegenKey(null);
+      setBusyKey(null);
     }
   }
 
-  async function doGenerate(docs = selected) {
-    setMissingModal(null);
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch(`/api/applications/${app.id}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ docs }),
-      });
-      const data = await readJson(res);
-      if (!res.ok) throw new Error(data.error || 'Generation failed.');
-      patchLocal({ generated: data.generated });
-      setNote(data.note || null);
-      const errNote = data.errors?.length
-        ? ` (${data.errors.length} had issues: ${data.errors.map((e) => e.key).join(', ')})`
-        : '';
-      setMsg({ type: 'ok', text: `Generated ${data.produced.length} document(s).${errNote}` });
-    } catch (e) {
-      setMsg({ type: 'err', text: e.message });
-    } finally {
-      setBusy(false);
-    }
-  }
+  const dl = (key, format) => `/api/applications/${app.id}/download/${key}${format ? `?format=${format}` : ''}`;
 
   return (
-    <>
-      <div className="card">
-        <h2>Generate documents & forms</h2>
-        <p className="muted small" style={{ marginTop: -6 }}>
-          Choose what to produce. Everything is a first draft built from your intake — review,
-          edit, and verify before submitting to IRCC.
-        </p>
+    <div className="card">
+      <h2>Letters &amp; working files</h2>
+      <p className="muted small" style={{ marginTop: -6 }}>
+        Everything below is produced by <strong>Build final files</strong>. Review the letters, download them as Word
+        to edit, or redraft one — then build again. Data sheets list every form value, for checking the forms.
+      </p>
+      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`}>{msg.text}</div>}
 
-        <div style={{ marginTop: 12 }}>
-          {DOCS.map((d) => (
-            <div className="row" key={d.key}>
-              <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontWeight: 400, margin: 0 }}>
-                <input
-                  type="checkbox"
-                  style={{ width: 18, marginTop: 3 }}
-                  checked={selected.includes(d.key)}
-                  onChange={() => toggle(d.key)}
-                />
-                <span>
-                  <span style={{ fontWeight: 600 }}>{d.label}</span>
-                  <div className="muted small">{d.desc}</div>
-                </span>
-              </label>
-              {hasGenerated(d.key) && (
-                <div className="btn-row" style={{ gap: 6 }}>
-                  <button
-                    className="btn-secondary"
-                    onClick={() => regenerateOne(d.key)}
-                    disabled={regenKey === d.key || busy}
-                    title="Re-generate this document"
-                  >
-                    {regenKey === d.key ? <span className="spinner" /> : '↻'}
-                  </button>
-                  <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/${d.key}`}>
-                    ↓ PDF
-                  </a>
-                  {d.word && (
-                    <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/${d.key}?format=docx`}>
-                      ↓ Word
-                    </a>
+      <table className="cmp">
+        <tbody>
+          {letters.map((l) => {
+            const g = gen.get(l.key);
+            return (
+              <tr key={l.key}>
+                <td>
+                  <div style={{ fontWeight: 600 }}>{l.title}</div>
+                  <div className="small muted">Letter{g ? ` · drafted ${new Date(g.generatedAt).toLocaleDateString()}` : ' · drafted when you build'}</div>
+                </td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {g && (
+                    <>
+                      <a className="small" href={dl(l.key)}>↓ PDF</a>
+                      {l.word && <> · <a className="small" href={dl(l.key, 'docx')}>↓ Word</a></>}
+                      {' · '}
+                    </>
                   )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="btn-row" style={{ marginTop: 16 }}>
-          <button onClick={generate} disabled={busy || !selected.length}>
-            {busy ? <span className="spinner" /> : `Generate ${selected.length} document(s)`}
-          </button>
-          {generated.length > 0 && (
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/package`}>
-              📦 Download full package (ZIP)
-            </a>
-          )}
-        </div>
-        {missingRequired.length > 0 && (
-          <p className="muted small" style={{ marginTop: 10 }}>
-            ⚠️ {missingRequired.length} required field(s) are still empty — forms will have gaps until you complete them.
-          </p>
-        )}
-        {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
-      </div>
-
-      {missingModal && (
-        <div className="modal-overlay" onClick={() => setMissingModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginBottom: 6 }}>Some required information is missing</h2>
-            <p className="muted small">
-              These fields are needed to complete your forms. You can complete them now, or generate
-              anyway and fill the gaps by hand later.
-            </p>
-            <ul style={{ paddingLeft: 18, marginTop: 10, maxHeight: 220, overflowY: 'auto' }}>
-              {missingModal.fields.map((f, i) => <li key={i}>{f}</li>)}
-            </ul>
-            <div className="btn-row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={() => doGenerate()}>Generate anyway</button>
-              <button onClick={() => { setMissingModal(null); onGoIntake && onGoIntake(); }}>
-                Complete in Intake →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {note && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ marginBottom: 0 }}>📋 Missing documents & next steps</h2>
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/next-steps`}>
-              ↓ Download as PDF
-            </a>
-          </div>
-
-          <h3 style={{ marginTop: 14 }}>Missing documents</h3>
-          {note.missingDocuments.length === 0 ? (
-            <p className="small" style={{ color: 'var(--ok)' }}>All checklist documents provided. 🎉</p>
-          ) : (
-            <ul style={{ paddingLeft: 18 }}>
-              {note.missingDocuments.map((m, i) => <li key={i}>{m}</li>)}
-            </ul>
-          )}
-
-          {note.missingFields.length > 0 && (
-            <>
-              <h3 style={{ marginTop: 14 }}>Intake fields still empty</h3>
-              <ul style={{ paddingLeft: 18 }}>
-                {note.missingFields.map((m, i) => <li key={i}>{m}</li>)}
-              </ul>
-            </>
-          )}
-
-          <h3 style={{ marginTop: 14 }}>Suggested next steps</h3>
-          <ol style={{ paddingLeft: 18 }}>
-            {note.nextSteps.map((s, i) => <li key={i} style={{ marginBottom: 6 }}>{s}</li>)}
-          </ol>
-        </div>
-      )}
-
-      <FinalFiles app={app} patchLocal={patchLocal} />
-
-      <OfficialFormsPanel />
-
-      <div className="hint-box">
-        <strong>Forms &amp; data sheets:</strong> The platform pulls the latest official IRCC
-        forms from canada.ca (above). Because those forms are Adobe dynamic (XFA) PDFs that need
-        the <em>Validate</em> step, the data sheets give you every value laid out by section so
-        you can fill the official form quickly and accurately.
-      </div>
-    </>
+                  <button className="btn-ghost" style={{ padding: '4px 10px' }} onClick={() => redraft(l.key, l.title)} disabled={Boolean(busyKey)}>
+                    {busyKey === l.key ? <span className="spinner" /> : g ? '↻ Redraft' : 'Draft now'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+          {forms.map((f) => {
+            const g = gen.get(f.key);
+            return (
+              <tr key={f.key}>
+                <td>
+                  <div style={{ fontWeight: 600 }}>{f.label} — data sheet</div>
+                  <div className="small muted">Field-by-field values{g ? '' : ' · made when you build'}</div>
+                </td>
+                <td style={{ textAlign: 'right' }}>{g && <a className="small" href={dl(f.key)}>↓ PDF</a>}</td>
+              </tr>
+            );
+          })}
+          <tr>
+            <td>
+              <div style={{ fontWeight: 600 }}>Missing documents &amp; next steps</div>
+              <div className="small muted">Refreshed every build</div>
+            </td>
+            <td style={{ textAlign: 'right' }}>{gen.get('next-steps') && <a className="small" href={dl('next-steps')}>↓ PDF</a>}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }

@@ -3,7 +3,8 @@ import path from 'path';
 import sharp from 'sharp';
 import { getApplication, updateApplication } from './store';
 import { readUpload, generatedPath, generatedTarget, UPLOAD_DIR } from './uploads';
-import { getAppType, formsFor, packagesFor } from './appTypes';
+import { getAppType, formsFor, packagesFor, lettersFor } from './appTypes';
+import { produceDocs, refreshNextSteps } from './generateDocs';
 import { buildPackageFile, ensureGenerated } from './compileJob';
 import { letterSpec } from './generators/letters';
 import { rasterizePdf } from './raster';
@@ -122,7 +123,7 @@ export function planFinalFiles(app) {
           label: f.label,
           source: upload ? { upload: upload.id } : filled ? { generated: filled.key } : null,
           ready: Boolean(upload || filled),
-          note: upload ? 'signed copy uploaded' : filled ? 'pre-filled official form' : 'generate the pre-filled form (below) or upload the signed copy',
+          note: upload ? 'signed copy uploaded' : filled ? 'pre-filled official form' : 'pre-filled when you build (or upload the signed copy)',
         });
       }
       continue;
@@ -213,13 +214,38 @@ export function startFinalJob(appId, { cleanPages = true, fixRotation = true } =
 
 async function build(appId, { cleanPages, fixRotation }, job) {
   let app = await getApplication(appId);
+  const problems = [];
+
+  // 1. Prepare everything the files are made from, in the same run:
+  //    letters not drafted yet (drafted or edited ones are kept — redraft them
+  //    individually), data sheets refreshed from the latest intake, and each
+  //    official form pre-filled unless a signed copy was uploaded.
+  const have = new Set((app.generated || []).filter((g) => g.stored).map((g) => g.key));
+  const prep = [
+    ...lettersFor(app).map((l) => l.key).filter((k) => !have.has(k)),
+    ...formsFor(app).map((f) => f.key),
+    ...formsFor(app).filter((f) => !signedUpload(app, f.key)).map((f) => `${f.key}-filled`),
+  ];
+  const planned = planFinalFiles(app).filter((e) => e.n).length;
+  job.total = planned + 1; // + preparing
+  job.current = 'Preparing letters and forms';
+  job.inner = { done: 0, total: prep.length };
+  const prepared = await produceDocs(app, prep, {
+    onProgress: (i, n, title) => Object.assign(job.inner, { done: i - 1, total: n, current: title }),
+  });
+  app = prepared.app;
+  // A form that couldn't be pre-filled is reported with its final file below.
+  const fillErrors = new Map(prepared.errors.filter((e) => e.key.endsWith('-filled')).map((e) => [e.key.replace(/-filled$/, ''), e.message]));
+  for (const e of prepared.errors.filter((x) => !x.key.endsWith('-filled'))) problems.push({ filename: e.key, name: e.key, reason: e.message });
+  job.done = 1;
+
+  // 2. The numbered files.
   const plan = planFinalFiles(app).filter((e) => e.n);
   const claimed = claimedCategories(plan, app);
   const pkgs = packagesFor(app.type);
-  job.total = plan.length;
+  job.total = plan.length + 1;
 
   const built = [];
-  const problems = [];
   const stats = { rotatedPages: 0, droppedPages: 0, mirroredPages: 0, skippedFiles: [], uncertainPages: [] };
   const addStats = (s) => {
     if (!s) return;
@@ -245,7 +271,11 @@ async function build(appId, { cleanPages, fixRotation }, job) {
     try {
       if (e.kind === 'form') {
         // Official forms go out untouched (their barcodes and XFA must survive).
-        if (!e.source) throw new Error(e.note);
+        if (!e.source) {
+          throw new Error(
+            `${fillErrors.get(e.formKey) || 'could not be pre-filled'} — fill the official form from its data sheet (Working files), or upload the signed copy`
+          );
+        }
         const src = e.source.upload
           ? path.join(UPLOAD_DIR, app.id, (app.documents || []).find((d) => d.id === e.source.upload).stored)
           : generatedPath(app.id, (app.generated || []).find((g) => g.key === e.source.generated).stored);
@@ -321,5 +351,13 @@ async function build(appId, { cleanPages, fixRotation }, job) {
     return a;
   });
 
-  return { files: app.finalFiles.files, problems, generated: app.generated, ...stats, skippedFiles: [...new Set(stats.skippedFiles)] };
+  // 3. What is still missing, and what to do next.
+  let note = null;
+  try {
+    ({ app, note } = await refreshNextSteps(app));
+  } catch (e) {
+    console.error(`[finalFiles] next-steps note failed: ${e.message}`);
+  }
+
+  return { files: app.finalFiles.files, problems, generated: app.generated, note, ...stats, skippedFiles: [...new Set(stats.skippedFiles)] };
 }

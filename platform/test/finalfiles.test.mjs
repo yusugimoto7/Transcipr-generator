@@ -115,7 +115,11 @@ try {
   ok(labels.size > 3, `progress names each file as it is built (${labels.size} seen)`);
   const res = job.result;
   const built = new Map(res.files.map((f) => [f.name, f]));
-  ok(res.problems.some((p) => /imm1295e/.test(p.filename)) && res.problems.some((p) => /imm5645e/.test(p.filename)), 'forms not yet generated are reported, not faked');
+  ok(res.problems.some((p) => /imm1295e/.test(p.filename) && /data sheet/.test(p.reason)) && res.problems.some((p) => /imm5645e/.test(p.filename)), 'forms that could not be pre-filled are reported (not faked), pointing to the data sheet');
+  const genKeys = new Set(res.generated.map((x) => x.key));
+  ok(['sop', 'submission-letter', 'imm1295', 'imm5645', 'imm5476', 'next-steps'].every((k) => genKeys.has(k)), 'the one build also drafted the letters, made the data sheets and the next-steps note');
+  ok(labels.has('Preparing letters and forms'), 'progress shows the preparation step');
+  ok(Array.isArray(res.note?.missingDocuments), 'the build reports what is still missing');
 
   const g = (name) => `/api/applications/${appId}/download/${built.get(name).key}`;
   const client = await download(g('Client Information'));
