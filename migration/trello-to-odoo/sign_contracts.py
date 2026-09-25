@@ -1651,7 +1651,7 @@ def install_send_button(odoo, rcic_email):
     arch = ('<data>'
             '<xpath expr="//header" position="inside">'
             f'<button name="{act_id}" type="action" string="Send Contract" class="btn-primary" '
-            'invisible="x_sign_request_id or state == \'cancel\'" groups="__trello__.p2group_contract_approvers"/>'
+            'invisible="x_sign_request_id or state in (\'sale\', \'cancel\')" groups="__trello__.p2group_contract_approvers"/>'
             f'<button name="{act_id}" type="action" string="Resend Contract" class="btn-secondary" '
             'invisible="not x_sign_request_id or state == \'cancel\'" '
             'groups="__trello__.p2group_contract_approvers" '
@@ -1679,6 +1679,14 @@ def install_send_button(odoo, rcic_email):
             '<attribute name="invisible">1</attribute>'
             '</xpath>'
             '<xpath expr="//button[@name=\'action_preview_sale_order\']" position="attributes">'
+            '<attribute name="invisible">1</attribute>'
+            '</xpath>'
+            # Invoices are issued in QuickBooks, not Odoo (no sales journal here):
+            # the invoice buttons would only lead to "No journal could be found".
+            '<xpath expr="//button[@id=\'create_invoice\']" position="attributes">'
+            '<attribute name="invisible">1</attribute>'
+            '</xpath>'
+            '<xpath expr="//button[@id=\'create_invoice_percentage\']" position="attributes">'
             '<attribute name="invisible">1</attribute>'
             '</xpath>'
             '<xpath expr="//field[@name=\'payment_term_id\']" position="after">'
