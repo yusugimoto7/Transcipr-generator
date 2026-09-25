@@ -432,12 +432,28 @@ def _card_vals(v):
     return vals
 
 
+def _retry(fn, what, tries=6):
+    """Run fn, riding out dropped connections (network, proxy, 502)."""
+    import time
+    for n in range(tries):
+        try:
+            return fn()
+        except OdooError:
+            raise
+        except Exception as exc:  # connection-level failures only reach here
+            if n == tries - 1:
+                raise
+            wait = 10 * (n + 1)
+            log.warning("  %s: connection problem (%s); retrying in %ds", what, type(exc).__name__, wait)
+            time.sleep(wait)
+
+
 BACKUP_FIELDS = ["x_fee_sg", "x_fee_sb", "x_fee_total", "x_fee_currency", "x_fee_source", "x_contract_status",
                  "x_contract_no_sg", "x_contract_no_sb", "x_contract_sent_on", "x_contract_signed_on",
                  "x_contract_paid_on", "expected_revenue"]
 
 
-def apply(odoo, p, create=True, limit=None, journal=None):
+def apply(odoo, p, create=True, limit=None, journal=None, skip_ids=()):
     """Write the plan. Returns (updated, created).
 
     Nothing is deleted or archived: existing cards get only the Contract
@@ -455,13 +471,14 @@ def apply(odoo, p, create=True, limit=None, journal=None):
             with open(journal, "w") as f:
                 json.dump(log_rows, f, default=str)
 
-    writes = p["writes"][:limit] if limit else p["writes"]
+    writes = [v for v in p["writes"] if v["lead_id"] not in set(skip_ids)]
+    writes = writes[:limit] if limit else writes
     n_up = 0
     for i, v in enumerate(writes, 1):
-        before = odoo.search_read("crm.lead", [("id", "=", v["lead_id"])], BACKUP_FIELDS,
-                                  context={"active_test": False})
+        before = _retry(lambda: odoo.search_read("crm.lead", [("id", "=", v["lead_id"])], BACKUP_FIELDS,
+                                                 context={"active_test": False}), "read %s" % v["lead_id"])
         try:
-            odoo.write("crm.lead", [v["lead_id"]], _card_vals(v), context=QUIET)
+            _retry(lambda: odoo.write("crm.lead", [v["lead_id"]], _card_vals(v), context=QUIET), "lead %s" % v["lead_id"])
             n_up += 1
             log_rows["updated"].append(before[0] if before else {"id": v["lead_id"]})
         except OdooError as exc:
@@ -486,14 +503,22 @@ def apply(odoo, p, create=True, limit=None, journal=None):
                                % ", ".join(v["sources"])})
             if v["stage_id"] in WON_STAGES and v["paid"]:
                 vals["date_closed"] = v["paid"].isoformat()
+            def find():
+                dom = [("name", "=", vals["name"]), ("x_fee_source", "=", "sheet")]
+                got = odoo.search_read("crm.lead", dom, ["id"], limit=1, context={"active_test": False})
+                return got[0]["id"] if got else None
+
+            def make():
+                # A create whose reply was lost may have happened: look first.
+                return find() or odoo.create("crm.lead", vals, context=QUIET)
             try:
-                lid = odoo.create("crm.lead", vals, context=QUIET)
+                lid = _retry(make, "create %s" % no)
                 n_new += 1
                 log_rows["created"].append(lid)
                 # Then the agent from the sheet, silently (no "assigned to you" e-mail).
                 uid = users.get(norm_name(v["agent"]))
                 if uid and uid != me:
-                    odoo.write("crm.lead", [lid], {"user_id": uid}, context=QUIET)
+                    _retry(lambda: odoo.write("crm.lead", [lid], {"user_id": uid}, context=QUIET), "agent %s" % no)
             except OdooError as exc:
                 log.warning("  create %s: %s", no, str(exc)[-160:])
             if i % 50 == 0:
