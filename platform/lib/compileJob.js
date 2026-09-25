@@ -67,7 +67,7 @@ export function startCompileJob(appId, pkg, { cleanPages = true, fixRotation = t
 }
 
 // Generate a text sub-document if it isn't already present, and return the app.
-async function ensureGenerated(app, key) {
+export async function ensureGenerated(app, key) {
   const existing = (app.generated || []).find((g) => g.key === key);
   if (existing?.stored) {
     try {
@@ -97,10 +97,37 @@ async function ensureGenerated(app, key) {
 }
 
 async function run(appId, pkg, { cleanPages, fixRotation }, job) {
-  let app = await getApplication(appId);
+  const app = await getApplication(appId);
   const def = getPackages(app.type)[pkg];
   if (!def) throw new Error('Unknown package.');
+  const out = await buildPackageFile(app, def, {
+    cleanPages,
+    fixRotation,
+    job,
+    owned: new Set(packageCategories(app.type)[pkg] || []),
+    key: `${pkg}-package`,
+    filename: def.filename,
+  });
+  return { ...out.stats, generated: out.app.generated, key: out.meta.key };
+}
 
+// Never compiled into any file: agency paperwork, the firm's questionnaire,
+// forms (they go out as their own files) and the photo.
+const NEVER = new Set(['internal', 'questionnaire', 'rep-form']);
+
+/**
+ * Build one PDF from a package definition (sections of uploaded documents and
+ * generated letters) and save it as the generated file `key`.
+ *
+ * opts:
+ *   owned    categories a catch-all section may take (a package's own), or
+ *   claimed  categories that belong to OTHER files — the catch-all takes every
+ *            remaining document except these (used by the final-file set)
+ *   plain    no table of contents, dividers or page footers (a single document)
+ *   job      progress object to update (phase, done, total, current)
+ * @returns {{ app, meta, stats }}
+ */
+export async function buildPackageFile(app, def, { cleanPages = true, fixRotation = true, job = {}, owned = null, claimed = null, plain = false, key, filename }) {
   // Plan first, so progress has a total: which letters need drafting, and which
   // uploaded files each section takes (a catch-all takes what is left over).
   const neededGen = [...new Set(def.sections.filter((s) => s.generatedKey).map((s) => s.generatedKey))];
@@ -110,13 +137,14 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
     if (node.generatedKey) return [];
     let docs = [];
     if (node.catchAll) {
-      // Anything belonging to this package (or uncategorized) not already used.
-      // 'internal' (agency intake forms, templates) must NEVER reach a package.
-      const owned = new Set(packageCategories(app.type)[pkg] || []);
-      docs = (app.documents || []).filter((d) => !usedDocIds.has(d.id) && d.category !== 'internal' && (!d.category || owned.has(d.category)));
+      docs = (app.documents || []).filter((d) => {
+        if (usedDocIds.has(d.id) || NEVER.has(d.category) || d.category === 'photo') return false;
+        if (claimed) return !claimed.has(d.category);
+        return !d.category || (owned && owned.has(d.category));
+      });
     } else if (node.categories?.length) {
       const wanted = new Set(node.categories);
-      docs = (app.documents || []).filter((d) => wanted.has(d.category));
+      docs = (app.documents || []).filter((d) => wanted.has(d.category) && !usedDocIds.has(d.id));
     }
     docs.forEach((d) => usedDocIds.add(d.id));
     return docs;
@@ -128,124 +156,110 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
   job.done = 0;
 
   job.phase = 'letters';
-  for (const key of neededGen) {
-    const drafting = missingGen.includes(key);
-    if (drafting) job.current = letterSpec(app, key)?.title || key;
+  for (const k of neededGen) {
+    const drafting = missingGen.includes(k);
+    if (drafting) job.current = letterSpec(app, k)?.title || k;
     try {
-      app = await ensureGenerated(app, key);
+      app = await ensureGenerated(app, k);
     } catch (e) {
-      throw new Error(`Could not generate ${key}: ${e.message}`);
+      throw new Error(`Could not generate ${k}: ${e.message}`);
     }
     if (drafting) job.done++;
   }
 
-  let droppedTotal = 0;
-  let rotatedTotal = 0;
-  let mirroredTotal = 0;
-  const skippedFiles = []; // files excluded from the package, reported to the applicant
+  const stats = { droppedPages: 0, rotatedPages: 0, mirroredPages: 0, skippedFiles: [], included: [], pages: 0, uncertainPages: [] };
 
   // Every upload — PDF of any geometry, or a photo — becomes a list of upright
   // page pictures (lib/packageDocs.js), written straight to disk so a
   // 100-file package never sits in memory. The compiler just places pictures.
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'compile-'));
   try {
-    return await build();
+    job.phase = 'documents';
+    let pageNo = 0;
+    let fileNo = 0;
+    const loadDocs = async (docs) => {
+      const items = [];
+      for (const d of docs) {
+        fileNo++;
+        job.current = `file ${fileNo} of ${fileCount} — ${d.filename}`;
+        try {
+          // Word files can't be embedded in a PDF — leave them out and tell the
+          // applicant, instead of printing a placeholder page into the package.
+          if (!EMBEDDABLE.has(d.mime)) {
+            stats.skippedFiles.push(d.filename);
+            continue;
+          }
+          const bytes = await readUpload(app.id, d.stored);
+          const prepared = await prepareDocument({ bytes, mime: d.mime }, { cleanPages, fixRotation });
+          stats.droppedPages += prepared.dropped;
+          stats.mirroredPages += prepared.mirrored;
+          stats.rotatedPages += prepared.rotated;
+          if (prepared.uncertain?.length) stats.uncertainPages.push(`${d.filename} (page ${prepared.uncertain.join(', ')})`);
+          for (const p of prepared.pages) {
+            const file = path.join(work, `p-${String(++pageNo).padStart(5, '0')}.jpg`);
+            await fs.writeFile(file, p.buffer);
+            items.push({ kind: 'picture', file, width: p.width, height: p.height, filename: d.filename });
+          }
+        } catch (e) {
+          console.error(`[compile] could not prepare "${d.filename}": ${e.message}`);
+          stats.skippedFiles.push(d.filename);
+        } finally {
+          job.done++;
+        }
+      }
+      return items;
+    };
+    const generatedItems = async (node) => {
+      const meta = (app.generated || []).find((g) => g.key === node.generatedKey);
+      if (!meta?.stored) return [];
+      try {
+        return [{ bytes: await readGenerated(app.id, meta.stored), mime: 'application/pdf', filename: meta.filename }];
+      } catch {
+        return [];
+      }
+    };
+
+    const d = app.data || {};
+    const sections = [];
+    for (const { sec, docs, children } of plan) {
+      let name = sec.name;
+      if (sec.supporter && (d.sponsorName || '').trim()) name = `${sec.name} (${d.sponsorName.trim()})`;
+      const items = sec.generatedKey ? await generatedItems(sec) : await loadDocs(docs);
+      const kids = [];
+      for (const c of children) kids.push({ name: c.child.name, items: c.child.generatedKey ? await generatedItems(c.child) : await loadDocs(c.docs) });
+      sections.push({ name, items, children: kids });
+    }
+
+    const includedCount = sections.filter((s) => s.items.length || s.children.some((c) => c.items.length)).length;
+    if (!includedCount) throw new Error('Nothing to compile yet — upload the documents for this package first.');
+
+    job.phase = 'assembling';
+    job.current = plain ? 'assembling the PDF' : 'assembling the PDF and table of contents';
+    const applicantName = [d.givenName, d.familyName].filter(Boolean).join(' ');
+    const target = await generatedTarget(app.id, { key, filename });
+    let compiled;
+    try {
+      compiled = await compilePackage(def.title, applicantName, sections, {
+        outPath: target.file,
+        plain,
+        onProgress: (n, total) => (job.current = `assembling page ${n} of ${total}`),
+      });
+    } catch (e) {
+      throw new Error(`Compilation failed: ${e.message}`);
+    }
+    stats.skippedFiles = [...new Set([...stats.skippedFiles, ...compiled.skipped])];
+    stats.pages = compiled.pages;
+    stats.included = sections.map((s) => ({ name: s.name, count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0) }));
+    const meta = await target.meta();
+    const updated = await updateApplication(app.id, (a) => {
+      const m = new Map((a.generated || []).map((g) => [g.key, g]));
+      m.set(key, meta);
+      a.generated = [...m.values()];
+      return a;
+    });
+    job.done = job.total;
+    return { app: updated, meta, stats };
   } finally {
     fs.rm(work, { recursive: true, force: true }).catch(() => {});
-  }
-
-  async function build() {
-  job.phase = 'documents';
-  let pageNo = 0;
-  let fileNo = 0;
-  const loadDocs = async (docs) => {
-    const items = [];
-    for (const d of docs) {
-      fileNo++;
-      job.current = `file ${fileNo} of ${fileCount} — ${d.filename}`;
-      try {
-        // Word files can't be embedded in a PDF — leave them out and tell the
-        // applicant, instead of printing a placeholder page into the package.
-        if (!EMBEDDABLE.has(d.mime)) {
-          skippedFiles.push(d.filename);
-          continue;
-        }
-        const bytes = await readUpload(app.id, d.stored);
-        const prepared = await prepareDocument({ bytes, mime: d.mime }, { cleanPages, fixRotation });
-        droppedTotal += prepared.dropped;
-        mirroredTotal += prepared.mirrored;
-        rotatedTotal += prepared.rotated;
-        for (const p of prepared.pages) {
-          const file = path.join(work, `p-${String(++pageNo).padStart(5, '0')}.jpg`);
-          await fs.writeFile(file, p.buffer);
-          items.push({ kind: 'picture', file, width: p.width, height: p.height, filename: d.filename });
-        }
-      } catch (e) {
-        console.error(`[compile] could not prepare "${d.filename}": ${e.message}`);
-        skippedFiles.push(d.filename);
-      } finally {
-        job.done++;
-      }
-    }
-    return items;
-  };
-  const generatedItems = async (node) => {
-    const meta = (app.generated || []).find((g) => g.key === node.generatedKey);
-    if (!meta?.stored) return [];
-    try {
-      return [{ bytes: await readGenerated(app.id, meta.stored), mime: 'application/pdf', filename: meta.filename }];
-    } catch {
-      return [];
-    }
-  };
-
-  const d = app.data || {};
-  const sections = [];
-  for (const { sec, docs, children } of plan) {
-    let name = sec.name;
-    if (sec.supporter && (d.sponsorName || '').trim()) name = `${sec.name} (${d.sponsorName.trim()})`;
-    const items = sec.generatedKey ? await generatedItems(sec) : await loadDocs(docs);
-    const kids = [];
-    for (const c of children) kids.push({ name: c.child.name, items: c.child.generatedKey ? await generatedItems(c.child) : await loadDocs(c.docs) });
-    sections.push({ name, items, children: kids });
-  }
-
-  const includedCount = sections.filter((s) => s.items.length || s.children.some((c) => c.items.length)).length;
-  if (!includedCount) throw new Error('Nothing to compile yet — upload the documents for this package first.');
-
-  job.phase = 'assembling';
-  job.current = 'assembling the PDF and table of contents';
-  const applicantName = [d.givenName, d.familyName].filter(Boolean).join(' ');
-  const key = `${pkg}-package`;
-  const target = await generatedTarget(app.id, { key, filename: def.filename });
-  let compiled;
-  try {
-    compiled = await compilePackage(def.title, applicantName, sections, {
-      outPath: target.file,
-      onProgress: (n, total) => (job.current = `assembling page ${n} of ${total}`),
-    });
-  } catch (e) {
-    throw new Error(`Compilation failed: ${e.message}`);
-  }
-  skippedFiles.push(...compiled.skipped);
-  const meta = await target.meta();
-  const updated = await updateApplication(app.id, (a) => {
-    const m = new Map((a.generated || []).map((g) => [g.key, g]));
-    m.set(key, meta);
-    a.generated = [...m.values()];
-    return a;
-  });
-  job.done = job.total;
-
-  return {
-    generated: updated.generated,
-    key,
-    droppedPages: droppedTotal,
-    rotatedPages: rotatedTotal,
-    mirroredPages: mirroredTotal,
-    skippedFiles: [...new Set(skippedFiles)],
-    included: sections.map((s) => ({ name: s.name, count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0) })),
-    pages: compiled.pages,
-  };
   }
 }

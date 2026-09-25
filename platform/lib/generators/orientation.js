@@ -149,3 +149,47 @@ export async function detectImageOrientation(pngB64) {
     return { rotate: 0, mirrored: false };
   }
 }
+
+/**
+ * For pages the OCR couldn't judge (too little text): show the model each page
+ * in all four orientations and ask which one is upright. Picking the upright
+ * picture is reliable; working out a rotation direction (90° vs 270°) is not.
+ *
+ * @param {Array<{page:number, b64:string}>} entries  PNG thumbnails, as scanned
+ * @returns {Promise<Record<string, number>>} { page: clockwise rotation } for
+ *   pages the model is sure about (others are left out)
+ */
+export async function pickUpright(entries, rotateThumb) {
+  const out = {};
+  const LETTERS = ['A', 'B', 'C', 'D'];
+  const ROTS = [0, 90, 180, 270];
+  for (let i = 0; i < entries.length; i += 3) {
+    const batch = entries.slice(i, i + 3);
+    const content = [
+      {
+        type: 'text',
+        text: `Each page below is shown four times, turned differently (A, B, C, D). For each page,
+say which picture shows it UPRIGHT — text reads normally, headings at the top. Answer "none" if
+you cannot tell (e.g. a photo or a page without text). Return ONLY JSON:
+{"pages": {"<page number>": "A" | "B" | "C" | "D" | "none", ...}, "sure": {"<page number>": true | false, ...}}`,
+      },
+    ];
+    for (const e of batch) {
+      for (let k = 0; k < 4; k++) {
+        content.push({ type: 'text', text: `Page ${e.page} — ${LETTERS[k]}:` });
+        content.push({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: await rotateThumb(e.b64, ROTS[k]) } });
+      }
+    }
+    try {
+      const res = await completeJson({ system: SYSTEM, content, maxTokens: 300 });
+      for (const e of batch) {
+        const letter = String(res.pages?.[e.page] || '').toUpperCase();
+        const k = LETTERS.indexOf(letter);
+        if (k >= 0 && res.sure?.[e.page] !== false) out[String(e.page)] = ROTS[k];
+      }
+    } catch (err) {
+      console.error(`[orientation] upright check failed: ${err.message}`);
+    }
+  }
+  return out;
+}

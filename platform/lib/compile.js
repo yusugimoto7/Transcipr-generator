@@ -148,7 +148,7 @@ function run(cmd, args) {
   });
 }
 
-export async function compilePackage(title, applicantName, sections, { outPath = null, onProgress = () => {} } = {}) {
+export async function compilePackage(title, applicantName, sections, { outPath = null, onProgress = () => {}, plain = false } = {}) {
   // 1. Layout: which items embed, and where every page will fall.
   const skipped = []; // filenames that could not be embedded
   const blocks = []; // { type: 'divider' | 'item', pages, ... } in body order
@@ -174,6 +174,14 @@ export async function compilePackage(title, applicantName, sections, { outPath =
     }
     // A section with nothing that embeds gets no divider and no TOC entry.
     if (!own.length && !kids.length) continue;
+    if (plain) {
+      // A single document for its own portal slot: just its pages, in order.
+      for (const b of [...own, ...kids.flatMap((k) => k.blocks)]) {
+        blocks.push(b);
+        bodyPages += b.pages;
+      }
+      continue;
+    }
     number++;
     marks.push({ label: `${number}) ${sec.name}`, page: bodyPages, level: 0 });
     blocks.push({ type: 'divider', number, name: sec.name, pages: 1 });
@@ -193,12 +201,14 @@ export async function compilePackage(title, applicantName, sections, { outPath =
   }
 
   const perPage = 26;
-  const tocPageCount = Math.max(1, Math.ceil((marks.length + 4) / perPage));
+  const tocPageCount = plain ? 0 : Math.max(1, Math.ceil((marks.length + 4) / perPage));
   const total = tocPageCount + bodyPages;
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'package-'));
   try {
+    const parts = [];
     // 2. Table of contents (title block, dotted leaders, children indented).
+    if (!plain) {
     const toc = await PDFDocument.create();
     const tBold = await toc.embedFont(StandardFonts.HelveticaBold);
     const tFont = await toc.embedFont(StandardFonts.Helvetica);
@@ -232,8 +242,9 @@ export async function compilePackage(title, applicantName, sections, { outPath =
       y -= 22;
     }
     tocPages.forEach((p, i) => footer(p, tFont, i + 1, total));
-    const parts = [path.join(dir, 'part-000.pdf')];
+    parts.push(path.join(dir, 'part-000.pdf'));
     await fs.writeFile(parts[0], await toc.save());
+    }
 
     // 3. The body, in parts of at most PART_PAGES pages, each released once saved.
     let doc = null;
@@ -241,7 +252,7 @@ export async function compilePackage(title, applicantName, sections, { outPath =
     let written = 0;
     const flush = async () => {
       if (!doc) return;
-      const file = path.join(dir, `part-${String(parts.length).padStart(3, '0')}.pdf`);
+      const file = path.join(dir, `part-${String(parts.length + 1).padStart(3, '0')}.pdf`);
       await fs.writeFile(file, await doc.save());
       parts.push(file);
       doc = null;
@@ -252,7 +263,10 @@ export async function compilePackage(title, applicantName, sections, { outPath =
         fonts = { bold: await doc.embedFont(StandardFonts.HelveticaBold), regular: await doc.embedFont(StandardFonts.Helvetica) };
       }
       const pages = await drawBlock(doc, fonts, block);
-      for (const p of pages) footer(p, fonts.regular, tocPageCount + ++written, total);
+      for (const p of pages) {
+        ++written;
+        if (!plain) footer(p, fonts.regular, tocPageCount + written, total);
+      }
       onProgress(written, bodyPages);
       if (doc.getPageCount() >= PART_PAGES) await flush();
     }
@@ -260,6 +274,7 @@ export async function compilePackage(title, applicantName, sections, { outPath =
 
     // 4. Join the parts.
     const out = path.join(dir, 'package.pdf');
+    if (!parts.length) throw new Error('nothing to write');
     if (parts.length === 1) await fs.copyFile(parts[0], out);
     else await run('pdfunite', [...parts, out]);
 

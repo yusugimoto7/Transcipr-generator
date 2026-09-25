@@ -6,7 +6,8 @@ import {
   imageToPage,
   transformPage,
 } from './raster';
-import { detectOrientations } from './generators/orientation';
+import { detectOrientations, pickUpright } from './generators/orientation';
+import { orientationByText, tesseractAvailable } from './orientationOcr';
 
 /**
  * Prepare one uploaded document for package compilation.
@@ -18,11 +19,12 @@ import { detectOrientations } from './generators/orientation';
  *
  * @returns {Promise<{
  *   pages: Array<{ buffer: Buffer, width: number, height: number }>,
- *   dropped: number, mirrored: number, rotated: number
+ *   dropped: number, mirrored: number, rotated: number, uncertain: number[]
  * }>}
  */
 export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixRotation = true } = {}) {
-  const stats = { dropped: 0, mirrored: 0, rotated: 0 };
+  // uncertain: pages whose orientation could not be established (left as scanned)
+  const stats = { dropped: 0, mirrored: 0, rotated: 0, uncertain: [] };
 
   // --- Photos -------------------------------------------------------------
   if (mime === 'image/jpeg' || mime === 'image/png' || mime === 'image/webp') {
@@ -32,6 +34,7 @@ export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixR
     if (fixRotation) {
       const fix = await orientationFor([{ page: 1, buffer: img.buffer }]);
       const f = fix['1'];
+      if (f?.uncertain) stats.uncertain.push(1);
       if (f && (f.rotate || f.mirrored)) {
         // Mirrored photos are repaired (flipped back), not dropped.
         const buffer = await transformPage(img.buffer, { rotate: f.rotate, flop: f.mirrored });
@@ -66,6 +69,7 @@ export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixR
     const out = [];
     for (const p of kept) {
       const f = fix[String(p.page)];
+      if (f?.uncertain) stats.uncertain.push(p.page);
       if (f?.mirrored) {
         // A mirrored PDF page is a scan artifact (and usually a duplicate of
         // the readable page next to it) — drop it, unless it's the only page.
@@ -90,20 +94,55 @@ export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixR
   };
 }
 
-/** Run the vision check on page pictures. Best-effort: {} on failure. */
+/**
+ * Orientation of each page picture: { [page]: { rotate, mirrored, uncertain } }.
+ *
+ *   1. The text decides (lib/orientationOcr.js): Tesseract's confident OSD, or
+ *      the rotation in which the page reads clearly best.
+ *   2. Pages with too little text: the vision model picks the upright one of
+ *      the four orientations. Still undecided → left as scanned, and reported.
+ *   3. Mirrored scans (left-right flipped) are flagged by the vision check.
+ * Best-effort: failures leave pages as they are.
+ */
 async function orientationFor(pages) {
-  try {
-    const thumbs = {};
-    for (const p of pages) thumbs[String(p.page)] = await thumbnailB64(p.buffer);
-    const { rotate, mirrored } = await detectOrientations(thumbs);
-    const out = {};
-    for (const [k, v] of Object.entries(rotate)) out[k] = { rotate: v, mirrored: false };
-    for (const n of mirrored) out[String(n)] = { ...(out[String(n)] || { rotate: 0 }), mirrored: true };
-    return out;
-  } catch (e) {
-    console.error(`[packageDocs] orientation check failed: ${e.message}`);
-    return {};
+  const out = {};
+  const thumbs = {};
+  for (const p of pages) thumbs[String(p.page)] = await thumbnailB64(p.buffer);
+
+  const undecided = [];
+  for (const p of pages) {
+    const key = String(p.page);
+    try {
+      const d = await orientationByText(p.buffer);
+      if (d.decided) out[key] = { rotate: d.rotate, mirrored: false, how: d.method };
+      else undecided.push(p);
+    } catch (e) {
+      console.error(`[packageDocs] OCR orientation failed: ${e.message}`);
+      undecided.push(p);
+    }
   }
+  if (!tesseractAvailable()) console.warn('[packageDocs] tesseract not installed — orientation falls back to the vision model');
+
+  if (undecided.length) {
+    const picked = await pickUpright(
+      undecided.map((p) => ({ page: p.page, b64: thumbs[String(p.page)] })),
+      async (b64, rot) => (rot ? (await sharp(Buffer.from(b64, 'base64')).rotate(rot).png().toBuffer()).toString('base64') : b64)
+    );
+    for (const p of undecided) {
+      const key = String(p.page);
+      if (key in picked) out[key] = { rotate: picked[key], mirrored: false, how: 'vision' };
+      else out[key] = { rotate: 0, mirrored: false, uncertain: true };
+    }
+  }
+
+  // Mirror check (vision). Its rotation answers are not used.
+  try {
+    const { mirrored } = await detectOrientations(thumbs);
+    for (const n of mirrored) out[String(n)] = { ...(out[String(n)] || { rotate: 0 }), mirrored: true };
+  } catch (e) {
+    console.error(`[packageDocs] mirror check failed: ${e.message}`);
+  }
+  return out;
 }
 
 async function withSize(buffer) {

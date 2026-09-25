@@ -128,6 +128,36 @@ checklist under **Also required by IRCC** (conditional items as *If applicable*)
 Admins see every source and its history under **Admin → IRCC checklists**, with
 **Check IRCC now**.
 
+## Final files for the IRCC portal
+
+**Generate → Final files for the IRCC portal** builds the set of files that go to
+the portal — one per upload slot — numbered and named like the team's
+"02 - Final Files" folders (`05 - Client Information - Zahra.pdf`). The set per
+application type was learned from the firm's 2026 final folders (file names
+only):
+
+- forms first — main form, Schedule 1 (`imm5257_1e`), IMM 5645, IMM 5476 (an
+  uploaded signed copy is used as is; otherwise the pre-filled official form) —
+  then Passport, Photo (JPG), Client Information;
+- then the documents that have their own slot for that type — e.g. Marriage
+  Certificate (always separate), Birth Certificate & National ID Card, Police
+  Clearance, CV, Education, Family Member Proof of Status, Financial Support,
+  LOA, PAL, Consent for Travel, Custody Document, Health Insurance, Medical Exam;
+- Submission Letter last.
+
+Client Information holds everything else, with its table of contents, and never
+repeats a document that has its own slot. Official forms are passed through
+untouched. **Download all (.zip)** gives the whole set.
+
+### Page orientation
+
+Scans are turned upright by reading their text (Tesseract OCR with Persian +
+English, `lib/orientationOcr.js`): Tesseract's orientation check when it is
+confident, otherwise the rotation in which the page reads clearly best. Only
+pages with too little text fall back to the vision model — asked to pick the
+upright one of four pictures — and any page still undecided is left as scanned
+and listed after the build so staff can check it.
+
 ## Application types
 
 Defined in `lib/appTypes.js`, one per service in the TR Visa team's checklists

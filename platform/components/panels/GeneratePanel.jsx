@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
-import CompiledPackages from '@/components/CompiledPackages';
+import FinalFiles from '@/components/FinalFiles';
 import { requiredMissing } from '@/lib/schema';
 import { lettersFor, formsFor } from '@/lib/appTypes';
 
@@ -225,7 +225,7 @@ export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
         </div>
       )}
 
-      <CompiledPackages app={app} patchLocal={patchLocal} />
+      <FinalFiles app={app} patchLocal={patchLocal} />
 
       <OfficialFormsPanel />
 

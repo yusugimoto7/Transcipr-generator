@@ -111,7 +111,7 @@ export async function saveGenerated(appId, { key, filename, bytes, mime = 'appli
 export async function generatedTarget(appId, { key, filename, mime = 'application/pdf' }) {
   const dir = path.join(UPLOAD_DIR, appId, 'generated');
   await fs.mkdir(dir, { recursive: true });
-  const stored = `${key}.${mime === 'application/pdf' ? 'pdf' : 'txt'}`;
+  const stored = `${key}.${mime === 'application/pdf' ? 'pdf' : mime === 'image/jpeg' ? 'jpg' : 'txt'}`;
   const file = path.join(dir, stored);
   return {
     file,
