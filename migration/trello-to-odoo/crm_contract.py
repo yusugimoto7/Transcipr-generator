@@ -163,8 +163,16 @@ def install_form(odoo):
     anchor = "//field[@name='x_service']" if parent else "//field[@name='user_id']"
     base = odoo.search_read("ir.ui.view", [("model", "=", LEAD), ("type", "=", "form"), ("inherit_id", "=", False),
                                            ("name", "=", "crm.lead.form")], ["id"], limit=1)[0]["id"]
+    # The passport copy moves up under Service Agreement (it is the document a
+    # quotation needs); the Contract block follows it.
+    passport = odoo.search_read("ir.ui.view", [("model", "=", LEAD), ("type", "=", "form"), ("active", "=", True),
+                                               ("arch_db", "like", "x_studio_copy_pass_info")], ["id"], limit=1)
+    move = ('<xpath expr="%s" position="after">'
+            '<xpath expr="//field[@name=\'x_studio_copy_pass_info\']" position="move"/>'
+            '</xpath>') % anchor if (passport and parent) else ''
+    after = "//field[@name='x_studio_copy_pass_info']" if move else anchor
     arch = (
-        '<data>'
+        '<data>' + move +
         '<xpath expr="%s" position="after">'
         '<field name="x_contract_status" widget="badge"'
         ' decoration-info="x_contract_status in (\'draft_sent\',\'sent\')"'
@@ -183,7 +191,7 @@ def install_form(odoo):
         '<field name="x_fee_source"/>'
         '<field name="x_contract_order_id" readonly="1" invisible="not x_contract_order_id"/>'
         '</xpath>'
-        '</data>') % anchor
+        '</data>') % after
     vals = {"name": "crm.lead.form.contract", "model": LEAD, "inherit_id": base, "arch_db": arch, "priority": 210}
     vid = odoo.ref("p2view", "lead_contract")
     if vid:

@@ -2465,7 +2465,12 @@ def install_sign_mail(odoo):
 # Draft Contract" onwards, which blocks a card the moment it reaches drafting
 # even though neither value is used in the agreement. The requirement is
 # dropped (client's request, 2026-09-20); the fields stay on the card.
-RELAXED_CARD_FIELDS = ["x_studio_description", "x_studio_nationality_1"]
+# The passport copy (x_studio_copy_pass_info) stays required: it is the one
+# document a quotation cannot go ahead without. Country, marital status and
+# "accompanying" blocked New Quotation (it saves the card first) and are not
+# needed for it.
+RELAXED_CARD_FIELDS = ["x_studio_description", "x_studio_nationality_1", "x_studio_country",
+                       "x_studio_married_status", "x_studio_accompanying", "x_studio_accompanying_1"]
 
 
 def relax_card_required(odoo, fields=None):
