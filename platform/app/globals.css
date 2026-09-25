@@ -34,11 +34,8 @@ a:hover { text-decoration: underline; }
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
 .brand .maple { color: var(--brand); font-size: 20px; }
-/* Firm logo on a white tile — its slate lettering needs a light background. */
-.brand-logo {
-  display: inline-flex; align-items: center; background: #fff;
-  padding: 6px 10px; border-radius: 6px; line-height: 0;
-}
+/* Firm logo — white lettering on transparent, made for the dark top bar. */
+.brand-logo { display: inline-flex; align-items: center; line-height: 0; }
 .brand-logo img { height: 32px; width: auto; display: block; }
 @media (max-width: 520px) { .brand-logo img { height: 24px; } }
 .topbar a { color: #cfd6e6; }
