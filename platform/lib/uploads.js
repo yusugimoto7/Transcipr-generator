@@ -104,6 +104,26 @@ export async function saveGenerated(appId, { key, filename, bytes, mime = 'appli
   };
 }
 
+/**
+ * Where a generated file of this key is stored, for writers that stream to
+ * disk (package compilation), plus the metadata to record once it's written.
+ */
+export async function generatedTarget(appId, { key, filename, mime = 'application/pdf' }) {
+  const dir = path.join(UPLOAD_DIR, appId, 'generated');
+  await fs.mkdir(dir, { recursive: true });
+  const stored = `${key}.${mime === 'application/pdf' ? 'pdf' : 'txt'}`;
+  const file = path.join(dir, stored);
+  return {
+    file,
+    meta: async () => ({ key, filename: filename || stored, stored, mime, size: (await fs.stat(file)).size, generatedAt: new Date().toISOString() }),
+  };
+}
+
+/** On-disk path of a generated file (for streaming large packages). */
+export function generatedPath(appId, stored) {
+  return path.join(UPLOAD_DIR, appId, 'generated', path.basename(stored));
+}
+
 export async function readGenerated(appId, stored) {
   return fs.readFile(path.join(UPLOAD_DIR, appId, 'generated', stored));
 }

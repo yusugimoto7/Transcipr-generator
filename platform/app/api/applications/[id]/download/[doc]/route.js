@@ -1,4 +1,6 @@
-import { readGenerated, readGeneratedText } from '@/lib/uploads';
+import fs from 'fs';
+import { Readable } from 'stream';
+import { generatedPath, readGeneratedText } from '@/lib/uploads';
 import { renderDocx } from '@/lib/docx';
 import { error, requireOwnedApp } from '@/lib/api';
 
@@ -41,20 +43,23 @@ export async function GET(req, { params }) {
     });
   }
 
-  let bytes;
+  // Stream from disk: a compiled package can be hundreds of MB, and reading
+  // it whole into memory would risk the server running out.
+  const file = generatedPath(app.id, meta.stored);
+  let size;
   try {
-    bytes = await readGenerated(app.id, meta.stored);
+    size = (await fs.promises.stat(file)).size;
   } catch {
     return error('File missing on server. Re-generate the document.', 410);
   }
 
   const safeName = (meta.filename || `${meta.key}.pdf`).replace(/[^\w.\- ]+/g, '_');
-  return new Response(bytes, {
+  return new Response(Readable.toWeb(fs.createReadStream(file)), {
     status: 200,
     headers: {
       'Content-Type': meta.mime || 'application/pdf',
       'Content-Disposition': `attachment; filename="${safeName}"`,
-      'Content-Length': String(bytes.length),
+      'Content-Length': String(size),
       'Cache-Control': 'no-store',
     },
   });

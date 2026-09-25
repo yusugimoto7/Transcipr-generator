@@ -1,5 +1,8 @@
 import { getApplication, updateApplication } from './store';
-import { readGenerated, readUpload, saveGenerated, buildDocBlocks } from './uploads';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
+import { readGenerated, readUpload, saveGenerated, generatedTarget, buildDocBlocks } from './uploads';
 import { renderDocPdf, textToBlocks } from './pdf';
 import { generateLetter, letterSpec, selectLetterDocs } from './generators/letters';
 import { compilePackage, getPackages, packageCategories } from './compile';
@@ -142,8 +145,18 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
   const skippedFiles = []; // files excluded from the package, reported to the applicant
 
   // Every upload — PDF of any geometry, or a photo — becomes a list of upright
-  // page pictures (lib/packageDocs.js). The compiler just places pictures.
+  // page pictures (lib/packageDocs.js), written straight to disk so a
+  // 100-file package never sits in memory. The compiler just places pictures.
+  const work = await fs.mkdtemp(path.join(os.tmpdir(), 'compile-'));
+  try {
+    return await build();
+  } finally {
+    fs.rm(work, { recursive: true, force: true }).catch(() => {});
+  }
+
+  async function build() {
   job.phase = 'documents';
+  let pageNo = 0;
   let fileNo = 0;
   const loadDocs = async (docs) => {
     const items = [];
@@ -162,7 +175,11 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
         droppedTotal += prepared.dropped;
         mirroredTotal += prepared.mirrored;
         rotatedTotal += prepared.rotated;
-        items.push(...prepared.pages.map((p) => ({ kind: 'picture', ...p, filename: d.filename })));
+        for (const p of prepared.pages) {
+          const file = path.join(work, `p-${String(++pageNo).padStart(5, '0')}.jpg`);
+          await fs.writeFile(file, p.buffer);
+          items.push({ kind: 'picture', file, width: p.width, height: p.height, filename: d.filename });
+        }
       } catch (e) {
         console.error(`[compile] could not prepare "${d.filename}": ${e.message}`);
         skippedFiles.push(d.filename);
@@ -199,16 +216,19 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
   job.phase = 'assembling';
   job.current = 'assembling the PDF and table of contents';
   const applicantName = [d.givenName, d.familyName].filter(Boolean).join(' ');
+  const key = `${pkg}-package`;
+  const target = await generatedTarget(app.id, { key, filename: def.filename });
   let compiled;
   try {
-    compiled = await compilePackage(def.title, applicantName, sections);
+    compiled = await compilePackage(def.title, applicantName, sections, {
+      outPath: target.file,
+      onProgress: (n, total) => (job.current = `assembling page ${n} of ${total}`),
+    });
   } catch (e) {
     throw new Error(`Compilation failed: ${e.message}`);
   }
   skippedFiles.push(...compiled.skipped);
-
-  const key = `${pkg}-package`;
-  const meta = await saveGenerated(app.id, { key, filename: def.filename, bytes: Buffer.from(compiled.bytes) });
+  const meta = await target.meta();
   const updated = await updateApplication(app.id, (a) => {
     const m = new Map((a.generated || []).map((g) => [g.key, g]));
     m.set(key, meta);
@@ -225,5 +245,7 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
     mirroredPages: mirroredTotal,
     skippedFiles: [...new Set(skippedFiles)],
     included: sections.map((s) => ({ name: s.name, count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0) })),
+    pages: compiled.pages,
   };
+  }
 }
