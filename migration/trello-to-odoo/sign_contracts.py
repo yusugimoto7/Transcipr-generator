@@ -770,12 +770,37 @@ else:
     # (SB0000yyNNN); a combined entrepreneur file carries SG0000yyNNN with the
     # same digits on the Sugimoto part; everything else on the Sugimoto
     # sequence (SyyNNN). Assigned once, kept on re-sends.
-    if not (order.client_order_ref or '').strip():
-        seq_code = 'x_sparkbridge_contract' if any(k.startswith('SB-') for k in kinds) else 'x_sugimoto_file'
-        number = env['ir.sequence'].sudo().next_by_code(seq_code)
-        if not number:
+    # The number was normally drawn with the file's first quotation; here it is
+    # only checked against the agreement actually going out. A name in the
+    # field is not a number, and a number of the wrong company is swapped (on
+    # a combined entrepreneur file a Sugimoto number moves to the Sugimoto part).
+    def _file_no(v):
+        v = (v or '').strip().upper()
+        head = v.rstrip('0123456789')
+        digits = v[len(head):]
+        ok = head in ('S', 'SB', 'SG', 'SBSUV', 'SGSUV', 'SBEU', 'SBBICT', 'SGBICT', 'C') and 4 <= len(digits) <= 9
+        return v if ok else ''
+    needs_sb = any(k.startswith('SB-') for k in kinds)
+    needs_sg = any(not k.startswith('SB-') for k in kinds)
+    ref = _file_no(order.client_order_ref)
+    old_ref = ref
+    if ref and needs_sb and not ref.startswith('SB'):
+        if needs_sg and not (order.x_sugimoto_no or '').strip():
+            order.write({'x_sugimoto_no': ref})
+        ref = ''
+    elif ref and not needs_sb and ref.startswith('SB'):
+        ref = ''
+    if not ref:
+        seq_code = 'x_sparkbridge_contract' if needs_sb else 'x_sugimoto_file'
+        ref = env['ir.sequence'].sudo().next_by_code(seq_code)
+        if not ref:
             raise UserError("The contract number sequence %s is not set up." % seq_code)
-        order.write({'client_order_ref': number})
+    if ref != (order.client_order_ref or '').strip():
+        order.write({'client_order_ref': ref})
+        if lead:
+            head = (lead.name or '').split(' - ')[0].strip()
+            rest = (lead.name or '')[len(head):].lstrip(' -') if _file_no(head) else (lead.name or '')
+            lead.sudo().write({'name': '%s - %s' % (ref, rest.strip()) if rest.strip() else ref})
     file_no = order.client_order_ref.strip()
     # A combined entrepreneur file is two separate agreements, one per company.
     # Each takes the next number of its own company's series, so the pair never
@@ -2795,3 +2820,48 @@ def install(odoo, rcic_email):
     relax_card_required(odoo)
     install_default_plans(odoo)
     return ids
+
+
+def bump_sequences(odoo, year=None):
+    """Move both contract-number sequences past every number already in use.
+
+    Numbers typed into card names by hand, or restored from the finance
+    sheets, are invisible to the sequence; left alone it hands them out a
+    second time. Looks at card names, the cards' contract-number fields and
+    every quotation, and never moves a sequence backwards.
+    """
+    import datetime as _dt
+    yy = "%02d" % ((year or _dt.date.today().year) % 100)
+    series = {"x_sugimoto_file": re.compile(r"\bS%s(\d{3,4})\b" % yy),
+              "x_sparkbridge_contract": re.compile(r"\bSB0000%s(\d{3,4})\b" % yy)}
+    texts = []
+    for l in odoo.search_read("crm.lead", ["|", "|", ("name", "like", "S" + yy), ("x_contract_no_sg", "!=", False),
+                                            ("x_contract_no_sb", "!=", False)],
+                              ["name", "x_contract_no_sg", "x_contract_no_sb"], context={"active_test": False}):
+        texts += [l["name"] or "", l["x_contract_no_sg"] or "", l["x_contract_no_sb"] or ""]
+    for so in odoo.search_read("sale.order", [], ["client_order_ref", "x_sugimoto_no"]):
+        texts += [so["client_order_ref"] or "", so["x_sugimoto_no"] or ""]
+    out = {}
+    for code, rx in series.items():
+        used = [int(m) for t in texts for m in rx.findall(t.upper())]
+        seq = odoo.search_read("ir.sequence", [("code", "=", code)], ["id", "use_date_range"], limit=1)
+        if not seq:
+            continue
+        ranges = odoo.search_read("ir.sequence.date_range", [("sequence_id", "=", seq[0]["id"]),
+                                                              ("date_from", "<=", "20%s-12-31" % yy),
+                                                              ("date_to", ">=", "20%s-01-01" % yy)],
+                                  ["id", "number_next_actual"], limit=1)
+        cur = ranges[0]["number_next_actual"] if ranges else None
+        # A number far ahead of the series is a typo in a card name, not a
+        # contract: it is reported, and must not drag the series with it.
+        outliers = sorted({u for u in used if cur and u > cur + 100})
+        used = [u for u in used if u not in outliers]
+        if outliers:
+            log.warning("  %s: ignored numbers far ahead of the series: %s", code, outliers)
+        top = max(used) if used else 0
+        target = top + 1
+        if ranges and target > cur:
+            odoo.write("ir.sequence.date_range", [ranges[0]["id"]], {"number_next_actual": target})
+        out[code] = {"highest_in_use": top, "was_next": cur, "now_next": max(target, cur or 0), "ignored": outliers}
+        log.info("  %s: highest in use %s, next %s -> %s", code, top, cur, out[code]["now_next"])
+    return out

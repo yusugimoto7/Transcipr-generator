@@ -52,9 +52,46 @@ for order in records:
 # picked is pre-filled from that service's template — principal line at 1,
 # add-ons and government fees at 0 for the salesperson to set, terms attached.
 PREFILL_ACTION_CODE = """
+# The contract number belongs to the client file: drawn once, when the card's
+# first quotation is created, and reused by every later quotation of the card.
+# The card carries it at the front of its name ("S26280 - Hiva Maleki").
+FILE_PREFIXES = ('S', 'SB', 'SG', 'SBSUV', 'SGSUV', 'SBEU', 'SBBICT', 'SGBICT', 'C')
+def file_no(v):
+    v = (v or '').strip().upper()
+    head = v.rstrip('0123456789')
+    digits = v[len(head):]
+    return v if head in FILE_PREFIXES and 4 <= len(digits) <= 9 else ''
+def taken(number, order):
+    Lead, Order = env['crm.lead'].sudo().with_context(active_test=False), env['sale.order'].sudo()
+    return bool(Lead.search_count(['|', '|', ('name', '=like', number + ' %'), ('x_contract_no_sg', '=', number), ('x_contract_no_sb', '=', number)])
+                or Order.search_count([('id', '!=', order.id), '|', ('client_order_ref', '=', number), ('x_sugimoto_no', '=', number)]))
+
 for order in records:
     lead = order.opportunity_id
     tmpl = lead.x_service if lead else False
+    if lead and not file_no(order.client_order_ref):
+        head = (lead.name or '').split(' - ')[0].split(' \u2013 ')[0].strip()
+        number = file_no(head)
+        if not number:
+            # an earlier quotation of the same card already has one
+            for other in lead.order_ids.filtered(lambda o: o.id != order.id):
+                number = file_no(other.client_order_ref)
+                if number:
+                    break
+        if not number:
+            is_sb = bool(tmpl) and any(t.name.startswith('SB-') for t in
+                tmpl.sale_order_template_line_ids.mapped('product_id.product_tmpl_id.product_tag_ids'))
+            seq = 'x_sparkbridge_contract' if is_sb else 'x_sugimoto_file'
+            for _i in range(50):
+                number = env['ir.sequence'].sudo().next_by_code(seq) or ''
+                if not number or not taken(number, order):
+                    break
+        if number:
+            order.write({'client_order_ref': number})
+            if not file_no(head):
+                lead.sudo().write({'name': '%s - %s' % (number, (lead.name or '').strip())})
+                lead.sudo().message_post(body='Contract number %s assigned with the first quotation (%s).' % (number, order.name),
+                                         message_type='comment', subtype_xmlid='mail.mt_note')
     if not tmpl or order.order_line:
         continue
     # Pricelist by the service's currency: EUR-tagged products -> EUR list.
@@ -75,8 +112,6 @@ for order in records:
             'require_signature': True, 'require_payment': False}
     if tmpl.note:
         vals['note'] = tmpl.note
-    if lead.name:
-        vals['client_order_ref'] = lead.name.split(' - ')[0].split(' – ')[0].strip()
     order.write(vals)
 """.strip()
 
