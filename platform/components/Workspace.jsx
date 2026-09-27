@@ -11,7 +11,7 @@ import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
 import { primaryLetter, getAppType } from '@/lib/appTypes';
 import { fileProgress } from '@/lib/progress';
-import { ROLE_LABEL } from '@/lib/cases';
+import { ROLE_LABEL, displayName } from '@/lib/cases';
 import { initials } from '@/components/TopBar';
 
 const SECTION_IDS = ['overview', 'documents', 'intake', 'sop', 'review', 'generate'];
@@ -169,7 +169,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
               {staff && family ? <Link href={`/case/${encodeURIComponent(family.key)}`}>{family.label}</Link> : <span>{app.clientNumber || 'File'}</span>}
             </div>
             <div className="ws-title">
-              <h1>{app.title}</h1>
+              <h1>{displayName(app)}</h1>
               <span className="chip">{ROLE_LABEL[app.applicantRole] || ROLE_LABEL.main}</span>
             </div>
             <div className="ws-meta">

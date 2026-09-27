@@ -26,6 +26,12 @@ export function caseKeyOf(a) {
 /** A name that was never entered: the default "<type> Application" title. */
 export const isDefaultTitle = (t) => !t || / Application$/.test(t);
 
+/** The person's name from the intake (as in the passport), or ''. */
+export const intakeName = (a) => [a?.data?.givenName, a?.data?.familyName].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
+
+/** The file's name: the one entered, else the name in the intake, else the default title. */
+export const displayName = (a) => (!isDefaultTitle(a?.title) ? a.title : intakeName(a) || a?.title || '');
+
 const roleRank = (a) => ROLE_ORDER[a.applicantRole] ?? ROLE_ORDER.other;
 
 /** Main applicant first, then spouse, children, parents; oldest first within a role. */
@@ -48,7 +54,7 @@ export function groupCases(apps) {
     cases.push({
       key,
       clientNumber: normNumber(main.clientNumber) || normNumber(members.find((m) => m.clientNumber)?.clientNumber),
-      name: main.title,
+      name: displayName(main),
       main,
       members,
       updatedAt: members.map((m) => m.updatedAt).filter(Boolean).sort().pop() || '',

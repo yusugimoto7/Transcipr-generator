@@ -136,6 +136,30 @@ Google Drive is where every file lives; the server disk is only a cache.
 - The service account needs **Editor** on the clients folder. Without a Drive connection files stay on the
   server disk, as before.
 
+## Odoo (TR Visa project)
+
+The platform reads the cards of the **TR Visa** project in Odoo (read-only) every 15 minutes:
+
+- Each main applicant's file is linked to their card: by the client number when the file has one, else by the
+  applicant's name. The file takes the card's number (`S26213`) and name; the whole family gets the number.
+  When a client has several cards, the most recent one wins.
+- A new card (open, created in the last `ODOO_IMPORT_DAYS`, default 365) becomes a client file. The type is read
+  from the card's title or tags (e.g. "Study Permit", "Visitor", "100-304"); when it can't be, the file is marked
+  **Check the type**. Assignees in Odoo are assigned on the platform when their emails match.
+- Cards in closed (folded) stages and archived cards are ignored. A card chosen by hand (client page → pencil →
+  Odoo card → Link) stays linked.
+- Admin → **Odoo** shows the connection, the last sync and what it changed, with "Sync with Odoo now".
+
+Setup on Render (Environment):
+
+| Variable | Value |
+|---|---|
+| `ODOO_URL` | `https://yourcompany.odoo.com` |
+| `ODOO_DB` | the database name (on odoo.com usually the subdomain) |
+| `ODOO_USER` | the login email of the Odoo user whose key is used |
+| `ODOO_API_KEY` | Odoo → My Profile → Account Security → **New API Key** |
+| `ODOO_PROJECT` | optional, default `TR Visa` |
+
 ## Document check (صحت و سقم)
 
 Every time documents are read, each one is also checked before it can go to

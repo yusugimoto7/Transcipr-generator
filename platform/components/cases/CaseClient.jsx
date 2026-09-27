@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronRight, UserPlus, Pencil, X, ArrowLeft, Link2, FilePlus2, Crown, User } from 'lucide-react';
-import { getAppType } from '@/lib/appTypes';
+import { getAppType, APP_TYPE_LIST } from '@/lib/appTypes';
 import { groupCases, caseLabel, caseKeyOf, isDefaultTitle, normNumber, ROLE_LABEL } from '@/lib/cases';
 import { fmtAgo } from '@/lib/format';
 import TypePicker from '@/components/cases/TypePicker';
@@ -27,7 +27,7 @@ async function send(url, method, body) {
  * One client: the main applicant's file and the family members applying with
  * them. Each card opens that person's own file.
  */
-export default function CaseClient({ caseKey, files, others, staff }) {
+export default function CaseClient({ caseKey, files, others, staff, odooOn }) {
   const router = useRouter();
   const c = groupCases(files)[0];
   const [adding, setAdding] = useState(false);
@@ -56,6 +56,12 @@ export default function CaseClient({ caseKey, files, others, staff }) {
             {check.red ? <> · <span style={{ color: 'var(--danger)', fontWeight: 600 }}>{check.red} serious finding{check.red === 1 ? '' : 's'}</span></> : null}
             <span suppressHydrationWarning> · updated {fmtAgo(c.updatedAt)}</span>
           </p>
+          {c.main.odoo && (
+            <p className="small" style={{ margin: '4px 0 0' }}>
+              <span className="faint">Odoo card:</span>{' '}
+              {c.main.odoo.url ? <a href={c.main.odoo.url} target="_blank" rel="noreferrer">{c.main.odoo.title}</a> : c.main.odoo.title}
+            </p>
+          )}
         </div>
         {staff && (
           <button type="button" onClick={() => setAdding(true)}>
@@ -76,7 +82,10 @@ export default function CaseClient({ caseKey, files, others, staff }) {
                   <div className="m-name">{isDefaultTitle(m.title) ? <span className="faint">Name not entered</span> : m.title}</div>
                   <div className="small muted">{m.typeTitle}{m.service ? ` · ${m.service}` : ''}</div>
                 </div>
-                <StageChip f={m} />
+                <div className="stack-sm" style={{ justifyItems: 'end' }}>
+                  <StageChip f={m} />
+                  {m.typeGuessed && <span className="chip warn" title="The Odoo card didn't say which application this is — set it in Client details">Check the type</span>}
+                </div>
               </div>
               <div className="cluster" style={{ gap: 24, alignItems: 'flex-end' }}>
                 <Meter v={m.docs} label="Documents" />
@@ -100,7 +109,7 @@ export default function CaseClient({ caseKey, files, others, staff }) {
       </div>
 
       {adding && <AddMember c={c} caseKey={caseKey} others={others} onClose={() => setAdding(false)} onDone={() => { setAdding(false); router.refresh(); }} />}
-      {editing && <EditClient c={c} onClose={() => setEditing(false)} onDone={(key) => { setEditing(false); if (key !== caseKey) router.replace(`/case/${encodeURIComponent(key)}`); router.refresh(); }} />}
+      {editing && <EditClient c={c} odooOn={odooOn} onClose={() => setEditing(false)} onDone={(key) => { setEditing(false); if (key !== caseKey) router.replace(`/case/${encodeURIComponent(key)}`); router.refresh(); }} />}
     </>
   );
 }
@@ -231,9 +240,41 @@ function AddMember({ c, caseKey, others, onClose, onDone }) {
 }
 
 /** Rename the client and set the file number shared by everyone in the file. */
-function EditClient({ c, onClose, onDone }) {
+function EditClient({ c, odooOn, onClose, onDone }) {
   const [name, setName] = useState(isDefaultTitle(c.name) ? '' : c.name);
   const [number, setNumber] = useState(c.clientNumber);
+  const [type, setType] = useState(c.main.type);
+  const [q, setQ] = useState(isDefaultTitle(c.name) ? c.clientNumber : c.name);
+  const [cards, setCards] = useState(null);
+  const [searching, setSearching] = useState(false);
+
+  async function search(e) {
+    e?.preventDefault();
+    setSearching(true);
+    setErr('');
+    try {
+      const res = await fetch(`/api/odoo/cards?q=${encodeURIComponent(q)}`);
+      const d = JSON.parse(await res.text());
+      if (!res.ok) throw new Error(d.error || 'Could not search Odoo.');
+      setCards(d.cards);
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function linkCard(card) {
+    setBusy(true);
+    setErr('');
+    try {
+      await send(`/api/applications/${c.main.id}/odoo`, 'POST', { taskId: card.taskId });
+      onDone(card.number || caseKeyOf(c.main));
+    } catch (e2) {
+      setErr(e2.message);
+      setBusy(false);
+    }
+  }
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
@@ -250,6 +291,7 @@ function EditClient({ c, onClose, onDone }) {
           clientNumber: num,
           groupId: key,
           ...(m.id === c.main.id && name.trim() ? { title: name.trim() } : {}),
+          ...(m.id === c.main.id && type !== c.main.type ? { type } : {}),
         });
       }
       onDone(key);
@@ -278,6 +320,37 @@ function EditClient({ c, onClose, onDone }) {
             <label htmlFor="ec-name">Main applicant’s name</label>
             <input id="ec-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="As in the passport" />
           </div>
+          <div className="field">
+            <label htmlFor="ec-type">Main applicant’s application</label>
+            <select id="ec-type" value={type} onChange={(e) => setType(e.target.value)}>
+              {APP_TYPE_LIST.map((t) => <option key={t.key} value={t.key}>{t.title}{t.service ? ` · ${t.service}` : ''}</option>)}
+            </select>
+            {c.main.typeGuessed && <div className="note" style={{ color: 'var(--warn)' }}>Created from Odoo; the card didn’t say which application this is. Please check.</div>}
+          </div>
+          {odooOn && (
+            <div className="field">
+              <label htmlFor="ec-odoo">Odoo card</label>
+              <div className="cluster" style={{ flexWrap: 'nowrap' }}>
+                <input id="ec-odoo" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') search(e); }} placeholder="Name or client number" />
+                <button type="button" className="btn-secondary" onClick={search} disabled={searching || !q.trim()}>{searching ? <span className="spinner dark" /> : 'Search'}</button>
+              </div>
+              <div className="note">Linking takes the card’s number and name for this client and the whole family.</div>
+              {cards && (
+                <div className="list" style={{ marginTop: 8 }}>
+                  {!cards.length && <div className="list-row small muted">No cards found.</div>}
+                  {cards.map((card) => (
+                    <div className="list-row" key={card.taskId} style={{ padding: '8px 12px' }}>
+                      <div className="grow small">
+                        <div className="strong">{card.title}</div>
+                        <div className="faint">{card.stage}{card.createdAt ? ` · ${fmtAgo(card.createdAt)}` : ''}{c.main.odoo?.taskId === card.taskId ? ' · linked now' : ''}</div>
+                      </div>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => linkCard(card)} disabled={busy}>Link</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {err && <div className="alert err">{err}</div>}
         </div>
         <div className="modal-foot">

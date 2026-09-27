@@ -5,6 +5,7 @@ import { summarizeFile } from '@/lib/fileSummary';
 import { caseKeyOf, groupCases, caseLabel } from '@/lib/cases';
 import TopBar from '@/components/TopBar';
 import CaseClient from '@/components/cases/CaseClient';
+import { odooConfig } from '@/lib/odoo';
 import AssistantWidget from '@/components/AssistantWidget';
 
 async function load(params) {
@@ -43,7 +44,7 @@ export default async function CasePage({ params }) {
     <>
       <TopBar user={user} />
       <div className="page">
-        <CaseClient caseKey={key} files={files} others={others} staff={staff} />
+        <CaseClient caseKey={key} files={files} others={others} staff={staff} odooOn={staff && odooConfig().configured} />
       </div>
       <AssistantWidget />
     </>

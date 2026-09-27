@@ -46,6 +46,16 @@ services:
         sync: false
       - key: DRIVE_CLIENTS_FOLDER
         sync: false
+      # Optional — Odoo TR Visa project (client numbers, names, new files).
+      # See platform/README.md → "Odoo".
+      - key: ODOO_URL
+        sync: false
+      - key: ODOO_DB
+        sync: false
+      - key: ODOO_USER
+        sync: false
+      - key: ODOO_API_KEY
+        sync: false
       # Server cache limit (MB) — keep it below the disk size (1 GB).
       - key: CACHE_MAX_MB
         value: "600"

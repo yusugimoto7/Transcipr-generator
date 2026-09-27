@@ -1,7 +1,7 @@
 import { getAppType } from './appTypes';
 import { getSchema } from './schema';
 import { fileProgress, stageOf } from './progress';
-import { caseKeyOf } from './cases';
+import { caseKeyOf, displayName } from './cases';
 
 /**
  * What the file lists show about one application: who, what, where it stands.
@@ -18,7 +18,7 @@ export function summarizeFile(a, people = new Map()) {
   return {
     id: a.id,
     caseKey: caseKeyOf(a),
-    title: a.title,
+    title: displayName(a),
     type: a.type,
     typeTitle: type.title,
     group: type.group,
@@ -34,5 +34,7 @@ export function summarizeFile(a, people = new Map()) {
     intake: p ? { done: p.intake.done, total: p.intake.total } : null,
     check: p ? { red: p.check.red, orange: p.check.orange, toSign: p.check.toSign } : null,
     finalStale: Boolean(p?.final.stale),
+    odoo: a.odoo ? { taskId: a.odoo.taskId, title: a.odoo.title, url: a.odoo.url, manual: Boolean(a.odoo.manual) } : null,
+    typeGuessed: Boolean(a.typeGuessed),
   };
 }

@@ -2,7 +2,7 @@ import { updateApplication, deleteApplication, effectiveRole } from '@/lib/store
 import { everyField } from '@/lib/schema';
 import { APP_TYPES, STAGE_LABELS } from '@/lib/appTypes';
 import { json, error, requireAppAccess } from '@/lib/api';
-import { ROLES, normNumber } from '@/lib/cases';
+import { ROLES, normNumber, isDefaultTitle, intakeName } from '@/lib/cases';
 
 export async function GET(_req, { params }) {
   const { app, error: err } = await requireAppAccess(params.id);
@@ -52,6 +52,8 @@ export async function PATCH(req, { params }) {
           if (validIds.has(k)) a.data[k] = v;
         }
         a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+        // A file created without a name takes the name from the intake (as in the passport).
+        if (isDefaultTitle(a.title) && intakeName(a)) a.title = intakeName(a);
       }
       if (typeof body.title === 'string' && body.title.trim()) a.title = body.title.trim();
       if (typeof body.status === 'string') a.status = body.status;
@@ -61,7 +63,10 @@ export async function PATCH(req, { params }) {
         // Link this file to a family case (lib/cases.js); null unlinks it.
         if ('groupId' in body) a.groupId = typeof body.groupId === 'string' && body.groupId.trim() ? body.groupId.trim() : null;
         if (body.representation === 'self' || body.representation === 'firm') a.representation = body.representation;
-        if (typeof body.type === 'string' && APP_TYPES[body.type]) a.type = body.type;
+        if (typeof body.type === 'string' && APP_TYPES[body.type]) {
+          a.type = body.type;
+          a.typeGuessed = false; // the team chose it
+        }
         if (ROLES.includes(body.applicantRole)) a.applicantRole = body.applicantRole;
       }
       return a;

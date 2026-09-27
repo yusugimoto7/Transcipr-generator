@@ -1,7 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getApplication, canAccess, listApplicationsFor } from '@/lib/store';
-import { caseKeyOf, groupCases, caseLabel } from '@/lib/cases';
+import { caseKeyOf, groupCases, caseLabel, displayName } from '@/lib/cases';
 import { driveOn } from '@/lib/driveStore';
 import { getSchema } from '@/lib/schema';
 import TopBar from '@/components/TopBar';
@@ -10,7 +10,7 @@ import AssistantWidget from '@/components/AssistantWidget';
 
 export async function generateMetadata({ params }) {
   const app = await getApplication(params.id);
-  return { title: app ? `${app.clientNumber ? `${app.clientNumber} ` : ''}${app.title} — Sugimoto Visa` : 'File — Sugimoto Visa' };
+  return { title: app ? `${app.clientNumber ? `${app.clientNumber} ` : ''}${displayName(app)} — Sugimoto Visa` : 'File — Sugimoto Visa' };
 }
 
 export default async function ApplicationPage({ params }) {
@@ -28,7 +28,7 @@ export default async function ApplicationPage({ params }) {
   const family = {
     key,
     label: caseLabel(c),
-    members: c.members.map((m) => ({ id: m.id, title: m.title, applicantRole: m.applicantRole || 'main', main: m.id === c.main.id })),
+    members: c.members.map((m) => ({ id: m.id, title: displayName(m), applicantRole: m.applicantRole || 'main', main: m.id === c.main.id })),
   };
 
   return (
