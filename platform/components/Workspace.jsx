@@ -11,6 +11,8 @@ import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
 import { primaryLetter, getAppType } from '@/lib/appTypes';
 import { fileProgress } from '@/lib/progress';
+import { ROLE_LABEL } from '@/lib/cases';
+import { initials } from '@/components/TopBar';
 
 const SECTION_IDS = ['overview', 'documents', 'intake', 'sop', 'review', 'generate'];
 
@@ -27,7 +29,7 @@ function readHash() {
  * the selected stage. The position is kept in the URL (#documents, #intake:family…)
  * so a refresh or a shared link opens the same place.
  */
-export default function Workspace({ initialApp, schema, viewerRole }) {
+export default function Workspace({ initialApp, schema, viewerRole, family }) {
   const [app, setApp] = useState(initialApp);
   const staff = viewerRole === 'admin' || viewerRole === 'manager';
   const [tab, setTabState] = useState('overview');
@@ -164,18 +166,27 @@ export default function Workspace({ initialApp, schema, viewerRole }) {
             <div className="crumbs">
               <Link href="/dashboard">{staff ? 'Client files' : 'My applications'}</Link>
               <ChevronRight size={13} aria-hidden="true" />
-              <span>{app.clientNumber || 'File'}</span>
+              {staff && family ? <Link href={`/case/${encodeURIComponent(family.key)}`}>{family.label}</Link> : <span>{app.clientNumber || 'File'}</span>}
             </div>
             <div className="ws-title">
               <h1>{app.title}</h1>
-              {app.clientNumber && <span className="chip code">{app.clientNumber}</span>}
+              <span className="chip">{ROLE_LABEL[app.applicantRole] || ROLE_LABEL.main}</span>
             </div>
             <div className="ws-meta">
               <span>{type.title}</span>
               {type.service && <span className="mono">{type.service}</span>}
-              {app.applicantRole && app.applicantRole !== 'main' && <span>{app.applicantRole === 'spouse' ? 'Accompanying spouse' : 'Dependent child'}</span>}
               {staff && <span>{app.representation === 'self' ? 'Self-represented' : 'Represented by the firm'}</span>}
             </div>
+            {family && family.members.length > 1 && (
+              <nav className="family" aria-label="Family members">
+                {family.members.map((m) => (
+                  <Link key={m.id} href={`/application/${m.id}`} className={m.id === app.id ? 'on' : ''} aria-current={m.id === app.id ? 'page' : undefined}>
+                    <span className="avatar" aria-hidden="true">{initials(m.title)}</span>
+                    {m.title.split(' ')[0]} · {m.main ? 'main' : (ROLE_LABEL[m.applicantRole] || 'family').split(' ')[0].toLowerCase()}
+                  </Link>
+                ))}
+              </nav>
+            )}
           </div>
           <div className="ws-stats" aria-label="File status">
             <Stat label="Documents" value={`${p.documents.provided}/${p.documents.required}`} ratio={p.documents.required ? p.documents.provided / p.documents.required : 0} />

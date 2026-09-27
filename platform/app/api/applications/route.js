@@ -1,6 +1,7 @@
 import { listApplicationsFor, createApplication, effectiveRole, listUsers } from '@/lib/store';
 import { APP_TYPES, DEFAULT_TYPE, getAppType } from '@/lib/appTypes';
 import { json, error, requireUser } from '@/lib/api';
+import { ROLES, normNumber } from '@/lib/cases';
 
 function summarize(a, users) {
   const byId = new Map((users || []).map((u) => [u.id, u]));
@@ -56,8 +57,8 @@ export async function POST(req) {
     createdBy: user.id,
     type,
     title: (body.title || '').trim() || `${getAppType(type).title} Application`,
-    clientNumber: staff ? body.clientNumber || '' : '',
-    applicantRole: ['main', 'spouse', 'child'].includes(body.applicantRole) ? body.applicantRole : 'main',
+    clientNumber: staff ? normNumber(body.clientNumber) : '',
+    applicantRole: ROLES.includes(body.applicantRole) ? body.applicantRole : 'main',
     groupId: staff ? body.groupId || null : null,
     representation: staff ? (body.representation === 'self' ? 'self' : 'firm') : 'self',
     assignedTo: role === 'manager' ? [user.id] : [],

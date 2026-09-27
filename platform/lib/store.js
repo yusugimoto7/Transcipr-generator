@@ -225,7 +225,7 @@ export async function createApplication({
     type: type || 'study-permit',
     title: title || 'Study Permit Application',
     clientNumber: String(clientNumber || '').trim(),
-    applicantRole, // main | spouse | child
+    applicantRole, // main | spouse | child | parent | other (lib/cases.js)
     groupId, // links the applications of one family file
     representation, // self | firm (adds IMM 5476 + Submission Letter)
     stage: 'documents',

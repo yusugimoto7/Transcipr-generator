@@ -5,6 +5,7 @@ import { DATA_DIR, listAllApplications, getApplication, updateApplication, listU
 import { saveUpload, isAllowedType } from './uploads';
 import { classifyByFilename } from './generators/classify';
 import { buildChecklist } from './checklist';
+import { normNumber } from './cases';
 import { startExtractJob, getExtractJob } from './extractJob';
 import { driveStatus, parseDriveLink, getItem, findChildren, searchFolders, getParents, createFolder, uploadFile, FOLDER_MIME } from './drive';
 
@@ -146,17 +147,25 @@ export async function matchApplication(msg, apps, users) {
   const addr = msg.from.address;
   const byUser = new Map((users || []).map((u) => [u.id, String(u.email || '').toLowerCase()]));
   const clientNo = (msg.text || '').match(CLIENT_NO)?.[1]?.toUpperCase();
+  const fromSender = (a) =>
+    addr &&
+    ((a.clientEmails || []).map((e) => e.toLowerCase()).includes(addr) ||
+      String(a.data?.email || '').toLowerCase() === addr ||
+      byUser.get(a.userId) === addr);
   if (clientNo) {
     const hit = apps.filter((a) => String(a.clientNumber || '').toUpperCase() === clientNo);
     if (hit.length === 1) return { app: hit[0], how: `client number ${clientNo}` };
+    if (hit.length > 1) {
+      // A family shares the number (lib/cases.js): the sender's own file, else
+      // the main applicant's — the family has one Drive folder either way.
+      const own = hit.filter(fromSender);
+      if (own.length === 1) return { app: own[0], how: `client number ${clientNo} and sender ${addr}` };
+      const main = hit.filter((a) => (a.applicantRole || 'main') === 'main');
+      if (main.length === 1) return { app: main[0], how: `client number ${clientNo} (main applicant's file)` };
+      return { candidates: hit.map((a) => a.id) };
+    }
   }
-  const byEmail = apps.filter(
-    (a) =>
-      addr &&
-      ((a.clientEmails || []).map((e) => e.toLowerCase()).includes(addr) ||
-        String(a.data?.email || '').toLowerCase() === addr ||
-        byUser.get(a.userId) === addr)
-  );
+  const byEmail = apps.filter(fromSender);
   if (byEmail.length === 1) return { app: byEmail[0], how: `sender ${addr}` };
   return { candidates: byEmail.map((a) => a.id) };
 }
@@ -284,6 +293,13 @@ async function underClients(id, rootId) {
  */
 export async function ensureClientFolder(app) {
   const cfg = mailConfig();
+  // A family shares one client folder, named after the main applicant (lib/cases.js).
+  if ((app.applicantRole || 'main') !== 'main' && app.clientNumber) {
+    const main = (await listAllApplications()).find(
+      (a) => a.id !== app.id && normNumber(a.clientNumber) === normNumber(app.clientNumber) && (a.applicantRole || 'main') === 'main'
+    );
+    if (main) app = { ...app, data: main.data, title: main.title, driveSource: app.driveSource || main.driveSource };
+  }
   let clientFolder = null;
   if (app.driveSource?.rootId) {
     try {

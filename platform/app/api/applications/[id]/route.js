@@ -2,6 +2,7 @@ import { updateApplication, deleteApplication, effectiveRole } from '@/lib/store
 import { everyField } from '@/lib/schema';
 import { APP_TYPES, STAGE_LABELS } from '@/lib/appTypes';
 import { json, error, requireAppAccess } from '@/lib/api';
+import { ROLES, normNumber } from '@/lib/cases';
 
 export async function GET(_req, { params }) {
   const { app, error: err } = await requireAppAccess(params.id);
@@ -56,10 +57,12 @@ export async function PATCH(req, { params }) {
       if (typeof body.status === 'string') a.status = body.status;
       if (typeof body.stage === 'string' && STAGE_LABELS[body.stage]) a.stage = body.stage;
       if (staff) {
-        if (typeof body.clientNumber === 'string') a.clientNumber = body.clientNumber.trim();
+        if (typeof body.clientNumber === 'string') a.clientNumber = normNumber(body.clientNumber);
+        // Link this file to a family case (lib/cases.js); null unlinks it.
+        if ('groupId' in body) a.groupId = typeof body.groupId === 'string' && body.groupId.trim() ? body.groupId.trim() : null;
         if (body.representation === 'self' || body.representation === 'firm') a.representation = body.representation;
         if (typeof body.type === 'string' && APP_TYPES[body.type]) a.type = body.type;
-        if (typeof body.applicantRole === 'string') a.applicantRole = body.applicantRole;
+        if (ROLES.includes(body.applicantRole)) a.applicantRole = body.applicantRole;
       }
       return a;
     },
