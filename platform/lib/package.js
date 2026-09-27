@@ -74,7 +74,7 @@ export async function buildSubmissionZip(app) {
   const nameByKey = Object.fromEntries(DOC_ORDER);
   for (const g of generated) {
     try {
-      const bytes = await readGenerated(app.id, g.stored);
+      const bytes = await readGenerated(app, g);
       const name = nameByKey[g.key] || g.filename || `${g.key}.pdf`;
       zip.file(name, bytes);
     } catch {

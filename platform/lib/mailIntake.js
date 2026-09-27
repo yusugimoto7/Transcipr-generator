@@ -2,12 +2,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import { simpleParser } from 'mailparser';
 import { DATA_DIR, listAllApplications, getApplication, updateApplication, listUsers } from './store';
-import { saveUpload, isAllowedType } from './uploads';
+import { saveUpload, isAllowedType, readUpload } from './uploads';
 import { classifyByFilename } from './generators/classify';
 import { buildChecklist } from './checklist';
-import { normNumber } from './cases';
+import { ensureClientFolder } from './driveStore';
 import { startExtractJob, getExtractJob } from './extractJob';
-import { driveStatus, parseDriveLink, getItem, findChildren, searchFolders, getParents, createFolder, uploadFile, FOLDER_MIME } from './drive';
+import { driveStatus, parseDriveLink, uploadFile } from './drive';
 
 /**
  * Email intake: documents clients send to the team's mailbox
@@ -267,85 +267,8 @@ export function teamFilename(app, doc) {
 /* ------------------------------ Drive filing ------------------------------ */
 
 /** Is `id` inside the clients folder (up to 4 levels)? */
-async function underClients(id, rootId) {
-  let cur = [id];
-  for (let depth = 0; depth < 4 && cur.length; depth++) {
-    const next = [];
-    for (const c of cur) {
-      let parents = [];
-      try {
-        parents = await getParents(c);
-      } catch {
-        /* unreadable */
-      }
-      if (parents.includes(rootId)) return true;
-      next.push(...parents);
-    }
-    cur = next;
-  }
-  return false;
-}
-
-/**
- * The client's "01 - Documents" folder on Drive: found from the file's Drive
- * source, or by client number / name under the clients folder; created (with
- * "02 - Final Files") when the client has no folder yet.
- */
-export async function ensureClientFolder(app) {
-  const cfg = mailConfig();
-  // A family shares one client folder, named after the main applicant (lib/cases.js).
-  if ((app.applicantRole || 'main') !== 'main' && app.clientNumber) {
-    const main = (await listAllApplications()).find(
-      (a) => a.id !== app.id && normNumber(a.clientNumber) === normNumber(app.clientNumber) && (a.applicantRole || 'main') === 'main'
-    );
-    if (main) app = { ...app, data: main.data, title: main.title, driveSource: app.driveSource || main.driveSource };
-  }
-  let clientFolder = null;
-  if (app.driveSource?.rootId) {
-    try {
-      const root = await getItem(app.driveSource.rootId);
-      if (/01\s*-\s*Documents/i.test(root.name)) {
-        const parents = await getParents(root.id);
-        return { docsFolderId: root.id, clientFolderId: parents[0] || null, created: false };
-      }
-      clientFolder = root;
-    } catch {
-      clientFolder = null;
-    }
-  }
-  const name = `${app.data?.givenName || ''} ${app.data?.familyName || ''}`.trim();
-  if (!clientFolder && cfg.clientsFolder) {
-    const keys = [app.clientNumber, name].filter((k) => k && k.length >= 3);
-    for (const key of keys) {
-      const found = (await searchFolders(key)).filter((f) => !/final files|documents/i.test(f.name));
-      for (const f of found) {
-        if (await underClients(f.id, cfg.clientsFolder)) {
-          clientFolder = f;
-          break;
-        }
-      }
-      if (clientFolder) break;
-    }
-  }
-  let created = false;
-  if (!clientFolder) {
-    if (!cfg.clientsFolder) throw new Error('DRIVE_CLIENTS_FOLDER is not set — the platform does not know where the client folders are.');
-    // New client: "S26160 - First Last" under this year's "… FILES" folder if the team has one, else the clients root.
-    const year = String(new Date().getFullYear());
-    const yearFolder = (await findChildren(cfg.clientsFolder, `${year} FILES`, { folder: true }))[0];
-    const folderName = `${app.clientNumber ? `${app.clientNumber} - ` : ''}${name || app.title || 'New client'}`.trim();
-    clientFolder = await createFolder(yearFolder?.id || cfg.clientsFolder, folderName);
-    await createFolder(clientFolder.id, '02 - Final Files');
-    created = true;
-  }
-  let docs = (await findChildren(clientFolder.id, '01 - Documents', { folder: true }))[0];
-  if (!docs) docs = await createFolder(clientFolder.id, '01 - Documents');
-  await updateApplication(app.id, (a) => {
-    a.driveSource = { ...(a.driveSource || {}), url: `https://drive.google.com/drive/folders/${clientFolder.id}`, rootId: clientFolder.id, rootName: clientFolder.name, docsFolderId: docs.id };
-    return a;
-  });
-  return { docsFolderId: docs.id, clientFolderId: clientFolder.id, created };
-}
+// The client's Drive folder is found or created by lib/driveStore.js (shared with uploads and final files).
+export { ensureClientFolder };
 
 /** Name the documents the team's way and put copies in the client's Drive folder. */
 export async function fileOnDrive(appId, docIds) {
@@ -370,10 +293,9 @@ export async function fileOnDrive(appId, docIds) {
   try {
     const { docsFolderId, created } = await ensureClientFolder(app);
     result.folderCreated = created;
-    const { readUpload } = await import('./uploads');
     for (const d of app.documents || []) {
       if (!docIds.includes(d.id) || d.driveId) continue;
-      const bytes = await readUpload(appId, d.stored);
+      const bytes = await readUpload(appId, d);
       const up = await uploadFile(docsFolderId, d.filename, d.mime, bytes);
       await updateApplication(appId, (a) => {
         const x = (a.documents || []).find((y) => y.id === d.id);

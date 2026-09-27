@@ -2,9 +2,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR
-  ? path.resolve(process.env.UPLOAD_DIR)
-  : path.join(process.cwd(), 'uploads');
+import { UPLOAD_DIR } from './paths';
+import { docFile, genFile } from './driveStore';
+
+export { docFile, genFile };
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -75,8 +76,13 @@ export async function saveUpload(appId, { buffer, filename, mime, category, maxB
   };
 }
 
-export async function readUpload(appId, stored) {
-  return fs.readFile(path.join(UPLOAD_DIR, appId, stored));
+/**
+ * The bytes of an uploaded document. Pass the document record: when the file
+ * isn't in the server cache it is fetched from Google Drive (lib/driveStore.js).
+ */
+export async function readUpload(appId, doc) {
+  if (typeof doc === 'string') return fs.readFile(path.join(UPLOAD_DIR, appId, doc));
+  return fs.readFile(await docFile(appId, doc));
 }
 
 /**
@@ -124,8 +130,10 @@ export function generatedPath(appId, stored) {
   return path.join(UPLOAD_DIR, appId, 'generated', path.basename(stored));
 }
 
-export async function readGenerated(appId, stored) {
-  return fs.readFile(path.join(UPLOAD_DIR, appId, 'generated', stored));
+/** The bytes of a generated file: `readGenerated(app, meta)` — fetched from Drive when not cached. */
+export async function readGenerated(app, meta) {
+  if (typeof meta === 'string') return fs.readFile(path.join(UPLOAD_DIR, typeof app === 'string' ? app : app.id, 'generated', meta));
+  return fs.readFile(await genFile(app, meta));
 }
 
 /** Read the sidecar source text for a generated document, or null. */
@@ -155,7 +163,7 @@ export async function buildDocBlocks(appId, docs) {
   const blocks = [];
   for (let i = 0; i < docs.length; i++) {
     const doc = docs[i];
-    const buf = await readUpload(appId, doc.stored);
+    const buf = await readUpload(appId, doc);
     blocks.push({
       type: 'text',
       text: `--- Document ${i + 1}: ${doc.filename} ---`,

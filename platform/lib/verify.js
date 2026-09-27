@@ -77,7 +77,7 @@ function checklistItem(app, doc) {
 async function blocksFor(appId, doc) {
   if (doc.mime === 'application/pdf') {
     try {
-      const pages = await rasterizePdf(await readUpload(appId, doc.stored), { dpi: 110, lastPage: PAGES });
+      const pages = await rasterizePdf(await readUpload(appId, doc), { dpi: 110, lastPage: PAGES });
       if (pages.length) {
         return {
           blocks: pages.map((p) => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.buffer.toString('base64') } })),
@@ -90,7 +90,7 @@ async function blocksFor(appId, doc) {
     }
   }
   const [, ...rest] = await buildDocBlocks(appId, [doc]);
-  const pictures = doc.mime !== 'application/pdf' ? [await readUpload(appId, doc.stored)] : [];
+  const pictures = doc.mime !== 'application/pdf' ? [await readUpload(appId, doc)] : [];
   return { blocks: rest, pages: null, pictures };
 }
 

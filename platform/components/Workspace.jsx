@@ -29,7 +29,7 @@ function readHash() {
  * the selected stage. The position is kept in the URL (#documents, #intake:family…)
  * so a refresh or a shared link opens the same place.
  */
-export default function Workspace({ initialApp, schema, viewerRole, family }) {
+export default function Workspace({ initialApp, schema, viewerRole, family, driveOn = false }) {
   const [app, setApp] = useState(initialApp);
   const staff = viewerRole === 'admin' || viewerRole === 'manager';
   const [tab, setTabState] = useState('overview');
@@ -236,6 +236,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family }) {
               staff={staff}
               selected={sub}
               onSelect={setSub}
+              driveOn={driveOn}
             />
           )}
           {tab === 'intake' && (
@@ -243,7 +244,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family }) {
           )}
           {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
           {tab === 'review' && <ReviewPanel app={app} progress={p} patchLocal={patchLocal} go={go} />}
-          {tab === 'generate' && showFinal && <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => go('intake')} progress={p} />}
+          {tab === 'generate' && showFinal && <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => go('intake')} progress={p} driveOn={driveOn} />}
         </main>
       </div>
     </>

@@ -90,7 +90,7 @@ async function blocksFor(appId, docs, app) {
     const note = checklistNote(doc, items, app.type);
     if (doc.mime === 'application/pdf' && (doc.size || 0) > BIG_PDF_BYTES) {
       try {
-        const pages = await rasterizePdf(await readUpload(appId, doc.stored), { dpi: 110, lastPage: PAGES });
+        const pages = await rasterizePdf(await readUpload(appId, doc), { dpi: 110, lastPage: PAGES });
         if (pages.length) {
           blocks.push({ type: 'text', text: `--- Document ${i + 1}: ${doc.filename} ---${note} (first ${pages.length} page(s) shown as images)` });
           for (const p of pages) {

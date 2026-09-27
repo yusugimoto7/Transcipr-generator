@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { Readable } from 'stream';
 import JSZip from 'jszip';
-import { generatedPath } from '@/lib/uploads';
+import { genFile } from '@/lib/uploads';
 import { error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -21,8 +21,12 @@ export async function GET(_req, { params }) {
   for (const f of files) {
     const meta = (app.generated || []).find((g) => g.key === f.key);
     if (!meta?.stored) continue;
-    const file = generatedPath(app.id, meta.stored);
-    if (!fs.existsSync(file)) continue;
+    let file;
+    try {
+      file = await genFile(app, meta); // the cached copy, or fetched from Google Drive
+    } catch {
+      continue;
+    }
     zip.file(f.filename, fs.createReadStream(file), { binary: true });
   }
   const who = String(app.data?.givenName || app.title || 'client').trim().split(/\s+/)[0];

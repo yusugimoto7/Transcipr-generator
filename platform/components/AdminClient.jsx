@@ -7,6 +7,7 @@ import { initials } from '@/components/TopBar';
 import { fmtDay, fmtTime } from '@/lib/format';
 import AdminIrcc from '@/components/AdminIrcc';
 import AdminMail from '@/components/AdminMail';
+import AdminStorage from '@/components/AdminStorage';
 
 /**
  * Admin console: staff accounts and file assignments.
@@ -87,6 +88,7 @@ export default function AdminClient() {
     ['users', 'Team & users', users.length],
     ['ircc', 'IRCC checklists'],
     ['mail', 'Email intake'],
+    ['storage', 'Storage'],
   ];
 
   return (
@@ -108,6 +110,7 @@ export default function AdminClient() {
 
       {tab === 'ircc' && <AdminIrcc />}
       {tab === 'mail' && <AdminMail />}
+      {tab === 'storage' && <AdminStorage />}
 
       {tab === 'users' && (
         <div className="stack">

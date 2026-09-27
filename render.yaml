@@ -15,6 +15,9 @@ services:
     branch: claude/canada-visa-permit-platform-1nd07u
     autoDeploy: true
     healthCheckPath: /api/health
+    # The disk holds the platform's records and a cache of recently used files;
+    # the files themselves are kept in Google Drive (platform/README.md →
+    # "Where files are kept"). CACHE_MAX_MB keeps the cache under the disk size.
     disk:
       name: visa-data
       mountPath: /data
@@ -43,6 +46,9 @@ services:
         sync: false
       - key: DRIVE_CLIENTS_FOLDER
         sync: false
+      # Server cache limit (MB) — keep it below the disk size (1 GB).
+      - key: CACHE_MAX_MB
+        value: "600"
       # Optional — second, independent document checker (Claude). See README.
       - key: ANTHROPIC_API_KEY
         sync: false

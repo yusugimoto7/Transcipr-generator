@@ -6,6 +6,7 @@ import { generateFormDataSheet } from './generators/forms';
 import { fillOfficialForm } from './generators/xfaFill';
 import { buildNextStepsNote } from './generators/nextsteps';
 import { lettersFor, formsFor } from './appTypes';
+import { queueSync } from './driveStore';
 
 /**
  * Producing an application's documents: AI-drafted letters, form data sheets,
@@ -77,6 +78,7 @@ export async function produceDocs(app, keys, { onProgress = () => {} } = {}) {
         return a;
       })
     : app;
+  queueSync(app.id);
   return { app: updated, produced, errors };
 }
 
@@ -89,5 +91,6 @@ export async function refreshNextSteps(app) {
     a.generated = [...(a.generated || []).filter((g) => g.key !== 'next-steps'), meta];
     return a;
   });
+  queueSync(app.id);
   return { app: updated, note };
 }

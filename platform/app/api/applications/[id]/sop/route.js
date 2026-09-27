@@ -5,6 +5,7 @@ import { generateLetter, selectLetterDocs } from '@/lib/generators/letters';
 import { cleanAnswers } from '@/lib/sopQuestions';
 import { primaryLetter } from '@/lib/appTypes';
 import { json, error, requireOwnedApp } from '@/lib/api';
+import { queueSync } from '@/lib/driveStore';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -75,6 +76,7 @@ export async function POST(req, { params }) {
     a.generated = [...byKey.values()];
     return a;
   });
+  queueSync(app.id);
 
   return json({ text, generated: updated.generated, sop: updated.sop, answers });
 }

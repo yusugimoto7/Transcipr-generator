@@ -12,7 +12,7 @@ const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ma
  * The numbered files that go to the IRCC portal, one per upload slot, named as
  * the team names them ("05 - Client Information - Zahra.pdf"), built in one go.
  */
-export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePlan }) {
+export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePlan, driveOn }) {
   const [data, setData] = useState(null); // { plan, built, job }
   const [job, setJob] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -180,7 +180,16 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
         <div className="card-head" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line)', marginBottom: 0 }}>
           <div>
             <h2 id="slots-h">Portal files</h2>
-            <p className="muted small">{slots.length} slots · {builtCount} built</p>
+            <p className="muted small">
+              {slots.length} slots · {builtCount} built
+              {driveOn && builtCount > 0 && (
+                Object.keys(app.driveGenerated || {}).some((k) => k.startsWith('final-')) && app.driveSource?.url ? (
+                  <> · <a href={app.driveSource.url} target="_blank" rel="noreferrer">saved in Google Drive → 02 - Final Files</a></>
+                ) : (
+                  <> · saving to Google Drive…</>
+                )
+              )}
+            </p>
           </div>
           <div className="cluster" style={{ gap: 16 }}>
             <label className="check-label"><input type="checkbox" checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} /> Remove blank pages</label>

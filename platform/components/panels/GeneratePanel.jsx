@@ -23,10 +23,10 @@ async function readJson(res) {
  * Below it, the letters and working files, to review, redraft or download
  * (letters also as Word).
  */
-export default function GeneratePanel({ app, patchLocal, onGoIntake, progress }) {
+export default function GeneratePanel({ app, patchLocal, onGoIntake, progress, driveOn }) {
   return (
     <div className="stack">
-      <FinalFiles app={app} patchLocal={patchLocal} onGoIntake={onGoIntake} stale={progress?.final?.stale} />
+      <FinalFiles app={app} patchLocal={patchLocal} onGoIntake={onGoIntake} stale={progress?.final?.stale} driveOn={driveOn} />
       <WorkingFiles app={app} patchLocal={patchLocal} />
       <details className="card">
         <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Blank IRCC forms (latest versions)</summary>

@@ -2,11 +2,12 @@ import { getApplication, updateApplication } from './store';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { readGenerated, readUpload, saveGenerated, generatedTarget, buildDocBlocks } from './uploads';
+import { readGenerated, readUpload, saveGenerated, generatedTarget, buildDocBlocks, genFile } from './uploads';
 import { renderDocPdf, textToBlocks } from './pdf';
 import { generateLetter, letterSpec, selectLetterDocs } from './generators/letters';
 import { compilePackage, getPackages, packageCategories } from './compile';
 import { prepareDocument } from './packageDocs';
+import { queueSync } from './driveStore';
 
 /**
  * Compiling a package as a background job, with progress.
@@ -71,7 +72,7 @@ export async function ensureGenerated(app, key) {
   const existing = (app.generated || []).find((g) => g.key === key);
   if (existing?.stored) {
     try {
-      await readGenerated(app.id, existing.stored);
+      await genFile(app, existing); // cached, or fetched back from Drive
       return app; // already available
     } catch {
       /* file missing — regenerate */
@@ -189,7 +190,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
             stats.skippedFiles.push(d.filename);
             continue;
           }
-          const bytes = await readUpload(app.id, d.stored);
+          const bytes = await readUpload(app.id, d);
           const prepared = await prepareDocument({ bytes, mime: d.mime }, { cleanPages, fixRotation });
           stats.droppedPages += prepared.dropped;
           stats.mirroredPages += prepared.mirrored;
@@ -213,7 +214,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
       const meta = (app.generated || []).find((g) => g.key === node.generatedKey);
       if (!meta?.stored) return [];
       try {
-        return [{ bytes: await readGenerated(app.id, meta.stored), mime: 'application/pdf', filename: meta.filename }];
+        return [{ bytes: await readGenerated(app, meta), mime: 'application/pdf', filename: meta.filename }];
       } catch {
         return [];
       }
@@ -258,6 +259,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
       return a;
     });
     job.done = job.total;
+    queueSync(app.id);
     return { app: updated, meta, stats };
   } finally {
     fs.rm(work, { recursive: true, force: true }).catch(() => {});

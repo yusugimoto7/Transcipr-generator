@@ -255,7 +255,8 @@ export async function updateApplication(id, mutator, opts = {}) {
     if (result === false) return app; // mutator declined (e.g. version conflict): nothing written
     const next = result || app;
     next.version = (Number(next.version) || 0) + 1;
-    next.updatedAt = nowIso();
+    // Background bookkeeping (e.g. Drive sync) passes { quiet: true }: not a change anyone made.
+    if (!opts.quiet) next.updatedAt = nowIso();
     if (opts.by) next.lastEditedBy = opts.by;
     await writeJson(appFile(id), next);
     return next;

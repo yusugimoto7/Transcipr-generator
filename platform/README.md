@@ -112,6 +112,30 @@ Only admins and account managers see this — never applicants.
 The server only ever calls the Google API with the ID taken from the pasted link
 — it never fetches the pasted URL itself.
 
+## Where files are kept (Google Drive)
+
+Google Drive is where every file lives; the server disk is only a cache.
+
+| Folder in the client's Drive folder | What goes there |
+|---|---|
+| `01 - Documents` | everything the client sends — imported from Drive (already there), emailed, or uploaded on the platform |
+| `02 - Final Files` | the numbered files for the IRCC portal; a rebuild replaces them in place, files a rebuild drops go to Drive's bin |
+| `03 - Working Files` | letters, form data sheets, pre-filled forms, the next-steps note |
+
+- The client folder is the one the file was imported from, else the folder with the client number under
+  `DRIVE_CLIENTS_FOLDER`, else a new `S26160 - First Last` folder under this year's "… FILES" folder. A family
+  shares one folder, named after the main applicant.
+- New uploads and built files are copied up in the background within seconds, and a sweep every
+  `DRIVE_SYNC_MINUTES` (default 10) catches anything missed (e.g. after a restart).
+- Opening, previewing, reading or building with a file uses the cached copy, or fetches it back from Drive.
+  The cache is kept under `CACHE_MAX_MB` (default 600) by removing the least recently used files that are
+  **safely on Drive** and unused for `CACHE_IDLE_MINUTES` (default 30). A file not yet on Drive is never removed.
+- Removing a document on the platform keeps its copy on Drive.
+- Admin → **Storage** shows the Drive connection, cache use, anything still waiting for Drive and any errors,
+  with "Save everything to Drive now".
+- The service account needs **Editor** on the clients folder. Without a Drive connection files stay on the
+  server disk, as before.
+
 ## Document check (صحت و سقم)
 
 Every time documents are read, each one is also checked before it can go to

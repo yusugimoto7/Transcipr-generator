@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getApplication, canAccess, listApplicationsFor } from '@/lib/store';
 import { caseKeyOf, groupCases, caseLabel } from '@/lib/cases';
+import { driveOn } from '@/lib/driveStore';
 import { getSchema } from '@/lib/schema';
 import TopBar from '@/components/TopBar';
 import Workspace from '@/components/Workspace';
@@ -33,7 +34,7 @@ export default async function ApplicationPage({ params }) {
   return (
     <>
       <TopBar user={user} />
-      <Workspace initialApp={app} schema={getSchema(app.type)} viewerRole={user.role} family={family} />
+      <Workspace initialApp={app} schema={getSchema(app.type)} viewerRole={user.role} family={family} driveOn={driveOn()} />
       <AssistantWidget appId={app.id} initialHistory={app.assistantHistory || []} />
     </>
   );

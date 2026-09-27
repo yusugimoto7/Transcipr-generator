@@ -220,3 +220,31 @@ export async function uploadFile(parentId, name, mime, buffer) {
     base: UPLOAD_API,
   });
 }
+
+/** Replace a file's content (and name) in place — same file id, Drive keeps the old version. */
+export async function updateFile(id, name, mime, buffer) {
+  const boundary = `sugimoto-${Date.now().toString(36)}`;
+  const meta = Buffer.from(JSON.stringify({ name }));
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`),
+    meta,
+    Buffer.from(`\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`),
+    buffer,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+  return call(`/files/${encodeURIComponent(id)}?uploadType=multipart&supportsAllDrives=true&fields=${encodeURIComponent(FIELDS)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+    base: UPLOAD_API,
+  });
+}
+
+/** Move a file to Drive's bin (recoverable for 30 days). */
+export async function trashFile(id) {
+  return call(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id`, {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ trashed: true }),
+  });
+}

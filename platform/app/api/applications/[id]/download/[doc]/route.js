@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { Readable } from 'stream';
-import { generatedPath, readGeneratedText } from '@/lib/uploads';
+import { genFile, readGeneratedText } from '@/lib/uploads';
 import { renderDocx } from '@/lib/docx';
 import { error, requireOwnedApp } from '@/lib/api';
 
@@ -45,12 +45,13 @@ export async function GET(req, { params }) {
 
   // Stream from disk: a compiled package can be hundreds of MB, and reading
   // it whole into memory would risk the server running out.
-  const file = generatedPath(app.id, meta.stored);
+  let file;
   let size;
   try {
+    file = await genFile(app, meta); // the cached copy, or fetched from Google Drive
     size = (await fs.promises.stat(file)).size;
-  } catch {
-    return error('File missing on server. Re-generate the document.', 410);
+  } catch (e) {
+    return error(e.message || 'File missing. Generate the document again.', 410);
   }
 
   const safeName = (meta.filename || `${meta.key}.pdf`).replace(/[^\w.\- ]+/g, '_');

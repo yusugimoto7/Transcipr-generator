@@ -1,7 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import { spawn } from 'child_process';
-import { UPLOAD_DIR } from '@/lib/uploads';
+import { docFile } from '@/lib/uploads';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -35,8 +33,12 @@ export async function GET(req, { params }) {
   const { searchParams } = new URL(req.url);
   const doc = (app.documents || []).find((d) => d.id === searchParams.get('docId'));
   if (!doc || doc.mime !== 'application/pdf' || !/^[\w.-]+$/.test(doc.stored || '')) return error('No preview for this document.', 404);
-  const file = path.join(UPLOAD_DIR, app.id, doc.stored);
-  if (!fs.existsSync(file)) return error('File missing on server.', 410);
+  let file;
+  try {
+    file = await docFile(app.id, doc); // the cached copy, or fetched from Google Drive
+  } catch (e) {
+    return error(e.message || 'File missing.', 410);
+  }
 
   if (searchParams.get('info')) {
     const out = await run('pdfinfo', [file]);

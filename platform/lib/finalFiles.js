@@ -1,8 +1,8 @@
 import fs from 'fs/promises';
-import path from 'path';
 import sharp from 'sharp';
 import { getApplication, updateApplication } from './store';
-import { readUpload, generatedPath, generatedTarget, UPLOAD_DIR } from './uploads';
+import { readUpload, generatedTarget, docFile, genFile } from './uploads';
+import { queueSync } from './driveStore';
 import { getAppType, formsFor, packagesFor, lettersFor } from './appTypes';
 import { produceDocs, refreshNextSteps } from './generateDocs';
 import { buildPackageFile, ensureGenerated } from './compileJob';
@@ -277,8 +277,8 @@ async function build(appId, { cleanPages, fixRotation }, job) {
           );
         }
         const src = e.source.upload
-          ? path.join(UPLOAD_DIR, app.id, (app.documents || []).find((d) => d.id === e.source.upload).stored)
-          : generatedPath(app.id, (app.generated || []).find((g) => g.key === e.source.generated).stored);
+          ? await docFile(app.id, (app.documents || []).find((d) => d.id === e.source.upload))
+          : await genFile(app, (app.generated || []).find((g) => g.key === e.source.generated));
         const target = await generatedTarget(app.id, { key, filename: e.filename });
         await fs.copyFile(src, target.file);
         const meta = await target.meta();
@@ -287,7 +287,7 @@ async function build(appId, { cleanPages, fixRotation }, job) {
       } else if (e.kind === 'photo') {
         const doc = (app.documents || []).find((d) => d.category === 'photo');
         if (!doc) throw new Error(e.note);
-        let img = await readUpload(app.id, doc.stored);
+        let img = await readUpload(app.id, doc);
         if (doc.mime === 'application/pdf') img = (await rasterizePdf(img, { dpi: 300, lastPage: 1 }))[0]?.buffer;
         const target = await generatedTarget(app.id, { key, filename: e.filename, mime: 'image/jpeg' });
         await sharp(img).rotate().jpeg({ quality: 92 }).toFile(target.file);
@@ -299,7 +299,7 @@ async function build(appId, { cleanPages, fixRotation }, job) {
         const g = (app.generated || []).find((x) => x.key === SLOT[e.slot].generatedKey);
         if (!g?.stored) throw new Error('the letter could not be drafted');
         const target = await generatedTarget(app.id, { key, filename: e.filename });
-        await fs.copyFile(generatedPath(app.id, g.stored), target.file);
+        await fs.copyFile(await genFile(app, g), target.file);
         const meta = await target.meta();
         await record(key, meta);
         built.push({ ...e, key, size: meta.size });
@@ -359,5 +359,6 @@ async function build(appId, { cleanPages, fixRotation }, job) {
     console.error(`[finalFiles] next-steps note failed: ${e.message}`);
   }
 
+  queueSync(app.id); // copy the final and working files to the client's Drive folder
   return { files: app.finalFiles.files, problems, generated: app.generated, note, ...stats, skippedFiles: [...new Set(stats.skippedFiles)] };
 }

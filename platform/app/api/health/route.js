@@ -1,4 +1,5 @@
 import { ensureMailPoller } from '@/lib/mailPoller';
+import { ensureDriveSync } from '@/lib/driveStore';
 import { json, requireUser } from '@/lib/api';
 import { complete, MODEL } from '@/lib/ai';
 
@@ -14,6 +15,7 @@ export const runtime = 'nodejs';
  */
 export async function GET(req) {
   ensureMailPoller();
+  ensureDriveSync();
   const base = { ok: true, service: 'canada-visa-platform' };
 
   if (new URL(req.url).searchParams.get('ai') !== '1') return json(base);

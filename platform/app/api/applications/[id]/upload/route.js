@@ -1,10 +1,10 @@
 import fs from 'fs';
-import path from 'path';
 import { Readable } from 'stream';
 import { updateApplication } from '@/lib/store';
-import { saveUpload, deleteUpload, UPLOAD_DIR } from '@/lib/uploads';
+import { saveUpload, deleteUpload, docFile } from '@/lib/uploads';
 import { classifyByFilename } from '@/lib/generators/classify';
 import { json, error, requireOwnedApp } from '@/lib/api';
+import { queueSync } from '@/lib/driveStore';
 
 export const runtime = 'nodejs';
 
@@ -18,12 +18,13 @@ export async function GET(req, { params }) {
   if (!doc) return error('Document not found.', 404);
   // `stored` is a server-generated name; refuse anything that is not a plain file name.
   if (!/^[\w.-]+$/.test(doc.stored || '')) return error('Document not found.', 404);
-  const file = path.join(UPLOAD_DIR, app.id, doc.stored);
+  let file;
   let size;
   try {
+    file = await docFile(app.id, doc); // the cached copy, or fetched from Google Drive
     size = (await fs.promises.stat(file)).size;
-  } catch {
-    return error('File missing on server.', 410);
+  } catch (e) {
+    return error(e.message || 'File missing.', 410);
   }
   const name = (doc.filename || doc.stored).replace(/[^\w.\- ]+/g, '_');
   const disposition = searchParams.get('download') ? 'attachment' : 'inline';
@@ -75,6 +76,7 @@ export async function POST(req, { params }) {
     a.documents.push(...saved);
     return a;
   });
+  queueSync(app.id); // copy the new files to the client's Drive folder
   return json({ documents: updated.documents, added: saved }, 201);
 }
 

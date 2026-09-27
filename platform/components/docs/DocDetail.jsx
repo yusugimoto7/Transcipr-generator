@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ExternalLink, Download, Trash2, UserCheck, Undo2, CheckCircle2, AlertOctagon, AlertTriangle, Info, CircleDashed, Check, X } from 'lucide-react';
+import { Cloud, CloudUpload, ExternalLink, Download, Trash2, UserCheck, Undo2, CheckCircle2, AlertOctagon, AlertTriangle, Info, CircleDashed, Check, X } from 'lucide-react';
 import { CATEGORY_LABELS, OWNER_LABELS } from '@/lib/docLabels';
 import { fmtDay } from '@/lib/format';
 
@@ -51,7 +51,7 @@ const date = fmtDay;
  * One uploaded document: what it is, the result of the accuracy check
  * (findings, translation-bundle parts), the staff sign-off and a preview.
  */
-export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, onCategory, onRemove }) {
+export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, onCategory, onRemove, driveOn }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const v = doc.verification;
   const url = `/api/applications/${app.id}/upload?docId=${encodeURIComponent(doc.id)}`;
@@ -93,6 +93,7 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
           </div>
         </div>
         <div className="small muted">{facts.join(' · ')}</div>
+        <DriveLine app={app} doc={doc} staff={staff} driveOn={driveOn} />
       </div>
 
       {v?.findings?.length > 0 && (
@@ -186,7 +187,7 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
           </select>
           {confirmRemove ? (
             <>
-              <span className="small">Remove this file from the platform?</span>
+              <span className="small">Remove this file from the platform?{doc.driveId ? ' The copy on Google Drive is kept.' : ''}</span>
               <button type="button" className="btn-sm" onClick={onRemove}>Remove</button>
               <button type="button" className="btn-secondary btn-sm" onClick={() => setConfirmRemove(false)}>Cancel</button>
             </>
@@ -241,6 +242,32 @@ function PdfPages({ app, doc, url }) {
         </button>
       )}
       {info.total > info.pages && <p className="small faint" style={{ margin: 0 }}>Showing the first {info.pages} of {info.total} pages. Open the file to see the rest.</p>}
+    </div>
+  );
+}
+
+/** Where the file is kept: on Google Drive (with a link for the team), or still on its way there. */
+function DriveLine({ app, doc, staff, driveOn }) {
+  if (!driveOn) return null;
+  if (doc.driveId) {
+    const id = String(doc.driveId).split(':')[0]; // a file inside a zip links to the zip
+    const where = doc.drivePath ? doc.drivePath.split('/').slice(0, -1).join(' / ') : '';
+    return (
+      <div className="small cluster" style={{ gap: 6, color: 'var(--ok)' }}>
+        <Cloud size={14} aria-hidden="true" />
+        <span>On Google Drive{where ? ` · ${where}` : ''}</span>
+        {staff && (
+          <a href={`https://drive.google.com/file/d/${encodeURIComponent(id)}/view`} target="_blank" rel="noreferrer" className="cluster" style={{ gap: 3 }}>
+            Open in Drive <ExternalLink size={12} aria-hidden="true" />
+          </a>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="small cluster" style={{ gap: 6, color: app.driveSync?.error ? 'var(--danger)' : 'var(--ink-faint)' }}>
+      <CloudUpload size={14} aria-hidden="true" />
+      <span>{app.driveSync?.error ? `Not saved to Google Drive yet: ${app.driveSync.error}` : 'Saving to Google Drive…'}</span>
     </div>
   );
 }

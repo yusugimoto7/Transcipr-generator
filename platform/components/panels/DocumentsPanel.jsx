@@ -56,7 +56,7 @@ function nameFor(item, firstName, file) {
   return `${item.code} - ${label}${firstName ? ` - ${firstName}` : ''}${ext}`;
 }
 
-export default function DocumentsPanel({ app, progress, patchLocal, onExtracted, staff, selected, onSelect }) {
+export default function DocumentsPanel({ app, progress, patchLocal, onExtracted, staff, selected, onSelect, driveOn }) {
   const init = parseSub(selected);
   const [filter, setFilter] = useState(init.filter || 'all');
   const [sel, setSelState] = useState(init.sel || null);
@@ -289,6 +289,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
               <>
                 {files.length === 1 && <div className="small faint" style={{ overflowWrap: 'anywhere' }}><FileText size={13} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {current.filename}</div>}
                 <DocDetail
+                  driveOn={driveOn}
                   app={app}
                   doc={current}
                   staff={staff}
@@ -342,7 +343,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
         body: (
           <>
             <p className="small muted" style={{ margin: 0 }}>Rename the file with its checklist code (e.g. “113 - …”) or set its type below so it counts for the right item.</p>
-            <DocDetail app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} />
+            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} />
           </>
         ),
       };
