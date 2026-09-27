@@ -171,34 +171,44 @@ def install_form(odoo):
             '<xpath expr="//field[@name=\'x_studio_copy_pass_info\']" position="move"/>'
             '</xpath>') % anchor if (passport and parent) else ''
     after = "//field[@name='x_studio_copy_pass_info']" if move else anchor
+    # Three titled columns: Client | Sales | Contract. The Contract block is its
+    # own group next to the salesperson group, and the outer group gets col=3.
     arch = (
         '<data>' + move +
-        '<xpath expr="%s" position="after">'
-        '<field name="x_contract_status" widget="badge"'
+        '<xpath expr="//group[@name=\'opportunity_partner\']/.." position="attributes">'
+        '<attribute name="col">3</attribute></xpath>'
+        '<xpath expr="//group[@name=\'opportunity_partner\']" position="attributes">'
+        '<attribute name="string">Client</attribute></xpath>'
+        '<xpath expr="%s/.." position="attributes">'
+        '<attribute name="string">Sales</attribute></xpath>'
+        '<xpath expr="%s/.." position="after">'
+        '<group name="x_contract_block" string="Contract" invisible="type == \'lead\'">'
+        '<field name="x_contract_status" string="Status" widget="badge"'
         ' decoration-info="x_contract_status in (\'draft_sent\',\'sent\')"'
         ' decoration-warning="x_contract_status in (\'signed\',\'signed_partial\',\'paid_only\')"'
         ' decoration-success="x_contract_status == \'paid\'"'
         ' decoration-danger="x_contract_status == \'terminated\'"/>'
-        '<field name="x_contract_no_sg"/>'
-        '<field name="x_contract_no_sb"/>'
-        '<label for="x_fee_sg" string="Professional fee (Sugimoto)"/>'
+        '<field name="x_contract_no_sg" string="No. Sugimoto"/>'
+        '<field name="x_contract_no_sb" string="No. Sparkbridge"/>'
+        '<label for="x_fee_sg" string="Fee Sugimoto"/>'
         '<div class="o_row"><field name="x_fee_sg"/><field name="x_fee_currency" class="oe_inline"/></div>'
-        '<field name="x_fee_sb"/>'
-        '<field name="x_fee_total"/>'
-        '<field name="x_contract_sent_on"/>'
-        '<field name="x_contract_signed_on"/>'
-        '<field name="x_contract_paid_on"/>'
-        '<field name="x_fee_source"/>'
-        '<field name="x_contract_order_id" readonly="1" invisible="not x_contract_order_id"/>'
+        '<field name="x_fee_sb" string="Fee Sparkbridge"/>'
+        '<field name="x_fee_total" string="Fee total"/>'
+        '<field name="x_contract_sent_on" string="Sent on"/>'
+        '<field name="x_contract_signed_on" string="Signed on"/>'
+        '<field name="x_contract_paid_on" string="Paid on"/>'
+        '<field name="x_fee_source" string="Fee source"/>'
+        '<field name="x_contract_order_id" string="Quotation" readonly="1" invisible="not x_contract_order_id"/>'
+        '</group>'
         '</xpath>'
-        '</data>') % after
+        '</data>') % (anchor, anchor)
     vals = {"name": "crm.lead.form.contract", "model": LEAD, "inherit_id": base, "arch_db": arch, "priority": 210}
     vid = odoo.ref("p2view", "lead_contract")
     if vid:
         odoo.write("ir.ui.view", [vid], vals)
     else:
         odoo.upsert("p2view", "lead_contract", "ir.ui.view", vals)
-    log.info("  Contract block placed under Service Agreement")
+    log.info("  card form: Client | Sales | Contract columns")
 
 
 def install_automations(odoo):
