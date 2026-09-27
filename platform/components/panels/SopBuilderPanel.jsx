@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { questionsFor } from '@/lib/sopQuestions';
 import { primaryLetter } from '@/lib/appTypes';
+import { Check, FileDown, FileText, PenLine, Save, Sparkles } from 'lucide-react';
 
 export default function SopBuilderPanel({ app, patchLocal }) {
   const letter = primaryLetter(app.type);
@@ -61,9 +62,9 @@ export default function SopBuilderPanel({ app, patchLocal }) {
       const data = await save.json();
       if (save.ok) {
         patchLocal({ generated: data.generated, sopAnswers: answers, sop: { text: acc } });
-        setMsg({ type: 'ok', text: 'Study plan drafted below. Edit it in your own words, then save.' });
+        setMsg({ type: 'ok', text: 'Draft written. Edit it in the client’s own words, then save.' });
       } else {
-        setMsg({ type: 'ok', text: 'Draft ready below — edit it, then press "Save & update PDF".' });
+        setMsg({ type: 'ok', text: 'Draft ready — edit it, then press "Save & update PDF".' });
       }
     } catch (e) {
       setMsg({ type: 'err', text: e.message });
@@ -97,82 +98,91 @@ export default function SopBuilderPanel({ app, patchLocal }) {
   ).length;
 
   return (
-    <>
-      <div className="card">
-        <h2>{letter.title} builder</h2>
-        <p className="muted small" style={{ marginTop: -6 }}>
-          Answer up to 7 quick questions — tap the answers that fit and add notes in your own
-          words. We combine them with your intake details to write a full Statement of Purpose.
-          <br />
-          <span className="chip" style={{ marginTop: 8 }}>{answered}/{QUESTIONS.length} answered</span>
-        </p>
+    <div className="stack">
+      <div className="page-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h1 style={{ fontSize: 20 }}>{letter.title}</h1>
+          <p className="muted small">Answer the questions, generate a draft, then edit it in the client&apos;s own words. It is used as-is in the final files.</p>
+        </div>
+        {text && (
+          <div className="btn-row">
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`}><FileDown size={16} aria-hidden="true" /> PDF</a>
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop?format=docx`}><FileText size={16} aria-hidden="true" /> Word</a>
+          </div>
+        )}
+      </div>
+      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ margin: 0 }}>{msg.text}</div>}
 
-        <div style={{ marginTop: 12 }}>
+      <div className="letter">
+        <section className="card" aria-labelledby="q-h">
+          <div className="card-head">
+            <div>
+              <h2 id="q-h">Questions</h2>
+              <p className="muted small">Tap every answer that fits and add detail in your own words.</p>
+            </div>
+            <span className={`chip ${answered === QUESTIONS.length ? 'ok' : ''}`}>{answered}/{QUESTIONS.length} answered</span>
+          </div>
           {QUESTIONS.map((q, i) => {
             const cur = answers[q.id] || { selected: [], note: '' };
             return (
-              <div key={q.id} style={{ padding: '14px 0', borderTop: i ? '1px solid var(--line)' : 'none' }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>{i + 1}. {q.question}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div key={q.id} className="q">
+                <div className="qt"><span className="n">{String(i + 1).padStart(2, '0')}</span><span>{q.question}</span></div>
+                <div className="cluster" role="group" aria-label={q.question}>
                   {q.options.map((o) => {
                     const on = cur.selected.includes(o);
                     return (
-                      <button
-                        key={o}
-                        type="button"
-                        onClick={() => toggle(q.id, o)}
-                        className={on ? '' : 'btn-secondary'}
-                        style={{ padding: '7px 12px', fontSize: 13 }}
-                      >
-                        {on ? '✓ ' : ''}{o}
+                      <button key={o} type="button" onClick={() => toggle(q.id, o)} className={`opt${on ? ' on' : ''}`} aria-pressed={on}>
+                        {on && <Check size={13} strokeWidth={3} aria-hidden="true" />}{o}
                       </button>
                     );
                   })}
                 </div>
+                <label htmlFor={`note-${q.id}`} className="sr-only">Your own detail</label>
                 <input
+                  id={`note-${q.id}`}
                   style={{ marginTop: 10 }}
-                  placeholder="Add your own detail (optional) — e.g. a specific course, employer, or reason"
+                  placeholder="Add a detail (optional): a course, an employer, a reason…"
                   value={cur.note || ''}
                   onChange={(e) => setNote(q.id, e.target.value)}
                 />
               </div>
             );
           })}
-        </div>
-
-        <div className="btn-row" style={{ marginTop: 16 }}>
-          <button onClick={generate} disabled={busy}>
-            {busy ? <span className="spinner" /> : text ? `Re-generate ${letter.title}` : `Generate my ${letter.title}`}
-          </button>
-        </div>
-        {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginTop: 14 }}>{msg.text}</div>}
-      </div>
-
-      {text && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ marginBottom: 0 }}>Your {letter.title}</h2>
-            <div className="btn-row" style={{ gap: 6 }}>
-              <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`}>↓ PDF</a>
-              <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop?format=docx`}>↓ Word</a>
-            </div>
-          </div>
-          <p className="muted small" style={{ marginTop: 6 }}>
-            Edit freely so it sounds like you, then save to update the PDF. Replace anything in
-            [square brackets] with your real details.
-          </p>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            style={{ minHeight: 380, marginTop: 8, fontFamily: 'inherit', lineHeight: 1.6 }}
-          />
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button onClick={saveEdited} disabled={saving}>
-              {saving ? <span className="spinner" /> : 'Save & update PDF'}
+          <div className="btn-row" style={{ marginTop: 14 }}>
+            <button type="button" onClick={generate} disabled={busy}>
+              {busy ? <span className="spinner" /> : <Sparkles size={16} aria-hidden="true" />}
+              {busy ? 'Writing…' : text ? 'Write a new draft' : `Generate the ${letter.title}`}
             </button>
           </div>
-        </div>
-      )}
-    </>
+        </section>
+
+        <section className="card draft" aria-labelledby="d-h">
+          <div className="card-head">
+            <div>
+              <h2 id="d-h">Draft</h2>
+              <p className="muted small">Replace anything in [square brackets] with real details.</p>
+            </div>
+            {text && (
+              <button type="button" className="btn-navy" onClick={saveEdited} disabled={saving || busy}>
+                {saving ? <span className="spinner" /> : <Save size={16} aria-hidden="true" />} Save &amp; update PDF
+              </button>
+            )}
+          </div>
+          {text || busy ? (
+            <>
+              <label htmlFor="draft" className="sr-only">Draft text</label>
+              <textarea id="draft" value={text} onChange={(e) => setText(e.target.value)} readOnly={busy} />
+              <p className="tiny faint" style={{ margin: '6px 0 0' }}>{text.trim().split(/\s+/).filter(Boolean).length} words</p>
+            </>
+          ) : (
+            <div className="empty">
+              <PenLine size={28} aria-hidden="true" />
+              <h2>No draft yet</h2>
+              <p className="small">Answer a few questions on the left and generate a draft. It appears here for editing.</p>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }

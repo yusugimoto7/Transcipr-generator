@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { checklistStatus, missingItems } from '@/lib/checklist';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Plus, Sparkles, Search, ArrowLeft, FolderCog, CircleDashed, FileText, RotateCcw, Landmark, ListChecks, X } from 'lucide-react';
 import { getAppType } from '@/lib/appTypes';
-import DriveImport from '@/components/DriveImport';
+import { everyField } from '@/lib/schema';
+import { CATEGORY_LABELS } from '@/lib/docLabels';
+import { fmtTime } from '@/lib/format';
 import ProgressBar from '@/components/ProgressBar';
 import IrccRequirements from '@/components/IrccRequirements';
-import { everyField } from '@/lib/schema';
+import DocDetail, { CHECK, CheckChip, worstStatus } from '@/components/docs/DocDetail';
+import AddDocuments from '@/components/docs/AddDocuments';
+import UploadBox from '@/components/docs/UploadBox';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
 
-/**
- * Parse a JSON response. A proxy or crash page (HTML) gets a readable message
- * instead of "Unexpected token '<'".
- */
+/** Parse a JSON response; a proxy or crash page gets a readable message instead of "Unexpected token '<'". */
 async function readJson(res) {
   const text = await res.text();
   try {
@@ -29,282 +30,102 @@ async function readJson(res) {
   }
 }
 
-// Document check colours (lib/verify.js): green ok · yellow minor · orange attention · red serious.
-const CHECK = {
-  green: { label: 'OK', bg: '#e5f4ec', fg: '#1a7f4b', title: 'Checked — nothing found' },
-  yellow: { label: 'Minor', bg: '#fdf6d8', fg: '#8a6d00', title: 'Minor issues (typos, notes)' },
-  orange: { label: 'Attention', bg: '#fde8d0', fg: '#b35c00', title: 'Needs attention — see the findings' },
-  red: { label: 'Serious', bg: '#fbe4e4', fg: '#c02626', title: 'Serious problem — fix before submission' },
-};
-const SEV = { high: { label: 'serious', color: '#c02626' }, medium: { label: 'attention', color: '#b35c00' }, low: { label: 'minor', color: '#8a6d00' } };
+const GROUPS = [
+  ['applicant', 'Applicant'],
+  ['principal', 'Spouse / parent / host / sponsor'],
+  ['ircc', "Also required by IRCC"],
+  ['firm', 'Prepared by the firm'],
+];
+const PROBLEM = new Set(['red', 'orange', 'yellow']);
 
-function CheckBadge({ v }) {
-  if (!v?.status) return null;
-  const c = CHECK[v.status] || CHECK.yellow;
-  return (
-    <span className="chip" title={c.title} style={{ background: c.bg, color: c.fg, marginLeft: 6, fontWeight: 700 }}>
-      ● {c.label}{v.reviewedBy ? ' · staff ✓' : ''}
-    </span>
-  );
+/** Parse the URL sub-position: "filter=missing", "doc=<id>", "item=<id>", "ircc", "compare". */
+function parseSub(sub) {
+  if (!sub) return {};
+  if (sub.startsWith('filter=')) {
+    const f = sub.slice(7);
+    return { filter: f === 'serious' || f === 'attention' ? 'problems' : f };
+  }
+  return { sel: sub };
 }
 
-function Agreement({ f }) {
-  if (f.by === 'platform') return <span className="muted"> · exact check</span>;
-  if (f.unverified) return <span style={{ color: '#8a6d00' }}> · quoted text not found on the page — possibly invented, confirm by eye</span>;
-  if (f.confirmed) return <span style={{ color: '#1a7f4b' }}> · ✓ both models</span>;
-  if (f.models?.length === 1 && f.confirmed === false) return <span style={{ color: '#b35c00' }}> · one model only ({f.models[0]}) — confirm by eye</span>;
-  return null;
+/** A short file name for an upload made for a checklist item: "101 - Birth certificate - Sara.pdf". */
+function nameFor(item, firstName, file) {
+  if (!/^\d/.test(item.code)) return null;
+  const ext = (file.name.match(/\.[a-z0-9]+$/i) || [''])[0].toLowerCase();
+  const label = item.label.split(/ — | \(|, /)[0].replace(/[\\/:*?"<>|]/g, '').slice(0, 60).trim();
+  return `${item.code} - ${label}${firstName ? ` - ${firstName}` : ''}${ext}`;
 }
 
-function CheckDetails({ v, onReview, reviewing }) {
-  if (!v) return null;
-  const signoff = (
-    <div className="small" style={{ marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-      {v.models?.length > 0 && <span className="muted">Checked by {v.models.length === 2 ? 'two models' : 'one model'}: {v.models.join(' + ')}{v.secondModelError ? ` (second model failed: ${v.secondModelError})` : ''}</span>}
-      {v.reviewedBy ? (
-        <span style={{ color: '#1a7f4b', fontWeight: 600 }}>
-          ✓ checked by {v.reviewedBy} on {new Date(v.reviewedAt).toLocaleDateString()}{' '}
-          <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => onReview(false)} disabled={reviewing}>undo</button>
-        </span>
-      ) : (
-        <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => onReview(true)} disabled={reviewing}>
-          ✓ I checked this document
-        </button>
-      )}
-    </div>
-  );
-  if (!v.findings?.length && !v.parts?.notes) return signoff;
-  const parts = v.parts || {};
-  const partList = [
-    ['translation', 'translation'],
-    ['certifiedCopy', 'certified copy'],
-    ['original', 'original'],
-    ['translatorSeal', 'seal'],
-  ];
-  return (
-    <details className="small" style={{ marginTop: 4 }}>
-      <summary style={{ cursor: 'pointer', color: 'var(--ink-soft)' }}>
-        {v.findings.length} finding(s){v.documentType ? ` · ${v.documentType}` : ''}
-      </summary>
-      <ul style={{ paddingLeft: 18, margin: '6px 0 4px' }}>
-        {v.findings.map((f, i) => (
-          <li key={i} style={{ marginBottom: 3 }}>
-            <span style={{ color: SEV[f.severity]?.color, fontWeight: 700 }}>{SEV[f.severity]?.label || f.severity}</span>
-            {' · '}
-            <span className="muted">{f.kind}</span>
-            {f.page ? <span className="muted"> · p.{f.page}</span> : null}: {f.text}
-            {f.quote ? <span className="muted"> — “{f.quote}”</span> : null}
-            <Agreement f={f} />
-          </li>
-        ))}
-      </ul>
-      {(parts.translation || parts.certifiedCopy || parts.original) && (
-        <div className="muted" style={{ marginTop: 2 }}>
-          Parts: {partList.map(([k, l]) => `${parts[k] ? '✓' : '✗'} ${l}`).join(' · ')}
-          {parts.notes ? ` — ${parts.notes}` : ''}
-        </div>
-      )}
-      {signoff}
-    </details>
-  );
-}
-
-const OWNER_LABELS = { spouse: 'the spouse', child: 'a child', parent: 'a parent', host: 'the host', sponsor: 'a sponsor', other: 'someone else' };
-
-const CATEGORY_LABELS = {
-  passport: 'Passport',
-  loa: 'Letter of Acceptance',
-  pal: 'Provincial Attestation Letter',
-  'proof-of-funds': 'My bank statement',
-  'source-of-funds': 'Source of my money',
-  'affidavit-support': 'Affidavit of support',
-  'title-deeds': 'My title deeds',
-  'supporter-bank': "Supporter's bank statements",
-  'supporter-income': "Supporter's pay slips / employment",
-  'supporter-deeds': "Supporter's title deeds",
-  'supporter-id': "Supporter's birth certificate / ID",
-  gic: 'GIC certificate',
-  deposit: 'Tuition deposit / receipt',
-  photo: 'Photo',
-  transcripts: 'Degree & transcripts',
-  certificates: 'Certificates',
-  cv: 'CV / résumé',
-  'national-id': 'Birth certificate / national ID',
-  language: 'Language test result',
-  sop: 'Statement of Purpose',
-  'employment-letter': 'Employment letter',
-  'job-offer': 'Job offer letter',
-  'leave-of-absence': 'Leave of absence letter',
-  internship: 'Internship certificate',
-  'ties-docs': 'Ties to home country docs',
-  'police-clearance': 'Police clearance',
-  military: 'Military service card',
-  flight: 'Flight reservation',
-  accommodation: 'Accommodation',
-  medical: 'Medical exam',
-  'family-info': 'Family information',
-  'marriage-cert': 'Marriage certificate',
-  'spouse-status': "Spouse's permit in Canada",
-  'inviter-docs': "Spouse's / inviter's documents (employment, income, lease)",
-  'host-docs': "Host's status & documents",
-  'invitation-letter': 'Invitation letter',
-  'status-in-canada': 'My current permit in Canada',
-  'last-entry': 'Proof of last entry to Canada',
-  'completion-letter': 'Completion of studies letter',
-  'consent-letter': "Parents' consent letter",
-  'custody-doc': 'Custody / guardianship document',
-  'refusal-letter': 'Previous refusal / GCMS notes / old application',
-  insurance: 'Social insurance records',
-  'travel-history': 'Previous visas & travel history',
-  'enrolment-letter': 'Enrolment letter / school enrolment certificate',
-  'residence-abroad': 'Residence in another country',
-  'relationship-proof': 'Proof of relationship to the inviter',
-  'medical-insurance': 'Medical insurance (Super Visa)',
-  scholarship: 'Funding / scholarship letter',
-  'co-op-letter': 'Co-op letter',
-  'research-proposal': 'Research proposal',
-  'business-docs': 'Business documents (registration, licences)',
-  'business-financials': 'Business financial statements & tax returns',
-  'business-contracts': 'Business contracts & partnership agreements',
-  'business-employees': 'Business employees & employment contracts',
-  'business-premises': 'Business premises (deeds / leases)',
-  'business-plan': 'Canadian business plan & job offer',
-  questionnaire: 'Questionnaire (111 SOP / POT) — used to write the letter',
-  'rep-form': 'IRCC form (IMM 5476, 5713…)',
-  internal: 'Internal / intake form (never compiled)',
-  other: 'Other',
-};
-
-const ACCEPT = ['.pdf', '.docx', '.jpg', '.jpeg', '.png', '.webp'];
-
-function accepted(file) {
-  const name = (file.name || '').toLowerCase();
-  return ACCEPT.some((ext) => name.endsWith(ext));
-}
-
-export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake, staff }) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState(null);
+export default function DocumentsPanel({ app, progress, patchLocal, onExtracted, staff, selected, onSelect }) {
+  const init = parseSub(selected);
+  const [filter, setFilter] = useState(init.filter || 'all');
+  const [sel, setSelState] = useState(init.sel || null);
+  const [query, setQuery] = useState('');
+  const [addOpen, setAddOpen] = useState(false);
   const [comparison, setComparison] = useState(null);
   const [extracting, setExtracting] = useState(false);
-  const [progress, setProgress] = useState(null); // running read job: { done, total, docCount }
+  const [job, setJob] = useState(null);
   const [readMsg, setReadMsg] = useState(null);
-  // Whose file this is — a family folder holds several people's documents.
   const [readFor, setReadFor] = useState(app.readFor || '');
+  const [reviewing, setReviewing] = useState(null);
   const pollTimer = useRef(null);
   const appRef = useRef(app);
   appRef.current = app;
-  const [pending, setPending] = useState([]); // File[] chosen but not yet uploaded
-  const [dragOver, setDragOver] = useState(false);
-  const fileRef = useRef(null);
+
   const docs = app.documents || [];
-
-  const checklist = checklistStatus(app);
-  const missing = missingItems(checklist);
+  const docById = useMemo(() => new Map(docs.map((d) => [d.id, d])), [docs]);
+  const checklist = progress.checklist;
   const service = getAppType(app.type);
-  const groups = [
-    ['applicant', 'Applicant'],
-    ['principal', 'Spouse / parent / host / sponsor'],
-    ['ircc', "Also required by IRCC's current checklists"],
-    ['firm', 'Prepared by the firm'],
-  ].map(([party, title]) => ({ party, title, items: checklist.filter((c) => c.party === party) })).filter((g) => g.items.length);
+  const firstName = (app.data?.givenName || readFor || '').split(' ')[0];
 
-  function addFiles(fileList) {
-    const incoming = Array.from(fileList || []);
-    const ok = incoming.filter(accepted);
-    const rejected = incoming.length - ok.length;
-    setPending((prev) => {
-      // De-duplicate by name+size so the same file isn't queued twice.
-      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`));
-      const merged = [...prev];
-      for (const f of ok) {
-        const key = `${f.name}:${f.size}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          merged.push(f);
-        }
-      }
-      return merged;
-    });
-    if (rejected > 0) {
-      setMsg({ type: 'err', text: `${rejected} file(s) skipped — only PDF, DOCX, JPG, PNG, WEBP are allowed.` });
-    } else {
-      setMsg(null);
-    }
-  }
+  // Follow the URL when the overview links here with a filter.
+  useEffect(() => {
+    const p = parseSub(selected);
+    if (p.filter) setFilter(p.filter);
+    if (p.sel) setSelState(p.sel);
+  }, [selected]);
 
-  function onDrop(e) {
-    e.preventDefault();
-    setDragOver(false);
-    addFiles(e.dataTransfer?.files);
-  }
+  const select = (s) => {
+    setSelState(s);
+    onSelect?.(s);
+  };
 
-  function removePending(idx) {
-    setPending((prev) => prev.filter((_, i) => i !== idx));
-  }
+  // ---- the list: checklist items with their files, then files that match no item ----
+  const matched = new Set(checklist.flatMap((c) => c.docIds || []));
+  const loose = docs.filter((d) => !matched.has(d.id));
+  const itemDocs = (c) => (c.docIds || []).map((id) => docById.get(id)).filter(Boolean);
 
-  async function upload() {
-    if (!pending.length) {
-      setMsg({ type: 'info', text: 'Add one or more files first.' });
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    const fd = new FormData();
-    for (const f of pending) fd.append('files', f);
-    try {
-      const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'POST', body: fd });
-      const data = await readJson(res);
-      if (!res.ok) throw new Error(data.error || 'Upload failed.');
-      patchLocal({ documents: data.documents });
-      setPending([]);
-      if (fileRef.current) fileRef.current.value = '';
-      setMsg({
-        type: 'ok',
-        text: `Uploaded ${data.added.length} file(s). Click "Read with AI & pre-fill" so AI can identify each document and fill your intake.`,
-      });
-    } catch (e2) {
-      setMsg({ type: 'err', text: e2.message });
-    } finally {
-      setBusy(false);
-    }
-  }
+  const q = query.trim().toLowerCase();
+  const passes = (label, files, missing) => {
+    if (q && ![label, ...files.map((f) => f.filename)].join(' ').toLowerCase().includes(q)) return false;
+    if (filter === 'missing') return missing;
+    if (filter === 'problems') return files.some((f) => PROBLEM.has(f.verification?.status));
+    if (filter === 'sign') return files.some((f) => f.verification && !f.verification.reviewedBy);
+    return true;
+  };
 
-  async function removeDoc(docId) {
-    const res = await fetch(`/api/applications/${app.id}/upload?docId=${docId}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (res.ok) patchLocal({ documents: data.documents });
-  }
+  const counts = {
+    missing: progress.documents.missing.length,
+    problems: progress.check.red + progress.check.orange + progress.check.yellow,
+    sign: progress.check.toSign,
+  };
 
-  const [reviewing, setReviewing] = useState(null);
-  async function setReviewed(docId, reviewed) {
-    setReviewing(docId);
-    try {
-      const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docId, reviewed }) });
-      const data = await readJson(res);
-      if (res.ok) patchLocal({ documents: data.documents });
-    } finally {
-      setReviewing(null);
-    }
-  }
+  const groups = GROUPS.map(([party, title]) => ({
+    party,
+    title,
+    rows: checklist
+      .filter((c) => c.party === party)
+      .map((c) => ({ c, files: itemDocs(c) }))
+      .filter(({ c, files }) => passes(`${c.code} ${c.label}`, files, !c.provided && c.party !== 'firm' && !c.optional)),
+  })).filter((g) => g.rows.length);
+  const looseShown = loose.filter((d) => passes(d.filename, [d], false));
 
-  async function setCategory(docId, category) {
-    const res = await fetch(`/api/applications/${app.id}/upload`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ docId, category }),
-    });
-    const data = await res.json();
-    if (res.ok) patchLocal({ documents: data.documents });
-  }
-
-  // Reading runs as a server job (it can take minutes for a large file):
-  // start it, then poll for progress. Resumes if the page is reloaded mid-run.
+  // ---- reading & checking (a server job; resumes if the page is reloaded) ----
   async function extract(all = false) {
     setExtracting(true);
     setReadMsg(null);
     setComparison(null);
-    setProgress(null);
+    setJob(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/extract`, {
         method: 'POST',
@@ -313,7 +134,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
       });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || 'Could not start reading.');
-      setProgress(data.job);
+      setJob(data.job);
       poll(0);
     } catch (e2) {
       setReadMsg({ type: 'err', text: e2.message });
@@ -328,20 +149,19 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
         const res = await fetch(`/api/applications/${app.id}/extract`);
         const data = await readJson(res);
         if (!res.ok) throw new Error(data.error || 'Could not check progress.');
-        const job = data.job;
-        if (!job) throw new Error('Reading was interrupted (the server restarted). Click the button to start again — files already read are skipped.');
-        setProgress(job);
-        if (job.status === 'running') return poll(0);
-        if (job.status === 'failed') throw new Error(job.error || 'Reading failed.');
-        applyResult(job.result || {});
+        const j = data.job;
+        if (!j) throw new Error('Reading was interrupted (the server restarted). Click "Read & check" again — files already read are skipped.');
+        setJob(j);
+        if (j.status === 'running') return poll(0);
+        if (j.status === 'failed') throw new Error(j.error || 'Reading failed.');
+        applyResult(j.result || {});
         setExtracting(false);
-        setProgress(null);
+        setJob(null);
       } catch (e2) {
-        // A network blip or a restarting server: keep trying for a while.
         if ((e2.transient || e2 instanceof TypeError) && errors < 8) return poll(errors + 1);
         setReadMsg({ type: 'err', text: e2.message });
         setExtracting(false);
-        setProgress(null);
+        setJob(null);
       }
     }, 2500);
   }
@@ -354,7 +174,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
         if (!cancelled && data.applicant) setReadFor((cur) => cur || data.applicant);
         if (!cancelled && data.job?.status === 'running') {
           setExtracting(true);
-          setProgress(data.job);
+          setJob(data.job);
           poll(0);
         }
       } catch {
@@ -374,338 +194,450 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
     const sources = data.sources || {};
     const conf = data.confidence || {};
     const entries = Object.entries(fields).filter(([, v]) => v != null && String(v).trim() !== '');
+    const check = data.check;
+    const problems = check ? check.red + check.orange + check.yellow : 0;
+    const checkText = check ? ` Check: ${check.green} OK${problems ? `, ${problems} with findings` : ''}.` : '';
     if (!entries.length) {
-      setReadMsg({ type: 'info', text: 'Documents identified. No intake details could be read.' });
-      if (data.notes?.length) setComparison({ rows: [], notes: data.notes });
+      setReadMsg({ type: 'info', text: `Documents identified. No intake details could be read.${checkText}` });
+      if (data.notes?.length) {
+        setComparison({ rows: [], notes: data.notes });
+        select('compare');
+      }
       return;
     }
-
-    const current = appRef.current.data || {}; // latest answers, incl. anything typed while reading
+    const current = appRef.current.data || {};
     const rows = [];
     let applied = 0;
     for (const [k, v] of entries) {
       const yours = String(current[k] ?? '');
       let status;
       if (!yours.trim()) {
-        onExtracted(k, v); // auto-fill empty fields
+        onExtracted(k, v);
         applied++;
         status = 'added';
-      } else if (yours === String(v)) {
-        status = 'match';
-      } else {
-        status = 'differ';
-      }
+      } else if (yours === String(v)) status = 'match';
+      else status = 'differ';
       rows.push({ id: k, label: FIELD_LABELS[k] || k, yours, doc: String(v), source: sources[k] || '', conf: conf[k] || '', status });
     }
     setComparison({ rows, notes: data.notes || [] });
     const differ = rows.filter((r) => r.status === 'differ').length;
-    setReadMsg({
-      type: 'ok',
-      text: `Filled ${applied} empty field(s) from the documents. See the comparison below${
-        differ ? ` — ${differ} value(s) differ from what is already entered.` : '.'
-      }`,
-    });
+    setReadMsg({ type: 'ok', text: `Filled ${applied} empty field(s) from the documents${differ ? `; ${differ} value(s) differ from what was entered` : ''}.${checkText}` });
+    select('compare');
   }
-
 
   function useDoc(row) {
     onExtracted(row.id, row.doc);
-    setComparison((c) => ({
-      ...c,
-      rows: c.rows.map((r) => (r.id === row.id ? { ...r, yours: row.doc, status: 'match' } : r)),
-    }));
+    setComparison((c) => ({ ...c, rows: c.rows.map((r) => (r.id === row.id ? { ...r, yours: row.doc, status: 'match' } : r)) }));
   }
-
   function useAllDiffering() {
     if (!comparison) return;
     for (const r of comparison.rows) if (r.status === 'differ') onExtracted(r.id, r.doc);
-    setComparison((c) => ({
-      ...c,
-      rows: c.rows.map((r) => (r.status === 'differ' ? { ...r, yours: r.doc, status: 'match' } : r)),
-    }));
+    setComparison((c) => ({ ...c, rows: c.rows.map((r) => (r.status === 'differ' ? { ...r, yours: r.doc, status: 'match' } : r)) }));
   }
 
-  return (
-    <>
-      <div className="card">
-        <h2>
-          Document checklist{service.service ? <span className="muted small" style={{ fontWeight: 400 }}> · {service.service}</span> : null}
-        </h2>
-        <p className="muted small" style={{ marginTop: -6 }}>
-          Name each file with its code and document name (e.g. <em>101-Birth Certificate</em>) — a
-          file is matched to its box by the code. <strong>TR</strong> = English translation with the
-          translator&apos;s seal + Persian copy with seal + Persian original, in one PDF.
-        </p>
-        {groups.map((g) => (
-          <div key={g.party} style={{ marginTop: 10 }}>
-            <div className="small" style={{ fontWeight: 700, margin: '6px 0' }}>{g.title}</div>
-            {g.items.map((c) => (
-              <div className="row" key={c.id}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>
-                    {c.provided ? '✅' : c.party === 'firm' ? '🗂️' : '⬜'}{' '}
-                    {c.party === 'ircc' ? (
-                      <span className="chip" title="From IRCC's current checklist or visa office instructions">{c.source || 'IRCC'}</span>
-                    ) : (
-                      <span className="muted" style={{ fontWeight: 400 }}>{/^\d/.test(c.code) ? c.code : c.code.toUpperCase()}</span>
-                    )}{' '}
-                    {c.label}
-                    {c.tr && <span className="chip" style={{ marginLeft: 6 }} title="Certified translation bundle required">TR</span>}
-                  </div>
-                  {(c.cond || c.hint) && (
-                    <div className="muted small">{c.cond ? <em>{c.cond}. </em> : null}{c.hint}</div>
-                  )}
-                </div>
-                <span className={`chip ${c.provided ? 'ok' : c.party === 'firm' || c.optional ? '' : 'warn'}`}>
-                  {c.provided ? 'Provided' : c.party === 'firm' ? 'Firm prepares' : c.optional ? 'If applicable' : 'Missing'}
-                </span>
+  // ---- per-document actions ----
+  async function patchDoc(docId, body) {
+    const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docId, ...body }) });
+    const data = await readJson(res);
+    if (res.ok) patchLocal({ documents: data.documents });
+    else setReadMsg({ type: 'err', text: data.error || 'Could not save.' });
+  }
+  async function setReviewed(docId, reviewed) {
+    setReviewing(docId);
+    try {
+      await patchDoc(docId, { reviewed });
+    } finally {
+      setReviewing(null);
+    }
+  }
+  async function removeDoc(docId) {
+    const res = await fetch(`/api/applications/${app.id}/upload?docId=${encodeURIComponent(docId)}`, { method: 'DELETE' });
+    const data = await readJson(res);
+    if (res.ok) {
+      patchLocal({ documents: data.documents });
+      select(null);
+    }
+  }
+
+  // ---- what the right-hand pane shows ----
+  let pane = null;
+  const selKind = sel?.startsWith('item=') ? 'item' : sel?.startsWith('doc=') ? 'doc' : sel;
+  const selId = sel?.includes('=') ? sel.slice(sel.indexOf('=') + 1) : null;
+
+  if (selKind === 'item') {
+    const [itemId, docPick] = selId.split('|file=');
+    const item = checklist.find((c) => c.id === itemId);
+    if (item) {
+      const files = itemDocs(item);
+      const current = files.find((f) => f.id === docPick) || files.slice().sort((a, b) => (RANKV(b) - RANKV(a)))[0];
+      pane = {
+        title: item.label,
+        eyebrow: /^\d/.test(item.code) ? item.code : item.source || 'IRCC',
+        tr: item.tr,
+        body: (
+          <>
+            {files.length > 1 && (
+              <div className="seg" role="group" aria-label="Files for this item">
+                {files.map((f) => (
+                  <button key={f.id} type="button" aria-pressed={f.id === current.id} onClick={() => select(`item=${item.id}|file=${f.id}`)} title={f.filename}>
+                    <span className={`dot ${f.verification?.status || 'hollow'}`} aria-hidden="true" /> {f.filename.length > 28 ? `${f.filename.slice(0, 26)}…` : f.filename}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
-        ))}
-        <div className="hint-box" style={{ marginTop: 14 }}>
-          {missing.length === 0
-            ? '🎉 All checklist documents are provided.'
-            : `${missing.length} document(s) still missing: ${missing.map((m) => `${m.code} ${m.label}`).join(', ')}.`}
-        </div>
-      </div>
-
-      <IrccRequirements app={app} patchLocal={patchLocal} />
-
-      {staff && <DriveImport app={app} patchLocal={patchLocal} onImported={() => extract()} />}
-
-      <div className="card">
-        <h2>Upload files</h2>
-        <p className="muted small" style={{ marginTop: -6 }}>
-          Add as many files as you like — PDF, DOCX, JPG, PNG or WEBP. No need to say what each
-          file is; we detect it from the file itself.
-        </p>
-
-        <div
-          className={`dropzone ${dragOver ? 'over' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
-          onDrop={onDrop}
-          onClick={() => fileRef.current?.click()}
-          role="button"
-          tabIndex={0}
-        >
-          <div style={{ fontSize: 30 }}>📄⬆️</div>
-          <div style={{ fontWeight: 600, marginTop: 6 }}>
-            Drag &amp; drop files here
-          </div>
-          <div className="muted small">or click to browse — you can select several at once</div>
-          <input
-            ref={fileRef}
-            type="file"
-            multiple
-            accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
-            style={{ display: 'none' }}
-            onChange={(e) => addFiles(e.target.files)}
-          />
-        </div>
-
-        {pending.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <div className="muted small" style={{ marginBottom: 6 }}>
-              {pending.length} file(s) ready to upload:
-            </div>
-            {pending.map((f, i) => (
-              <div className="row" key={`${f.name}:${f.size}`} style={{ padding: '8px 0' }}>
-                <div className="small" style={{ fontWeight: 600 }}>
-                  {f.name} <span className="muted">· {(f.size / 1024).toFixed(0)} KB</span>
-                </div>
-                <button className="btn-ghost" onClick={() => removePending(i)}>Remove</button>
-              </div>
-            ))}
-            <div className="btn-row" style={{ marginTop: 12 }}>
-              <button onClick={upload} disabled={busy}>
-                {busy ? <span className="spinner" /> : `Upload ${pending.length} file(s)`}
-              </button>
-              <button className="btn-secondary" onClick={() => setPending([])} disabled={busy}>
-                Clear
-              </button>
-            </div>
-          </div>
-        )}
-
-        {msg && (
-          <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 14 }}>
-            {msg.text}
-          </div>
-        )}
-      </div>
-
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ marginBottom: 0 }}>Your files ({docs.length})</h2>
-          <button className="btn-secondary" onClick={() => extract()} disabled={extracting || !docs.length}>
-            {extracting ? <span className="spinner" /> : '✨ Read documents & fill intake'}
-          </button>
-        </div>
-        {staff && docs.length > 0 && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
-            <label htmlFor="readFor" className="small" style={{ margin: 0, fontWeight: 600 }}>Reading for</label>
-            <input
-              id="readFor"
-              value={readFor}
-              onChange={(e) => setReadFor(e.target.value)}
-              placeholder="Applicant's name, as in the file names"
-              style={{ flex: '1 1 220px', maxWidth: 320, padding: '6px 10px' }}
-              disabled={extracting}
-            />
-            <span className="muted small" style={{ flex: '1 1 260px' }}>
-              The applicant this file is for. Other family members&apos; documents only fill their own sections.
-            </span>
-            {docs.some((d) => d.extractedAt) && !extracting && (
-              <a href="#" className="small" onClick={(e) => { e.preventDefault(); extract(true); }}>
-                Re-read all documents
-              </a>
             )}
-          </div>
-        )}
-        {docs.some((d) => d.verification) && (() => {
-          const n = { green: 0, yellow: 0, orange: 0, red: 0 };
-          let unchecked = 0;
-          for (const d of docs) {
-            if (d.verification?.status) n[d.verification.status]++;
-            else if (!['internal', 'questionnaire', 'photo'].includes(d.category)) unchecked++;
-          }
-          return (
-            <div className="small" style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <strong>Document check:</strong>
-              {['green', 'yellow', 'orange', 'red'].map((k) => (
-                <span key={k} className="chip" style={{ background: CHECK[k].bg, color: CHECK[k].fg, fontWeight: 700 }}>
-                  {n[k]} {CHECK[k].label.toLowerCase()}
-                </span>
-              ))}
-              {unchecked > 0 && <span className="muted">{unchecked} not checked yet</span>}
-            </div>
-          );
-        })()}
-        {extracting && progress && (
-          <ProgressBar
-            value={
-              progress.phase === 'checking'
-                ? progress.checkTotal ? (progress.checkDone || 0) / progress.checkTotal : null
-                : progress.total ? progress.done / progress.total : null
-            }
-            label={
-              progress.phase === 'checking'
-                ? `Checking document ${Math.min((progress.checkDone || 0) + 1, progress.checkTotal || 1)} of ${progress.checkTotal || 0}${
-                    progress.checkCurrent ? ` — ${progress.checkCurrent}` : ''
-                  } (translation, dates, names, completeness). You can keep working.`
-                : `Reading ${progress.docCount} document(s) with AI — part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${
-                    progress.failed ? ` · ${progress.failed} part(s) failed` : ''
-                  }. You can keep working; this page updates when it is done.`
-            }
-          />
-        )}
-        {readMsg && (
-          <div className={`alert ${readMsg.type === 'err' ? 'err' : readMsg.type === 'ok' ? 'ok' : 'info'}`} style={{ marginTop: 10 }}>
-            {readMsg.text}
-          </div>
-        )}
-
-        {docs.length === 0 ? (
-          <p className="muted small" style={{ marginTop: 12 }}>No files yet.</p>
-        ) : (
-          <div style={{ marginTop: 8 }}>
-            {docs.map((d) => (
-              <div className="row" key={d.id}>
+            {current ? (
+              <>
+                {files.length === 1 && <div className="small faint" style={{ overflowWrap: 'anywhere' }}><FileText size={13} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {current.filename}</div>}
+                <DocDetail
+                  app={app}
+                  doc={current}
+                  staff={staff}
+                  tr={item.tr}
+                  reviewing={reviewing === current.id}
+                  onReview={(r) => setReviewed(current.id, r)}
+                  onCategory={(c) => patchDoc(current.id, { category: c })}
+                  onRemove={() => removeDoc(current.id)}
+                />
+              </>
+            ) : item.party === 'firm' ? (
+              <div className="status-strip none">
+                <FolderCog size={18} aria-hidden="true" />
                 <div>
-                  <div style={{ fontWeight: 600 }}>
-                    {d.filename}
-                    <CheckBadge v={d.verification} />
-                  </div>
-                  <div className="muted small">
-                    {d.category
-                      ? `Detected: ${CATEGORY_LABELS[d.category] || d.category}`
-                      : 'Not identified yet — run "Read with AI"'}
-                    {d.owner && d.owner !== 'applicant' ? ` · ${OWNER_LABELS[d.owner] || 'someone else'}’s document` : ''}{' '}
-                    · {(d.size / 1024).toFixed(0)} KB
-                    {d.source === 'email' ? ` · from email${d.mailDate ? ` (${new Date(d.mailDate).toLocaleDateString()})` : ''}` : d.source === 'drive' ? ' · from Drive' : ''}
-                    {d.driveId && d.source === 'email' ? ' · filed on Drive' : ''}
-                  </div>
-                  <CheckDetails v={d.verification} onReview={(r) => setReviewed(d.id, r)} reviewing={reviewing === d.id} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <select
-                    value={d.category || ''}
-                    onChange={(e) => setCategory(d.id, e.target.value)}
-                    style={{ width: 190, padding: '6px 8px', fontSize: 12.5 }}
-                  >
-                    <option value="">— set type —</option>
-                    {Object.entries(CATEGORY_LABELS).map(([k, label]) => (
-                      <option key={k} value={k}>{label}</option>
-                    ))}
-                  </select>
-                  <button className="btn-ghost" onClick={() => removeDoc(d.id)}>Remove</button>
+                  <div className="strong">Prepared by the firm</div>
+                  <div className="small">{item.hint || 'The team prepares this document; it is produced with the final files.'}</div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {comparison && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <h3 style={{ margin: 0 }}>You entered vs. your documents</h3>
-              {comparison.rows.some((r) => r.status === 'differ') && (
-                <button className="btn-secondary" onClick={useAllDiffering}>Use all document values</button>
-              )}
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="cmp">
-                <thead>
-                  <tr>
-                    <th>Field</th>
-                    <th>You entered</th>
-                    <th>In your documents</th>
-                    <th>Source</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {comparison.rows.map((r) => (
-                    <tr key={r.id} className={r.status === 'differ' ? 'row-differ' : ''}>
-                      <td>{r.label}</td>
-                      <td className="muted">{r.yours || <span className="chip">empty</span>}</td>
-                      <td style={{ fontWeight: 600 }}>
-                        {r.doc}{' '}
-                        {r.conf && (
-                          <span className={`chip ${r.conf === 'high' ? 'ok' : r.conf === 'low' ? 'danger' : 'warn'}`}>{r.conf}</span>
-                        )}
-                      </td>
-                      <td className="muted small">{r.source || '—'}</td>
-                      <td>
-                        {r.status === 'added' && <span className="chip ok">added</span>}
-                        {r.status === 'match' && <span className="chip">✓</span>}
-                        {r.status === 'differ' && <button className="btn-ghost" onClick={() => useDoc(r)}>Use this</button>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {comparison.notes?.length > 0 && (
+            ) : (
               <>
-                <h3 style={{ marginTop: 16 }}>Notes from your documents</h3>
-                <ul className="muted small" style={{ paddingLeft: 18 }}>
-                  {comparison.notes.map((n, i) => <li key={i}>{n}</li>)}
-                </ul>
+                <div className={`status-strip ${item.optional ? 'none' : 'orange'}`}>
+                  <CircleDashed size={18} aria-hidden="true" />
+                  <div>
+                    <div className="strong">{item.optional ? 'Only if it applies' : 'Missing'}</div>
+                    <div className="small">
+                      {item.cond ? <em>{item.cond}. </em> : null}
+                      {item.hint || (item.party === 'ircc' ? `Listed by IRCC (${item.source}). The firm's checklist doesn't cover it.` : '')}
+                      {item.tr ? ' Needs the certified translation bundle: translation with seal, certified copy and the original, in one PDF.' : ''}
+                    </div>
+                  </div>
+                </div>
+                <UploadBox
+                  app={app}
+                  patchLocal={patchLocal}
+                  compact
+                  hint={/^\d/.test(item.code) ? `Files are renamed to “${item.code} - …” so they land in this box.` : undefined}
+                  rename={(f) => nameFor(item, firstName, f)}
+                />
               </>
             )}
-            <p className="muted small" style={{ marginTop: 8 }}>
-              Empty fields were filled automatically. Always verify against your original documents.
-            </p>
-          </div>
-        )}
+          </>
+        ),
+      };
+    }
+  } else if (selKind === 'doc') {
+    const d = docById.get(selId);
+    if (d) {
+      pane = {
+        title: d.filename,
+        eyebrow: 'Not matched to a checklist item',
+        body: (
+          <>
+            <p className="small muted" style={{ margin: 0 }}>Rename the file with its checklist code (e.g. “113 - …”) or set its type below so it counts for the right item.</p>
+            <DocDetail app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} />
+          </>
+        ),
+      };
+    }
+  } else if (selKind === 'compare' && comparison) {
+    pane = { title: 'What the documents say', eyebrow: 'Reading result', body: <Comparison comparison={comparison} onUse={useDoc} onUseAll={useAllDiffering} /> };
+  }
+  if (!pane) {
+    pane = {
+      title: 'Documents summary',
+      eyebrow: service.service ? `Checklist ${service.service}` : 'Checklist',
+      body: <Summary app={app} progress={progress} staff={staff} onFilter={setFilter} onRead={(all) => extract(Boolean(all))} extracting={extracting} hasComparison={Boolean(comparison)} openComparison={() => select('compare')} patchLocal={patchLocal} />,
+    };
+  }
 
-        <div style={{ marginTop: 16 }}>
-          <button className="btn-ghost" onClick={goIntake}>Continue to Intake →</button>
+  const readingLabel = job
+    ? job.phase === 'checking'
+      ? `Checking document ${Math.min((job.checkDone || 0) + 1, job.checkTotal || 1)} of ${job.checkTotal || 0}${job.checkCurrent ? ` — ${job.checkCurrent}` : ''}: translation, dates, names, completeness.`
+      : `Reading ${job.docCount || ''} document(s) — part ${Math.min((job.done || 0) + 1, job.total || 1)} of ${job.total || '…'}${job.failed ? ` · ${job.failed} part(s) failed` : ''}.`
+    : 'Starting…';
+  const readingValue = job
+    ? job.phase === 'checking'
+      ? job.checkTotal ? (job.checkDone || 0) / job.checkTotal : null
+      : job.total ? job.done / job.total : null
+    : null;
+
+  return (
+    <div>
+      <div className="page-head" style={{ marginBottom: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 20 }}>Documents</h1>
+          <p className="muted small">
+            {progress.documents.provided} of {progress.documents.required} required provided · {docs.length} file{docs.length === 1 ? '' : 's'}
+            {progress.check.unread ? ` · ${progress.check.unread} not read yet` : ''}
+          </p>
+        </div>
+        <div className="btn-row">
+          {staff && docs.length > 0 && (
+            <div className="cluster" style={{ gap: 6 }}>
+              <label htmlFor="readFor" className="small faint" style={{ margin: 0, fontWeight: 500 }}>Reading for</label>
+              <input id="readFor" value={readFor} onChange={(e) => setReadFor(e.target.value)} placeholder="First name" style={{ width: 130, padding: '6px 9px' }} disabled={extracting} title="The applicant this file is for, as in the file names. Other family members' documents only fill their own sections." />
+            </div>
+          )}
+          <button type="button" className="btn-navy" onClick={() => extract(false)} disabled={extracting || !docs.length}>
+            {extracting ? <span className="spinner" /> : <Sparkles size={16} aria-hidden="true" />} Read &amp; check
+          </button>
+          <button type="button" onClick={() => setAddOpen(true)}>
+            <Plus size={16} aria-hidden="true" /> Add documents
+          </button>
         </div>
       </div>
+
+      {extracting && (
+        <div className="banner" style={{ marginBottom: 12 }}>
+          <span className="spinner dark" aria-hidden="true" />
+          <div className="grow">
+            <ProgressBar value={readingValue} label={`${readingLabel} You can keep working.`} />
+          </div>
+        </div>
+      )}
+      {readMsg && (
+        <div className={`alert ${readMsg.type === 'err' ? 'err' : readMsg.type === 'ok' ? 'ok' : 'info'}`}>
+          <span style={{ flex: 1 }}>{readMsg.text}</span>
+          {comparison && selKind !== 'compare' && <button type="button" className="btn-secondary btn-sm" onClick={() => select('compare')}>Show what was read</button>}
+          <button type="button" className="icon-btn" onClick={() => setReadMsg(null)} aria-label="Dismiss"><X size={14} /></button>
+        </div>
+      )}
+
+      <div className="docs-bar">
+        <div className="seg" role="group" aria-label="Filter">
+          {[
+            ['all', 'All'],
+            ['missing', 'Missing', counts.missing],
+            ['problems', 'Problems', counts.problems],
+            ...(staff ? [['sign', 'To sign off', counts.sign]] : []),
+          ].map(([k, l, n]) => (
+            <button key={k} type="button" aria-pressed={filter === k} onClick={() => setFilter(k)}>
+              {l}{n != null ? <span className="count"> {n}</span> : null}
+            </button>
+          ))}
+        </div>
+        <div className="grow" />
+        <div className="input-icon" style={{ width: 240, maxWidth: '100%' }}>
+          <Search size={15} aria-hidden="true" />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search documents" aria-label="Search documents" style={{ padding: '7px 10px 7px 32px' }} />
+        </div>
+      </div>
+
+      <div className={`docs${sel ? ' has-sel' : ''}`}>
+        <div className="docs-list" role="list" aria-label="Checklist">
+          {groups.map((g) => (
+            <div key={g.party} role="presentation">
+              <div className="grp">
+                <span>{g.title}</span>
+                <span>{g.rows.filter((r) => r.c.provided).length}/{g.rows.length}</span>
+              </div>
+              {g.rows.map(({ c, files }) => {
+                const worst = worstStatus(files);
+                const missing = !c.provided && c.party !== 'firm';
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    role="listitem"
+                    className={`doc-row${sel?.startsWith(`item=${c.id}`) ? ' sel' : ''}${missing ? ' missing' : ''}`}
+                    onClick={() => select(`item=${c.id}`)}
+                  >
+                    <span className="st" aria-hidden="true">
+                      {c.party === 'firm' && !files.length ? <FolderCog size={15} className="faint" /> : <span className={`dot ${worst || (c.provided ? 'green' : 'hollow')}`} style={c.provided && !worst ? { background: 'var(--line-strong)' } : c.optional && !c.provided ? { borderStyle: 'dashed' } : undefined} />}
+                    </span>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="lbl">
+                        {/^\d/.test(c.code) ? <span className="code">{c.code}</span> : <span className="chip code" style={{ marginRight: 6 }}>{c.source || 'IRCC'}</span>}
+                        {c.label}
+                      </span>
+                      <span className="files">
+                        {files.length
+                          ? files.map((f) => (
+                              <span key={f.id}>
+                                {f.filename}
+                                {f.verification?.reviewedBy ? <span className="faint">· signed off</span> : null}
+                              </span>
+                            ))
+                          : <span className="faint">{c.party === 'firm' ? 'Firm prepares' : c.optional ? 'If applicable' : c.cond || 'Missing'}</span>}
+                      </span>
+                    </span>
+                    <span>
+                      {worst ? <span className={`chip ${CHECK[worst].cls}`}>{CHECK[worst].label}</span> : c.tr ? <span className="chip outline" title="Certified translation bundle required">TR</span> : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+          {looseShown.length > 0 && (
+            <div role="presentation">
+              <div className="grp"><span>Other files</span><span>{looseShown.length}</span></div>
+              {looseShown.map((d) => (
+                <button key={d.id} type="button" role="listitem" className={`doc-row${sel === `doc=${d.id}` ? ' sel' : ''}`} onClick={() => select(`doc=${d.id}`)}>
+                  <span className="st" aria-hidden="true"><span className={`dot ${d.verification?.status || 'hollow'}`} /></span>
+                  <span style={{ minWidth: 0 }}>
+                    <span className="lbl" style={{ overflowWrap: 'anywhere' }}>{d.filename}</span>
+                    <span className="files"><span className="faint">{d.category ? CATEGORY_LABELS[d.category] || d.category : 'Type not detected yet'}</span></span>
+                  </span>
+                  <span>{d.verification?.status ? <span className={`chip ${CHECK[d.verification.status].cls}`}>{CHECK[d.verification.status].label}</span> : null}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {!groups.length && !looseShown.length && (
+            <div className="empty small">
+              <ListChecks size={26} aria-hidden="true" />
+              <p style={{ marginTop: 8 }}>{docs.length || filter !== 'all' || q ? 'Nothing matches this filter.' : 'No documents yet.'}</p>
+              {(filter !== 'all' || q) && <button type="button" className="btn-secondary btn-sm" onClick={() => { setFilter('all'); setQuery(''); }}>Show everything</button>}
+            </div>
+          )}
+        </div>
+
+        <section className="docs-pane" aria-label="Details">
+          <div className="pane-head">
+            <button type="button" className="icon-btn pane-back" onClick={() => select(null)} aria-label="Back to the list"><ArrowLeft size={18} /></button>
+            <div className="grow">
+              <div className="eyebrow">{pane.eyebrow}</div>
+              <h2>
+                {pane.title}
+                {pane.tr ? <span className="chip outline" style={{ marginLeft: 8, verticalAlign: '2px' }} title="Certified translation bundle required">TR</span> : null}
+              </h2>
+            </div>
+            {sel && <button type="button" className="icon-btn pane-close" onClick={() => select(null)} aria-label="Close"><X size={17} /></button>}
+          </div>
+          <div className="pane-body">{pane.body}</div>
+        </section>
+      </div>
+
+      <AddDocuments
+        app={app}
+        patchLocal={patchLocal}
+        staff={staff}
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onImported={() => { setAddOpen(false); extract(false); }}
+        onUploaded={() => {}}
+      />
+    </div>
+  );
+}
+
+const RANKS = { red: 4, orange: 3, yellow: 2, green: 1 };
+function RANKV(d) {
+  return RANKS[d.verification?.status] || 0;
+}
+
+/** Shown when nothing is selected: the check at a glance, reading, and IRCC's current requirements. */
+function Summary({ app, progress: p, staff, onFilter, onRead, extracting, hasComparison, openComparison, patchLocal }) {
+  const docs = app.documents || [];
+  const readAt = docs.map((d) => d.extractedAt).filter(Boolean).sort().pop();
+  return (
+    <>
+      <section className="stack-sm" aria-label="Document check">
+        <h3 style={{ margin: 0 }}>Accuracy check</h3>
+        <div className="cluster">
+          {['red', 'orange', 'yellow', 'green'].map((k) => (
+            <button key={k} type="button" className="btn-secondary btn-sm" onClick={() => onFilter(k === 'green' ? 'all' : 'problems')}>
+              <span className={`dot ${k}`} aria-hidden="true" /> {p.check[k] || 0} {CHECK[k].label.toLowerCase()}
+            </button>
+          ))}
+          {p.check.unchecked > 0 && <span className="small faint">{p.check.unchecked} not checked yet</span>}
+        </div>
+        <p className="small muted" style={{ margin: 0 }}>
+          Every document is read by two independent models and checked for translation errors, dates (Persian ↔ Gregorian),
+          names, typos, vague statements and missing parts of the translation bundle. Select a document to see why it got its colour.
+        </p>
+        <div className="cluster">
+          <button type="button" className="btn-secondary btn-sm" onClick={() => onRead(false)} disabled={extracting || !docs.length}>
+            <Sparkles size={14} aria-hidden="true" /> {readAt ? 'Read new files' : 'Read & check now'}
+          </button>
+          {hasComparison && <button type="button" className="btn-ghost btn-sm" onClick={openComparison}>What the documents say</button>}
+          {readAt && <span className="small faint">Last read {fmtTime(readAt)}</span>}
+        </div>
+      </section>
+
+      {p.documents.missing.length > 0 && (
+        <section className="stack-sm" aria-label="Missing">
+          <h3 style={{ margin: 0 }}>Still missing ({p.documents.missing.length})</h3>
+          <ul className="small" style={{ margin: 0, paddingLeft: 18, display: 'grid', gap: 3 }}>
+            {p.documents.missing.slice(0, 8).map((m) => (
+              <li key={m.id}><span className="mono faint">{/^\d/.test(m.code) ? m.code : m.source}</span> {m.label}</li>
+            ))}
+          </ul>
+          {p.documents.missing.length > 8 && <button type="button" className="btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => onFilter('missing')}>Show all missing</button>}
+        </section>
+      )}
+
+      <section aria-label="IRCC requirements" className="stack-sm">
+        <h3 style={{ margin: 0, display: 'flex', gap: 6, alignItems: 'center' }}><Landmark size={14} aria-hidden="true" /> IRCC&apos;s current requirements</h3>
+        <IrccRequirements app={app} patchLocal={patchLocal} bare />
+      </section>
+
+      {staff && (
+        <p className="small faint" style={{ margin: 0 }}>
+          <RotateCcw size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} /> To read every file again (for example after renaming files), use{' '}
+          <a href="#" onClick={(e) => { e.preventDefault(); onRead(true); }}>re-read all documents</a>.
+        </p>
+      )}
+    </>
+  );
+}
+
+/** The reading result: what was filled, what matches, and what differs. */
+function Comparison({ comparison, onUse, onUseAll }) {
+  const differ = comparison.rows.filter((r) => r.status === 'differ').length;
+  return (
+    <>
+      {comparison.rows.length > 0 && (
+        <>
+          <div className="spread">
+            <p className="small muted" style={{ margin: 0 }}>Empty fields were filled automatically. Where the documents disagree with what was entered, choose which to keep.</p>
+            {differ > 0 && <button type="button" className="btn-secondary btn-sm" onClick={onUseAll}>Use all document values ({differ})</button>}
+          </div>
+          <div className="tbl-wrap" style={{ border: '1px solid var(--line)', borderRadius: 8 }}>
+            <table className="cmp">
+              <thead>
+                <tr><th>Field</th><th>Entered</th><th>In the documents</th><th>Source</th><th /></tr>
+              </thead>
+              <tbody>
+                {comparison.rows.map((r) => (
+                  <tr key={r.id} className={r.status === 'differ' ? 'row-differ' : ''}>
+                    <td>{r.label}</td>
+                    <td className="muted">{r.yours || <span className="faint">empty</span>}</td>
+                    <td className="strong">
+                      {r.doc}{' '}
+                      {r.conf && r.conf !== 'high' && <span className={`chip ${r.conf === 'low' ? 'danger' : 'warn'}`}>{r.conf} confidence</span>}
+                    </td>
+                    <td className="small muted">{r.source || '—'}</td>
+                    <td className="nowrap">
+                      {r.status === 'added' && <span className="chip ok">Filled</span>}
+                      {r.status === 'match' && <span className="chip">Same</span>}
+                      {r.status === 'differ' && <button type="button" className="btn-secondary btn-sm" onClick={() => onUse(r)}>Use this</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {comparison.notes?.length > 0 && (
+        <section>
+          <h3>Notes from the documents</h3>
+          <ul className="small muted" style={{ paddingLeft: 18, margin: 0, display: 'grid', gap: 4 }}>
+            {comparison.notes.map((n, i) => <li key={i}>{n}</li>)}
+          </ul>
+        </section>
+      )}
+      <p className="small faint" style={{ margin: 0 }}>Always verify against the original documents.</p>
     </>
   );
 }

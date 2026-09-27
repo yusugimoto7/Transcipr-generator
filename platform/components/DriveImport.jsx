@@ -125,47 +125,51 @@ export default function DriveImport({ app, patchLocal, onImported }) {
   const mode = status?.drive?.mode;
 
   return (
-    <div className="card">
-      <h2>Import from Google Drive</h2>
-      <p className="muted small" style={{ marginTop: -6 }}>
-        Paste the link of the client&apos;s documents folder. Every PDF, photo and Word file is
-        downloaded — including per-applicant subfolders and zip files — and identified by its
-        document code. Backup folders (bk, old, used…) are skipped.
+    <div className="stack-sm">
+      <p className="muted small" style={{ margin: 0 }}>
+        Paste the link of the client&apos;s documents folder. Every PDF, photo and Word file is downloaded, including
+        per-applicant subfolders and zip files, and matched to the checklist by its code. Backup folders (bk, old,
+        used…) are skipped.
       </p>
 
       {mode === 'none' && (
-        <div className="alert info">
-          Google Drive isn&apos;t connected on the server yet. An admin needs to add a Google service
-          account key as <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> — see the setup steps in the README.
+        <div className="alert info" style={{ margin: 0 }}>
+          Google Drive isn&apos;t connected on the server yet. An admin needs to add a Google service account key as{' '}
+          <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> (see the README).
         </div>
       )}
-      {mode === 'invalid' && <div className="alert err">{status.drive.error}</div>}
+      {mode === 'invalid' && <div className="alert err" style={{ margin: 0 }}>{status.drive.error}</div>}
       {mode === 'service-account' && (
-        <p className="small" style={{ marginTop: 0 }}>
-          Folders must be shared (Viewer) with <strong>{status.drive.email}</strong>. Share your
-          main client folder once and every client inside it works.
+        <p className="small faint" style={{ margin: 0 }}>
+          Folders must be shared with <strong className="mono">{status.drive.email}</strong>. Share the main client folder once and every client inside it works.
         </p>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+      <form
+        className="cluster"
+        style={{ flexWrap: 'nowrap' }}
+        onSubmit={(e) => { e.preventDefault(); if (url.trim()) run(url); }}
+      >
+        <label htmlFor="drive-url" className="sr-only">Google Drive folder link</label>
         <input
+          id="drive-url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://drive.google.com/drive/folders/…"
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0 }}
           disabled={busy || mode === 'none'}
         />
-        <button onClick={() => run(url)} disabled={busy || !url.trim() || mode === 'none'}>
+        <button type="submit" disabled={busy || !url.trim() || mode === 'none'}>
           {busy ? <span className="spinner" /> : 'Import'}
         </button>
-      </div>
-      <div style={{ display: 'flex', gap: 18, marginTop: 8, flexWrap: 'wrap' }}>
-        <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400 }}>
-          <input type="checkbox" style={{ width: 14 }} checked={readAfter} onChange={(e) => setReadAfter(e.target.checked)} />
-          Read with AI and pre-fill the intake afterwards
+      </form>
+      <div className="cluster" style={{ gap: 18 }}>
+        <label className="check-label">
+          <input type="checkbox" checked={readAfter} onChange={(e) => setReadAfter(e.target.checked)} />
+          Read and check the documents afterwards
         </label>
-        <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400 }}>
-          <input type="checkbox" style={{ width: 14 }} checked={includeBackups} onChange={(e) => setIncludeBackups(e.target.checked)} />
+        <label className="check-label">
+          <input type="checkbox" checked={includeBackups} onChange={(e) => setIncludeBackups(e.target.checked)} />
           Also import backup folders
         </label>
       </div>
@@ -176,19 +180,19 @@ export default function DriveImport({ app, patchLocal, onImported }) {
       })()}
 
       {source && !result && !busy && (
-        <p className="muted small" style={{ marginTop: 10 }}>
+        <p className="muted small" style={{ margin: 0 }}>
           Last imported from <strong>{source.rootName}</strong> on {new Date(source.lastImportAt).toLocaleString()}.{' '}
           <a href="#" onClick={(e) => { e.preventDefault(); run(source.url); }}>Sync again</a> — only new or changed files are downloaded.
         </p>
       )}
 
-      {err && <div className="alert err" style={{ marginTop: 10 }}>{err}</div>}
+      {err && <div className="alert err" style={{ margin: 0 }}>{err}</div>}
 
       {result && (
-        <div className="alert ok" style={{ marginTop: 10 }}>
+        <div className="alert ok" style={{ margin: 0, display: 'block' }}>
           <strong>{result.root.name}</strong>: {result.added.length} new, {result.updated.length} updated,{' '}
           {result.unchanged} unchanged{result.skipped.length ? `, ${result.skipped.length} skipped` : ''}.
-          {readAfter && (result.added.length || result.updated.length) ? ' Reading them with AI now…' : ''}
+          {readAfter && (result.added.length || result.updated.length) ? ' Reading and checking them now…' : ''}
           {result.skipped.length > 0 && (
             <details style={{ marginTop: 6 }}>
               <summary className="small">What was skipped and why</summary>

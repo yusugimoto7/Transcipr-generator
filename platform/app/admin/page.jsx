@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import TopBar from '@/components/TopBar';
 import AdminClient from '@/components/AdminClient';
 
-export const metadata = { title: 'Admin — Canada Visa Platform' };
+export const metadata = { title: 'Admin — Sugimoto Visa' };
 
 export default async function AdminPage() {
   const user = await getCurrentUser();
@@ -12,7 +12,7 @@ export default async function AdminPage() {
   return (
     <>
       <TopBar user={user} />
-      <div className="container">
+      <div className="page">
         <AdminClient />
       </div>
     </>

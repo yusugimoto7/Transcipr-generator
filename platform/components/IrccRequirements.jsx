@@ -12,7 +12,7 @@ const when = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { year:
  * list lacks are added to the file's checklist (the "Also required by IRCC"
  * group). Sources are re-checked on the server at least daily.
  */
-export default function IrccRequirements({ app, patchLocal }) {
+export default function IrccRequirements({ app, patchLocal, bare }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const timer = useRef(null);
@@ -54,15 +54,13 @@ export default function IrccRequirements({ app, patchLocal }) {
   const needsCountry = !residence && getAppType(app.type).group.includes('outside Canada');
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-        <h2 style={{ marginBottom: 0 }}>IRCC&apos;s current requirements</h2>
-        {data?.checking && <span className="small muted"><span className="spinner" style={{ width: 12, height: 12 }} /> Checking IRCC for updates…</span>}
-      </div>
-      <p className="muted small" style={{ marginTop: 4 }}>
+    <div className={bare ? 'stack-sm' : 'card'}>
+      {!bare && <h2 style={{ marginBottom: 0 }}>IRCC&apos;s current requirements</h2>}
+      {data?.checking && <span className="small muted cluster"><span className="spinner dark" style={{ width: 12, height: 12 }} /> Checking IRCC for updates…</span>}
+      <p className="muted small" style={{ margin: 0 }}>
         Read from IRCC&apos;s own checklist and the visa office instructions for the country the
-        client applies from, re-checked at least daily. Anything IRCC asks for that the firm&apos;s
-        checklist doesn&apos;t cover is added above under &ldquo;Also required by IRCC&rdquo;.
+        client applies from, re-checked at least daily. Anything the firm&apos;s checklist
+        doesn&apos;t cover is added to the list under &ldquo;Also required by IRCC&rdquo;.
       </p>
 
       {err && <div className="alert err">{err}</div>}
@@ -71,7 +69,8 @@ export default function IrccRequirements({ app, patchLocal }) {
       )}
 
       {sources.length > 0 && (
-        <table className="cmp" style={{ marginTop: 6 }}>
+        <div className="tbl-wrap" style={{ border: '1px solid var(--line)', borderRadius: 8 }}>
+        <table className="cmp" style={{ minWidth: 480 }}>
           <thead>
             <tr><th>Source</th><th>Version</th><th>Checked</th><th>Last change</th></tr>
           </thead>
@@ -93,6 +92,7 @@ export default function IrccRequirements({ app, patchLocal }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {recent.map((s) => (

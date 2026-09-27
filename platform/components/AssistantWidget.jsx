@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { MessageCircle, X, Send, Bot } from 'lucide-react';
 
 const GREETING = {
   role: 'assistant',
   content:
-    "Hi! I'm your study permit assistant. Ask me anything — what documents you need, how to answer a question, how to strengthen your file, or how to use this platform.",
+    "Hi! Ask me anything about Canadian visas and permits: which documents are needed, how to answer a question, how to strengthen a file, or how to use this platform.",
 };
 
 const SUGGESTIONS = [
-  'What documents do I need?',
-  'How much proof of funds is required?',
-  'How do I write a strong study plan?',
+  'What documents are needed for this application?',
+  'How much proof of funds is enough?',
+  'How do I write a strong Purpose of Travel?',
 ];
 
 export default function AssistantWidget({ appId, initialHistory = [] }) {
@@ -61,23 +62,23 @@ export default function AssistantWidget({ appId, initialHistory = [] }) {
       <button
         className="assist-fab"
         onClick={() => setOpen((o) => !o)}
-        aria-label="Open assistant"
+        aria-label={open ? 'Close assistant' : 'Open assistant'}
         title="Need help? Ask the assistant"
       >
-        {open ? '✕' : '💬'}
+        {open ? <X size={22} /> : <MessageCircle size={22} />}
       </button>
 
       {open && (
-        <div className="assist-panel" role="dialog" aria-label="Study permit assistant">
+        <div className="assist-panel" role="dialog" aria-label="Assistant">
           <div className="assist-head">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 18 }}>🍁</span>
+              <Bot size={20} aria-hidden="true" />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>Assistant</div>
-                <div style={{ fontSize: 11, opacity: 0.8 }}>Study permit help</div>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>Visa &amp; permit help</div>
               </div>
             </div>
-            <button className="assist-x" onClick={() => setOpen(false)} aria-label="Close">✕</button>
+            <button className="assist-x" onClick={() => setOpen(false)} aria-label="Close"><X size={16} /></button>
           </div>
 
           <div className="assist-body" ref={scrollRef}>
@@ -86,7 +87,7 @@ export default function AssistantWidget({ appId, initialHistory = [] }) {
                 {m.content}
               </div>
             ))}
-            {busy && <div className="assist-msg assistant"><span className="spinner" style={{ borderTopColor: '#666', borderColor: '#ccc', borderTopWidth: 2 }} /></div>}
+            {busy && <div className="assist-msg assistant"><span className="spinner dark" /></div>}
             {messages.length <= 1 && (
               <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {SUGGESTIONS.map((s) => (
@@ -106,7 +107,7 @@ export default function AssistantWidget({ appId, initialHistory = [] }) {
               placeholder="Type your question…"
               disabled={busy}
             />
-            <button type="submit" disabled={busy || !input.trim()}>Send</button>
+            <button type="submit" disabled={busy || !input.trim()} aria-label="Send"><Send size={16} /></button>
           </form>
           <div className="assist-foot">General information, not legal advice.</div>
         </div>

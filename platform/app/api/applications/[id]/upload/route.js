@@ -1,9 +1,43 @@
+import fs from 'fs';
+import path from 'path';
+import { Readable } from 'stream';
 import { updateApplication } from '@/lib/store';
-import { saveUpload, deleteUpload } from '@/lib/uploads';
+import { saveUpload, deleteUpload, UPLOAD_DIR } from '@/lib/uploads';
 import { classifyByFilename } from '@/lib/generators/classify';
 import { json, error, requireOwnedApp } from '@/lib/api';
 
 export const runtime = 'nodejs';
+
+// View an uploaded document in the browser (the Documents tab's preview):
+// GET ?docId=… streams the file inline; add &download=1 to save it instead.
+export async function GET(req, { params }) {
+  const { app, error: err } = await requireOwnedApp(params.id);
+  if (err) return err;
+  const { searchParams } = new URL(req.url);
+  const doc = (app.documents || []).find((d) => d.id === searchParams.get('docId'));
+  if (!doc) return error('Document not found.', 404);
+  // `stored` is a server-generated name; refuse anything that is not a plain file name.
+  if (!/^[\w.-]+$/.test(doc.stored || '')) return error('Document not found.', 404);
+  const file = path.join(UPLOAD_DIR, app.id, doc.stored);
+  let size;
+  try {
+    size = (await fs.promises.stat(file)).size;
+  } catch {
+    return error('File missing on server.', 410);
+  }
+  const name = (doc.filename || doc.stored).replace(/[^\w.\- ]+/g, '_');
+  const disposition = searchParams.get('download') ? 'attachment' : 'inline';
+  return new Response(Readable.toWeb(fs.createReadStream(file)), {
+    status: 200,
+    headers: {
+      'Content-Type': doc.mime || 'application/octet-stream',
+      'Content-Disposition': `${disposition}; filename="${name}"`,
+      'Content-Length': String(size),
+      'Cache-Control': 'private, max-age=300',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
+}
 
 // Upload one or more documents for an application. Categories are guessed from
 // filenames immediately; AI refines them during the extract step.
@@ -57,6 +91,7 @@ export async function PATCH(req, { params }) {
   }
   const { docId, category } = body;
   if (!docId) return error('docId is required.');
+  if ('reviewed' in body && !['admin', 'manager'].includes(user.role)) return error('Only the team can sign off a document.', 403);
   const updated = await updateApplication(app.id, (a) => {
     const doc = (a.documents || []).find((d) => d.id === docId);
     if (!doc) return a;

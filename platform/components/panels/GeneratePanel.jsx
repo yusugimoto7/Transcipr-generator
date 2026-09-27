@@ -4,6 +4,8 @@ import { useState } from 'react';
 import OfficialFormsPanel from '@/components/OfficialFormsPanel';
 import FinalFiles from '@/components/FinalFiles';
 import { lettersFor, formsFor } from '@/lib/appTypes';
+import { FileDown, FileText, RefreshCw } from 'lucide-react';
+import { fmtDay } from '@/lib/format';
 
 /** Parse a JSON reply; a proxy / crash page gets a readable message. */
 async function readJson(res) {
@@ -21,13 +23,18 @@ async function readJson(res) {
  * Below it, the letters and working files, to review, redraft or download
  * (letters also as Word).
  */
-export default function GeneratePanel({ app, patchLocal, onGoIntake }) {
+export default function GeneratePanel({ app, patchLocal, onGoIntake, progress }) {
   return (
-    <>
-      <FinalFiles app={app} patchLocal={patchLocal} onGoIntake={onGoIntake} />
+    <div className="stack">
+      <FinalFiles app={app} patchLocal={patchLocal} onGoIntake={onGoIntake} stale={progress?.final?.stale} />
       <WorkingFiles app={app} patchLocal={patchLocal} />
-      <OfficialFormsPanel />
-    </>
+      <details className="card">
+        <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Blank IRCC forms (latest versions)</summary>
+        <div style={{ marginTop: 12 }}>
+          <OfficialFormsPanel bare />
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -60,61 +67,48 @@ function WorkingFiles({ app, patchLocal }) {
 
   const dl = (key, format) => `/api/applications/${app.id}/download/${key}${format ? `?format=${format}` : ''}`;
 
-  return (
-    <div className="card">
-      <h2>Letters &amp; working files</h2>
-      <p className="muted small" style={{ marginTop: -6 }}>
-        Everything below is produced by <strong>Build final files</strong>. Review the letters, download them as Word
-        to edit, or redraft one — then build again. Data sheets list every form value, for checking the forms.
-      </p>
-      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`}>{msg.text}</div>}
-
-      <table className="cmp">
-        <tbody>
-          {letters.map((l) => {
-            const g = gen.get(l.key);
-            return (
-              <tr key={l.key}>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{l.title}</div>
-                  <div className="small muted">Letter{g ? ` · drafted ${new Date(g.generatedAt).toLocaleDateString()}` : ' · drafted when you build'}</div>
-                </td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {g && (
-                    <>
-                      <a className="small" href={dl(l.key)}>↓ PDF</a>
-                      {l.word && <> · <a className="small" href={dl(l.key, 'docx')}>↓ Word</a></>}
-                      {' · '}
-                    </>
-                  )}
-                  <button className="btn-ghost" style={{ padding: '4px 10px' }} onClick={() => redraft(l.key, l.title)} disabled={Boolean(busyKey)}>
-                    {busyKey === l.key ? <span className="spinner" /> : g ? '↻ Redraft' : 'Draft now'}
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-          {forms.map((f) => {
-            const g = gen.get(f.key);
-            return (
-              <tr key={f.key}>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{f.label} — data sheet</div>
-                  <div className="small muted">Field-by-field values{g ? '' : ' · made when you build'}</div>
-                </td>
-                <td style={{ textAlign: 'right' }}>{g && <a className="small" href={dl(f.key)}>↓ PDF</a>}</td>
-              </tr>
-            );
-          })}
-          <tr>
-            <td>
-              <div style={{ fontWeight: 600 }}>Missing documents &amp; next steps</div>
-              <div className="small muted">Refreshed every build</div>
-            </td>
-            <td style={{ textAlign: 'right' }}>{gen.get('next-steps') && <a className="small" href={dl('next-steps')}>↓ PDF</a>}</td>
-          </tr>
-        </tbody>
-      </table>
+  const Row = ({ title, sub, children }) => (
+    <div className="list-row">
+      <div className="grow">
+        <div className="strong">{title}</div>
+        <div className="small muted">{sub}</div>
+      </div>
+      <div className="btn-row" style={{ gap: 6, justifyContent: 'flex-end' }}>{children}</div>
     </div>
+  );
+
+  return (
+    <section className="card card-flush" aria-labelledby="wf-h">
+      <div className="card-head" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line)', marginBottom: 0 }}>
+        <div>
+          <h2 id="wf-h">Letters &amp; working files</h2>
+          <p className="muted small">Produced by Build final files. Edit a letter in Word or redraft it, then build again.</p>
+        </div>
+      </div>
+      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ margin: '12px 18px 0' }}>{msg.text}</div>}
+      {letters.map((l) => {
+        const g = gen.get(l.key);
+        return (
+          <Row key={l.key} title={l.title} sub={g ? `Letter · drafted ${fmtDay(g.generatedAt)}` : 'Letter · drafted when you build'}>
+            {g && <a className="btn btn-secondary btn-sm" href={dl(l.key)}><FileDown size={14} aria-hidden="true" /> PDF</a>}
+            {g && l.word && <a className="btn btn-secondary btn-sm" href={dl(l.key, 'docx')}><FileText size={14} aria-hidden="true" /> Word</a>}
+            <button type="button" className="btn-ghost btn-sm" onClick={() => redraft(l.key, l.title)} disabled={Boolean(busyKey)}>
+              {busyKey === l.key ? <span className="spinner dark" /> : <RefreshCw size={14} aria-hidden="true" />} {g ? 'Redraft' : 'Draft now'}
+            </button>
+          </Row>
+        );
+      })}
+      {forms.map((f) => {
+        const g = gen.get(f.key);
+        return (
+          <Row key={f.key} title={`${f.label} — data sheet`} sub={g ? 'Every form value, for checking the form' : 'Made when you build'}>
+            {g && <a className="btn btn-secondary btn-sm" href={dl(f.key)}><FileDown size={14} aria-hidden="true" /> PDF</a>}
+          </Row>
+        );
+      })}
+      <Row title="Missing documents & next steps" sub="Refreshed on every build">
+        {gen.get('next-steps') && <a className="btn btn-secondary btn-sm" href={dl('next-steps')}><FileDown size={14} aria-hidden="true" /> PDF</a>}
+      </Row>
+    </section>
   );
 }

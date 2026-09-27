@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { intakeStatus } from '@/lib/progress';
 
 function Field({ field, value, onChange }) {
   const common = {
     id: field.id,
     value: value ?? '',
     onChange: (e) => onChange(field.id, e.target.value),
+    'aria-required': field.required || undefined,
   };
   let control;
   if (field.type === 'textarea') {
@@ -24,29 +27,23 @@ function Field({ field, value, onChange }) {
     );
   } else if (field.type === 'bool') {
     control = (
-      <select
-        id={field.id}
-        value={value === true ? 'yes' : value === false ? 'no' : ''}
-        onChange={(e) => onChange(field.id, e.target.value === '' ? '' : e.target.value === 'yes')}
-      >
-        <option value="">Select…</option>
-        <option value="no">No</option>
-        <option value="yes">Yes</option>
-      </select>
+      <div className="seg" role="radiogroup" aria-labelledby={`${field.id}-l`}>
+        {[['no', 'No', false], ['yes', 'Yes', true]].map(([k, l, v]) => (
+          <button key={k} type="button" role="radio" aria-checked={value === v} aria-pressed={value === v} onClick={() => onChange(field.id, value === v ? '' : v)}>
+            {l}
+          </button>
+        ))}
+      </div>
     );
   } else {
-    const type =
-      field.type === 'date' ? 'date'
-      : field.type === 'number' ? 'number'
-      : field.type === 'email' ? 'email'
-      : field.type === 'tel' ? 'tel'
-      : 'text';
+    const type = { date: 'date', number: 'number', email: 'email', tel: 'tel' }[field.type] || 'text';
     control = <input type={type} {...common} placeholder={field.placeholder || ''} />;
   }
   return (
     <div className="field">
-      <label htmlFor={field.id}>
-        {field.label} {field.required && <span style={{ color: 'var(--brand)' }}>*</span>}
+      <label htmlFor={field.type === 'bool' ? undefined : field.id} id={`${field.id}-l`}>
+        {field.label}
+        {field.required && <span className="req" aria-label="required">*</span>}
       </label>
       {control}
       {field.note && <div className="note">{field.note}</div>}
@@ -54,63 +51,55 @@ function Field({ field, value, onChange }) {
   );
 }
 
-export default function IntakePanel({ app, schema, onFieldChange, onFinish, activeStepId, onStepChange }) {
+/**
+ * The intake, one section at a time: numbered sections with their status on
+ * the left (a drop-down on small screens), the form, and Back / Next kept in
+ * view at the bottom. Answers save as you type.
+ */
+export default function IntakePanel({ app, schema, sections, onFieldChange, onFinish, activeStepId, onStepChange }) {
   const fromUrl = schema.steps.findIndex((s) => s.id === activeStepId);
   const [stepIdx, setStepIdxState] = useState(fromUrl >= 0 ? fromUrl : 0);
 
-  // Follow the URL when it changes (refresh, back/forward).
   useEffect(() => {
     const i = schema.steps.findIndex((s) => s.id === activeStepId);
     if (i >= 0 && i !== stepIdx) setStepIdxState(i);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStepId]);
 
-  const setStepIdx = (next) => {
-    const i = typeof next === 'function' ? next(stepIdx) : next;
+  const setStepIdx = (i) => {
     setStepIdxState(i);
     onStepChange?.(schema.steps[i]?.id || null);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const step = schema.steps[stepIdx];
-
-  const filled = (f) => {
-    const v = app.data?.[f.id];
-    return typeof v === 'boolean' || String(v ?? '').trim() !== '';
-  };
-  // done: every required field answered (a section with none required counts
-  // once anything in it is filled); partial: started but required fields left.
-  const status = (s) => {
-    const req = s.fields.filter((f) => f.required);
-    const left = req.filter((f) => !filled(f)).length;
-    const any = s.fields.some(filled);
-    if (req.length ? left === 0 : any) return { state: 'done', text: 'Complete' };
-    if (any) return { state: 'partial', text: `${left} required left` };
-    return { state: 'todo', text: req.length ? `${req.length} required` : 'Optional' };
-  };
-  const statuses = schema.steps.map(status);
+  const statuses = sections || intakeStatus(app, schema);
   const doneCount = statuses.filter((x) => x.state === 'done').length;
+  const step = schema.steps[stepIdx];
+  const st = statuses[stepIdx];
+  const last = stepIdx === schema.steps.length - 1;
+  const next = schema.steps[stepIdx + 1];
 
   return (
     <div className="intake-layout">
       <nav className="stepper" aria-label="Intake sections">
         <div className="stepper-head">
-          <span>Intake progress</span>
+          <span>Progress</span>
           <strong>{doneCount} of {schema.steps.length} complete</strong>
         </div>
-        <div className="progress" style={{ marginBottom: 14 }}>
-          <div className="progress-fill" style={{ width: `${Math.round((doneCount / schema.steps.length) * 100)}%`, background: 'var(--ok)' }} />
+        <div className="progress" style={{ marginBottom: 12 }}>
+          <div className="progress-fill ok" style={{ width: `${Math.round((doneCount / schema.steps.length) * 100)}%` }} />
         </div>
         <ol>
           {schema.steps.map((s, i) => {
-            const st = statuses[i];
+            const x = statuses[i];
             const current = i === stepIdx;
             return (
-              <li key={s.id} className={`stepper-item ${st.state}${current ? ' current' : ''}`}>
+              <li key={s.id} className={`stepper-item ${x.state}${current ? ' current' : ''}`}>
                 <button type="button" onClick={() => setStepIdx(i)} aria-current={current ? 'step' : undefined}>
-                  <span className="stepper-dot" aria-hidden="true">{st.state === 'done' && !current ? '✓' : i + 1}</span>
+                  <span className="stepper-dot" aria-hidden="true">{x.state === 'done' && !current ? <Check size={14} strokeWidth={3} /> : i + 1}</span>
                   <span className="stepper-text">
                     <span className="stepper-title">{s.title}</span>
-                    <span className="stepper-sub">{st.text}</span>
+                    <span className="stepper-sub">{x.text}</span>
                   </span>
                 </button>
               </li>
@@ -119,35 +108,55 @@ export default function IntakePanel({ app, schema, onFieldChange, onFinish, acti
         </ol>
       </nav>
 
-      <div className="card intake-card">
-        <div className="stepper-eyebrow">Step {stepIdx + 1} of {schema.steps.length}</div>
-        <h2>{step.title}</h2>
-        {step.help && <p className="muted small" style={{ marginTop: -6 }}>{step.help}</p>}
+      <div className="stack">
+        <div className="step-picker">
+          <label htmlFor="step-pick" className="sr-only">Section</label>
+          <select id="step-pick" value={stepIdx} onChange={(e) => setStepIdx(Number(e.target.value))}>
+            {schema.steps.map((s, i) => (
+              <option key={s.id} value={i}>
+                {i + 1}. {s.title} — {statuses[i].state === 'done' ? '✓ complete' : statuses[i].text.toLowerCase()}
+              </option>
+            ))}
+          </select>
+          <span className="small faint nowrap">{doneCount}/{schema.steps.length}</span>
+        </div>
 
-        <div className="grid2" style={{ marginTop: 14 }}>
-          {step.fields.map((f) => (
-            <div key={f.id} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-              <Field field={f} value={app.data?.[f.id]} onChange={onFieldChange} />
+        <section className="card intake-card" aria-labelledby="step-h">
+          <div className="ic-head">
+            <div className="spread">
+              <div className="stepper-eyebrow">Step {stepIdx + 1} of {schema.steps.length}</div>
+              <span className={`chip ${st.state === 'done' ? 'ok' : st.state === 'partial' ? 'warn' : ''}`}>{st.text}</span>
             </div>
-          ))}
-        </div>
+            <h2 id="step-h" style={{ margin: '4px 0 4px', fontSize: 19 }}>{step.title}</h2>
+            {step.help && <p className="muted small" style={{ margin: 0 }}>{step.help}</p>}
+          </div>
 
-        <div className="btn-row" style={{ marginTop: 8, justifyContent: 'space-between' }}>
-          <button
-            className="btn-secondary"
-            disabled={stepIdx === 0}
-            onClick={() => setStepIdx((i) => Math.max(0, i - 1))}
-          >
-            ← Back
-          </button>
-          {stepIdx < schema.steps.length - 1 ? (
-            <button onClick={() => setStepIdx((i) => Math.min(schema.steps.length - 1, i + 1))}>
-              Next: {schema.steps[stepIdx + 1].title} →
+          <div className="ic-body">
+            <div className="grid2">
+              {step.fields.map((f) => (
+                <div key={f.id} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
+                  <Field field={f} value={app.data?.[f.id]} onChange={onFieldChange} />
+                </div>
+              ))}
+            </div>
+            <p className="tiny faint" style={{ margin: '0 0 10px' }}><span className="req">*</span> needed for the IRCC forms. Answers save automatically.</p>
+          </div>
+
+          <div className="intake-foot">
+            <button type="button" className="btn-secondary" disabled={stepIdx === 0} onClick={() => setStepIdx(Math.max(0, stepIdx - 1))}>
+              <ArrowLeft size={16} aria-hidden="true" /> Back
             </button>
-          ) : (
-            <button onClick={onFinish}>End of intake — go to Review →</button>
-          )}
-        </div>
+            {!last ? (
+              <button type="button" className="btn-navy" onClick={() => setStepIdx(stepIdx + 1)}>
+                <span>Next<span className="next-label">: {next.title}</span></span> <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            ) : (
+              <button type="button" onClick={onFinish}>
+                Finish intake <ArrowRight size={16} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

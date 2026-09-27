@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-export default function OfficialFormsPanel() {
+export default function OfficialFormsPanel({ bare }) {
   const [forms, setForms] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -44,11 +44,11 @@ export default function OfficialFormsPanel() {
   const checklist = (forms || []).find((f) => f.role === 'checklist');
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ marginBottom: 0 }}>Latest official IRCC forms</h2>
-        <button className="btn-secondary" onClick={refresh} disabled={busy}>
-          {busy ? <span className="spinner" /> : '↻ Check for updates'}
+    <div className={bare ? '' : 'card'}>
+      <div className="spread">
+        {!bare && <h2 style={{ marginBottom: 0 }}>Latest official IRCC forms</h2>}
+        <button className="btn-secondary btn-sm" onClick={refresh} disabled={busy}>
+          {busy ? <span className="spinner dark" /> : '↻ Check for updates'}
         </button>
       </div>
       <p className="muted small" style={{ marginTop: 6 }}>
@@ -70,7 +70,7 @@ export default function OfficialFormsPanel() {
                   {f.source === 'fallback' && ' · using cached link'}
                 </div>
               </div>
-              <a className="btn btn-secondary" href={`/api/forms/${f.key}/download`}>↓ Download blank</a>
+              <a className="btn btn-secondary btn-sm" href={`/api/forms/${f.key}/download`}>↓ Download blank</a>
             </div>
           ))}
 
@@ -82,7 +82,7 @@ export default function OfficialFormsPanel() {
                   Official document checklist{checklist.version ? ` · version ${checklist.version}` : ''}
                 </div>
               </div>
-              <a className="btn btn-secondary" href={`/api/forms/${checklist.key}/download`}>↓ Download checklist</a>
+              <a className="btn btn-secondary btn-sm" href={`/api/forms/${checklist.key}/download`}>↓ Download checklist</a>
             </div>
           )}
         </div>

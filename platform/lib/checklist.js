@@ -46,33 +46,38 @@ export function checklistStatus(app) {
   const ircc = (app?.ircc?.extra || []).filter((i) => !firm.some((f) => f.key && f.key === i.key));
   const items = [...firm, ...ircc];
   const docs = app?.documents || [];
-  const codes = new Set();
   const cats = new Set();
+  const codeOf = new Map(); // doc id -> its code
   for (const d of docs) {
     const c = firmCode(d.filename);
-    if (c) {
-      codes.add(c);
-      codes.add(c.split('-')[0] === c ? c : c); // exact sub-code
-    }
+    if (c) codeOf.set(d.id, c);
     if (d.category) cats.add(d.category);
   }
   const keyCount = firm.reduce((m, i) => m.set(i.key, (m.get(i.key) || 0) + 1), new Map());
   const subCodes = new Set(items.filter((i) => i.code.includes('-')).map((i) => i.code));
 
   return items.map((i) => {
-    let provided = false;
+    // The files that satisfy this item, by the same rules as `provided`.
+    let matched = [];
     if (/^\d/.test(i.code)) {
-      if (codes.has(i.code)) provided = true;
+      matched = docs.filter((d) => codeOf.get(d.id) === i.code);
       // A plain code is also satisfied by "107-2"-style files when no item owns that sub-code.
-      if (!provided && !i.code.includes('-')) {
-        provided = [...codes].some((c) => c.startsWith(`${i.code}-`) && !subCodes.has(c));
+      if (!matched.length && !i.code.includes('-')) {
+        matched = docs.filter((d) => {
+          const c = codeOf.get(d.id);
+          return c && c.startsWith(`${i.code}-`) && !subCodes.has(c);
+        });
       }
     } else if (i.key === 'rep-form') {
-      provided = docs.some((d) => new RegExp(i.code.replace('imm', 'imm ?'), 'i').test(d.filename));
+      matched = docs.filter((d) => new RegExp(i.code.replace('imm', 'imm ?'), 'i').test(d.filename));
     }
+    if (!matched.length && i.party === 'ircc' && i.key) matched = docs.filter((d) => d.category === i.key);
+    else if (!matched.length && i.party !== 'ircc' && keyCount.get(i.key) === 1) matched = docs.filter((d) => d.category === i.key);
+    let provided = matched.length > 0;
+    // Category-only evidence (no code on the file) still counts, as before.
     if (!provided && i.party === 'ircc') provided = Boolean(i.key) && cats.has(i.key);
     else if (!provided && keyCount.get(i.key) === 1) provided = cats.has(i.key);
-    return { ...i, provided, uploaded: provided };
+    return { ...i, provided, uploaded: provided, docIds: matched.map((d) => d.id) };
   });
 }
 

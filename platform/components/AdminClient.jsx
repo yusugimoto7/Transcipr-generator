@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { STAGE_LABELS } from '@/lib/appTypes';
+import { Search } from 'lucide-react';
+import { initials } from '@/components/TopBar';
+import { fmtDay, fmtTime } from '@/lib/format';
 import AdminIrcc from '@/components/AdminIrcc';
 import AdminMail from '@/components/AdminMail';
 
@@ -54,11 +56,13 @@ export default function AdminClient() {
     load();
   }
 
-  async function resetPassword(u) {
-    const password = window.prompt(`New password for ${u.email} (min 8 characters):`);
-    if (!password) return;
-    await patchUser(u.id, { password });
-    setMsg({ type: 'ok', text: `Password updated for ${u.email}.` });
+  const [resetFor, setResetFor] = useState(null); // { id, email, password }
+  async function saveReset(e) {
+    e.preventDefault();
+    if (!resetFor || resetFor.password.length < 8) return;
+    await patchUser(resetFor.id, { password: resetFor.password });
+    setMsg({ type: 'ok', text: `Password updated for ${resetFor.email}. Share it with them privately.` });
+    setResetFor(null);
   }
 
   async function toggleAssign(app, managerId) {
@@ -78,97 +82,157 @@ export default function AdminClient() {
     return [a.title, a.clientNumber, a.typeTitle, a.owner?.name, ...a.assignedTo.map((m) => m.name)].join(' ').toLowerCase().includes(q);
   });
 
+  const TABS = [
+    ['files', 'Files', apps.length],
+    ['users', 'Team & users', users.length],
+    ['ircc', 'IRCC checklists'],
+    ['mail', 'Email intake'],
+  ];
+
   return (
     <>
-      <h1>Admin</h1>
-      <p className="muted">Manage account managers and decide who can work on each file.</p>
-      <div className="steps" style={{ marginBottom: 16 }}>
-        <div className={`step-pill ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')} role="button">Files ({apps.length})</div>
-        <div className={`step-pill ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')} role="button">Users ({users.length})</div>
-        <div className={`step-pill ${tab === 'ircc' ? 'active' : ''}`} onClick={() => setTab('ircc')} role="button">IRCC checklists</div>
-        <div className={`step-pill ${tab === 'mail' ? 'active' : ''}`} onClick={() => setTab('mail')} role="button">Email intake</div>
+      <div className="page-head">
+        <div>
+          <h1>Admin</h1>
+          <p className="muted">Who works on which file, team accounts, IRCC checklist tracking and the email inbox.</p>
+        </div>
       </div>
-      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginBottom: 14 }}>{msg.text}</div>}
+      <div className="tabs" role="tablist">
+        {TABS.map(([k, l, n]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+            {l}{n != null ? <span className="count" style={{ marginLeft: 6 }}>{n}</span> : null}
+          </button>
+        ))}
+      </div>
+      {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`}>{msg.text}</div>}
 
       {tab === 'ircc' && <AdminIrcc />}
       {tab === 'mail' && <AdminMail />}
 
       {tab === 'users' && (
-        <>
-          <div className="card">
-            <h2>Create an account manager</h2>
-            <form onSubmit={createUser} className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div className="field"><label>Email</label><input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div className="field"><label>Name</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div className="field"><label>Temporary password</label><input type="text" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-              <div className="field"><label>Role</label>
-                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="manager">Account manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div><button type="submit">Create account</button></div>
-            </form>
-          </div>
-          <div className="card">
-            <h2>All users</h2>
-            {users.map((u) => (
-              <div className="row" key={u.id}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{u.name || u.email} <span className={`chip ${u.role === 'admin' ? 'ok' : u.role === 'manager' ? 'warn' : ''}`}>{u.role}</span> {u.active === false && <span className="chip danger">deactivated</span>}</div>
-                  <div className="muted small">{u.email} · joined {new Date(u.createdAt).toLocaleDateString()}</div>
-                </div>
-                <div className="btn-row" style={{ gap: 6 }}>
-                  <select value={u.role} onChange={(e) => patchUser(u.id, { role: e.target.value })}>
-                    <option value="applicant">applicant</option>
-                    <option value="manager">manager</option>
-                    <option value="admin">admin</option>
+        <div className="stack">
+          <section className="card card-flush" aria-labelledby="users-h">
+            <div className="card-head" style={{ paddingBottom: 12 }}>
+              <h2 id="users-h">Accounts</h2>
+            </div>
+            <div className="tbl-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr><th>Person</th><th>Role</th><th className="hide-sm">Joined</th><th style={{ textAlign: 'right' }}>Actions</th></tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} style={u.active === false ? { opacity: 0.6 } : undefined}>
+                      <td>
+                        <div className="cluster" style={{ flexWrap: 'nowrap' }}>
+                          <span className="avatar" style={{ background: '#dfe4ee', color: 'var(--ink-soft)' }} aria-hidden="true">{initials(u.name, u.email)}</span>
+                          <span className="file-cell">
+                            <span className="t">{u.name || u.email} {u.active === false && <span className="chip danger">deactivated</span>}</span>
+                            <span className="s">{u.email}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <label htmlFor={`role-${u.id}`} className="sr-only">Role</label>
+                        <select id={`role-${u.id}`} value={u.role} onChange={(e) => patchUser(u.id, { role: e.target.value })} style={{ width: 'auto', padding: '6px 8px' }}>
+                          <option value="applicant">Client</option>
+                          <option value="manager">Account manager</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </td>
+                      <td className="hide-sm small muted" suppressHydrationWarning>{fmtDay(u.createdAt)}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        {resetFor?.id === u.id ? (
+                          <form onSubmit={saveReset} className="cluster" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                            <label htmlFor={`pw-${u.id}`} className="sr-only">New password</label>
+                            <input id={`pw-${u.id}`} autoFocus type="text" minLength={8} placeholder="New password (8+)" value={resetFor.password} onChange={(e) => setResetFor({ ...resetFor, password: e.target.value })} style={{ width: 170, padding: '6px 8px' }} />
+                            <button type="submit" className="btn-sm" disabled={resetFor.password.length < 8}>Save</button>
+                            <button type="button" className="btn-secondary btn-sm" onClick={() => setResetFor(null)}>Cancel</button>
+                          </form>
+                        ) : (
+                          <div className="btn-row" style={{ justifyContent: 'flex-end', gap: 6 }}>
+                            <button type="button" className="btn-secondary btn-sm" onClick={() => setResetFor({ id: u.id, email: u.email, password: '' })}>Reset password</button>
+                            <button type="button" className="btn-secondary btn-sm" onClick={() => patchUser(u.id, { active: u.active === false })}>
+                              {u.active === false ? 'Reactivate' : 'Deactivate'}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="card" aria-labelledby="new-user-h">
+            <h2 id="new-user-h">Add a team member</h2>
+            <form onSubmit={createUser}>
+              <div className="grid2">
+                <div className="field"><label htmlFor="nu-email">Email</label><input id="nu-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="field"><label htmlFor="nu-name">Name</label><input id="nu-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+                <div className="field"><label htmlFor="nu-pw">Temporary password</label><input id="nu-pw" type="text" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><div className="note">At least 8 characters. Share it privately.</div></div>
+                <div className="field"><label htmlFor="nu-role">Role</label>
+                  <select id="nu-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                    <option value="manager">Account manager — works on assigned files</option>
+                    <option value="admin">Admin — everything, including this page</option>
                   </select>
-                  <button className="btn-secondary" onClick={() => resetPassword(u)}>Reset password</button>
-                  <button className="btn-secondary" onClick={() => patchUser(u.id, { active: u.active === false })}>
-                    {u.active === false ? 'Reactivate' : 'Deactivate'}
-                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        </>
+              <button type="submit">Create account</button>
+            </form>
+          </section>
+        </div>
       )}
 
       {tab === 'files' && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-            <h2 style={{ marginBottom: 0 }}>All files</h2>
-            <input placeholder="Filter by client, number, type, manager…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ maxWidth: 320 }} />
-          </div>
-          <p className="muted small">Tick the managers allowed to work on each file. Admins can open everything.</p>
-          {shownApps.map((a) => (
-            <div className="row" key={a.id} style={{ alignItems: 'flex-start' }}>
-              <div style={{ maxWidth: '55%' }}>
-                <Link href={`/application/${a.id}`} style={{ fontWeight: 600 }}>
-                  {a.clientNumber ? `${a.clientNumber} · ` : ''}{a.title}
-                </Link>
-                <div className="muted small">
-                  {a.typeTitle}{a.applicantRole !== 'main' ? ` (${a.applicantRole})` : ''} · {STAGE_LABELS[a.stage] || a.stage} · owner {a.owner?.name}
-                  {a.lastEditedBy ? ` · last edited by ${a.lastEditedBy}` : ''} · {new Date(a.updatedAt).toLocaleString()}
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {managers.map((m) => {
-                  const on = a.assignedTo.some((x) => x.id === m.id);
-                  return (
-                    <label key={m.id} className={`chip ${on ? 'ok' : ''}`} style={{ cursor: 'pointer', fontWeight: 400 }}>
-                      <input type="checkbox" checked={on} onChange={() => toggleAssign(a, m.id)} style={{ width: 14, marginRight: 4 }} />
-                      {m.name || m.email}
-                    </label>
-                  );
-                })}
-                {!managers.length && <span className="muted small">No managers yet — create one on the Users tab.</span>}
-              </div>
+        <section className="card card-flush" aria-label="All files">
+          <div className="filters">
+            <div className="input-icon">
+              <Search size={15} aria-hidden="true" />
+              <input type="search" placeholder="Search by client, number, type or manager" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search files" />
             </div>
-          ))}
-          {!shownApps.length && <p className="muted small">No files match.</p>}
-        </div>
+            <span className="small muted">Tick who may work on each file. Admins can open everything.</span>
+          </div>
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr><th>File</th><th className="hide-sm">Last change</th><th>Account managers</th></tr>
+              </thead>
+              <tbody>
+                {shownApps.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <Link href={`/application/${a.id}`} className="file-cell" style={{ color: 'inherit' }}>
+                        <span className="t">{a.clientNumber && <span className="mono faint" style={{ marginRight: 8 }}>{a.clientNumber}</span>}{a.title}</span>
+                        <span className="s">{a.typeTitle}{a.applicantRole !== 'main' ? ` (${a.applicantRole})` : ''} · owner {a.owner?.name}</span>
+                      </Link>
+                    </td>
+                    <td className="hide-sm small muted">
+                      <span suppressHydrationWarning>{fmtTime(a.updatedAt)}</span>
+                      {a.lastEditedBy ? <div className="faint">by {a.lastEditedBy}</div> : null}
+                    </td>
+                    <td>
+                      <div className="cluster" style={{ gap: 6 }}>
+                        {managers.map((m) => {
+                          const on = a.assignedTo.some((x) => x.id === m.id);
+                          return (
+                            <label key={m.id} className={`chip ${on ? 'ok' : 'outline'}`} style={{ cursor: 'pointer', fontWeight: 500 }}>
+                              <input type="checkbox" checked={on} onChange={() => toggleAssign(a, m.id)} style={{ width: 13, height: 13 }} />
+                              {m.name || m.email}
+                            </label>
+                          );
+                        })}
+                        {!managers.length && <span className="muted small">No account managers yet — add one under Team &amp; users.</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!shownApps.length && <div className="empty small">No files match.</div>}
+        </section>
       )}
     </>
   );

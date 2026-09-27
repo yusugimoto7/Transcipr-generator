@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Download, Hammer, AlertTriangle } from 'lucide-react';
 import ProgressBar from '@/components/ProgressBar';
 import { requiredMissing } from '@/lib/schema';
 
@@ -11,7 +12,7 @@ const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ma
  * The numbered files that go to the IRCC portal, one per upload slot, named as
  * the team names them ("05 - Client Information - Zahra.pdf"), built in one go.
  */
-export default function FinalFiles({ app, patchLocal, onGoIntake }) {
+export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePlan }) {
   const [data, setData] = useState(null); // { plan, built, job }
   const [job, setJob] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -113,36 +114,48 @@ export default function FinalFiles({ app, patchLocal, onGoIntake }) {
       }
     : null;
 
+  const slots = plan.filter((e) => e.n);
+  const builtCount = slots.filter((e) => {
+    const b = builtByN.get(e.n);
+    return b && b.filename === e.filename && genKeys.has(b.key);
+  }).length;
+  const stale = stalePlan;
+
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Final files for the IRCC portal</h2>
-        <div className="btn-row" style={{ gap: 6 }}>
+    <div className="stack">
+      <div className="page-head" style={{ marginBottom: 0 }}>
+        <div>
+          <h1 style={{ fontSize: 20 }}>Final files for the IRCC portal</h1>
+          <p className="muted small">
+            One file per upload slot, numbered and named like the team&apos;s &ldquo;02 - Final Files&rdquo; folders. Building also
+            drafts the letters and pre-fills the IRCC forms.
+          </p>
+        </div>
+        <div className="btn-row">
           {data?.built?.files?.length > 0 && !job && (
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/final-files/zip`}>↓ Download all (.zip)</a>
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/final-files/zip`}><Download size={16} aria-hidden="true" /> Download all (.zip)</a>
           )}
-          <button onClick={requestBuild} disabled={Boolean(job) || !plan.length}>
-            {job ? <span className="spinner" /> : data?.built ? 'Rebuild final files' : 'Build final files'}
+          <button type="button" onClick={requestBuild} disabled={Boolean(job) || !plan.length}>
+            {job ? <span className="spinner" /> : <Hammer size={16} aria-hidden="true" />}
+            {job ? 'Building…' : data?.built ? 'Rebuild final files' : 'Build final files'}
           </button>
         </div>
       </div>
-      <p className="muted small" style={{ marginTop: 6 }}>
-        One button does everything: drafts the letters, pre-fills the IRCC forms and builds one file per upload
-        slot in the portal, numbered and named like the team&apos;s &ldquo;02 - Final Files&rdquo; folders. Documents
-        with their own slot — like the marriage certificate — are left out of Client Information.
-      </p>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '6px 0 2px' }}>
-        <input type="checkbox" style={{ width: 16 }} checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} />
-        <span className="small">Remove blank pages automatically</span>
-      </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 400, margin: '2px 0' }}>
-        <input type="checkbox" style={{ width: 16 }} checked={fixRotation} onChange={(e) => setFixRotation(e.target.checked)} />
-        <span className="small">Turn sideways / upside-down scans upright (read from the text)</span>
-      </label>
 
-      {progress && <ProgressBar value={progress.value} label={progress.label} />}
+      {stale && !job && (
+        <div className="alert warn" style={{ margin: 0 }}>
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>Documents or letters changed after the last build. Rebuild before uploading to the portal.</span>
+        </div>
+      )}
+      {progress && (
+        <div className="banner">
+          <span className="spinner dark" aria-hidden="true" />
+          <div className="grow"><ProgressBar value={progress.value} label={progress.label} /></div>
+        </div>
+      )}
       {msg && (
-        <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'warn' ? 'info' : 'ok'}`} style={{ marginTop: 12 }}>
+        <div className={`alert ${msg.type === 'err' ? 'err' : msg.type === 'warn' ? 'warn' : 'ok'}`} style={{ margin: 0, display: 'block' }}>
           {msg.text}
           {msg.list?.length > 0 && (
             <ul className="small" style={{ paddingLeft: 18, margin: '6px 0 0' }}>
@@ -151,10 +164,9 @@ export default function FinalFiles({ app, patchLocal, onGoIntake }) {
           )}
         </div>
       )}
-
       {note && (note.missingDocuments?.length > 0 || note.missingFields?.length > 0) && (
-        <details style={{ marginTop: 10 }}>
-          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>
+        <details className="hint-box">
+          <summary className="small strong" style={{ cursor: 'pointer' }}>
             Still missing: {note.missingDocuments.length} document(s), {note.missingFields.length} intake answer(s)
           </summary>
           <ul className="small" style={{ paddingLeft: 18, marginTop: 6 }}>
@@ -164,58 +176,68 @@ export default function FinalFiles({ app, patchLocal, onGoIntake }) {
         </details>
       )}
 
+      <section className="card card-flush" aria-labelledby="slots-h">
+        <div className="card-head" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line)', marginBottom: 0 }}>
+          <div>
+            <h2 id="slots-h">Portal files</h2>
+            <p className="muted small">{slots.length} slots · {builtCount} built</p>
+          </div>
+          <div className="cluster" style={{ gap: 16 }}>
+            <label className="check-label"><input type="checkbox" checked={cleanPages} onChange={(e) => setCleanPages(e.target.checked)} /> Remove blank pages</label>
+            <label className="check-label"><input type="checkbox" checked={fixRotation} onChange={(e) => setFixRotation(e.target.checked)} /> Turn scans upright</label>
+          </div>
+        </div>
+        {!data && <div className="empty small"><span className="spinner dark" /> Loading…</div>}
+        {plan.map((e, i) => {
+          const b = e.n ? builtByN.get(e.n) : null;
+          const current = b && b.filename === e.filename && genKeys.has(b.key);
+          return (
+            <div key={i} className={`slot${e.n ? '' : ' skip'}`}>
+              <span className="n">{e.n ? String(e.n).padStart(2, '0') : '—'}</span>
+              <div style={{ minWidth: 0 }}>
+                <div className="name">{e.kind === 'form' && e.label ? e.label : e.name}</div>
+                <div className="sub">
+                  {e.kind === 'form' ? <span className="mono">{e.name}</span> : KIND[e.kind]}
+                  {e.note ? <span> · {e.note}</span> : null}
+                </div>
+              </div>
+              <div className="act">
+                {current ? (
+                  <a href={`/api/applications/${app.id}/download/${b.key}`} className="btn btn-secondary btn-sm" title={b.filename}>
+                    <Download size={14} aria-hidden="true" /> {size(b.size)}{b.pages ? ` · ${b.pages} p.` : ''}
+                  </a>
+                ) : e.n ? (
+                  <span className={`chip ${e.ready || e.kind === 'form' || e.kind === 'letter' ? '' : 'warn'}`}>{e.ready || e.kind === 'form' || e.kind === 'letter' ? 'Not built yet' : 'Needs input'}</span>
+                ) : (
+                  <span className="small faint">Nothing to include</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
       {missingModal && (
         <div className="modal-overlay" onClick={() => setMissingModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ marginBottom: 6 }}>Some required information is missing</h2>
-            <p className="muted small">
-              The forms are filled from the intake. You can complete these answers first, or build now and fill the
-              gaps in the forms by hand.
-            </p>
-            <ul style={{ paddingLeft: 18, marginTop: 10, maxHeight: 220, overflowY: 'auto' }}>
-              {missingModal.map((f, i) => <li key={i}>{f}</li>)}
-            </ul>
-            <div className="btn-row" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={() => buildAll()}>Build anyway</button>
-              <button onClick={() => { setMissingModal(null); onGoIntake && onGoIntake(); }}>Complete in Intake →</button>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="miss-h" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <div>
+                <h2 id="miss-h">Some intake answers are empty</h2>
+                <p className="muted small">The forms are filled from the intake. Complete these first, or build now and fill the gaps in the forms by hand.</p>
+              </div>
+            </div>
+            <div className="modal-body">
+              <ul style={{ paddingLeft: 18, margin: 0, display: 'grid', gap: 3 }}>
+                {missingModal.map((f, i) => <li key={i}>{f}</li>)}
+              </ul>
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="btn-secondary" onClick={() => buildAll()}>Build anyway</button>
+              <button type="button" onClick={() => { setMissingModal(null); onGoIntake && onGoIntake(); }}>Complete the intake</button>
             </div>
           </div>
         </div>
       )}
-
-      <table className="cmp" style={{ marginTop: 12 }}>
-        <tbody>
-          {plan.map((e, i) => {
-            const b = e.n ? builtByN.get(e.n) : null;
-            const current = b && b.filename === e.filename && genKeys.has(b.key);
-            return (
-              <tr key={i} style={e.n ? undefined : { opacity: 0.55 }}>
-                <td style={{ width: 34, fontWeight: 700 }}>{e.n ? String(e.n).padStart(2, '0') : '—'}</td>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{e.name}</div>
-                  <div className="small muted">
-                    {KIND[e.kind]}
-                    {!e.ready && e.note ? <span style={{ color: e.n ? 'var(--warn)' : undefined }}> · {e.note}</span> : null}
-                    {e.ready && e.note ? ` · ${e.note}` : null}
-                  </div>
-                </td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  {current ? (
-                    <a href={`/api/applications/${app.id}/download/${b.key}`} className="small">
-                      ↓ {b.filename.replace(/\.(pdf|jpg)$/, '')}
-                      <span className="muted"> · {size(b.size)}{b.pages ? ` · ${b.pages} p.` : ''}</span>
-                    </a>
-                  ) : e.n ? (
-                    <span className="small muted">not built yet</span>
-                  ) : (
-                    <span className="small muted">nothing to include</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
     </div>
   );
 }

@@ -1,50 +1,53 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import Link from 'next/link';
+import { LayoutDashboard, FileStack, ClipboardList, PenLine, ShieldCheck, PackageCheck, CheckCircle2, ChevronRight, Loader2, CloudOff, AlertTriangle } from 'lucide-react';
+import OverviewPanel from '@/components/panels/OverviewPanel';
 import DocumentsPanel from '@/components/panels/DocumentsPanel';
 import IntakePanel from '@/components/panels/IntakePanel';
 import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
 import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
 import { primaryLetter, getAppType } from '@/lib/appTypes';
+import { fileProgress } from '@/lib/progress';
 
-const TAB_IDS = ['documents', 'intake', 'sop', 'review', 'generate'];
+const SECTION_IDS = ['overview', 'documents', 'intake', 'sop', 'review', 'generate'];
 
-function tabsFor(type) {
-  return [
-    { id: 'documents', label: '1. Documents' },
-    { id: 'intake', label: '2. Intake' },
-    { id: 'sop', label: `3. ${primaryLetter(type).title.replace(/ \(.*\)$/, '')}` },
-    { id: 'review', label: '4. Review' },
-    { id: 'generate', label: '5. Generate' },
-  ];
-}
-
-/** Read "#tab" or "#tab:substep" from the URL. */
+/** Read "#section" or "#section:sub" from the URL. */
 function readHash() {
   if (typeof window === 'undefined') return {};
   const raw = decodeURIComponent(window.location.hash.replace(/^#/, ''));
   const [tab, sub] = raw.split(':');
-  return TAB_IDS.includes(tab) ? { tab, sub: sub || null } : {};
+  return SECTION_IDS.includes(tab) ? { tab, sub: sub || null } : {};
 }
 
-export default function Workspace({ initialApp, schema, initialChecklist, viewerRole }) {
+/**
+ * A client file: the client header, the stage sidebar (with live counts) and
+ * the selected stage. The position is kept in the URL (#documents, #intake:family…)
+ * so a refresh or a shared link opens the same place.
+ */
+export default function Workspace({ initialApp, schema, viewerRole }) {
   const [app, setApp] = useState(initialApp);
-  const TABS = tabsFor(app.type);
-  const [tab, setTabState] = useState('documents');
-  const [intakeStep, setIntakeStepState] = useState(null);
+  const staff = viewerRole === 'admin' || viewerRole === 'manager';
+  const [tab, setTabState] = useState('overview');
+  const [sub, setSubState] = useState(null);
   const [saveState, setSaveState] = useState('saved'); // saved | saving | error | conflict
   // Version of the intake answers this page last saw (see the PATCH route).
   const versionRef = useRef(initialApp.dataVersion || 0);
   const saveTimer = useRef(null);
 
-  // Restore the position from the URL on load, and follow browser back/forward.
+  const type = getAppType(app.type);
+  const letter = primaryLetter(app.type);
+  const p = useMemo(() => fileProgress(app, schema), [app, schema]);
+  const showFinal = staff || app.representation === 'self';
+
   useEffect(() => {
     const sync = () => {
-      const { tab: t, sub } = readHash();
+      const { tab: t, sub: s } = readHash();
       if (t) {
         setTabState(t);
-        setIntakeStepState(sub);
+        setSubState(s);
       }
     };
     sync();
@@ -56,24 +59,28 @@ export default function Workspace({ initialApp, schema, initialChecklist, viewer
     };
   }, []);
 
-  /** Change tab (and optional sub-step) and record it in the URL. */
-  const setTab = useCallback((next, sub = null) => {
+  /** Go to a section (and optional sub-position) and record it in the URL. */
+  const go = useCallback((next, s = null) => {
     setTabState(next);
-    setIntakeStepState(sub);
+    setSubState(s);
     if (typeof window !== 'undefined') {
-      const hash = `#${next}${sub ? `:${sub}` : ''}`;
+      const hash = `#${next}${s ? `:${s}` : ''}`;
       window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+      window.scrollTo({ top: 0 });
     }
   }, []);
 
-  /** Remember the intake sub-step without adding a history entry per field. */
-  const setIntakeStep = useCallback((stepId) => {
-    setIntakeStepState(stepId);
-    if (typeof window !== 'undefined') {
-      const hash = `#intake${stepId ? `:${stepId}` : ''}`;
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
-    }
-  }, []);
+  /** Remember a sub-position (intake step, selected document) without a history entry each time. */
+  const setSub = useCallback(
+    (s) => {
+      setSubState(s);
+      if (typeof window !== 'undefined') {
+        const hash = `#${tab}${s ? `:${s}` : ''}`;
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+      }
+    },
+    [tab]
+  );
 
   // Merge a partial update into local app state.
   const patchLocal = useCallback((partial) => {
@@ -125,60 +132,132 @@ export default function Workspace({ initialApp, schema, initialChecklist, viewer
     [saveData]
   );
 
+  const attention = p.check.red + p.check.orange;
+  const nav = [
+    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+    {
+      id: 'documents',
+      label: 'Documents',
+      icon: FileStack,
+      sub: `${p.documents.provided} of ${p.documents.required} provided`,
+      badge: p.check.red ? { n: p.check.red, cls: 'danger', title: 'serious findings' } : attention ? { n: attention, cls: 'warn', title: 'need attention' } : null,
+      done: p.documents.required > 0 && !p.documents.missing.length && !attention,
+    },
+    { id: 'intake', label: staff ? 'Intake' : 'Your details', icon: ClipboardList, sub: `${p.intake.done} of ${p.intake.total} sections`, done: p.intake.done === p.intake.total },
+    { id: 'sop', label: letter.title.replace(/ \(.*\)$/, ''), icon: PenLine, sub: p.letter.done ? 'Drafted' : 'Not written yet', done: p.letter.done },
+    { id: 'review', label: 'Review', icon: ShieldCheck, sub: p.review ? `Readiness ${p.review.score}/100` : 'Not run yet' },
+    ...(showFinal
+      ? [{
+          id: 'generate', label: 'Final files', icon: PackageCheck,
+          sub: p.final.count ? (p.final.stale ? 'Out of date — rebuild' : `${p.final.count} files built`) : 'Not built yet',
+          badge: p.final.stale ? { n: '!', cls: 'warn', title: 'out of date' } : null,
+          done: p.final.count > 0 && !p.final.stale,
+        }]
+      : []),
+  ];
+
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <h1 style={{ marginBottom: 2 }}>{app.title}</h1>
-        <SaveBadge state={saveState} />
-      </div>
-      <p className="muted small" style={{ marginBottom: 18 }}>
-        {getAppType(app.type).title}
-        {app.clientNumber ? ` · File ${app.clientNumber}` : ''}
-        {app.applicantRole && app.applicantRole !== 'main' ? ` · ${app.applicantRole}` : ''}
-        {' · '}
-        <a href="/dashboard">← all files</a>
-      </p>
-
-      <div className="steps">
-        {TABS.map((t) => (
-          <div
-            key={t.id}
-            className={`step-pill ${tab === t.id ? 'active' : ''}`}
-            onClick={() => setTab(t.id)}
-            role="button"
-          >
-            {t.label}
+      <div className="ws-head">
+        <div className="ws-head-inner">
+          <div className="ws-id">
+            <div className="crumbs">
+              <Link href="/dashboard">{staff ? 'Client files' : 'My applications'}</Link>
+              <ChevronRight size={13} aria-hidden="true" />
+              <span>{app.clientNumber || 'File'}</span>
+            </div>
+            <div className="ws-title">
+              <h1>{app.title}</h1>
+              {app.clientNumber && <span className="chip code">{app.clientNumber}</span>}
+            </div>
+            <div className="ws-meta">
+              <span>{type.title}</span>
+              {type.service && <span className="mono">{type.service}</span>}
+              {app.applicantRole && app.applicantRole !== 'main' && <span>{app.applicantRole === 'spouse' ? 'Accompanying spouse' : 'Dependent child'}</span>}
+              {staff && <span>{app.representation === 'self' ? 'Self-represented' : 'Represented by the firm'}</span>}
+            </div>
           </div>
-        ))}
+          <div className="ws-stats" aria-label="File status">
+            <Stat label="Documents" value={`${p.documents.provided}/${p.documents.required}`} ratio={p.documents.required ? p.documents.provided / p.documents.required : 0} />
+            <Stat label="Intake" value={`${p.intake.done}/${p.intake.total}`} ratio={p.intake.total ? p.intake.done / p.intake.total : 0} />
+            <div className="ws-stat">
+              <span className="lbl">Check</span>
+              <span className="val">
+                {p.check.red ? <span className="chip danger">{p.check.red} serious</span> : attention ? <span className="chip warn">{attention} attention</span> : p.check.green ? <span className="chip ok">All OK</span> : <span className="faint">—</span>}
+              </span>
+            </div>
+          </div>
+          <SaveBadge state={saveState} />
+        </div>
       </div>
 
-      {tab === 'documents' && (
-        <DocumentsPanel app={app} patchLocal={patchLocal} onExtracted={onFieldChange} goIntake={() => setTab('intake')} staff={viewerRole === 'admin' || viewerRole === 'manager'} />
-      )}
-      {tab === 'intake' && (
-        <IntakePanel
-          app={app}
-          schema={schema}
-          onFieldChange={onFieldChange}
-          onFinish={() => setTab('review')}
-          activeStepId={intakeStep}
-          onStepChange={setIntakeStep}
-        />
-      )}
-      {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
-      {tab === 'review' && (
-        <ReviewPanel app={app} initialChecklist={initialChecklist} patchLocal={patchLocal} />
-      )}
-      {tab === 'generate' && (
-        <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => setTab('intake')} />
-      )}
+      <div className="ws">
+        <nav className="ws-side" aria-label="File sections">
+          <div className="side-label">{staff ? 'This file' : 'Your application'}</div>
+          {nav.map((n) => {
+            const Icon = n.icon;
+            return (
+              <button key={n.id} type="button" className={`side-item${tab === n.id ? ' on' : ''}`} onClick={() => go(n.id)} aria-current={tab === n.id ? 'page' : undefined}>
+                <span className="ico"><Icon size={18} aria-hidden="true" /></span>
+                <span>
+                  {n.label}
+                  {n.sub && <span className="sub">{n.sub}</span>}
+                </span>
+                {n.badge ? (
+                  <span className={`count ${n.badge.cls}`} title={`${n.badge.n} ${n.badge.title}`}>{n.badge.n}</span>
+                ) : n.done ? (
+                  <CheckCircle2 size={16} className="state-done" aria-label="done" />
+                ) : <span />}
+              </button>
+            );
+          })}
+        </nav>
+
+        <main className="ws-main">
+          {tab === 'overview' && <OverviewPanel app={app} progress={p} staff={staff} showFinal={showFinal} go={go} letterTitle={letter.title.replace(/ \(.*\)$/, '')} />}
+          {tab === 'documents' && (
+            <DocumentsPanel
+              app={app}
+              progress={p}
+              patchLocal={patchLocal}
+              onExtracted={onFieldChange}
+              goIntake={() => go('intake')}
+              staff={staff}
+              selected={sub}
+              onSelect={setSub}
+            />
+          )}
+          {tab === 'intake' && (
+            <IntakePanel app={app} schema={schema} sections={p.intake.sections} onFieldChange={onFieldChange} onFinish={() => go(showFinal ? 'review' : 'overview')} activeStepId={sub} onStepChange={setSub} saveState={saveState} />
+          )}
+          {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
+          {tab === 'review' && <ReviewPanel app={app} progress={p} patchLocal={patchLocal} go={go} />}
+          {tab === 'generate' && showFinal && <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => go('intake')} progress={p} />}
+        </main>
+      </div>
     </>
   );
 }
 
+function Stat({ label, value, ratio }) {
+  return (
+    <div className="ws-stat">
+      <span className="lbl">{label}</span>
+      <span className="val">{value}</span>
+      <div className="meter" aria-hidden="true"><i style={{ width: `${Math.round(Math.min(1, ratio) * 100)}%` }} /></div>
+    </div>
+  );
+}
+
 function SaveBadge({ state }) {
-  if (state === 'saving') return <span className="chip">Saving…</span>;
-  if (state === 'error') return <span className="chip danger">Save failed</span>;
-  if (state === 'conflict') return <span className="chip danger" title="Another account manager saved this file after you opened it. Their version has been loaded — re-apply your last change.">Updated by someone else — reloaded</span>;
-  return <span className="chip ok">Saved</span>;
+  if (state === 'saving') return <span className="save-state"><Loader2 size={14} className="spin-icon" aria-hidden="true" /> Saving…</span>;
+  if (state === 'error') return <span className="chip danger"><CloudOff size={13} aria-hidden="true" /> Not saved — check your connection</span>;
+  if (state === 'conflict') {
+    return (
+      <span className="chip danger" title="Another account manager saved this file after you opened it. Their version has been loaded — re-apply your last change.">
+        <AlertTriangle size={13} aria-hidden="true" /> Updated by someone else — reloaded
+      </span>
+    );
+  }
+  return <span className="save-state"><CheckCircle2 size={14} aria-hidden="true" /> All changes saved</span>;
 }
