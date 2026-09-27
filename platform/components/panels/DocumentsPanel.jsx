@@ -29,6 +29,59 @@ async function readJson(res) {
   }
 }
 
+// Document check colours (lib/verify.js): green ok · yellow minor · orange attention · red serious.
+const CHECK = {
+  green: { label: 'OK', bg: '#e5f4ec', fg: '#1a7f4b', title: 'Checked — nothing found' },
+  yellow: { label: 'Minor', bg: '#fdf6d8', fg: '#8a6d00', title: 'Minor issues (typos, notes)' },
+  orange: { label: 'Attention', bg: '#fde8d0', fg: '#b35c00', title: 'Needs attention — see the findings' },
+  red: { label: 'Serious', bg: '#fbe4e4', fg: '#c02626', title: 'Serious problem — fix before submission' },
+};
+const SEV = { high: { label: 'serious', color: '#c02626' }, medium: { label: 'attention', color: '#b35c00' }, low: { label: 'minor', color: '#8a6d00' } };
+
+function CheckBadge({ v }) {
+  if (!v?.status) return null;
+  const c = CHECK[v.status] || CHECK.yellow;
+  return (
+    <span className="chip" title={c.title} style={{ background: c.bg, color: c.fg, marginLeft: 6, fontWeight: 700 }}>
+      ● {c.label}
+    </span>
+  );
+}
+
+function CheckDetails({ v }) {
+  if (!v || (!v.findings?.length && !v.parts?.notes)) return null;
+  const parts = v.parts || {};
+  const partList = [
+    ['translation', 'translation'],
+    ['certifiedCopy', 'certified copy'],
+    ['original', 'original'],
+    ['translatorSeal', 'seal'],
+  ];
+  return (
+    <details className="small" style={{ marginTop: 4 }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--ink-soft)' }}>
+        {v.findings.length} finding(s){v.documentType ? ` · ${v.documentType}` : ''}
+      </summary>
+      <ul style={{ paddingLeft: 18, margin: '6px 0 4px' }}>
+        {v.findings.map((f, i) => (
+          <li key={i} style={{ marginBottom: 3 }}>
+            <span style={{ color: SEV[f.severity]?.color, fontWeight: 700 }}>{SEV[f.severity]?.label || f.severity}</span>
+            {' · '}
+            <span className="muted">{f.kind}</span>
+            {f.page ? <span className="muted"> · p.{f.page}</span> : null}: {f.text}
+          </li>
+        ))}
+      </ul>
+      {(parts.translation || parts.certifiedCopy || parts.original) && (
+        <div className="muted" style={{ marginTop: 2 }}>
+          Parts: {partList.map(([k, l]) => `${parts[k] ? '✓' : '✗'} ${l}`).join(' · ')}
+          {parts.notes ? ` — ${parts.notes}` : ''}
+        </div>
+      )}
+    </details>
+  );
+}
+
 const OWNER_LABELS = { spouse: 'the spouse', child: 'a child', parent: 'a parent', host: 'the host', sponsor: 'a sponsor', other: 'someone else' };
 
 const CATEGORY_LABELS = {
@@ -472,12 +525,41 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
             )}
           </div>
         )}
+        {docs.some((d) => d.verification) && (() => {
+          const n = { green: 0, yellow: 0, orange: 0, red: 0 };
+          let unchecked = 0;
+          for (const d of docs) {
+            if (d.verification?.status) n[d.verification.status]++;
+            else if (!['internal', 'questionnaire', 'photo'].includes(d.category)) unchecked++;
+          }
+          return (
+            <div className="small" style={{ marginTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <strong>Document check:</strong>
+              {['green', 'yellow', 'orange', 'red'].map((k) => (
+                <span key={k} className="chip" style={{ background: CHECK[k].bg, color: CHECK[k].fg, fontWeight: 700 }}>
+                  {n[k]} {CHECK[k].label.toLowerCase()}
+                </span>
+              ))}
+              {unchecked > 0 && <span className="muted">{unchecked} not checked yet</span>}
+            </div>
+          );
+        })()}
         {extracting && progress && (
           <ProgressBar
-            value={progress.total ? progress.done / progress.total : null}
-            label={`Reading ${progress.docCount} document(s) with AI — part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${
-              progress.failed ? ` · ${progress.failed} part(s) failed` : ''
-            }. You can keep working; this page updates when it is done.`}
+            value={
+              progress.phase === 'checking'
+                ? progress.checkTotal ? (progress.checkDone || 0) / progress.checkTotal : null
+                : progress.total ? progress.done / progress.total : null
+            }
+            label={
+              progress.phase === 'checking'
+                ? `Checking document ${Math.min((progress.checkDone || 0) + 1, progress.checkTotal || 1)} of ${progress.checkTotal || 0}${
+                    progress.checkCurrent ? ` — ${progress.checkCurrent}` : ''
+                  } (translation, dates, names, completeness). You can keep working.`
+                : `Reading ${progress.docCount} document(s) with AI — part ${Math.min(progress.done + 1, progress.total)} of ${progress.total}${
+                    progress.failed ? ` · ${progress.failed} part(s) failed` : ''
+                  }. You can keep working; this page updates when it is done.`
+            }
           />
         )}
         {readMsg && (
@@ -493,14 +575,20 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
             {docs.map((d) => (
               <div className="row" key={d.id}>
                 <div>
-                  <div style={{ fontWeight: 600 }}>{d.filename}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {d.filename}
+                    <CheckBadge v={d.verification} />
+                  </div>
                   <div className="muted small">
                     {d.category
                       ? `Detected: ${CATEGORY_LABELS[d.category] || d.category}`
                       : 'Not identified yet — run "Read with AI"'}
                     {d.owner && d.owner !== 'applicant' ? ` · ${OWNER_LABELS[d.owner] || 'someone else'}’s document` : ''}{' '}
                     · {(d.size / 1024).toFixed(0)} KB
+                    {d.source === 'email' ? ` · from email${d.mailDate ? ` (${new Date(d.mailDate).toLocaleDateString()})` : ''}` : d.source === 'drive' ? ' · from Drive' : ''}
+                    {d.driveId && d.source === 'email' ? ' · filed on Drive' : ''}
                   </div>
+                  <CheckDetails v={d.verification} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <select

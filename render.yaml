@@ -35,3 +35,11 @@ services:
       # See platform/README.md → "Import a client's documents from Google Drive".
       - key: GOOGLE_SERVICE_ACCOUNT_JSON
         sync: false
+      # Optional — email intake: the team mailbox (IMAP at IONOS) and the Drive
+      # folder that holds the client folders. See platform/README.md → "Email intake".
+      - key: MAIL_USER
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: DRIVE_CLIENTS_FOLDER
+        sync: false

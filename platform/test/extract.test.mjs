@@ -17,7 +17,7 @@ let failures = 0;
 const ok = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if (!cond) failures++; };
 
 /* ------------------------------ stub OpenAI ------------------------------ */
-const seen = { calls: 0, inflight: 0, maxInflight: 0, files: 0, images: 0, headers: [], instructions: [] };
+const seen = { calls: 0, inflight: 0, maxInflight: 0, files: 0, images: 0, headers: [], instructions: [], verifyCalls: 0, passportFirst: 0, refSeen: false };
 const stub = http.createServer((req, res) => {
   let b = '';
   req.on('data', (c) => (b += c));
@@ -27,6 +27,24 @@ const stub = http.createServer((req, res) => {
     seen.maxInflight = Math.max(seen.maxInflight, seen.inflight);
     const body = JSON.parse(b || '{}');
     const parts = body.messages?.flatMap((m) => (Array.isArray(m.content) ? m.content : [])) || [];
+    const allText = parts.filter((p) => p.type === 'text').map((p) => p.text).join('\n');
+    // The document check (lib/verify.js) asks for datePairs: answer like a checker would.
+    if (/"datePairs"/.test(allText)) {
+      seen.verifyCalls++;
+      const name = allText.match(/Document: "(.+?)"/)?.[1] || '';
+      const wantsBundle = /bundle IS expected/.test(allText);
+      let out = { documentType: 'stub', languages: ['fa', 'en'], parts: { translation: wantsBundle, certifiedCopy: wantsBundle, original: wantsBundle, translatorSeal: wantsBundle }, legibility: 'good', facts: {}, datePairs: [], findings: [] };
+      if (/103 - Passport - Zahra/.test(name)) out.facts = { fullNameLatin: 'Zahra Test', dobGregorian: '1980-01-01', passportNumber: 'X1234567', expiryDate: '2031-01-01' };
+      else if (/105 - Degree - Zahra/.test(name)) { out.facts = { fullNameLatin: 'Zahra Tset', dobGregorian: '1980-01-01' }; out.datePairs = [{ jalali: '1352/03/14', gregorian: '1973-06-05', context: 'graduation date', page: 1 }]; }
+      else if (/113 - Employment letter/.test(name)) out.findings = [{ severity: 'medium', kind: 'vague', text: 'The letter states no salary or start date.', page: 1 }];
+      else if (/101 - Birth certificate/.test(name)) { out.parts = { translation: true, certifiedCopy: false, original: true, translatorSeal: true }; out.findings = [{ severity: 'low', kind: 'typo', text: '"Tehran" is spelled "Teheran" on page 2.', page: 2 }]; }
+      else if (/103 - Passport - Nima/.test(name)) out.facts = { fullNameLatin: 'Nima Test', dobGregorian: '2011-12-17', passportNumber: 'C9999', expiryDate: '2030-01-01' };
+      if (/Document: "103 - Passport - Zahra/.test(allText) && !/Reference spelling/.test(allText)) seen.passportFirst = seen.verifyCalls;
+      if (/105 - Degree/.test(name) && /Reference spelling.*Zahra Test/.test(allText)) seen.refSeen = true;
+      seen.inflight--;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(out) } }] }));
+    }
     const headers = parts.filter((p) => p.type === 'text' && /^--- Document \d+:/.test(p.text)).map((p) => p.text);
     seen.headers.push(...headers);
     seen.files += parts.filter((p) => p.type === 'file').length;
@@ -185,6 +203,21 @@ try {
   ok(doc('113 - Employment').category === 'employment-letter', "the file's checklist code beats a wrong AI guess");
   ok(after.documents.filter((d) => d.extractedAt).length === readCount, 'read documents are marked as read');
   ok(doc('103 - Passport - Nima').owner === 'child' && doc('132 - Work permit').owner === 'spouse', 'each document remembers whose it is');
+
+  // --- document check (صحت و سقم) ------------------------------------------
+  const v = (n) => doc(n).verification;
+  const checkable = after.documents.filter((d) => !['internal', 'questionnaire', 'photo'].includes(d.category)).length;
+  ok(seen.verifyCalls === checkable && checkable === readCount - 2, `every document except the firm's forms and the photo was checked (${seen.verifyCalls} of ${readCount} read)`);
+  ok(seen.passportFirst > 0 && seen.passportFirst <= 2 && seen.refSeen, 'passports are checked first and then serve as the reference spelling');
+  ok(v('103 - Passport - Zahra').status === 'green', 'a clean passport is green');
+  ok(v('101 - Birth certificate').status === 'orange' && v('101 - Birth certificate').findings.some((f) => /certified copy/.test(f.text)), 'a translation bundle missing its certified copy is orange');
+  ok(v('113 - Employment letter').status === 'orange' && v('113 - Employment letter').findings[0].kind === 'vague', 'a vague employment letter is orange');
+  const deg = v('105 - Degree - Zahra');
+  ok(deg.status === 'red' && deg.findings.some((f) => f.by === 'platform' && /1352\/03\/14 is 1973-06-04/.test(f.text) && /1973-06-05/.test(f.text)), 'a wrong Jalali→Gregorian date in a translation is caught by the platform itself (red)');
+  ok(deg.findings.some((f) => /"Zahra Tset" here but "Zahra Test" on the passport/.test(f.text)), 'a name spelled differently from the passport is flagged');
+  ok(v('103 - Passport - Nima').status === 'green', "the child's passport is not compared with the applicant's");
+  ok(job.result.check && job.result.check.red === 1 && job.result.check.orange === 2, `the summary counts colours (${JSON.stringify(job.result.check)})`);
+  ok(!doc('100 - Checklist - Zahra').verification && !doc('104 - Photo').verification, 'the checklist form and the photo are not checked');
   ok(after.readFor === 'Zahra Mousavi' && (await call('GET', `/api/applications/${appId}/extract`)).data.applicant === 'Zahra Mousavi', 'the applicant name is remembered for next time');
   ok((after.dataVersion || 0) === (before.dataVersion || 0), 'reading does not touch the intake version');
 

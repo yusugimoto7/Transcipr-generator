@@ -6,6 +6,7 @@ import { rasterizePdf } from './raster';
 import { buildChecklist } from './checklist';
 import { getAppType } from './appTypes';
 import { allFields, APPLICANT_ONLY_STEPS, SAME_PERSON_FIELDS } from './schema';
+import { verifyDocument, crossCheck, needsCheck, verificationSummary } from './verify';
 
 /**
  * "Read documents & fill intake" as a background job.
@@ -129,8 +130,8 @@ export function applicantHint(app) {
 /** Public view of a job for the page. */
 function view(job) {
   if (!job) return null;
-  const { status, applicant, total, done, failed, docCount, startedAt, finishedAt, error, result } = job;
-  return { status, applicant, total, done, failed, docCount, startedAt, finishedAt, error, ...(status === 'done' ? { result } : {}) };
+  const { status, applicant, phase, total, done, failed, docCount, checkTotal, checkDone, checkCurrent, startedAt, finishedAt, error, result } = job;
+  return { status, applicant, phase, total, done, failed, docCount, checkTotal, checkDone, checkCurrent, startedAt, finishedAt, error, ...(status === 'done' ? { result } : {}) };
 }
 
 export function getExtractJob(appId) {
@@ -165,6 +166,7 @@ export async function startExtractJob(appId, { all = false, applicant } = {}) {
   const batches = batchDocs(toRead);
   const job = {
     status: 'running',
+    phase: 'reading',
     applicant: applicantHint(app),
     total: batches.length,
     done: 0,
@@ -325,7 +327,60 @@ async function run(appId, app, batches, job) {
   if (failures.length) {
     merged.notes.push(`${failures.length} of ${batches.length} document batches could not be read (${failures[0]}). Run it again to retry them.`);
   }
-  job.result = { ...merged, documents: updated?.documents || [], version: updated?.version };
+  // --- Document check (صحت و سقم) ------------------------------------------
+  // Every document just read, plus any never checked: accuracy of the
+  // translation, dates, names, completeness of the bundle (lib/verify.js).
+  // Passports go first — they are the reference spelling for everyone else.
+  job.phase = 'checking';
+  const docsNow = updated?.documents || [];
+  const toCheck = docsNow.filter((d) => needsCheck(d) && (readIds.has(d.id) || !d.verification));
+  job.checkTotal = toCheck.length;
+  job.checkDone = 0;
+  const verifications = new Map(docsNow.filter((d) => d.verification).map((d) => [d.id, d.verification]));
+  const refFor = (owner) => {
+    const p = docsNow.find((d) => d.category === 'passport' && (d.owner || 'applicant') === owner && verifications.get(d.id)?.facts?.fullNameLatin);
+    return p ? verifications.get(p.id).facts : null;
+  };
+  const checkAll = async (list, n) => {
+    let i = 0;
+    const w = async () => {
+      while (i < list.length) {
+        const doc = list[i++];
+        job.checkCurrent = doc.filename;
+        try {
+          const v = await verifyDocument({ ...app, documents: docsNow }, doc, {
+            applicant: job.applicant,
+            reference: doc.category === 'passport' ? null : refFor(doc.owner || 'applicant'),
+          });
+          verifications.set(doc.id, v);
+          await updateApplication(appId, (a) => {
+            const d = (a.documents || []).find((x) => x.id === doc.id);
+            if (d) d.verification = v;
+            return a;
+          });
+        } catch (e) {
+          console.error(`[verify] ${doc.filename}: ${e.message}`);
+        }
+        job.checkDone++;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(n, list.length) }, w));
+  };
+  await checkAll(toCheck.filter((d) => d.category === 'passport'), CONCURRENCY);
+  await checkAll(toCheck.filter((d) => d.category !== 'passport'), CONCURRENCY);
+
+  // Compare every document with its person's passport; save the outcome.
+  let final = await getApplication(appId);
+  if (crossCheck(final.documents || []) >= 0) {
+    const byId = new Map((final.documents || []).map((d) => [d.id, d.verification]));
+    final = await updateApplication(appId, (a) => {
+      for (const d of a.documents || []) if (byId.get(d.id)) d.verification = byId.get(d.id);
+      return a;
+    });
+  }
+  job.checkCurrent = null;
+
+  job.result = { ...merged, documents: final?.documents || docsNow, check: verificationSummary(final?.documents || docsNow), version: final?.version };
   job.status = 'done';
   job.finishedAt = new Date().toISOString();
 }

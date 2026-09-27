@@ -1,3 +1,4 @@
+import { ensureMailPoller } from '@/lib/mailPoller';
 import { json, requireUser } from '@/lib/api';
 import { complete, MODEL } from '@/lib/ai';
 
@@ -12,6 +13,7 @@ export const runtime = 'nodejs';
  * plain check the host polls stays public and free.
  */
 export async function GET(req) {
+  ensureMailPoller();
   const base = { ok: true, service: 'canada-visa-platform' };
 
   if (new URL(req.url).searchParams.get('ai') !== '1') return json(base);

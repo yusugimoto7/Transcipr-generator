@@ -21,7 +21,11 @@ import { SignJWT, importPKCS8 } from 'jose';
 
 const API = process.env.GOOGLE_DRIVE_API_BASE || 'https://www.googleapis.com/drive/v3';
 const TOKEN_URL = process.env.GOOGLE_OAUTH_TOKEN_URL || 'https://oauth2.googleapis.com/token';
-const SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+// Full Drive access: the platform also files documents that clients email in
+// (lib/mailIntake.js). Writes only succeed in folders shared with the service
+// account as Editor; folders shared as Viewer stay read-only.
+const SCOPE = 'https://www.googleapis.com/auth/drive';
+const UPLOAD_API = API.replace('/drive/v3', '/upload/drive/v3');
 const ALL_DRIVES = 'supportsAllDrives=true&includeItemsFromAllDrives=true';
 const FIELDS = 'id,name,mimeType,size,modifiedTime,shortcutDetails(targetId,targetMimeType)';
 
@@ -108,22 +112,25 @@ export class DriveError extends Error {
   }
 }
 
-async function call(pathAndQuery, { raw = false } = {}) {
+async function call(pathAndQuery, { raw = false, method = 'GET', body = null, headers: extraHeaders = {}, base = API } = {}) {
   const status = driveStatus();
   if (status.mode === 'none') {
     throw new DriveError('Google Drive is not connected. An admin must set GOOGLE_SERVICE_ACCOUNT_JSON on the server.', 503);
   }
   if (status.mode === 'invalid') throw new DriveError(status.error, 503);
 
-  const headers = {};
-  let url = `${API}${pathAndQuery}`;
+  const headers = { ...extraHeaders };
+  let url = `${base}${pathAndQuery}`;
   const token = await accessToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   else url += `${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(process.env.GOOGLE_API_KEY)}`;
 
-  const res = await fetch(url, { headers });
+  const res = await fetch(url, { method, headers, body });
   if (res.status === 404 || res.status === 403) {
     const who = status.email ? `the service account (${status.email})` : 'this server';
+    if (method !== 'GET') {
+      throw new DriveError(`Drive refused to write there (${res.status}). Share the client folders with ${who} as Editor, not Viewer.`, 403);
+    }
     throw new DriveError(`Drive item not found or not shared with ${who}. Share the folder with that address (Viewer) and try again.`, 404);
   }
   if (!res.ok) {
@@ -161,4 +168,55 @@ export async function downloadFile(id) {
 /** A Google Docs / Sheets / Slides file exported to another format (PDF). */
 export async function exportFile(id, mimeType = 'application/pdf') {
   return call(`/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent(mimeType)}`, { raw: true });
+}
+
+/* ------------------------------ writes ------------------------------ */
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+/** Files in a folder whose name contains `text` (case-insensitive on Drive's side). */
+export async function findChildren(parentId, text, { folder = false } = {}) {
+  const q = [`'${parentId}' in parents`, 'trashed = false', `name contains '${String(text).replace(/'/g, "\\'")}'`];
+  if (folder) q.push(`mimeType = '${FOLDER_MIME}'`);
+  const data = await call(`/files?q=${encodeURIComponent(q.join(' and '))}&fields=${encodeURIComponent(`files(${FIELDS})`)}&pageSize=50&${ALL_DRIVES}`);
+  return data.files || [];
+}
+
+/** Folders anywhere the service account can see whose name contains `text`. */
+export async function searchFolders(text) {
+  const q = [`mimeType = '${FOLDER_MIME}'`, 'trashed = false', `name contains '${String(text).replace(/'/g, "\\'")}'`];
+  const data = await call(`/files?q=${encodeURIComponent(q.join(' and '))}&fields=${encodeURIComponent(`files(${FIELDS},parents)`)}&pageSize=50&${ALL_DRIVES}`);
+  return data.files || [];
+}
+
+export async function getParents(id) {
+  const data = await call(`/files/${encodeURIComponent(id)}?fields=id,name,parents&supportsAllDrives=true`);
+  return data.parents || [];
+}
+
+export async function createFolder(parentId, name) {
+  return call(`/files?supportsAllDrives=true&fields=${encodeURIComponent(FIELDS)}`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] }),
+  });
+}
+
+/** Upload a file into a folder (multipart, one request). Returns its metadata. */
+export async function uploadFile(parentId, name, mime, buffer) {
+  const boundary = `sugimoto-${Date.now().toString(36)}`;
+  const meta = Buffer.from(JSON.stringify({ name, parents: [parentId] }));
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`),
+    meta,
+    Buffer.from(`\r\n--${boundary}\r\nContent-Type: ${mime}\r\n\r\n`),
+    buffer,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+  return call(`/files?uploadType=multipart&supportsAllDrives=true&fields=${encodeURIComponent(FIELDS)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+    base: UPLOAD_API,
+  });
 }

@@ -58,6 +58,10 @@ npm run dev                   # http://localhost:3001
 | `OPENAI_BASE_URL` | no | Only for Azure OpenAI / a gateway / an OpenAI-compatible proxy |
 | `DATA_DIR` | no | Where accounts/applications JSON live (default `./data`) |
 | `UPLOAD_DIR` | no | Where uploaded & generated files live (default `./uploads`) |
+| `MAIL_USER` / `MAIL_PASSWORD` | no | The team mailbox for email intake (IMAP; IONOS defaults) |
+| `MAIL_IMAP_HOST` / `MAIL_IMAP_PORT` / `MAIL_FOLDER` | no | Defaults `imap.ionos.com` / `993` / `INBOX` |
+| `MAIL_POLL_MINUTES` / `MAIL_SINCE_DAYS` | no | How often to check (5) and how far back the first run looks (7) |
+| `DRIVE_CLIENTS_FOLDER` | no | Link/ID of the Drive folder holding the client folders (share as Editor) |
 | `IRCC_CHECK_HOURS` | no | How often IRCC checklists are re-checked (default 24) |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | no | Service-account key for **Import from Google Drive** (raw JSON or base64) — see below |
 | `DRIVE_MAX_FILE_MB` / `DRIVE_MAX_TOTAL_MB` / `DRIVE_MAX_FILES` | no | Drive import limits (defaults 25 / 400 / 300) |
@@ -105,6 +109,58 @@ Only admins and account managers see this — never applicants.
 
 The server only ever calls the Google API with the ID taken from the pasted link
 — it never fetches the pasted URL itself.
+
+## Document check (صحت و سقم)
+
+Every time documents are read, each one is also checked before it can go to
+IRCC (`lib/verify.js`): the certified translation is compared with the Persian
+original (names, dates, numbers, places, relationships), every Jalali ↔
+Gregorian date pair is recomputed by the platform, names and dates are compared
+with the intake and — across all of a person's documents — with their passport,
+expiry and age of certificates are checked, and a translation bundle is checked
+for its three parts (translation, certified copy of the original, original).
+Each document gets a colour on the Documents tab, with the findings:
+
+| Colour | Meaning |
+|---|---|
+| **green** | nothing found |
+| **yellow** | minor: typos, formatting, notes |
+| **orange** | needs attention: a part of the bundle missing, a vague or unclear statement, a secondary inconsistency |
+| **red** | serious: a name, date or number wrong or different from the passport / intake, a wrong date conversion, an expired document, missing translation, key data illegible |
+
+Findings marked red or orange are also fed to the Review.
+
+## Email intake (visa@sugimotovisa.com)
+
+Documents clients email to the team arrive on the right file by themselves
+(`lib/mailIntake.js`). The mailbox is checked every few minutes over IMAP; for
+each new message with documents:
+
+1. the sender is matched to a file — a client number in the subject or body
+   (`S26160`), a sender address remembered on the file, the intake's email or
+   the applicant's login;
+2. the attachments (PDF, JPG, PNG, WEBP, DOCX; zips unpacked) are saved on the
+   file, read and checked like any upload;
+3. each document is named the team's way from what the reading found
+   (`103 - Passport - Zahra.pdf`) and copied into the client's Drive folder
+   under **01 - Documents**. A client with no folder yet gets one — `S26160 -
+   First Last` with `01 - Documents` and `02 - Final Files` — under this
+   year's `… FILES` folder (or the clients folder).
+
+A message that matches no file, or several, waits under **Admin → Email
+intake** for staff to file it (the sender is then remembered for that file).
+The mailbox itself is never modified.
+
+**Setup:**
+
+1. On Render, set `MAIL_USER` (`visa@sugimotovisa.com`) and `MAIL_PASSWORD`
+   (the mailbox password). The mailbox is at IONOS, so the defaults
+   `MAIL_IMAP_HOST=imap.ionos.com`, `MAIL_IMAP_PORT=993` apply.
+2. Set `DRIVE_CLIENTS_FOLDER` to the link of the folder that holds the client
+   folders, and share that folder with the service account as **Editor**
+   (Viewer is enough for importing, not for filing).
+3. Optional: `MAIL_POLL_MINUTES` (default 5), `MAIL_SINCE_DAYS` (how far back
+   the first run looks, default 7), `MAIL_FOLDER` (default INBOX).
 
 ## IRCC's current checklists
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { STAGE_LABELS } from '@/lib/appTypes';
 import AdminIrcc from '@/components/AdminIrcc';
+import AdminMail from '@/components/AdminMail';
 
 /**
  * Admin console: staff accounts and file assignments.
@@ -85,10 +86,12 @@ export default function AdminClient() {
         <div className={`step-pill ${tab === 'files' ? 'active' : ''}`} onClick={() => setTab('files')} role="button">Files ({apps.length})</div>
         <div className={`step-pill ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')} role="button">Users ({users.length})</div>
         <div className={`step-pill ${tab === 'ircc' ? 'active' : ''}`} onClick={() => setTab('ircc')} role="button">IRCC checklists</div>
+        <div className={`step-pill ${tab === 'mail' ? 'active' : ''}`} onClick={() => setTab('mail')} role="button">Email intake</div>
       </div>
       {msg && <div className={`alert ${msg.type === 'err' ? 'err' : 'ok'}`} style={{ marginBottom: 14 }}>{msg.text}</div>}
 
       {tab === 'ircc' && <AdminIrcc />}
+      {tab === 'mail' && <AdminMail />}
 
       {tab === 'users' && (
         <>

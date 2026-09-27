@@ -73,7 +73,7 @@ const google = http.createServer(async (req, res) => {
     const form = new URLSearchParams(b);
     try {
       const { payload } = await jwtVerify(form.get('assertion'), spki, { issuer: SA_EMAIL, audience: `http://127.0.0.1:${GOOGLE}/token` });
-      if (form.get('grant_type') !== 'urn:ietf:params:oauth:grant-type:jwt-bearer' || !/drive\.readonly/.test(payload.scope)) throw new Error('bad grant');
+      if (form.get('grant_type') !== 'urn:ietf:params:oauth:grant-type:jwt-bearer' || !/auth\/drive$/.test(payload.scope)) throw new Error(`bad grant (scope ${payload.scope})`); // full Drive scope: emailed documents are filed into client folders
       stats.tokens++;
       return send(res, 200, { access_token: TOKEN, expires_in: 3600, token_type: 'Bearer' });
     } catch (e) {

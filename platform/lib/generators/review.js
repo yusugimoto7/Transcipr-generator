@@ -19,6 +19,10 @@ applicant's file for completeness and for common refusal risks under IRPA s.216
 (dual intent, funds, ties to home country, purpose of visit, study plan credibility).
 Be concrete and practical. Do not give legal advice or guarantees.`;
 
+  const checkLines = (app.documents || [])
+    .filter((d) => d.verification && d.verification.status !== 'green')
+    .map((d) => `- ${d.filename} [${d.verification.status.toUpperCase()}]: ${d.verification.findings.filter((f) => f.severity !== 'low').map((f) => f.text).join(' | ') || 'minor issues'}`)
+    .join('\n');
   const instruction = `Review this ${service.title} file and return JSON:
 {
   "readinessScore": 0-100,
@@ -38,6 +42,7 @@ ${JSON.stringify(data, null, 2)}
 
 Checklist (required for this applicant):
 ${checklist.map((c) => `- ${c.code} ${c.label}${c.cond ? ` (${c.cond})` : ''} — ${c.provided ? 'PROVIDED' : c.party === 'firm' ? 'prepared by the firm' : 'MISSING'}`).join('\n')}
+${checkLines ? `\nDocument check (each document read against its translation, the intake and the passport):\n${checkLines}\nTreat red items as refusal risks to fix before submission.` : ''}
 
 Uploaded document categories: ${uploadedKeys.length ? uploadedKeys.join(', ') : '(none yet)'}
 
