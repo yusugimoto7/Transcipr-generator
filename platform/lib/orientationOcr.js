@@ -147,3 +147,10 @@ export async function orientationByText(image) {
   }
   return { rotate: 0, decided: false, method: 'ocr', detail: last };
 }
+
+/** Plain text of a page picture (Persian + English), for checking quoted findings against the page. */
+export async function pageText(image) {
+  if (!tesseractAvailable()) return '';
+  const png = await sharp(image).resize({ width: 1600, height: 1600, fit: 'inside' }).grayscale().normalise().png().toBuffer();
+  return tesseract(png, ['-l', langs, '--psm', '6', '-c', 'textord_heavy_nr=1']);
+}

@@ -43,13 +43,37 @@ function CheckBadge({ v }) {
   const c = CHECK[v.status] || CHECK.yellow;
   return (
     <span className="chip" title={c.title} style={{ background: c.bg, color: c.fg, marginLeft: 6, fontWeight: 700 }}>
-      ● {c.label}
+      ● {c.label}{v.reviewedBy ? ' · staff ✓' : ''}
     </span>
   );
 }
 
-function CheckDetails({ v }) {
-  if (!v || (!v.findings?.length && !v.parts?.notes)) return null;
+function Agreement({ f }) {
+  if (f.by === 'platform') return <span className="muted"> · exact check</span>;
+  if (f.unverified) return <span style={{ color: '#8a6d00' }}> · quoted text not found on the page — possibly invented, confirm by eye</span>;
+  if (f.confirmed) return <span style={{ color: '#1a7f4b' }}> · ✓ both models</span>;
+  if (f.models?.length === 1 && f.confirmed === false) return <span style={{ color: '#b35c00' }}> · one model only ({f.models[0]}) — confirm by eye</span>;
+  return null;
+}
+
+function CheckDetails({ v, onReview, reviewing }) {
+  if (!v) return null;
+  const signoff = (
+    <div className="small" style={{ marginTop: 6, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      {v.models?.length > 0 && <span className="muted">Checked by {v.models.length === 2 ? 'two models' : 'one model'}: {v.models.join(' + ')}{v.secondModelError ? ` (second model failed: ${v.secondModelError})` : ''}</span>}
+      {v.reviewedBy ? (
+        <span style={{ color: '#1a7f4b', fontWeight: 600 }}>
+          ✓ checked by {v.reviewedBy} on {new Date(v.reviewedAt).toLocaleDateString()}{' '}
+          <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => onReview(false)} disabled={reviewing}>undo</button>
+        </span>
+      ) : (
+        <button className="btn-ghost" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => onReview(true)} disabled={reviewing}>
+          ✓ I checked this document
+        </button>
+      )}
+    </div>
+  );
+  if (!v.findings?.length && !v.parts?.notes) return signoff;
   const parts = v.parts || {};
   const partList = [
     ['translation', 'translation'],
@@ -69,6 +93,8 @@ function CheckDetails({ v }) {
             {' · '}
             <span className="muted">{f.kind}</span>
             {f.page ? <span className="muted"> · p.{f.page}</span> : null}: {f.text}
+            {f.quote ? <span className="muted"> — “{f.quote}”</span> : null}
+            <Agreement f={f} />
           </li>
         ))}
       </ul>
@@ -78,6 +104,7 @@ function CheckDetails({ v }) {
           {parts.notes ? ` — ${parts.notes}` : ''}
         </div>
       )}
+      {signoff}
     </details>
   );
 }
@@ -247,6 +274,18 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
     const res = await fetch(`/api/applications/${app.id}/upload?docId=${docId}`, { method: 'DELETE' });
     const data = await res.json();
     if (res.ok) patchLocal({ documents: data.documents });
+  }
+
+  const [reviewing, setReviewing] = useState(null);
+  async function setReviewed(docId, reviewed) {
+    setReviewing(docId);
+    try {
+      const res = await fetch(`/api/applications/${app.id}/upload`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docId, reviewed }) });
+      const data = await readJson(res);
+      if (res.ok) patchLocal({ documents: data.documents });
+    } finally {
+      setReviewing(null);
+    }
   }
 
   async function setCategory(docId, category) {
@@ -588,7 +627,7 @@ export default function DocumentsPanel({ app, patchLocal, onExtracted, goIntake,
                     {d.source === 'email' ? ` · from email${d.mailDate ? ` (${new Date(d.mailDate).toLocaleDateString()})` : ''}` : d.source === 'drive' ? ' · from Drive' : ''}
                     {d.driveId && d.source === 'email' ? ' · filed on Drive' : ''}
                   </div>
-                  <CheckDetails v={d.verification} />
+                  <CheckDetails v={d.verification} onReview={(r) => setReviewed(d.id, r)} reviewing={reviewing === d.id} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <select

@@ -1,9 +1,10 @@
-import { completeJson } from './ai';
+import { completeJson, MODEL, secondModel, modelLabel } from './ai';
+import { pageText } from './orientationOcr';
 import { readUpload, buildDocBlocks } from './uploads';
 import { rasterizePdf } from './raster';
 import { buildChecklist } from './checklist';
 import { codeCategory, firmCode } from './generators/classify';
-import { checkDatePair, parseGregorian, isoDate } from './jalali';
+import { checkDatePair, parseGregorian, isoDate, asciiDigits } from './jalali';
 
 /**
  * Document check (صحت و سقم): is each document accurate, complete and
@@ -81,6 +82,7 @@ async function blocksFor(appId, doc) {
         return {
           blocks: pages.map((p) => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.buffer.toString('base64') } })),
           pages: pages.length,
+          pictures: pages.map((p) => p.buffer),
         };
       }
     } catch {
@@ -88,7 +90,107 @@ async function blocksFor(appId, doc) {
     }
   }
   const [, ...rest] = await buildDocBlocks(appId, [doc]);
-  return { blocks: rest, pages: null };
+  const pictures = doc.mime !== 'application/pdf' ? [await readUpload(appId, doc.stored)] : [];
+  return { blocks: rest, pages: null, pictures };
+}
+
+/* ------------------------- two models, one verdict ------------------------- */
+
+const words = (t) =>
+  asciiDigits(String(t || ''))
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter((w) => w.length >= 3);
+const similarity = (a, b) => {
+  const A = new Set(words(a));
+  const B = new Set(words(b));
+  if (!A.size || !B.size) return 0;
+  let n = 0;
+  for (const w of A) if (B.has(w)) n++;
+  return n / Math.min(A.size, B.size);
+};
+const sameFinding = (x, y) => (x.kind === y.kind || similarity(x.text, y.text) >= 0.6) && (similarity(x.text, y.text) >= 0.35 || (x.quote && y.quote && similarity(x.quote, y.quote) >= 0.6));
+
+/**
+ * Merge two models' findings: a finding both report is confirmed; one only
+ * one reports is kept, unconfirmed. Facts, parts and legibility are compared.
+ */
+function mergeModels(a, b, labels) {
+  const findings = [];
+  const used = new Set();
+  for (const f of a.findings) {
+    const j = b.findings.findIndex((g, i) => !used.has(i) && sameFinding(f, g));
+    if (j >= 0) {
+      used.add(j);
+      const g = b.findings[j];
+      const sev = ['low', 'medium', 'high'];
+      findings.push({ ...f, severity: sev[Math.max(sev.indexOf(f.severity), sev.indexOf(g.severity))], models: labels, confirmed: true });
+    } else findings.push({ ...f, models: [labels[0]], confirmed: false });
+  }
+  b.findings.forEach((g, i) => {
+    if (!used.has(i)) findings.push({ ...g, models: [labels[1]], confirmed: false });
+  });
+  const disagreements = [];
+  const fa = a.facts || {};
+  const fb = b.facts || {};
+  for (const key of ['fullNameLatin', 'dobGregorian', 'passportNumber', 'documentNumber', 'expiryDate', 'issueDate']) {
+    if (!fa[key] || !fb[key]) continue;
+    const same = key === 'fullNameLatin' ? sameName(fa[key], fb[key]) : sameNumber(fa[key], fb[key]);
+    if (!same) disagreements.push(`${key}: "${fa[key]}" (${labels[0]}) vs "${fb[key]}" (${labels[1]})`);
+  }
+  const partKeys = ['translation', 'certifiedCopy', 'original', 'translatorSeal'];
+  const partsDiffer = partKeys.filter((k) => Boolean(a.parts[k]) !== Boolean(b.parts[k]));
+  const parts = Object.fromEntries(partKeys.map((k) => [k, Boolean(a.parts[k] || b.parts[k])]));
+  parts.notes = [a.parts.notes, b.parts.notes].filter(Boolean).join(' / ');
+  const leg = ['good', 'partial', 'poor'];
+  const legibility = leg[Math.max(leg.indexOf(a.legibility), leg.indexOf(b.legibility))];
+  const seenPairs = new Set();
+  const datePairs = [...a.datePairs, ...b.datePairs].filter((p) => {
+    const k = `${p?.jalali}|${p?.gregorian}`;
+    if (seenPairs.has(k)) return false;
+    seenPairs.add(k);
+    return true;
+  });
+  return { findings, facts: fa, factsSecond: fb, disagreements, partsDiffer, parts, legibility, datePairs, documentType: a.documentType || b.documentType, languages: a.languages.length ? a.languages : b.languages };
+}
+
+/** Did the quoted text appear on the page? Only Latin quotes can be checked (OCR of Persian scans is unreliable). */
+async function checkQuotes(findings, pictures) {
+  const texts = new Map();
+  const textOf = async (i) => {
+    if (!texts.has(i)) {
+      try {
+        texts.set(i, words(await pageText(pictures[i])).join(' '));
+      } catch {
+        texts.set(i, '');
+      }
+    }
+    return texts.get(i);
+  };
+  for (const f of findings) {
+    if (f.by !== 'ai' || !f.quote) continue;
+    const latin = words(f.quote).filter((w) => /^[a-z0-9]+$/.test(w));
+    if (latin.length < 2 || !pictures.length) continue;
+    const candidates = f.page && pictures[f.page - 1] ? [f.page - 1] : pictures.slice(0, 4).map((_, i) => i);
+    let best = 0;
+    for (const i of candidates) {
+      const t = await textOf(i);
+      const hit = latin.filter((w) => t.includes(w)).length / latin.length;
+      best = Math.max(best, hit);
+    }
+    f.quoteChecked = true;
+    if (best < 0.6) f.unverified = true; // the quoted words are not on the page — treat with suspicion
+  }
+}
+
+/** How much a finding weighs in the colour: platform and confirmed findings fully; one-model-only or unverified ones one step less. */
+function weight(f) {
+  if (f.by === 'platform') return f.severity;
+  if (f.unverified) return 'low';
+  if (f.confirmed === false) return f.severity === 'high' ? 'medium' : 'low';
+  return f.severity;
 }
 
 /* ------------------------------ the check ------------------------------ */
@@ -105,7 +207,7 @@ export async function verifyDocument(app, doc, { applicant = '', reference = nul
   const tr = Boolean(item?.tr);
   const d = app.data || {};
   const owner = doc.owner || 'applicant';
-  const { blocks, pages } = await blocksFor(app.id, doc);
+  const { blocks, pages, pictures } = await blocksFor(app.id, doc);
 
   const system = `You are a meticulous document checker at a Canadian immigration consultancy. Before a
 client's document goes to IRCC you check it for accuracy, completeness and consistency. Most
@@ -147,7 +249,7 @@ Check the document and return JSON:
   "datePairs": [ { "jalali": "1352/03/14", "gregorian": "1973-06-04", "context": "date of birth", "page": 1 } ],  // EVERY date that appears in both calendars
   "findings": [
     { "severity": "low"|"medium"|"high", "kind": "translation"|"date"|"name"|"typo"|"discrepancy"|"vague"|"missing-part"|"legibility"|"validity"|"other",
-      "text": "<what is wrong, quoting the text, and what it should be>", "page": 2 }
+      "text": "<what is wrong and what it should be>", "quote": "<the exact words on the page you are referring to, copied verbatim>", "page": 2 }
   ]
 }
 
@@ -163,25 +265,56 @@ What to look for:
 - Legibility: key data unreadable (kind "legibility", high if names/dates/numbers are unreadable).
 If nothing is wrong, return an empty findings list. ${pages ? `(${pages} page image(s) follow.)` : ''}`;
 
-  const res = await completeJson({ system, content: [{ type: 'text', text: instruction }, ...blocks], maxTokens: 2500, temperature: 0 });
+  const content = [{ type: 'text', text: instruction }, ...blocks];
+  const ask = async (model) => {
+    const res = await completeJson({ system, content, maxTokens: 2500, temperature: 0, model });
+    return {
+      findings: (Array.isArray(res.findings) ? res.findings : [])
+        .filter((f) => f && f.text)
+        .map((f) => ({
+          severity: ['low', 'medium', 'high'].includes(f.severity) ? f.severity : 'medium',
+          kind: String(f.kind || 'other'),
+          text: String(f.text).slice(0, 600),
+          quote: f.quote ? String(f.quote).slice(0, 200) : null,
+          page: Number.isFinite(Number(f.page)) ? Number(f.page) : null,
+          by: 'ai',
+        })),
+      facts: res.facts && typeof res.facts === 'object' ? res.facts : {},
+      parts: { translation: false, certifiedCopy: false, original: false, translatorSeal: false, ...(res.parts || {}) },
+      legibility: ['good', 'partial', 'poor'].includes(res.legibility) ? res.legibility : 'good',
+      datePairs: Array.isArray(res.datePairs) ? res.datePairs : [],
+      documentType: res.documentType || null,
+      languages: Array.isArray(res.languages) ? res.languages : [],
+    };
+  };
 
-  const findings = (Array.isArray(res.findings) ? res.findings : [])
-    .filter((f) => f && f.text)
-    .map((f) => ({
-      severity: ['low', 'medium', 'high'].includes(f.severity) ? f.severity : 'medium',
-      kind: String(f.kind || 'other'),
-      text: String(f.text).slice(0, 600),
-      page: Number.isFinite(Number(f.page)) ? Number(f.page) : null,
-      by: 'ai',
-    }));
-  const facts = res.facts && typeof res.facts === 'object' ? res.facts : {};
-  const parts = { translation: false, certifiedCopy: false, original: false, translatorSeal: false, ...(res.parts || {}) };
-  const legibility = ['good', 'partial', 'poor'].includes(res.legibility) ? res.legibility : 'good';
+  // Two independent models when a second one is configured: the first must
+  // answer; if the second fails, its absence is recorded and shown.
+  const second = secondModel();
+  const labels = [modelLabel(MODEL), second ? modelLabel(second) : null].filter(Boolean);
+  let secondError = null;
+  const [first, other] = await Promise.all([
+    ask(MODEL),
+    second
+      ? ask(second).catch((e) => {
+          secondError = e.message;
+          return null;
+        })
+      : Promise.resolve(null),
+  ]);
+  let merged;
+  if (other) merged = mergeModels(first, other, labels);
+  else merged = { ...first, findings: first.findings.map((f) => ({ ...f, models: [labels[0]] })), disagreements: [], partsDiffer: [] };
+  const { findings, facts, parts, legibility } = merged;
+  await checkQuotes(findings, pictures);
 
   // --- The platform's own checks -------------------------------------------
   const add = (severity, kind, text, page = null) => findings.push({ severity, kind, text, page, by: 'platform' });
 
-  for (const p of Array.isArray(res.datePairs) ? res.datePairs : []) {
+  for (const line of merged.disagreements) add('medium', 'discrepancy', `The two models read different values — ${line} — check by eye.`);
+  if (merged.partsDiffer.length) add('medium', 'missing-part', `The two models disagree on whether the file contains its ${merged.partsDiffer.join(', ')} — check the bundle by eye.`);
+
+  for (const p of merged.datePairs) {
     const r = checkDatePair(p?.jalali, p?.gregorian);
     if (r && !r.ok) {
       add('high', 'date', `${p.context ? `${p.context}: ` : ''}the Persian date ${p.jalali} is ${r.expected} in the Gregorian calendar, but the translation says ${r.got}.`, p.page ?? null);
@@ -234,19 +367,23 @@ If nothing is wrong, return an empty findings list. ${pages ? `(${pages} page im
 
   return {
     status: statusOf(findings),
-    documentType: res.documentType || null,
-    languages: Array.isArray(res.languages) ? res.languages : [],
+    documentType: merged.documentType,
+    languages: merged.languages,
     parts,
     legibility,
     facts,
+    ...(merged.factsSecond ? { factsSecond: merged.factsSecond } : {}),
     findings,
+    models: labels,
+    ...(secondError ? { secondModelError: secondError } : {}),
     checkedAt: new Date().toISOString(),
   };
 }
 
 export function statusOf(findings) {
-  if (findings.some((f) => f.severity === 'high')) return 'red';
-  if (findings.some((f) => f.severity === 'medium')) return 'orange';
+  const w = findings.map(weight);
+  if (w.includes('high')) return 'red';
+  if (w.includes('medium')) return 'orange';
   if (findings.length) return 'yellow';
   return 'green';
 }

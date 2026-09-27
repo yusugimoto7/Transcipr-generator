@@ -58,6 +58,8 @@ npm run dev                   # http://localhost:3001
 | `OPENAI_BASE_URL` | no | Only for Azure OpenAI / a gateway / an OpenAI-compatible proxy |
 | `DATA_DIR` | no | Where accounts/applications JSON live (default `./data`) |
 | `UPLOAD_DIR` | no | Where uploaded & generated files live (default `./uploads`) |
+| `ANTHROPIC_API_KEY` | no | Enables Claude as the second, independent document checker |
+| `SECOND_MODEL` | no | `anthropic:<model>` (default `anthropic:claude-sonnet-5` when the key is set) or `openai:<model>` |
 | `MAIL_USER` / `MAIL_PASSWORD` | no | The team mailbox for email intake (IMAP; IONOS defaults) |
 | `MAIL_IMAP_HOST` / `MAIL_IMAP_PORT` / `MAIL_FOLDER` | no | Defaults `imap.ionos.com` / `993` / `INBOX` |
 | `MAIL_POLL_MINUTES` / `MAIL_SINCE_DAYS` | no | How often to check (5) and how far back the first run looks (7) |
@@ -127,6 +129,20 @@ Each document gets a colour on the Documents tab, with the findings:
 | **yellow** | minor: typos, formatting, notes |
 | **orange** | needs attention: a part of the bundle missing, a vague or unclear statement, a secondary inconsistency |
 | **red** | serious: a name, date or number wrong or different from the passport / intake, a wrong date conversion, an expired document, missing translation, key data illegible |
+
+**Two models.** With `ANTHROPIC_API_KEY` set (or `SECOND_MODEL`), every
+document is checked by two independent models — GPT and Claude — and the
+verdicts are merged: a finding both report is *confirmed*; one only one model
+reports stays visible, labelled "one model only — confirm by eye", and never
+turns a document red on its own. Each AI finding must quote the words it refers
+to; the platform reads the page with OCR and marks a finding whose quoted words
+are not on the page as *unverified* (a hallucination looks exactly like that).
+When the two models read a name, date or number differently, or disagree on
+what the bundle contains, that is reported for a person to settle. Exact
+checks (dates, passport comparison, expiry, bundle parts) are code, not AI.
+Staff sign off each document with "I checked this document"; the tick shows on
+its badge. Nothing makes AI output certain — this makes an error need to slip
+past two models, an OCR check and a person.
 
 Findings marked red or orange are also fed to the Review.
 

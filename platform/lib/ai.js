@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { completeAnthropic } from './aiAnthropic';
 
 /**
  * Single point of contact with the LLM provider (OpenAI / GPT).
@@ -27,6 +28,22 @@ export function getClient() {
 }
 
 export const MODEL = process.env.OPENAI_MODEL || 'gpt-4.1';
+
+/**
+ * The second, independent model that re-checks every document (lib/verify.js):
+ * SECOND_MODEL = "anthropic:<claude model>" (needs ANTHROPIC_API_KEY) or
+ * "openai:<model>". Defaults to Claude when an Anthropic key is set; null when
+ * no second model is configured.
+ */
+export function secondModel() {
+  const id = process.env.SECOND_MODEL || (process.env.ANTHROPIC_API_KEY ? 'anthropic:claude-sonnet-5' : null);
+  if (!id) return null;
+  if (id.startsWith('anthropic:') && !process.env.ANTHROPIC_API_KEY) return null;
+  return id.startsWith('openai:') ? id.slice('openai:'.length) : id;
+}
+
+/** Display name of a model id ("anthropic:claude-sonnet-5" → "claude-sonnet-5"). */
+export const modelLabel = (id) => String(id || '').replace(/^(anthropic|openai):/, '');
 
 // Reasoning models spend part of the completion budget on hidden reasoning
 // tokens, so a cap sized for plain output can leave nothing for the answer.
@@ -111,6 +128,10 @@ async function createCompletion(params, budget) {
  * image) so callers can attach uploaded PDFs/images for extraction.
  */
 export async function complete({ system, content, maxTokens = 4096, model = MODEL, jsonMode = false }) {
+  // A model named "anthropic:<id>" goes to Claude (the second checker).
+  if (String(model).startsWith('anthropic:')) {
+    return (await completeAnthropic({ system, content, maxTokens, model: model.slice('anthropic:'.length) })).trim();
+  }
   // Note: `temperature` is intentionally omitted — several current models
   // accept only the default, so we rely on it everywhere for consistency.
   const useJson = jsonMode && !jsonModeUnsupported;

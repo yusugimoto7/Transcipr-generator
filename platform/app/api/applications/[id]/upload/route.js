@@ -44,9 +44,10 @@ export async function POST(req, { params }) {
   return json({ documents: updated.documents, added: saved }, 201);
 }
 
-// Change a document's category manually. Body: { docId, category }
+// Change a document's category, or sign off its check.
+// Body: { docId, category } | { docId, reviewed: true|false }
 export async function PATCH(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { user, app, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
   let body;
   try {
@@ -58,7 +59,15 @@ export async function PATCH(req, { params }) {
   if (!docId) return error('docId is required.');
   const updated = await updateApplication(app.id, (a) => {
     const doc = (a.documents || []).find((d) => d.id === docId);
-    if (doc) doc.category = category || null;
+    if (!doc) return a;
+    if ('reviewed' in body) {
+      // A person looked at the findings and the document: the last word.
+      doc.verification = doc.verification || { status: 'green', findings: [] };
+      if (body.reviewed) Object.assign(doc.verification, { reviewedBy: user.name || user.email, reviewedAt: new Date().toISOString() });
+      else delete doc.verification.reviewedBy, delete doc.verification.reviewedAt;
+    } else {
+      doc.category = category || null;
+    }
     return a;
   });
   return json({ documents: updated.documents });

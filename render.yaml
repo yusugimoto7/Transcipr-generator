@@ -43,3 +43,6 @@ services:
         sync: false
       - key: DRIVE_CLIENTS_FOLDER
         sync: false
+      # Optional — second, independent document checker (Claude). See README.
+      - key: ANTHROPIC_API_KEY
+        sync: false

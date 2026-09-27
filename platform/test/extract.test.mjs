@@ -36,7 +36,7 @@ const stub = http.createServer((req, res) => {
       let out = { documentType: 'stub', languages: ['fa', 'en'], parts: { translation: wantsBundle, certifiedCopy: wantsBundle, original: wantsBundle, translatorSeal: wantsBundle }, legibility: 'good', facts: {}, datePairs: [], findings: [] };
       if (/103 - Passport - Zahra/.test(name)) out.facts = { fullNameLatin: 'Zahra Test', dobGregorian: '1980-01-01', passportNumber: 'X1234567', expiryDate: '2031-01-01' };
       else if (/105 - Degree - Zahra/.test(name)) { out.facts = { fullNameLatin: 'Zahra Tset', dobGregorian: '1980-01-01' }; out.datePairs = [{ jalali: '1352/03/14', gregorian: '1973-06-05', context: 'graduation date', page: 1 }]; }
-      else if (/113 - Employment letter/.test(name)) out.findings = [{ severity: 'medium', kind: 'vague', text: 'The letter states no salary or start date.', page: 1 }];
+      else if (/113 - Employment letter/.test(name)) out.findings = [{ severity: 'medium', kind: 'vague', text: 'The letter states no salary or start date.', quote: 'employment letter', page: 1 }];
       else if (/101 - Birth certificate/.test(name)) { out.parts = { translation: true, certifiedCopy: false, original: true, translatorSeal: true }; out.findings = [{ severity: 'low', kind: 'typo', text: '"Tehran" is spelled "Teheran" on page 2.', page: 2 }]; }
       else if (/103 - Passport - Nima/.test(name)) out.facts = { fullNameLatin: 'Nima Test', dobGregorian: '2011-12-17', passportNumber: 'C9999', expiryDate: '2030-01-01' };
       if (/Document: "103 - Passport - Zahra/.test(allText) && !/Reference spelling/.test(allText)) seen.passportFirst = seen.verifyCalls;
@@ -80,6 +80,31 @@ const stub = http.createServer((req, res) => {
 });
 await new Promise((r) => stub.listen(STUB, r));
 
+// Second, independent checker in Anthropic's Messages format. It agrees on
+// some findings, adds one of its own that is NOT on the page, and reads one
+// name differently — the platform must merge honestly.
+const STUB2 = 3343;
+const seen2 = { calls: 0 };
+const stub2 = http.createServer((req, res) => {
+  let b = '';
+  req.on('data', (c) => (b += c));
+  req.on('end', () => {
+    seen2.calls++;
+    const body = JSON.parse(b || '{}');
+    const text = (body.messages?.[0]?.content || []).filter((p) => p.type === 'text').map((p) => p.text).join('\n');
+    const name = text.match(/Document: "(.+?)"/)?.[1] || '';
+    const wantsBundle = /bundle IS expected/.test(text);
+    const out = { documentType: 'stub2', languages: ['fa', 'en'], parts: { translation: wantsBundle, certifiedCopy: wantsBundle, original: wantsBundle, translatorSeal: wantsBundle }, legibility: 'good', facts: {}, datePairs: [], findings: [] };
+    if (/103 - Passport - Zahra/.test(name)) out.facts = { fullNameLatin: 'Zahra Test', dobGregorian: '1980-01-01', passportNumber: 'X1234567' };
+    else if (/105 - Degree - Zahra/.test(name)) out.facts = { fullNameLatin: 'Zahra Test' }; // disagrees with model 1 ("Zahra Tset")
+    else if (/113 - Employment letter/.test(name)) out.findings = [{ severity: 'medium', kind: 'vague', text: 'No salary and no start date are stated in the letter.', quote: 'employment letter', page: 1 }];
+    else if (/101 - Birth certificate/.test(name)) { out.parts = { translation: true, certifiedCopy: false, original: true, translatorSeal: true }; out.findings = [{ severity: 'high', kind: 'translation', text: "The father's name is mistranslated as Mohammad.", quote: 'Mohammad Reza Karimi', page: 1 }]; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ content: [{ type: 'text', text: JSON.stringify(out) }] }));
+  });
+});
+await new Promise((r) => stub2.listen(STUB2, r));
+
 /* -------------------------------- fixtures -------------------------------- */
 const smallPdf = async (label) => {
   const d = await PDFDocument.create();
@@ -106,7 +131,8 @@ const bigPdf = async () => {
 const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'extract-data-'));
 const server = spawn('npx', ['next', 'start', '-p', String(PORT)], {
   env: { ...process.env, AUTH_SECRET: 'extract-secret-value-at-least-32-chars', DATA_DIR: dataDir, UPLOAD_DIR: path.join(dataDir, 'up'),
-         OPENAI_API_KEY: 'stub', OPENAI_BASE_URL: `http://127.0.0.1:${STUB}/v1`, ADMIN_EMAIL: 'boss@firm.test' },
+         OPENAI_API_KEY: 'stub', OPENAI_BASE_URL: `http://127.0.0.1:${STUB}/v1`, ADMIN_EMAIL: 'boss@firm.test',
+         ANTHROPIC_API_KEY: 'stub', ANTHROPIC_BASE_URL: `http://127.0.0.1:${STUB2}`, SECOND_MODEL: 'anthropic:claude-stub' },
   stdio: ['ignore', 'pipe', 'pipe'],
   detached: true,
 });
@@ -150,7 +176,7 @@ try {
   files.push(['104 - Photo.png', await sharp({ create: { width: 200, height: 260, channels: 3, background: '#ddd' } }).png().toBuffer(), 'image/png']);
   files.push(['103 - Passport - Zahra.pdf', await bigPdf(), 'application/pdf']);
   files.push(['101 - Birth certificate.pdf', await bigPdf(), 'application/pdf']);
-  files.push(['113 - Employment letter.pdf', await smallPdf('employment'), 'application/pdf']);
+  files.push(['113 - Employment letter.pdf', await smallPdf('employment letter from ACME'), 'application/pdf']);
   // A family folder: the child's passport and school record, the spouse's permit.
   files.push(['103 - Passport - Nima.pdf', await smallPdf('child passport'), 'application/pdf']);
   files.push(['106 - School record - Nima.pdf', await smallPdf('child school'), 'application/pdf']);
@@ -218,6 +244,21 @@ try {
   ok(v('103 - Passport - Nima').status === 'green', "the child's passport is not compared with the applicant's");
   ok(job.result.check && job.result.check.red === 1 && job.result.check.orange === 2, `the summary counts colours (${JSON.stringify(job.result.check)})`);
   ok(!doc('100 - Checklist - Zahra').verification && !doc('104 - Photo').verification, 'the checklist form and the photo are not checked');
+
+  // --- two models --------------------------------------------------------------
+  ok(seen2.calls === seen.verifyCalls && v('103 - Passport - Zahra').models.length === 2, `the second model checked every document too (${seen2.calls})`);
+  const emp = v('113 - Employment letter').findings.find((f) => f.kind === 'vague');
+  ok(emp.confirmed === true && emp.models.length === 2, 'a finding both models report is confirmed');
+  ok(emp.quoteChecked === true && !emp.unverified, 'its quoted words are found on the page by OCR');
+  const bc = v('101 - Birth certificate');
+  const invented = bc.findings.find((f) => /mistranslated/.test(f.text));
+  ok(invented && invented.confirmed === false && invented.unverified === true, 'a finding only one model reports, whose quote is not on the page, is marked unverified');
+  ok(bc.status === 'orange', 'and it does not turn the document red on its own');
+  ok(deg.findings.some((f) => f.by === 'platform' && /two models read different values/.test(f.text) && /Zahra Tset/.test(f.text)), 'the models disagreeing on a name is reported for a human to settle');
+
+  // Staff sign-off is the last word.
+  r = await call('PATCH', `/api/applications/${appId}/upload`, { docId: doc('103 - Passport - Zahra').id, reviewed: true });
+  ok(r.status === 200 && r.data.documents.find((d) => d.filename.startsWith('103 - Passport - Zahra')).verification.reviewedBy === 'Boss', 'a person can sign off a document');
   ok(after.readFor === 'Zahra Mousavi' && (await call('GET', `/api/applications/${appId}/extract`)).data.applicant === 'Zahra Mousavi', 'the applicant name is remembered for next time');
   ok((after.dataVersion || 0) === (before.dataVersion || 0), 'reading does not touch the intake version');
 
@@ -238,6 +279,7 @@ try {
 } finally {
   try { process.kill(-server.pid, 'SIGKILL'); } catch {}
   stub.close();
+  stub2.close();
   await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
 }
 console.log(failures ? `\n${failures} FAILED` : '\nALL EXTRACTION CHECKS PASS');
