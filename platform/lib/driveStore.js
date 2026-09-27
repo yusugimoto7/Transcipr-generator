@@ -10,11 +10,10 @@ import {
   searchFolders,
   getParents,
   createFolder,
-  uploadFile,
-  updateFile,
   trashFile,
   downloadFile,
-  exportFile,
+  uploadFromDisk,
+  downloadToDisk,
 } from './drive';
 import { normNumber, isDefaultTitle } from './cases';
 
@@ -145,19 +144,22 @@ async function subfolder(parentId, name) {
 
 /* ------------------------------ reading ------------------------------ */
 
-/** The bytes of a Drive file; "zipId:entry" is a file inside a zip on Drive. */
-export async function fetchDriveBytes(driveId) {
+/**
+ * Write a Drive file to `file`, streamed; "zipId:entry" is a file inside a zip
+ * on Drive (the zip is read, the one entry written).
+ */
+export async function fetchDriveTo(driveId, file) {
   const i = String(driveId).indexOf(':');
   if (i > 0) {
     const { default: JSZip } = await import('jszip');
     const zip = await JSZip.loadAsync(await downloadFile(driveId.slice(0, i)));
     const entry = zip.file(driveId.slice(i + 1));
     if (!entry) throw new Error('The file is no longer in its zip on Google Drive.');
-    return entry.async('nodebuffer');
+    await fs.writeFile(file, await entry.async('nodebuffer'));
+    return;
   }
   const item = await getItem(driveId);
-  if (/^application\/vnd\.google-apps\./.test(item.mimeType || '')) return exportFile(driveId, 'application/pdf');
-  return downloadFile(driveId);
+  await downloadToDisk(driveId, file, { exportPdf: /^application\/vnd\.google-apps\./.test(item.mimeType || '') });
 }
 
 const docPath = (appId, doc) => path.join(UPLOAD_DIR, appId, path.basename(doc.stored || ''));
@@ -166,7 +168,7 @@ const exists = (p) => fs.stat(p).then(() => true, () => false);
 const touch = (p) => fs.utimes(p, new Date(), new Date()).catch(() => {});
 const inflight = new Map(); // path -> Promise, so two readers fetch once
 
-async function cacheFrom(p, load) {
+async function cacheFrom(p, writeTo) {
   if (await exists(p)) {
     await touch(p);
     return p;
@@ -175,11 +177,15 @@ async function cacheFrom(p, load) {
     inflight.set(
       p,
       (async () => {
-        const bytes = await load();
         await fs.mkdir(path.dirname(p), { recursive: true });
         const tmp = `${p}.part-${process.pid}`;
-        await fs.writeFile(tmp, bytes);
-        await fs.rename(tmp, p);
+        try {
+          await writeTo(tmp);
+          await fs.rename(tmp, p);
+        } catch (e) {
+          await fs.unlink(tmp).catch(() => {});
+          throw e;
+        }
         evictSoon();
         return p;
       })().finally(() => inflight.delete(p))
@@ -191,19 +197,19 @@ async function cacheFrom(p, load) {
 /** Local path of an uploaded document — fetched from Drive when not cached. */
 export async function docFile(appId, doc) {
   if (!doc?.stored) throw new Error('This document has no stored file.');
-  return cacheFrom(docPath(appId, doc), async () => {
+  return cacheFrom(docPath(appId, doc), async (tmp) => {
     if (!doc.driveId) throw new Error(`${doc.filename} is missing on the server and was never saved to Google Drive.`);
-    return fetchDriveBytes(doc.driveId);
+    await fetchDriveTo(doc.driveId, tmp);
   });
 }
 
 /** Local path of a generated file — fetched from Drive when not cached. */
 export async function genFile(app, meta) {
   if (!meta?.stored) throw new Error('This file has not been generated yet.');
-  return cacheFrom(genPath(app.id, meta), async () => {
+  return cacheFrom(genPath(app.id, meta), async (tmp) => {
     const rec = app.driveGenerated?.[meta.key];
     if (!rec?.id) throw new Error(`${meta.filename || meta.key} is missing on the server and was never saved to Google Drive — build it again.`);
-    return downloadFile(rec.id);
+    await downloadToDisk(rec.id, tmp);
   });
 }
 
@@ -251,8 +257,9 @@ export async function syncApp(appId) {
   const errors = [];
   for (const d of docs) {
     try {
-      const bytes = await fs.readFile(docPath(appId, d));
-      const up = await uploadFile(folders.docsFolderId, d.filename, d.mime, bytes);
+      const file = docPath(appId, d);
+      await fs.access(file);
+      const up = await uploadFromDisk({ parentId: folders.docsFolderId, name: d.filename, mime: d.mime, file });
       await updateApplication(appId, (a) => {
         const x = (a.documents || []).find((y) => y.id === d.id);
         if (x) Object.assign(x, { driveId: up.id, driveModified: up.modifiedTime, drivePath: `${DOCS_FOLDER}/${d.filename}` });
@@ -267,7 +274,8 @@ export async function syncApp(appId) {
   const folderIds = {};
   for (const g of gens) {
     try {
-      const bytes = await fs.readFile(genPath(appId, g));
+      const file = genPath(appId, g);
+      await fs.access(file);
       const name = g.filename || g.stored;
       const fname = genFolder(g.key);
       folderIds[fname] = folderIds[fname] || (await subfolder(folders.clientFolderId, fname)).id;
@@ -275,12 +283,12 @@ export async function syncApp(appId) {
       let up = null;
       if (prev?.id) {
         try {
-          up = await updateFile(prev.id, name, g.mime || 'application/pdf', bytes);
+          up = await uploadFromDisk({ id: prev.id, name, mime: g.mime || 'application/pdf', file });
         } catch {
           up = null; // deleted on Drive: upload it again
         }
       }
-      if (!up) up = await uploadFile(folderIds[fname], name, g.mime || 'application/pdf', bytes);
+      if (!up) up = await uploadFromDisk({ parentId: folderIds[fname], name, mime: g.mime || 'application/pdf', file });
       await updateApplication(appId, (a) => {
         a.driveGenerated = { ...(a.driveGenerated || {}), [g.key]: { id: up.id, name, folder: fname, syncedAt: g.generatedAt || new Date().toISOString() } };
         return a;
@@ -352,7 +360,7 @@ export function ensureDriveSync() {
   if (Q.started) return;
   Q.started = true;
   const tick = () => sweep().then(() => evictCache()).catch((e) => console.error(`[drive] sweep failed: ${e.message}`));
-  setTimeout(tick, 20000);
+  setTimeout(tick, 90000); // after start-up, so the site is serving first
   setInterval(tick, SWEEP_MS).unref?.();
 }
 

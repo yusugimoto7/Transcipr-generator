@@ -36,6 +36,7 @@ const tree = {
   yearFolder001: { name: '0005 - 2026 FILES', mimeType: FOLDER, parents: ['clientsRoot01'] },
 };
 const log = { uploads: [], updates: [], trashed: [], downloads: 0 };
+const sessions = {}; // resumable upload sessions
 let nextId = 1;
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
 const meta = (id) => ({ id, name: tree[id].name, mimeType: tree[id].mimeType, modifiedTime: '2026-09-27T10:00:00.000Z', parents: tree[id].parents, size: String(tree[id].bytes?.length || 0) });
@@ -52,7 +53,8 @@ function multipart(req, body) {
 const google = http.createServer(async (req, res) => {
   const u = new URL(req.url, `http://127.0.0.1:${GOOGLE}`);
   let body = Buffer.alloc(0);
-  for await (const c of req) body = Buffer.concat([body, c]);
+  let chunks = 0;
+  for await (const c of req) { body = Buffer.concat([body, c]); chunks++; }
   if (req.method === 'POST' && u.pathname === '/token') {
     const form = new URLSearchParams(body.toString());
     try {
@@ -62,7 +64,34 @@ const google = http.createServer(async (req, res) => {
       return send(res, 400, { error: 'invalid_grant', error_description: e.message });
     }
   }
+  // Resumable upload, step 2: the session URL takes the bytes (no auth header, as with Google).
+  const sess = u.pathname.match(/^\/upload\/session\/(\w+)$/);
+  if (req.method === 'PUT' && sess && sessions[sess[1]]) {
+    const { id, json, mime } = sessions[sess[1]];
+    delete sessions[sess[1]];
+    log.maxChunk = Math.max(log.maxChunk || 0, chunks);
+    if (id) {
+      Object.assign(tree[id], { name: json.name, bytes: body });
+      log.updates.push({ id, name: json.name });
+      return send(res, 200, meta(id));
+    }
+    const nid = `up${String(nextId++).padStart(8, '0')}`;
+    tree[nid] = { name: json.name, mimeType: mime, parents: json.parents, bytes: body };
+    log.uploads.push({ id: nid, parent: json.parents[0], name: json.name });
+    return send(res, 200, meta(nid));
+  }
   if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(res, 401, { error: 'unauthenticated' });
+  // Resumable upload, step 1: metadata, answered with the session URL.
+  if (u.searchParams.get('uploadType') === 'resumable') {
+    const um = u.pathname.match(/^\/upload\/drive\/v3\/files(?:\/([^/]+))?$/);
+    if (!um) return send(res, 404, { error: 'notFound' });
+    const id = um[1] ? decodeURIComponent(um[1]) : null;
+    if (id && !tree[id]) return send(res, 404, { error: 'notFound' });
+    const sid = crypto.randomBytes(6).toString('hex');
+    sessions[sid] = { id, json: JSON.parse(body.toString() || '{}'), mime: req.headers['x-upload-content-type'] };
+    res.writeHead(200, { Location: `http://127.0.0.1:${GOOGLE}/upload/session/${sid}` });
+    return res.end();
+  }
   if (req.method === 'POST' && u.pathname === '/upload/drive/v3/files') {
     const { json, mime, bytes } = multipart(req, body);
     const id = `up${String(nextId++).padStart(8, '0')}`;
@@ -183,6 +212,17 @@ try {
   const pages = await call('GET', `/api/applications/${app.id}/preview?docId=${doc.id}&info=1`);
   ok(pages.json.pages === 1, 'the preview works from the fetched copy');
 
+  // 3b. A large file streams to Drive in pieces and comes back intact.
+  const big = Buffer.concat([passport, crypto.randomBytes(6 * 1024 * 1024)]);
+  const fd2 = new FormData();
+  fd2.append('files', new Blob([big], { type: 'application/pdf' }), '112 - Bank Statement - Test.pdf');
+  await call('POST', `/api/applications/${app.id}/upload`, fd2);
+  const bigDoc = await until(async () => (await getApp(app.id)).documents.find((d) => d.filename.startsWith('112') && d.driveId), 'the large file to reach Drive');
+  ok(tree[bigDoc.driveId].bytes.equals(big) && log.maxChunk > 1, 'a large file is streamed to Drive in pieces, byte for byte');
+  await call('POST', '/api/admin/storage');
+  const bigBack = await call('GET', `/api/applications/${app.id}/upload?docId=${bigDoc.id}`, null, true);
+  ok(bigBack.bytes.equals(big), 'and streamed back intact');
+
   // 4. Built files go to 03 - Working Files; a new version replaces the old one in place.
   ok((await call('POST', `/api/applications/${app.id}/sop`, { answers: {}, editedText: 'Dear Officer, first draft.' })).status === 200, 'a letter is saved');
   const rec = await until(async () => (await getApp(app.id)).driveGenerated?.sop, 'the letter to reach Drive');
@@ -201,6 +241,7 @@ try {
 } catch (e) {
   failures++;
   console.log('FAIL ', e.message);
+  try { console.log('storage status:', JSON.stringify((await call('GET', '/api/admin/storage')).json)); } catch {}
 } finally {
   stop();
 }

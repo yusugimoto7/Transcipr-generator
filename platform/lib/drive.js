@@ -1,3 +1,6 @@
+import fs from 'fs';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import { SignJWT, importPKCS8 } from 'jose';
 
 /**
@@ -247,4 +250,81 @@ export async function trashFile(id) {
     headers: JSON_HEADERS,
     body: JSON.stringify({ trashed: true }),
   });
+}
+
+/* ------------------------- streaming (large files) ------------------------- */
+// Final files can be hundreds of MB; holding one in memory (twice, for a
+// multipart body) would exceed a small server's RAM. These stream from and to
+// disk: memory use stays flat whatever the file size.
+
+async function authorized(url, init = {}) {
+  const status = driveStatus();
+  if (status.mode === 'none') throw new DriveError('Google Drive is not connected. An admin must set GOOGLE_SERVICE_ACCOUNT_JSON on the server.', 503);
+  if (status.mode === 'invalid') throw new DriveError(status.error, 503);
+  const token = await accessToken();
+  if (!token) throw new DriveError('Writing to Drive needs a service account (GOOGLE_SERVICE_ACCOUNT_JSON).', 503);
+  return fetch(url, { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${token}` } });
+}
+
+async function failed(res, what) {
+  const t = await res.text().catch(() => '');
+  const who = driveStatus().email ? ` Share the client folders with ${driveStatus().email} as Editor.` : '';
+  if (res.status === 403 || res.status === 404) return new DriveError(`Drive refused to ${what} (${res.status}).${who}`, res.status);
+  return new DriveError(`Google Drive error ${res.status} while trying to ${what}: ${t.slice(0, 200)}`, 502);
+}
+
+/**
+ * PUT a file from disk with Node's http(s) streams, which respect back-pressure:
+ * at most a few chunks are in memory at once. (fetch/undici held a whole
+ * 300 MB request body in memory in testing.)
+ */
+async function putFile(url, headers, file) {
+  const { request } = await (url.startsWith('https:') ? import('https') : import('http'));
+  return new Promise((resolve, reject) => {
+    const req = request(url, { method: 'PUT', headers }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, text: Buffer.concat(chunks).toString('utf8') }));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    pipeline(fs.createReadStream(file, { highWaterMark: 1024 * 1024 }), req).catch(reject);
+  });
+}
+
+/**
+ * Upload a file from disk, streamed (Drive's resumable upload). With `id` the
+ * existing Drive file's content and name are replaced in place; otherwise a
+ * new file is created in `parentId`.
+ */
+export async function uploadFromDisk({ parentId, id, name, mime, file }) {
+  const size = (await fs.promises.stat(file)).size;
+  const init = await authorized(
+    `${UPLOAD_API}/files${id ? `/${encodeURIComponent(id)}` : ''}?uploadType=resumable&supportsAllDrives=true&fields=${encodeURIComponent(FIELDS)}`,
+    {
+      method: id ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Type': mime, 'X-Upload-Content-Length': String(size) },
+      body: JSON.stringify(id ? { name } : { name, parents: [parentId] }),
+    }
+  );
+  if (!init.ok) throw await failed(init, id ? 'replace a file' : 'save a file');
+  const session = init.headers.get('location');
+  if (!session) throw new DriveError('Drive did not start the upload.', 502);
+  const res = await putFile(session, { 'Content-Type': mime, 'Content-Length': String(size) }, file);
+  if (!res.ok) {
+    throw res.status === 403 || res.status === 404
+      ? new DriveError(`Drive refused to upload a file (${res.status}).`, res.status)
+      : new DriveError(`Google Drive error ${res.status} while uploading: ${res.text.slice(0, 200)}`, 502);
+  }
+  return JSON.parse(res.text);
+}
+
+/** Download a Drive file (or export a Google Doc as PDF) straight to disk. */
+export async function downloadToDisk(id, file, { exportPdf = false } = {}) {
+  const url = exportPdf
+    ? `${API}/files/${encodeURIComponent(id)}/export?mimeType=${encodeURIComponent('application/pdf')}`
+    : `${API}/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true`;
+  const res = await authorized(url);
+  if (!res.ok || !res.body) throw await failed(res, 'read a file');
+  await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(file));
 }
