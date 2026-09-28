@@ -1,4 +1,4 @@
-import { readMailStore, mailConfig, checkMail, assignMessage, ignoreMessage, restoreMessage, startBackfill, backfillStatus } from '@/lib/mailIntake';
+import { readMailStore, mailConfig, checkMail, assignMessage, ignoreMessage, restoreMessage, retryDrive, startBackfill, backfillStatus } from '@/lib/mailIntake';
 import { ensureMailPoller } from '@/lib/mailPoller';
 import { listAllApplications } from '@/lib/store';
 import { json, error, requireStaff } from '@/lib/api';
@@ -25,7 +25,7 @@ export async function GET() {
   });
 }
 
-/** { action: 'check' } | { action: 'backfill' } | { action: 'assign', id, appId, remember? } | { action: 'ignore', id | ids } | { action: 'restore', id } */
+/** { action: 'check' } | { action: 'backfill' } | { action: 'assign', id, appId, remember? } | { action: 'ignore', id | ids } | { action: 'restore', id } | { action: 'drive', id } */
 export async function POST(req) {
   const { error: err } = await requireStaff();
   if (err) return err;
@@ -50,6 +50,7 @@ export async function POST(req) {
       for (const id of ids) await ignoreMessage(id);
       return json({ ok: true, ignored: ids.length });
     }
+    if (body.action === 'drive') return json({ message: await retryDrive(String(body.id)) });
     if (body.action === 'restore') {
       await restoreMessage(String(body.id));
       return json({ ok: true });

@@ -216,6 +216,11 @@ try {
   ok(zApp.driveSource?.rootId === created?.[0] && zApp.driveSource.docsFolderId === docsFolder, "the file remembers the client's Drive folder");
   ok(!zApp.documents.some((d) => /__MACOSX|\._x/.test(d.filename)), 'zip junk is ignored');
 
+  // Retry: copying an email's documents to Drive again is safe (already there → nothing re-uploaded).
+  const before = uploads.length;
+  r = await admin('POST', '/api/admin/mail', { action: 'drive', id: z.id });
+  ok(r.status === 200 && !r.data.message.drive.error && r.data.message.drive.uploaded === 0 && uploads.length === before && r.data.message.files.every((f) => f.driveId), 'Save to Drive again re-checks the documents without uploading them twice');
+
   const a = byFrom['other@x.test'];
   ok(a.status === 'processed' && a.appId === ali && /client number S26170/.test(a.how), 'a client number in the subject matches the message to the file');
   ok(a.files[0].filename === '113 - Employment - Ali.pdf' && !a.drive.folderCreated && uploads.some((u) => u.parent === 'aliDocs000001' && u.name === '113 - Employment - Ali.pdf'), "the existing client folder's 01 - Documents is used");

@@ -480,6 +480,25 @@ export async function ignoreMessage(id) {
   });
 }
 
+/** Copy a filed message's documents to the client's Drive folder again (after a Drive error). */
+export async function retryDrive(id) {
+  const rec = (await readMailStore()).messages[id];
+  if (!rec?.appId) throw new Error('This email is not filed on a client yet.');
+  if (!(await getApplication(rec.appId))) throw new Error('The file this email was on no longer exists.');
+  const docIds = (rec.files || []).map((f) => f.docId).filter(Boolean);
+  const drive = await fileOnDrive(rec.appId, docIds);
+  const after = await getApplication(rec.appId);
+  await saveMailStore((s) => {
+    const m = s.messages[id];
+    m.drive = drive;
+    m.files = (m.files || []).map((f) => {
+      const d = (after.documents || []).find((x) => x.id === f.docId);
+      return d ? { ...f, filename: d.filename, driveId: d.driveId || null } : f;
+    });
+  });
+  return (await readMailStore()).messages[id];
+}
+
 /** Undo "Ignore": the message waits for a file again (its content is fetched again when filed). */
 export async function restoreMessage(id) {
   await saveMailStore((s) => {

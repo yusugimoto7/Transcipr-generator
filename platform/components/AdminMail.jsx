@@ -214,6 +214,13 @@ export default function AdminMail() {
                   Filed on <Link href={`/application/${app.id}`}>{app.clientNumber ? `${app.clientNumber} — ` : ''}{app.title}</Link>
                   {m.drive?.folderCreated ? ' · Drive folder created' : ''}
                   {m.drive?.error ? <span style={{ color: 'var(--danger)' }}> · Drive: {m.drive.error}</span> : ''}
+                  {(m.drive?.error || (m.files || []).some((f) => !f.driveId)) && m.files?.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => act({ action: 'drive', id: m.id }, `d${m.id}`)} disabled={busy === `d${m.id}`}>
+                        {busy === `d${m.id}` ? <><span className="spinner" /> Saving to Drive…</> : 'Save to Drive again'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {m.files?.length > 0 && (
