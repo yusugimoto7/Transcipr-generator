@@ -2044,6 +2044,66 @@ PAID_STAGE_IDS = (25, 17, 48)
 # the two fees so the total follows them.
 FEE_FIELDS = ["x_fee_sg", "x_fee_sb"]
 
+# Stage 22 hands the card to the project tasks that carry its hidden
+# CRM-LEAD-ID marker (the execution task and the Agreements task). This copies
+# the card's log notes, messages and completed activities onto each of those
+# tasks, with their original author, date and attachments. The copies are
+# written as plain messages, so nobody is notified; a note already copied
+# (same author and date on the task) is skipped, so running it again only adds
+# what is new.
+COPY_NOTES_CODE = r"""
+Msg = env['mail.message'].sudo()
+note = env.ref('mail.mt_note')
+done = env.ref('mail.mt_activities')
+for lead in records:
+    tasks = env['project.task'].sudo().with_context(active_test=False).search(
+        [('description', 'ilike', 'CRM-LEAD-ID:%d<' % lead.id)])
+    if not tasks:
+        continue
+    src = Msg.search([('model', '=', 'crm.lead'), ('res_id', '=', lead.id), '|',
+                      ('message_type', 'in', ('comment', 'email')), ('subtype_id', '=', done.id)],
+                     order='date asc, id asc')
+    src = src.filtered(lambda m: m.attachment_ids or (m.body and str(m.body).strip() not in ('', '<p></p>')))
+    for task in tasks:
+        have = set((m.author_id.id, m.date) for m in Msg.search([('model', '=', 'project.task'), ('res_id', '=', task.id)]))
+        n = 0
+        for m in src:
+            if (m.author_id.id, m.date) in have:
+                continue
+            atts = [a.copy({'res_model': 'project.task', 'res_id': task.id}).id for a in m.attachment_ids.sudo()]
+            kind = 'Activity done' if m.subtype_id == done else ('Message' if m.subtype_id != note else 'Note')
+            Msg.create({
+                'model': 'project.task', 'res_id': task.id, 'message_type': 'comment', 'subtype_id': note.id,
+                'author_id': m.author_id.id, 'email_from': m.email_from, 'date': m.date,
+                'body': '<p style="color:#888;"><i>%s from the CRM card</i></p>%s' % (kind, m.body or ''),
+                'attachment_ids': [(6, 0, atts)],
+            })
+            n += 1
+        if n:
+            log('copied %d notes from crm.lead %d to project.task %d' % (n, lead.id, task.id))
+""".strip()
+
+
+def install_copy_notes(odoo):
+    return _server_action(odoo, "copy_card_notes", {
+        "name": "Copy CRM card notes to its project tasks", "model_id": _model_id(odoo, "crm.lead"),
+        "state": "code", "code": COPY_NOTES_CODE, "binding_model_id": False})
+
+
+def backfill_copy_notes(odoo):
+    """Cards already handed to projects: copy their notes now (safe to re-run)."""
+    import re
+    act = odoo.ref("p2action", "copy_card_notes")
+    tasks = odoo.search_read("project.task", [("description", "ilike", "CRM-LEAD-ID:")], ["description"],
+                             context={"active_test": False})
+    leads = sorted({int(m.group(1)) for t in tasks for m in [re.search(r"CRM-LEAD-ID:(\d+)", t["description"] or "")] if m})
+    for lid in leads:
+        odoo.execute("ir.actions.server", "run", [act],
+                     context={"active_model": "crm.lead", "active_id": lid, "active_ids": [lid]})
+    log.info("  card notes copied for %d cards already in projects", len(leads))
+    return leads
+
+
 # One automation for every Phase-2 rule on the card, plus the customer's
 # stage-22 handoff.  Odoo 17's automation engine writes date_automation_last
 # on every automation it runs, and that write re-triggers every *other*
@@ -2068,6 +2128,10 @@ for lead in records:
             Action.browse(__ROUTE__).with_context(**ctx).run()
     elif __ROUTE__ and changed is None and lead.stage_id.id == __EXEC_STAGE__:
         Action.browse(__ROUTE__).with_context(**ctx).run()
+    # The card's notes follow it into the project tasks the handoff just made.
+    if __COPY_NOTES__ and lead.stage_id.id == __EXEC_STAGE__ and (
+            changed is None or ('stage_id' in changed and changed['stage_id'] != lead.stage_id)):
+        Action.browse(__COPY_NOTES__).with_context(**ctx).run()
     # Contract block (crm_contract.py): the total follows the two fees, and a
     # payment stage stamps the paid date. Done here rather than as automations
     # of their own, for the reason in the comment above.
@@ -2105,7 +2169,8 @@ def install_card_rules(odoo):
     route_action = route[0]["action_server_ids"][0] if route and route[0]["action_server_ids"] else 0
     code = (CARD_RULES_CODE.replace("__ADDRESS_FIELDS__", repr(ADDRESS_FIELDS)).replace("__SYNC__", str(sync))
             .replace("__GATE__", str(gate)).replace("__EXEC_STAGE__", str(stage[0]["id"]))
-            .replace("__ROUTE__", str(route_action)).replace("__PAID_STAGES__", repr(PAID_STAGE_IDS)))
+            .replace("__ROUTE__", str(route_action)).replace("__PAID_STAGES__", repr(PAID_STAGE_IDS))
+            .replace("__COPY_NOTES__", str(install_copy_notes(odoo) if route_action else 0)))
     act_id = _server_action(odoo, "card_rules", {"name": "CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
                                                  "state": "code", "code": code, "binding_model_id": False})
     fields = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"),
