@@ -97,6 +97,6 @@ export async function DELETE(_req, { params }) {
   if (role !== 'admin' && app.userId !== user.id && app.createdBy !== user.id) {
     return error('Only the owner or an admin can delete a file.', 403);
   }
-  await deleteApplication(params.id);
+  await deleteApplication(params.id, { by: user.id });
   return json({ ok: true });
 }

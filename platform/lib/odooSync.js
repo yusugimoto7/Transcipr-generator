@@ -3,6 +3,7 @@ import path from 'path';
 import { DATA_DIR, listAllApplications, updateApplication, createApplication, listUsers, adminEmails, getUserByEmail, effectiveRole } from './store';
 import { odooConfig, listCards, cardUrl, workStages } from './odoo';
 import { caseKeyOf, normNumber, displayName, isDefaultTitle } from './cases';
+import { isTemplateName } from './unused';
 
 /**
  * Keeps the platform in step with the TR Visa project in Odoo:
@@ -151,7 +152,9 @@ export async function syncOdoo({ create = true } = {}) {
         const since = Date.now() - IMPORT_DAYS() * 86400000;
         const seenNames = [];
         for (const card of cards) {
-          if (used.has(card.taskId) || store.imported[card.taskId]) continue;
+          if (used.has(card.taskId) || isTemplateName(card.title)) continue;
+          // Already imported — unless that file was since removed (Admin → Files → Unused), so a card back at work gets a file again.
+          if (store.imported[card.taskId] && apps.some((a) => a.id === store.imported[card.taskId])) continue;
           if (card.number && newestByNumber.get(card.number) !== card) continue;
           if (!card.number && seenNames.some((n) => sameName(n, card.name))) continue;
           seenNames.push(card.name);

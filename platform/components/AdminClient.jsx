@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, Trash2 } from 'lucide-react';
 import { initials } from '@/components/TopBar';
 import { fmtDay, fmtTime } from '@/lib/format';
 import AdminIrcc from '@/components/AdminIrcc';
@@ -24,6 +24,9 @@ export default function AdminClient() {
   const [msg, setMsg] = useState(null);
   const [form, setForm] = useState({ email: '', name: '', password: '', role: 'manager' });
   const [filter, setFilter] = useState('');
+  const [showUnused, setShowUnused] = useState(false);
+  const [keep, setKeep] = useState(() => new Set()); // unused files the admin unticked
+  const [cleaning, setCleaning] = useState(false);
 
   async function load() {
     const [u, a] = await Promise.all([fetch('/api/admin/users'), fetch('/api/admin/applications')]);
@@ -78,7 +81,31 @@ export default function AdminClient() {
     load();
   }
 
-  const shownApps = apps.filter((a) => {
+  async function deleteUnused() {
+    const ids = unusedApps.filter((a) => !keep.has(a.id)).map((a) => a.id);
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} unused file${ids.length === 1 ? '' : 's'} from the platform?\n\nClient folders on Google Drive and cards in Odoo are not touched.`)) return;
+    setCleaning(true);
+    setMsg(null);
+    const res = await fetch('/api/admin/applications/cleanup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+    const d = await res.json();
+    setCleaning(false);
+    if (!res.ok) return setMsg({ type: 'err', text: d.error });
+    setMsg({ type: 'ok', text: `Deleted ${d.deleted} unused file${d.deleted === 1 ? '' : 's'}.${d.kept.length ? ` Kept ${d.kept.length} that now have content.` : ''}` });
+    setKeep(new Set());
+    setShowUnused(false);
+    load();
+  }
+  const toggleKeep = (id) => setKeep((k) => {
+    const n = new Set(k);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+
+  const unusedApps = apps.filter((a) => a.unused);
+  const toDelete = unusedApps.filter((a) => !keep.has(a.id)).length;
+  const shownApps = (showUnused ? unusedApps : apps).filter((a) => {
     const q = filter.trim().toLowerCase();
     if (!q) return true;
     return [a.title, a.clientNumber, a.typeTitle, a.owner?.name, ...a.assignedTo.map((m) => m.name)].join(' ').toLowerCase().includes(q);
@@ -198,19 +225,54 @@ export default function AdminClient() {
               <Search size={15} aria-hidden="true" />
               <input type="search" placeholder="Search by client, number, type or manager" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Search files" />
             </div>
-            <span className="small muted">Tick who may work on each file. Admins can open everything.</span>
+            {(unusedApps.length > 0 || showUnused) && (
+              <button type="button" className={showUnused ? 'btn-navy btn-sm' : 'btn-secondary btn-sm'} aria-pressed={showUnused} onClick={() => setShowUnused(!showUnused)}>
+                <Trash2 size={14} aria-hidden="true" /> Unused ({unusedApps.length})
+              </button>
+            )}
+            {!showUnused && <span className="small muted">Tick who may work on each file. Admins can open everything.</span>}
           </div>
+          {showUnused && (
+            <div className="cleanup">
+              <p className="small">
+                Files with <strong>nothing in them</strong> (no documents, intake answers, letter or final files) that are archived, templates, or have no client number and no Odoo card.
+                Deleting removes them from the platform only: client folders on Google Drive and cards in Odoo are not touched. Untick any you want to keep.
+              </p>
+              <button type="button" onClick={deleteUnused} disabled={!toDelete || cleaning}>
+                {cleaning ? <span className="spinner" /> : <Trash2 size={16} aria-hidden="true" />} Delete {toDelete} file{toDelete === 1 ? '' : 's'}
+              </button>
+            </div>
+          )}
           <div className="tbl-wrap">
             <table className="tbl">
               <thead>
-                <tr><th>File</th><th className="hide-sm">Last change</th><th>Account managers</th></tr>
+                {showUnused ? (
+                  <tr><th style={{ width: 36 }}><span className="sr-only">Delete</span></th><th>File</th><th>Why</th><th className="hide-sm">Last change</th></tr>
+                ) : (
+                  <tr><th>File</th><th className="hide-sm">Last change</th><th>Account managers</th></tr>
+                )}
               </thead>
               <tbody>
-                {shownApps.map((a) => (
+                {showUnused && shownApps.map((a) => (
+                  <tr key={a.id} style={keep.has(a.id) ? { opacity: 0.55 } : undefined}>
+                    <td>
+                      <input type="checkbox" checked={!keep.has(a.id)} onChange={() => toggleKeep(a.id)} aria-label={`Delete ${a.title}`} style={{ width: 16, height: 16 }} />
+                    </td>
+                    <td>
+                      <span className="file-cell">
+                        <span className="t">{a.clientNumber && <span className="mono faint" style={{ marginRight: 8 }}>{a.clientNumber}</span>}{a.title}</span>
+                        <span className="s">{a.typeTitle}{a.applicantRole !== 'main' ? ` (${a.applicantRole})` : ''}</span>
+                      </span>
+                    </td>
+                    <td className="small muted">{a.unused}</td>
+                    <td className="hide-sm small muted"><span suppressHydrationWarning>{fmtTime(a.updatedAt)}</span></td>
+                  </tr>
+                ))}
+                {!showUnused && shownApps.map((a) => (
                   <tr key={a.id}>
                     <td>
                       <Link href={`/application/${a.id}`} className="file-cell" style={{ color: 'inherit' }}>
-                        <span className="t">{a.clientNumber && <span className="mono faint" style={{ marginRight: 8 }}>{a.clientNumber}</span>}{a.title}</span>
+                        <span className="t">{a.clientNumber && <span className="mono faint" style={{ marginRight: 8 }}>{a.clientNumber}</span>}{a.title}{a.archived && <span className="chip" style={{ marginLeft: 8 }}>Archived</span>}</span>
                         <span className="s">{a.typeTitle}{a.applicantRole !== 'main' ? ` (${a.applicantRole})` : ''} · owner {a.owner?.name}</span>
                       </Link>
                     </td>
@@ -237,7 +299,7 @@ export default function AdminClient() {
               </tbody>
             </table>
           </div>
-          {!shownApps.length && <div className="empty small">No files match.</div>}
+          {!shownApps.length && <div className="empty small">{showUnused ? 'No unused files.' : 'No files match.'}</div>}
         </section>
       )}
     </>

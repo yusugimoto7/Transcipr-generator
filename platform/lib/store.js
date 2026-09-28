@@ -263,14 +263,21 @@ export async function updateApplication(id, mutator, opts = {}) {
   });
 }
 
-export async function deleteApplication(id) {
-  try {
+/**
+ * Remove a file from the platform. The record is moved to DATA_DIR/deleted
+ * (not erased), so it can be recovered by hand if needed. Drive and Odoo are
+ * never touched.
+ */
+export async function deleteApplication(id, { by = null } = {}) {
+  return withLock(appFile(id), async () => {
+    const app = await readJson(appFile(id), null);
+    if (!app) return false;
+    const dir = path.join(DATA_DIR, 'deleted');
+    await fs.mkdir(dir, { recursive: true });
+    await writeJson(path.join(dir, `${id}.json`), { ...app, deletedAt: nowIso(), deletedBy: by });
     await fs.unlink(appFile(id));
     return true;
-  } catch (err) {
-    if (err.code === 'ENOENT') return false;
-    throw err;
-  }
+  });
 }
 
 export { DATA_DIR };

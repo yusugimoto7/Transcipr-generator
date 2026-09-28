@@ -33,6 +33,7 @@ const tasks = [
   { id: 14, name: 'S26302 - Nazanin Rahimi', create_date: '2026-09-10 10:00:00', write_date: '2026-09-10 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
   { id: 15, name: 'S26100 - Old Closed', create_date: '2026-01-10 10:00:00', write_date: '2026-02-10 10:00:00', stage_id: [9, 'Done'], fold: true, tag_ids: [], user_ids: [] },
   { id: 16, name: 'S26400 - Parisa New', create_date: '2026-09-20 10:00:00', write_date: '2026-09-20 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
+  { id: 18, name: '000 Template', create_date: '2026-09-22 10:00:00', write_date: '2026-09-22 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
   { id: 17, name: 'S26500 - Other Stage', create_date: '2026-09-21 10:00:00', write_date: '2026-09-21 10:00:00', stage_id: [4, 'Submitted'], fold: false, tag_ids: [], user_ids: [] },
 ];
 let writes = 0;
@@ -100,7 +101,7 @@ try {
 
   const st = (await admin('POST', '/api/admin/odoo')).json;
   ok(projectsAsked.length > 0 && projectsAsked.every((d) => d.includes('["project_id","=",3]')), 'the "Visa - TR" project is found among the others');
-  ok(!st.lastError && st.lastResult?.cards === 5, `the sync reads only the cards in Documents Received / SOP Done / Documents Prepared (${st.lastResult?.cards} of 7)`);
+  ok(!st.lastError && st.lastResult?.cards === 6, `the sync reads only the cards in Documents Received / SOP Done / Documents Prepared (${st.lastResult?.cards} of 8)`);
   a = (await admin('GET', `/api/applications/${ana.id}`)).json.application;
   ok(a.clientNumber === 'S26213' && a.odoo?.taskId === 11, 'the unnumbered file is matched by name to the newest of its two cards');
   const c = (await admin('GET', `/api/applications/${child.id}`)).json.application;
@@ -117,6 +118,7 @@ try {
   ok(parisaFull?.typeGuessed === true, 'a card that doesn’t say the type is marked for the team to check');
   ok(!all.some((x) => x.clientNumber === 'S26100') && all.filter((x) => x.clientNumber === 'S26213').length === 2, 'no file for the closed card, and no second file for the older card');
   ok(!all.some((x) => x.clientNumber === 'S26500'), 'no file for a card in another stage (Submitted)');
+  ok(!all.some((x) => /template/i.test(x.title)), 'no file for a template card');
 
   const again = (await admin('POST', '/api/admin/odoo')).json;
   ok(again.lastResult?.created === 0 && again.lastResult?.linked === 0, 'a second sync changes nothing');
@@ -146,6 +148,30 @@ try {
   await admin('POST', '/api/admin/odoo');
   a = (await admin('GET', `/api/applications/${ana.id}`)).json.application;
   ok(a.odoo?.taskId === 12 && a.odoo.manual === true && a.clientNumber === 'S26213', 'a card chosen by hand stays linked after the next sync');
+
+  // Admin → Files → Unused: empty files that are archived, templates or unnumbered can be removed.
+  const empty = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Test File' })).json.application;
+  const tmpl = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'ApplyBoard Template' })).json.application;
+  const filled = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Draft Without Number' })).json.application;
+  await admin('PATCH', `/api/applications/${filled.id}`, { data: { givenName: 'Kian' } });
+  tasks.find((t) => t.id === 13).stage_id = [4, 'Submitted'];
+  await admin('POST', '/api/admin/odoo');
+  let list = (await admin('GET', '/api/admin/applications')).json.applications;
+  const why = (id) => list.find((x) => x.id === id)?.unused;
+  ok(why(empty.id) && why(tmpl.id) === 'Template' && why(reza.id)?.startsWith('Archived'), 'empty unnumbered, template and archived-empty files are listed as unused');
+  ok(!why(filled.id) && !why(naz.id) && !why(parisa.id), 'files with content and live clients are not unused');
+  const staff = client();
+  await staff('POST', '/api/auth/login', { email: 'maryam@firm.test', password: 'password123' });
+  ok((await staff('POST', '/api/admin/applications/cleanup', { ids: [empty.id] })).status === 403, 'only an admin can remove files');
+  const cl = (await admin('POST', '/api/admin/applications/cleanup', { ids: [empty.id, tmpl.id, reza.id, filled.id, naz.id] })).json;
+  list = (await admin('GET', '/api/admin/applications')).json.applications;
+  ok(cl.deleted === 3 && cl.kept.length === 2 && !list.some((x) => [empty.id, tmpl.id, reza.id].includes(x.id)), 'the unused files are removed; a file with content or a live client is kept even if asked');
+  const kept = JSON.parse(await fs.readFile(path.join(dataDir, 'deleted', `${reza.id}.json`), 'utf8'));
+  ok(kept.deletedAt && kept.title === 'Reza Karimi', 'a removed file is kept aside in DATA_DIR/deleted, not erased');
+  tasks.find((t) => t.id === 13).stage_id = [2, 'SOP Done'];
+  r = (await admin('POST', '/api/admin/odoo')).json;
+  list = (await admin('GET', '/api/applications')).json.applications;
+  ok(r.lastResult?.created === 1 && list.some((x) => x.clientNumber === 'S26301' && x.id !== reza.id), 'if its card comes back to work, the client gets a new file');
   ok(writes === 0, 'nothing is ever written to Odoo');
 } catch (e) {
   failures++;
