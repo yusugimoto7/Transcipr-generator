@@ -136,9 +136,9 @@ Google Drive is where every file lives; the server disk is only a cache.
 - The service account needs **Editor** on the clients folder. Without a Drive connection files stay on the
   server disk, as before.
 
-## Odoo (TR Visa project)
+## Odoo (Visa - TR project)
 
-The platform reads the cards of the **TR Visa** project in Odoo (read-only) every 15 minutes:
+The platform reads the cards of the **Visa - TR** project in Odoo (read-only) every 15 minutes:
 
 - Each main applicant's file is linked to their card: by the client number when the file has one, else by the
   applicant's name. The file takes the card's number (`S26213`) and name; the whole family gets the number.
@@ -158,7 +158,7 @@ Setup on Render (Environment):
 | `ODOO_DB` | the database name (on odoo.com usually the subdomain) |
 | `ODOO_USER` | the login email of the Odoo user whose key is used |
 | `ODOO_API_KEY` | Odoo → My Profile → Account Security → **New API Key** |
-| `ODOO_PROJECT` | optional, default `TR Visa` |
+| `ODOO_PROJECT` | optional, default `Visa - TR` (word order and punctuation don't matter) |
 
 ## Document check (صحت و سقم)
 

@@ -10,7 +10,8 @@ import { APP_TYPE_LIST } from './appTypes';
  *                  odoo.com it is usually the subdomain)
  *   ODOO_USER      the login (email) of the Odoo user whose API key is used
  *   ODOO_API_KEY   Odoo → My Profile → Account Security → New API Key
- *   ODOO_PROJECT   project name to read (default "TR Visa")
+ *   ODOO_PROJECT   project name to read (default "Visa - TR"; word order and
+ *                  punctuation don't matter, so "TR Visa" finds it too)
  *
  * JSON-RPC over HTTPS (/jsonrpc); the platform never writes to Odoo.
  */
@@ -22,7 +23,7 @@ export function odooConfig() {
     db: process.env.ODOO_DB || '',
     user: process.env.ODOO_USER || '',
     key: process.env.ODOO_API_KEY || '',
-    project: process.env.ODOO_PROJECT || 'TR Visa',
+    project: process.env.ODOO_PROJECT || 'Visa - TR',
     configured: Boolean(url && process.env.ODOO_DB && process.env.ODOO_USER && process.env.ODOO_API_KEY),
   };
 }
@@ -103,6 +104,27 @@ export function detectType(text) {
 
 let fieldCache = null;
 
+const words = (s) => String(s || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+/**
+ * The project to read: the exact name, else the same words in any order
+ * ("TR Visa" = "Visa - TR"), else the one name containing all the words.
+ */
+async function findProject(name) {
+  const projects = await call('project.project', 'search_read', [[]], { fields: ['id', 'name'], limit: 1000 });
+  const want = words(name);
+  const key = (w) => [...w].sort().join(' ');
+  const project =
+    projects.find((p) => p.name.trim().toLowerCase() === name.trim().toLowerCase()) ||
+    projects.find((p) => key(words(p.name)) === key(want)) ||
+    projects.filter((p) => want.every((w) => words(p.name).includes(w))).sort((a, b) => a.name.length - b.name.length)[0];
+  if (!project) {
+    const names = projects.map((p) => p.name).slice(0, 12).join(', ');
+    throw new Error(`No Odoo project named "${name}". Projects found: ${names}. Set ODOO_PROJECT to the right one.`);
+  }
+  return project;
+}
+
 /**
  * The open cards of the TR Visa project, newest first:
  * [{ taskId, title, number, name, type, createdAt, updatedAt, stage, tags, assignees }]
@@ -110,9 +132,7 @@ let fieldCache = null;
  */
 export async function listCards({ all = false } = {}) {
   const cfg = odooConfig();
-  const projects = await call('project.project', 'search_read', [[['name', 'ilike', cfg.project]]], { fields: ['id', 'name'], limit: 20 });
-  const project = projects.find((p) => p.name.trim().toLowerCase() === cfg.project.toLowerCase()) || projects[0];
-  if (!project) throw new Error(`No Odoo project named "${cfg.project}". Set ODOO_PROJECT to its exact name.`);
+  const project = await findProject(cfg.project);
 
   if (!fieldCache) fieldCache = Object.keys(await call('project.task', 'fields_get', [], { attributes: ['type'] }));
   const has = (f) => fieldCache.includes(f);

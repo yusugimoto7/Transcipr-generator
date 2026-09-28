@@ -30,7 +30,7 @@ export default function AdminOdoo() {
       <section className="card">
         <div className="card-head">
           <div>
-            <h2>Odoo — {s?.project || 'TR Visa'} project</h2>
+            <h2>Odoo — {s?.project || 'Visa - TR'} project</h2>
             <p className="muted small">
               Each main applicant&apos;s file is linked to their card (by client number, else by name; the most recent card
               when there are several) and takes the card&apos;s number and name. New cards become client files. Odoo is only

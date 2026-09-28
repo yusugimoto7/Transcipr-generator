@@ -25,6 +25,7 @@ ok(parseTitle('27673 Vv').number === '27673', 'a number without a letter is read
 ok(detectType('Study Permit') === 'study-permit' && detectType('Visitor visa') === 'trv-outside' && detectType('100-304') === 'owp-worker-spouse' && detectType('Nazanin') === null, 'the application type is read from words or the service code');
 
 /* ------------------------------ stub Odoo ------------------------------ */
+const projectsAsked = [];
 const tasks = [
   { id: 11, name: 'S26213 - Anahita Mousavi', create_date: '2026-03-01 10:00:00', write_date: '2026-09-01 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [1], user_ids: [] },
   { id: 12, name: 'S26213 - Anahita Mousavi - 2025', create_date: '2025-10-01 10:00:00', write_date: '2025-10-01 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [], user_ids: [] },
@@ -44,9 +45,10 @@ const odoo = http.createServer(async (req, res) => {
   const [db, uid, key, model, method, args, kwargs] = params.args;
   if (db !== 'firm' || uid !== 7 || key !== 'key-123') return fail('Access denied');
   if (!['search_read', 'read', 'fields_get'].includes(method)) { writes++; return fail('read only in this test'); }
-  if (model === 'project.project') return reply([{ id: 3, name: 'TR Visa' }]);
+  if (model === 'project.project') return reply([{ id: 1, name: 'Visa - PR' }, { id: 2, name: 'SUV-Biz-Team' }, { id: 3, name: 'Visa - TR' }, { id: 4, name: 'Marketing' }]);
   if (model === 'project.task' && method === 'fields_get') return reply({ name: {}, stage_id: {}, tag_ids: {}, user_ids: {}, partner_id: {}, create_date: {}, write_date: {} });
   if (model === 'project.task') {
+    projectsAsked.push(JSON.stringify(args[0]));
     const openOnly = JSON.stringify(args[0]).includes('stage_id.fold');
     const rows = tasks.filter((t) => !openOnly || !t.fold).sort((a, b) => b.create_date.localeCompare(a.create_date));
     return reply(rows.map(({ fold, ...t }) => ({ ...t, partner_id: false })));
@@ -96,6 +98,7 @@ try {
   const naz = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Nazanin Rahimi', clientNumber: 'S26302' })).json.application;
 
   const st = (await admin('POST', '/api/admin/odoo')).json;
+  ok(projectsAsked.length > 0 && projectsAsked.every((d) => d.includes('["project_id","=",3]')), 'the "Visa - TR" project is found among the others');
   ok(!st.lastError && st.lastResult?.cards === 5, `the sync reads the open cards only (${st.lastResult?.cards} of 6; the closed one is left out)`);
   a = (await admin('GET', `/api/applications/${ana.id}`)).json.application;
   ok(a.clientNumber === 'S26213' && a.odoo?.taskId === 11, 'the unnumbered file is matched by name to the newest of its two cards');
