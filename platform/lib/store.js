@@ -161,6 +161,7 @@ export async function updateUser(id, patch) {
     if (patch.role && ROLES.includes(patch.role)) u.role = patch.role;
     if (typeof patch.active === 'boolean') u.active = patch.active;
     if (typeof patch.name === 'string') u.name = patch.name.trim();
+    if (typeof patch.autoNewFiles === 'boolean') u.autoNewFiles = patch.autoNewFiles;
     if (typeof patch.passwordHash === 'string') u.passwordHash = patch.passwordHash;
     u.updatedAt = nowIso();
     await writeJson(USERS_FILE, users);
@@ -233,11 +234,15 @@ export async function createApplication({
   representation = 'self',
   assignedTo = [],
 }) {
+  // Account managers get every new file by default (autoNewFiles, set per person in Team & access).
+  const auto = (await readJson(USERS_FILE, []))
+    .filter((u) => u.active !== false && userLevel(u) === 'manager' && u.autoNewFiles !== false)
+    .map((u) => u.id);
   const app = {
     id: newId(),
     userId,
     createdBy: createdBy || userId,
-    assignedTo: Array.isArray(assignedTo) ? assignedTo : [],
+    assignedTo: [...new Set([...(Array.isArray(assignedTo) ? assignedTo : []), ...auto])],
     type: type || 'study-permit',
     title: title || 'Study Permit Application',
     clientNumber: String(clientNumber || '').trim(),

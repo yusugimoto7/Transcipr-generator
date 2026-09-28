@@ -71,6 +71,7 @@ export async function PATCH(req) {
   if (body.role) patch.role = body.role;
   if (typeof body.active === 'boolean') patch.active = body.active;
   if (typeof body.name === 'string') patch.name = body.name;
+  if (typeof body.autoNewFiles === 'boolean') patch.autoNewFiles = body.autoNewFiles;
   if (typeof body.password === 'string' && body.password) {
     if (body.password.length < 8) return error('Password must be at least 8 characters.');
     patch.passwordHash = await hashPassword(body.password);

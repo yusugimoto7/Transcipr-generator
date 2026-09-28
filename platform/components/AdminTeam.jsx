@@ -69,7 +69,7 @@ export default function AdminTeam({ onChanged }) {
         {[
           ['superadmin', ShieldCheck, 'Everything, including who is an admin. Set by ADMIN_EMAIL on the server, or by another super admin.'],
           ['admin', Shield, 'Every client file. Adds account managers and decides which files each one can open.'],
-          ['manager', UserCog, 'Only the files given to them — they open and edit those, nothing else.'],
+          ['manager', UserCog, 'Only the files given to them — they open and edit those, nothing else. By default they get every new file automatically.'],
         ].map(([k, Icon, text]) => (
           <div key={k} className={`level-card l-${k}`}>
             <div className="level-top"><Icon size={16} aria-hidden="true" /> <strong>{LEVEL[k]}</strong><span className="count">{counts[k] || 0}</span></div>
@@ -119,9 +119,15 @@ export default function AdminTeam({ onChanged }) {
                       {ALL_FILES.has(u.level) ? (
                         <span className="small muted">All files</span>
                       ) : (
-                        <button type="button" className={managing === u.id ? 'btn-navy btn-sm' : 'btn-secondary btn-sm'} onClick={() => setManaging(managing === u.id ? null : u.id)} disabled={u.active === false}>
-                          <KeyRound size={14} aria-hidden="true" /> {clientsOf(u.id)} client{clientsOf(u.id) === 1 ? '' : 's'} · Manage
-                        </button>
+                        <div className="stack-xs">
+                          <button type="button" className={managing === u.id ? 'btn-navy btn-sm' : 'btn-secondary btn-sm'} onClick={() => setManaging(managing === u.id ? null : u.id)} disabled={u.active === false}>
+                            <KeyRound size={14} aria-hidden="true" /> {clientsOf(u.id)} client{clientsOf(u.id) === 1 ? '' : 's'} · Manage
+                          </button>
+                          <label className="check-label small" title="Every new client file (from Odoo, email or created by hand) is given to them automatically">
+                            <input type="checkbox" checked={u.autoNewFiles !== false} disabled={!u.canManage} onChange={(e) => patchUser(u.id, { autoNewFiles: e.target.checked }, e.target.checked ? `${u.name || u.email} now gets every new file.` : `${u.name || u.email} gets only the files you give them.`)} />
+                            Gets new files automatically
+                          </label>
+                        </div>
                       )}
                     </td>
                     <td className="hide-sm small muted" suppressHydrationWarning>{fmtDay(u.createdAt)}</td>

@@ -798,3 +798,4 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .access-row.on { background: #f4f8ff; }
 .access-row:hover { background: var(--hover, #f3f5f8); }
 @media (max-width: 720px) { .levels { grid-template-columns: 1fr; } }
+.stack-xs { display: grid; gap: 6px; justify-items: start; }

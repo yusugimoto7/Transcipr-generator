@@ -231,6 +231,12 @@ try {
   ok(ac.json.removed === 1 && (await hz('GET', `/api/applications/${naz.id}`)).status === 403, 'removing access closes the file for them');
   ok((await ng('POST', '/api/admin/access', { userId: negar.id, add: [naz.id] })).status === 400, 'access is set for account managers only (admins see everything)');
   ok((await hz('GET', '/api/admin/users')).status === 403, 'an account manager cannot open the admin panel');
+  // New files go to account managers automatically (unless turned off for them).
+  let fresh = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Brand New', clientNumber: 'S29001' })).json.application;
+  ok((await hz('GET', `/api/applications/${fresh.id}`)).status === 200, 'a new file is open to account managers by default');
+  await ng('PATCH', '/api/admin/users', { id: hamzeh.id, autoNewFiles: false });
+  fresh = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Another New', clientNumber: 'S29002' })).json.application;
+  ok((await hz('GET', `/api/applications/${fresh.id}`)).status === 403, 'unless an admin turns that off for them');
 
   const { notesText } = await loadLib('notes.js');
   const withNotes = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
