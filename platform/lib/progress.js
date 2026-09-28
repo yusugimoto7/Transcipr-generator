@@ -9,10 +9,11 @@ import { getSchema } from './schema';
 
 const NOT_CHECKED = new Set(['internal', 'questionnaire', 'photo']);
 
-const filled = (data, f) => {
+export const isFilled = (data, f) => filled(data, f);
+function filled(data, f) {
   const v = data?.[f.id];
   return typeof v === 'boolean' || String(v ?? '').trim() !== '';
-};
+}
 
 /** Per intake section: done (all required answered), partial, or todo. */
 export function intakeStatus(app, schema = getSchema(app.type)) {

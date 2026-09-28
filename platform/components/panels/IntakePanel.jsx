@@ -1,15 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
-import { intakeStatus } from '@/lib/progress';
+import { ArrowLeft, ArrowRight, Check, AlertCircle } from 'lucide-react';
+import { intakeStatus, isFilled } from '@/lib/progress';
 
-function Field({ field, value, onChange }) {
+function Field({ field, value, onChange, missing = false }) {
   const common = {
     id: field.id,
     value: value ?? '',
     onChange: (e) => onChange(field.id, e.target.value),
     'aria-required': field.required || undefined,
+    'aria-invalid': missing || undefined,
+    'aria-describedby': missing ? `${field.id}-miss` : undefined,
   };
   let control;
   if (field.type === 'textarea') {
@@ -40,12 +42,13 @@ function Field({ field, value, onChange }) {
     control = <input type={type} {...common} placeholder={field.placeholder || ''} />;
   }
   return (
-    <div className="field">
+    <div className={`field${missing ? ' missing' : ''}`}>
       <label htmlFor={field.type === 'bool' ? undefined : field.id} id={`${field.id}-l`}>
         {field.label}
         {field.required && <span className="req" aria-label="required">*</span>}
       </label>
       {control}
+      {missing && <div className="miss-note" id={`${field.id}-miss`}><AlertCircle size={12} aria-hidden="true" /> Required — still missing</div>}
       {field.note && <div className="note">{field.note}</div>}
     </div>
   );
@@ -78,6 +81,23 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
   const st = statuses[stepIdx];
   const last = stepIdx === schema.steps.length - 1;
   const next = schema.steps[stepIdx + 1];
+  // Required answers still empty: in this section, and across the whole intake.
+  const missingHere = step.fields.filter((f) => f.required && !isFilled(app.data, f));
+  const missingAll = schema.steps
+    .map((s, i) => ({ i, step: s, fields: s.fields.filter((f) => f.required && !isFilled(app.data, f)) }))
+    .filter((x) => x.fields.length);
+  const missingCount = missingAll.reduce((n, x) => n + x.fields.length, 0);
+  const focusField = (id) => setTimeout(() => {
+    const el = typeof document !== 'undefined' && document.getElementById(id);
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); }
+  }, 150);
+  const goToField = (i, id) => {
+    if (i !== stepIdx) {
+      setStepIdxState(i);
+      onStepChange?.(schema.steps[i]?.id || null);
+    }
+    focusField(id);
+  };
 
   return (
     <div className="intake-layout">
@@ -109,6 +129,26 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
       </nav>
 
       <div className="stack">
+        {missingCount > 0 && (
+          <details className="missing-all">
+            <summary>
+              <AlertCircle size={15} aria-hidden="true" /> <strong>{missingCount} required answer{missingCount === 1 ? '' : 's'} missing</strong>
+              <span className="muted"> in {missingAll.length} section{missingAll.length === 1 ? '' : 's'} — needed for the IRCC forms</span>
+            </summary>
+            <div className="missing-groups">
+              {missingAll.map((x) => (
+                <div key={x.step.id}>
+                  <span className="small faint">{x.i + 1}. {x.step.title}</span>
+                  <div className="cluster" style={{ gap: 6 }}>
+                    {x.fields.map((f) => (
+                      <button key={f.id} type="button" className="miss-chip" onClick={() => goToField(x.i, f.id)}>{f.label}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
         <div className="step-picker">
           <label htmlFor="step-pick" className="sr-only">Section</label>
           <select id="step-pick" value={stepIdx} onChange={(e) => setStepIdx(Number(e.target.value))}>
@@ -129,13 +169,21 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
             </div>
             <h2 id="step-h" style={{ margin: '4px 0 4px', fontSize: 19 }}>{step.title}</h2>
             {step.help && <p className="muted small" style={{ margin: 0 }}>{step.help}</p>}
+            {missingHere.length > 0 && (
+              <div className="missing-here">
+                <span className="small"><AlertCircle size={13} aria-hidden="true" /> Still needed here:</span>
+                {missingHere.map((f) => (
+                  <button key={f.id} type="button" className="miss-chip" onClick={() => focusField(f.id)}>{f.label}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="ic-body">
             <div className="grid2">
               {step.fields.map((f) => (
                 <div key={f.id} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-                  <Field field={f} value={app.data?.[f.id]} onChange={onFieldChange} />
+                  <Field field={f} value={app.data?.[f.id]} onChange={onFieldChange} missing={f.required && !isFilled(app.data, f)} />
                 </div>
               ))}
             </div>

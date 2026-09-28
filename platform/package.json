@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "next lint",
-    "test": "node test/registry.test.mjs && node test/geometry.test.mjs && node test/smoke.mjs && node test/drive.test.mjs && node test/extract.test.mjs && node test/ircc.test.mjs && node test/compile.test.mjs && node test/finalfiles.test.mjs && node test/mail.test.mjs && node test/progress.test.mjs && node test/cases.test.mjs && node test/storage.test.mjs && node test/odoo.test.mjs",
+    "test": "node test/registry.test.mjs && node test/geometry.test.mjs && node test/smoke.mjs && node test/drive.test.mjs && node test/extract.test.mjs && node test/ircc.test.mjs && node test/compile.test.mjs && node test/finalfiles.test.mjs && node test/mail.test.mjs && node test/progress.test.mjs && node test/dates.test.mjs && node test/cases.test.mjs && node test/storage.test.mjs && node test/odoo.test.mjs",
     "test:memory": "node test/compile-memory.mjs"
   },
   "engines": {

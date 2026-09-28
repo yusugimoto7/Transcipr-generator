@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getApplication, canAccess, listApplicationsFor, effectiveRole } from '@/lib/store';
 import { forViewer } from '@/lib/emails';
+import { refreshDates } from '@/lib/dateSweep';
 import { caseKeyOf, groupCases, caseLabel, displayName } from '@/lib/cases';
 import { driveOn } from '@/lib/driveStore';
 import { getSchema } from '@/lib/schema';
@@ -18,9 +19,11 @@ export default async function ApplicationPage({ params }) {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const app = await getApplication(params.id);
+  let app = await getApplication(params.id);
   if (!app) notFound();
   if (!canAccess(user, app)) redirect('/dashboard');
+  // Documents age: today's date rules (bank letters older than a month, expiring passports…).
+  if (await refreshDates(app.id).catch(() => false)) app = await getApplication(params.id);
 
   // The family this file belongs to (the main applicant and the others applying with them).
   const key = caseKeyOf(app);

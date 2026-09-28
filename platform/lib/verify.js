@@ -4,7 +4,8 @@ import { readUpload, buildDocBlocks } from './uploads';
 import { rasterizePdf } from './raster';
 import { buildChecklist } from './checklist';
 import { codeCategory, firmCode } from './generators/classify';
-import { checkDatePair, parseGregorian, isoDate, asciiDigits } from './jalali';
+import { checkDatePair, asciiDigits } from './jalali';
+import { dateFindings } from './dateRules';
 
 /**
  * Document check (صحت و سقم): is each document accurate, complete and
@@ -33,7 +34,6 @@ import { checkDatePair, parseGregorian, isoDate, asciiDigits } from './jalali';
 
 const PAGES = 14; // pages sent per document (as images for large scans)
 const SKIP = new Set(['internal', 'questionnaire', 'photo']);
-const MONTH_MS = 30.44 * 86400000;
 
 export const STATUS_ORDER = ['green', 'yellow', 'orange', 'red'];
 
@@ -242,7 +242,14 @@ Check the document and return JSON:
     "dobGregorian": "YYYY-MM-DD", "dobJalali": "YYYY/MM/DD",
     "documentNumber": "<certificate / ID / permit number>",
     "passportNumber": "<if a passport>",
-    "issueDate": "YYYY-MM-DD", "expiryDate": "YYYY-MM-DD",
+    "issueDate": "YYYY-MM-DD",       // when THIS document was issued / printed / signed (a bank letter or statement: its date)
+    "expiryDate": "YYYY-MM-DD",      // valid until / expires
+    "translationDate": "YYYY-MM-DD", // the date on the certified translation (translator's stamp/date)
+    "testDate": "YYYY-MM-DD",        // language test: the test date
+    "examDate": "YYYY-MM-DD",        // medical: the exam date
+    "programStart": "YYYY-MM-DD",    // letter of acceptance / PAL / enrolment: program start
+    "travelDate": "YYYY-MM-DD",      // flight booking: departure date
+    "validFrom": "YYYY-MM-DD", "validTo": "YYYY-MM-DD",   // insurance / permits: coverage or validity period
     "father": "<Latin>", "mother": "<Latin>", "spouse": "<Latin>",
     "employer": "<if an employment letter>", "position": "...", "salary": "...", "employedFrom": "YYYY-MM-DD", "employedTo": "YYYY-MM-DD|present"
   },
@@ -261,7 +268,20 @@ What to look for:
 - Vague or missing essentials — e.g. an employment letter without dates, position, salary or letterhead; a bank letter without balance or dates; an unsigned or undated letter (kind "vague", medium).
 - Contradictions within the document (kind "discrepancy").
 - Missing parts of an expected translation bundle (kind "missing-part": translation missing = high; certified copy or original missing = medium). Do not report missing parts when a bundle is not expected.
-- Validity: expired document, certificate issued long ago (kind "validity"; state the dates — the platform judges).
+- Dates (read every one carefully; give all dates in the Gregorian calendar, converting Persian dates):
+  the platform itself applies the firm's date rules to the dates you return in "facts" — financial documents
+  older than 1 month (20 days = attention), employment letters older than 1 month, translations older than
+  6 months, language tests older than 2 years, medical exams older than 1 year, passports with less than a
+  year left, expired documents, police certificates older than 6 months, letters older than 3 months, program
+  start dates or flights that have passed. Do NOT report those yourself — just return the dates accurately.
+  DO report (kind "validity" or "date") other date problems that matter to the application, e.g.:
+  a bank statement that does not cover the last 6 months, or whose balance date differs from the letter date;
+  pay slips that are not the most recent months; a leave letter whose dates do not cover the trip
+  (${d.visitFrom || d.visitTo ? `planned stay ${d.visitFrom || '?'} to ${d.visitTo || '?'}` : 'the planned stay'}); an employment start date or
+  job history that contradicts itself; a spouse's or host's permit that ends before the planned stay or program
+  ${d.programStart || d.programEnd ? `(program ${d.programStart || '?'} to ${d.programEnd || '?'})` : ''}; a child who will turn 18 or 22 before
+  a decision; a marriage or relationship date that contradicts other dates; a document signed before an event
+  it describes; an undated letter (medium).
 - Legibility: key data unreadable (kind "legibility", high if names/dates/numbers are unreadable).
 If nothing is wrong, return an empty findings list. ${pages ? `(${pages} page image(s) follow.)` : ''}`;
 
@@ -351,17 +371,8 @@ If nothing is wrong, return an empty findings list. ${pages ? `(${pages} page im
     }
   }
 
-  const today = Date.now();
-  const exp = facts.expiryDate ? parseGregorian(facts.expiryDate) : null;
-  if (exp) {
-    const t = Date.UTC(exp.gy, exp.gm - 1, exp.gd);
-    if (t < today) add('high', 'validity', `Expired on ${isoDate(exp)}.`);
-    else if (doc.category === 'passport' && t < today + 12 * MONTH_MS) add('medium', 'validity', `Passport expires on ${isoDate(exp)} — less than a year; IRCC issues the visa only up to the passport's expiry, and the checklist asks for a new passport.`);
-  }
-  const iss = facts.issueDate ? parseGregorian(facts.issueDate) : null;
-  if (iss && doc.category === 'police-clearance' && Date.UTC(iss.gy, iss.gm - 1, iss.gd) < today - 6 * MONTH_MS) {
-    add('medium', 'validity', `Police clearance issued on ${isoDate(iss)} — older than 6 months.`);
-  }
+  // The firm's date rules (lib/dateRules.js): age of financial documents, translations, tests, expiries…
+  for (const f of dateFindings(doc, facts, d, { type: app.type })) findings.push(f);
   if (legibility === 'poor') add('high', 'legibility', 'The scan is too poor to read key data — a clearer scan is needed.');
   else if (legibility === 'partial') add('medium', 'legibility', 'Parts of the scan are hard to read.');
 
