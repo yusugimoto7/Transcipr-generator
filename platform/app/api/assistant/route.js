@@ -1,6 +1,7 @@
 import { chat } from '@/lib/ai';
 import { getApplication, updateApplication, canAccess, effectiveRole } from '@/lib/store';
 import { emailFactsText } from '@/lib/emails';
+import { notesText } from '@/lib/notes';
 import { checklistStatus, missingItems } from '@/lib/checklist';
 import { getAppType } from '@/lib/appTypes';
 import { json, error, requireUser } from '@/lib/api';
@@ -59,7 +60,7 @@ export async function POST(req) {
 - Citizenship: ${d.citizenship || 'unknown'}
 - Program: ${d.programName || 'unknown'} at ${d.schoolName || 'unknown'} (${d.schoolProvince || ''})
 - Funds declared (CAD): ${d.totalFunds || 'unknown'}
-- Documents still missing: ${missing.length ? missing.join(', ') : 'none'}${['admin', 'manager'].includes(effectiveRole(user)) && emailFactsText(app, 30) ? `\n${emailFactsText(app, 30)}` : ''}`;
+- Documents still missing: ${missing.length ? missing.join(', ') : 'none'}${['admin', 'manager'].includes(effectiveRole(user)) && emailFactsText(app, 30) ? `\n${emailFactsText(app, 30)}` : ''}${['admin', 'manager'].includes(effectiveRole(user)) && notesText(app, 30) ? `\n${notesText(app, 30)}` : ''}`;
     }
   }
 

@@ -3,6 +3,7 @@ import { checklistStatus } from '../checklist';
 import { getAppType } from '../appTypes';
 import { requiredMissing } from '../schema';
 import { emailFactsText } from '../emails';
+import { notesText } from '../notes';
 
 /**
  * AI readiness review: compares the applicant's data + uploaded documents against
@@ -22,7 +23,10 @@ Be concrete and practical. Do not give legal advice or guarantees.`;
 
   const checkLines = (app.documents || [])
     .filter((d) => d.verification && d.verification.status !== 'green')
-    .map((d) => `- ${d.filename} [${d.verification.status.toUpperCase()}]: ${d.verification.findings.filter((f) => f.severity !== 'low').map((f) => f.text).join(' | ') || 'minor issues'}`)
+    .map((d) => {
+      const notes = (app.notes || []).filter((n) => n.docId === d.id).map((n) => `${n.by?.name || 'team'}: ${n.text.replace(/\s+/g, ' ').trim()}`);
+      return `- ${d.filename} [${d.verification.status.toUpperCase()}]: ${d.verification.findings.filter((f) => f.severity !== 'low').map((f) => f.text).join(' | ') || 'minor issues'}${d.verification.reviewedBy ? ` (checked and signed off by ${d.verification.reviewedBy})` : ''}${notes.length ? ` â€” TEAM NOTE: ${notes.join(' / ')}` : ''}`;
+    })
     .join('\n');
   const instruction = `Review this ${service.title} file and return JSON:
 {
@@ -46,7 +50,7 @@ ${checklist.map((c) => `- ${c.code} ${c.label}${c.cond ? ` (${c.cond})` : ''} â€
 ${checkLines ? `\nDocument check (each document read against its translation, the intake and the passport):\n${checkLines}\nTreat red items as refusal risks to fix before submission.` : ''}
 
 Uploaded document categories: ${uploadedKeys.length ? uploadedKeys.join(', ') : '(none yet)'}
-${emailFactsText(app) ? `\n${emailFactsText(app)}\nUse them to spot gaps and inconsistencies (e.g. an email that contradicts the intake or a document, or a promised document still missing).\n` : ''}
+${emailFactsText(app) ? `\n${emailFactsText(app)}\nUse them to spot gaps and inconsistencies (e.g. an email that contradicts the intake or a document, or a promised document still missing).\n` : ''}${notesText(app) ? `\n${notesText(app)}\nWhen a note records a decision about a document or an issue (approved as it is, explained, being fixed), reflect it: do not list that issue as a problem to fix, and mention the decision where relevant.\n` : ''}
 
 Required intake fields still empty: ${
     missingRequiredFields.length ? missingRequiredFields.join(', ') : '(none)'

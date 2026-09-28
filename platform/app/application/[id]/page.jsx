@@ -35,7 +35,7 @@ export default async function ApplicationPage({ params }) {
   return (
     <>
       <TopBar user={user} />
-      <Workspace initialApp={forViewer(app, ['admin', 'manager'].includes(effectiveRole(user)))} schema={getSchema(app.type)} viewerRole={user.role} family={family} driveOn={driveOn()} />
+      <Workspace initialApp={forViewer(app, ['admin', 'manager'].includes(effectiveRole(user)))} schema={getSchema(app.type)} viewerRole={user.role} viewerId={user.id} family={family} driveOn={driveOn()} />
       <AssistantWidget appId={app.id} initialHistory={app.assistantHistory || []} />
     </>
   );

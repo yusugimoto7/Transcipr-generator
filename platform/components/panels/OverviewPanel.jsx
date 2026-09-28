@@ -2,6 +2,7 @@
 
 import { AlertOctagon, AlertTriangle, FileQuestion, Sparkles, UserCheck, ClipboardList, PenLine, ShieldCheck, PackageCheck, CheckCircle2, ChevronRight, Mail, HardDrive, Upload, FileSearch, Hammer } from 'lucide-react';
 import { fmtDay, fmtAgo } from '@/lib/format';
+import { NotesBox, NotesFeed } from '@/components/Notes';
 
 
 const fmtDate = fmtDay;
@@ -54,7 +55,7 @@ function activity(app) {
   return ev.sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 8);
 }
 
-export default function OverviewPanel({ app, progress: p, staff, showFinal, go, letterTitle }) {
+export default function OverviewPanel({ app, progress: p, staff, showFinal, go, letterTitle, patchLocal, viewer, openDoc }) {
   const steps = nextSteps(app, p, staff, showFinal, letterTitle);
   const events = activity(app);
   const d = app.data || {};
@@ -129,6 +130,18 @@ export default function OverviewPanel({ app, progress: p, staff, showFinal, go, 
               </button>
             ))}
           </div>
+          {staff && patchLocal && (
+            <section className="card" aria-labelledby="notes-h">
+              <div className="card-head">
+                <div>
+                  <h2 id="notes-h">Team notes</h2>
+                  <p className="muted small">Notes from account managers and admins on this file, its documents and each section. The review, letters and assistant take them into account.</p>
+                </div>
+              </div>
+              <NotesBox app={app} patchLocal={patchLocal} viewer={viewer} section="overview" title="Add a note on the file" placeholder="e.g. Client prefers WhatsApp; call before sending anything to IRCC." compact hideList />
+              <NotesFeed app={app} viewer={viewer} patchLocal={patchLocal} onOpen={(n) => (n.docId ? openDoc(n.docId) : go(n.section === 'overview' ? 'overview' : n.section))} />
+            </section>
+          )}
         </div>
 
         <div className="stack">

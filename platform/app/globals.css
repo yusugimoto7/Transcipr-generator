@@ -704,3 +704,24 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .mail-sync { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
 .mail-bulk { position: sticky; top: calc(var(--top-h) + 8px); z-index: 3; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; margin: 4px 0 6px; background: var(--sunk, #eef1f5); border: 1px solid var(--line); border-radius: 8px; }
 .mail-bulk.on { background: #fff; border-color: var(--navy-900, #0f1729); box-shadow: var(--shadow-sm); }
+
+/* Team notes */
+.signoff-wrap { display: grid; gap: 0; flex: none; border: 1px solid var(--line); border-radius: var(--radius); background: var(--sunk, #f3f5f8); }
+.signoff-wrap > .signoff { border: 0; border-radius: 0; margin: 0; border-bottom: 1px solid var(--line); }
+.signoff-wrap > .notes { padding: 12px 14px; }
+.notes { display: grid; gap: 8px; }
+.notes-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+.notes-head .count { margin-left: 2px; }
+.note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.note { background: #fff; border: 1px solid var(--line); border-left: 3px solid #e8a33d; border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
+.note p { margin: 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-soft); }
+.note-meta .btn-ghost { padding: 2px 6px; }
+.note-where { all: unset; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--link, #1f5fbf); display: inline-flex; gap: 4px; align-items: center; overflow-wrap: anywhere; }
+.note-where:hover { text-decoration: underline; }
+.note-form { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+.note-form textarea { min-height: 44px; resize: vertical; font-size: 14px; }
+.notes.compact .note-form textarea { min-height: 40px; }
+.note-flag { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; color: #b36b00; font-weight: 600; }
+.section-notes { margin-top: 16px; }
+@media (max-width: 640px) { .note-form { grid-template-columns: 1fr; } .note-form button { justify-self: start; } }

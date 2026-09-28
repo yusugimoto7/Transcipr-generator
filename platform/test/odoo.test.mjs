@@ -174,6 +174,23 @@ try {
   r = (await admin('POST', '/api/admin/odoo')).json;
   list = (await admin('GET', '/api/applications')).json.applications;
   ok(r.lastResult?.created === 1 && list.some((x) => x.clientNumber === 'S26301' && x.id !== reza.id), 'if its card comes back to work, the client gets a new file');
+  // Team notes: account managers and admins write them; the writer (or an admin) removes them; clients never see them.
+  await admin('POST', `/api/admin/applications/${naz.id}/assign`, { assignedTo: [maryam.id] });
+  const mar = client();
+  await mar('POST', '/api/auth/login', { email: 'maryam@firm.test', password: 'password123' });
+  let nr = await mar('POST', `/api/applications/${naz.id}/notes`, { action: 'add', section: 'intake', text: 'Spouse employer to confirm by phone.' });
+  ok(nr.status === 200 && nr.json.notes[0].by.name === 'Maryam' && nr.json.notes[0].section === 'intake' && nr.json.notes[0].at, 'an account manager adds a note; it keeps the writer and the time');
+  nr = await admin('POST', `/api/applications/${naz.id}/notes`, { action: 'add', section: 'overview', text: 'Client prefers WhatsApp.' });
+  const bossNote = nr.json.notes.find((x) => x.text === 'Client prefers WhatsApp.');
+  ok((await mar('POST', `/api/applications/${naz.id}/notes`, { action: 'delete', id: bossNote.id })).status === 403, "an account manager cannot remove someone else's note");
+  ok((await admin('POST', `/api/applications/${naz.id}/notes`, { action: 'add', docId: 'nope', text: 'x' })).status === 400, 'a note on a document that is not on the file is refused');
+  nr = await admin('POST', `/api/applications/${naz.id}/notes`, { action: 'delete', id: nr.json.notes.find((x) => x.by.name === 'Maryam').id });
+  ok(nr.status === 200 && nr.json.notes.length === 1, 'an admin can remove any note');
+  const { notesText } = await loadLib('notes.js');
+  const withNotes = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
+  ok(/WhatsApp/.test(notesText(withNotes)) && /respect them/.test(notesText(withNotes)), 'the notes are given to the AI as the team’s decisions');
+  const { forViewer } = await loadLib('emails.js');
+  ok(!('notes' in forViewer(withNotes, false)) && forViewer(withNotes, true).notes.length === 1, 'clients never receive the team’s notes');
   ok(writes === 0, 'nothing is ever written to Odoo');
 } catch (e) {
   failures++;

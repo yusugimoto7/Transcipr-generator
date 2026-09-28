@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { Plus, Sparkles, Search, ArrowLeft, FolderCog, CircleDashed, FileText, RotateCcw, Landmark, ListChecks, X } from 'lucide-react';
+import { Plus, Sparkles, Search, ArrowLeft, FolderCog, CircleDashed, FileText, RotateCcw, Landmark, ListChecks, X, StickyNote } from 'lucide-react';
 import { getAppType } from '@/lib/appTypes';
 import { everyField } from '@/lib/schema';
 import { CATEGORY_LABELS } from '@/lib/docLabels';
@@ -11,6 +11,7 @@ import IrccRequirements from '@/components/IrccRequirements';
 import DocDetail, { CHECK, CheckChip, worstStatus } from '@/components/docs/DocDetail';
 import AddDocuments from '@/components/docs/AddDocuments';
 import UploadBox from '@/components/docs/UploadBox';
+import { NotesBox, NotesFeed } from '@/components/Notes';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
 
@@ -56,7 +57,7 @@ function nameFor(item, firstName, file) {
   return `${item.code} - ${label}${firstName ? ` - ${firstName}` : ''}${ext}`;
 }
 
-export default function DocumentsPanel({ app, progress, patchLocal, onExtracted, staff, selected, onSelect, driveOn }) {
+export default function DocumentsPanel({ app, progress, patchLocal, onExtracted, staff, selected, onSelect, driveOn, viewer }) {
   const init = parseSub(selected);
   const [filter, setFilter] = useState(init.filter || 'all');
   const [sel, setSelState] = useState(init.sel || null);
@@ -94,6 +95,12 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
   const matched = new Set(checklist.flatMap((c) => c.docIds || []));
   const loose = docs.filter((d) => !matched.has(d.id));
   const itemDocs = (c) => (c.docIds || []).map((id) => docById.get(id)).filter(Boolean);
+  // Open a document in the pane (from a note): under its checklist item when it has one.
+  const openDoc = (docId) => {
+    const item = checklist.find((c) => (c.docIds || []).includes(docId));
+    select(item ? `item=${item.id}|file=${docId}` : `doc=${docId}`);
+  };
+  const noteCount = (docId) => (app.notes || []).filter((n) => n.docId === docId).length;
 
   const q = query.trim().toLowerCase();
   const passes = (label, files, missing) => {
@@ -298,6 +305,8 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
                   onReview={(r) => setReviewed(current.id, r)}
                   onCategory={(c) => patchDoc(current.id, { category: c })}
                   onRemove={() => removeDoc(current.id)}
+                  patchLocal={staff ? patchLocal : null}
+                  viewer={viewer}
                 />
               </>
             ) : item.party === 'firm' ? (
@@ -343,7 +352,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
         body: (
           <>
             <p className="small muted" style={{ margin: 0 }}>Rename the file with its checklist code (e.g. “113 - …”) or set its type below so it counts for the right item.</p>
-            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} />
+            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} patchLocal={staff ? patchLocal : null} viewer={viewer} />
           </>
         ),
       };
@@ -355,7 +364,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
     pane = {
       title: 'Documents summary',
       eyebrow: service.service ? `Checklist ${service.service}` : 'Checklist',
-      body: <Summary app={app} progress={progress} staff={staff} onFilter={setFilter} onRead={(all) => extract(Boolean(all))} extracting={extracting} hasComparison={Boolean(comparison)} openComparison={() => select('compare')} patchLocal={patchLocal} />,
+      body: <Summary app={app} progress={progress} staff={staff} onFilter={setFilter} onRead={(all) => extract(Boolean(all))} extracting={extracting} hasComparison={Boolean(comparison)} openComparison={() => select('compare')} patchLocal={patchLocal} viewer={viewer} openDoc={openDoc} />,
     };
   }
 
@@ -465,6 +474,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
                               <span key={f.id}>
                                 {f.filename}
                                 {f.verification?.reviewedBy ? <span className="faint">· signed off</span> : null}
+                                {staff && noteCount(f.id) ? <span className="note-flag" title={`${noteCount(f.id)} note(s)`}><StickyNote size={11} aria-hidden="true" /> {noteCount(f.id)}</span> : null}
                               </span>
                             ))
                           : <span className="faint">{c.party === 'firm' ? 'Firm prepares' : c.optional ? 'If applicable' : c.cond || 'Missing'}</span>}
@@ -537,7 +547,7 @@ function RANKV(d) {
 }
 
 /** Shown when nothing is selected: the check at a glance, reading, and IRCC's current requirements. */
-function Summary({ app, progress: p, staff, onFilter, onRead, extracting, hasComparison, openComparison, patchLocal }) {
+function Summary({ app, progress: p, staff, onFilter, onRead, extracting, hasComparison, openComparison, patchLocal, viewer, openDoc }) {
   const docs = app.documents || [];
   const readAt = docs.map((d) => d.extractedAt).filter(Boolean).sort().pop();
   return (
@@ -574,6 +584,14 @@ function Summary({ app, progress: p, staff, onFilter, onRead, extracting, hasCom
             ))}
           </ul>
           {p.documents.missing.length > 8 && <button type="button" className="btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => onFilter('missing')}>Show all missing</button>}
+        </section>
+      )}
+
+      {staff && (
+        <section aria-label="Notes" className="stack-sm">
+          <h3 style={{ margin: 0 }}>Notes on documents</h3>
+          <NotesFeed app={app} viewer={viewer} patchLocal={patchLocal} only="documents" onOpen={(n) => openDoc(n.docId)} empty="No notes on documents yet — add one next to “I checked this document”." />
+          <NotesBox app={app} patchLocal={patchLocal} viewer={viewer} section="documents" title="Notes on the documents in general" placeholder="e.g. The client will send the police certificate after 10 October." compact />
         </section>
       )}
 

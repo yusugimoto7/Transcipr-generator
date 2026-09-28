@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Cloud, CloudUpload, ExternalLink, Download, Trash2, UserCheck, Undo2, CheckCircle2, AlertOctagon, AlertTriangle, Info, CircleDashed, Check, X } from 'lucide-react';
 import { CATEGORY_LABELS, OWNER_LABELS } from '@/lib/docLabels';
 import { fmtDay } from '@/lib/format';
+import { NotesBox } from '@/components/Notes';
 
 // Document check colours (lib/verify.js): green ok · yellow minor · orange attention · red serious.
 export const CHECK = {
@@ -51,7 +52,7 @@ const date = fmtDay;
  * One uploaded document: what it is, the result of the accuracy check
  * (findings, translation-bundle parts), the staff sign-off and a preview.
  */
-export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, onCategory, onRemove, driveOn }) {
+export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, onCategory, onRemove, driveOn, patchLocal, viewer }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const v = doc.verification;
   const url = `/api/applications/${app.id}/upload?docId=${encodeURIComponent(doc.id)}`;
@@ -133,7 +134,9 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
         </section>
       )}
 
-      {staff && v && (
+      {staff && (
+        <div className="signoff-wrap">
+        {v && (
         <div className="signoff">
           {v.reviewedBy ? (
             <>
@@ -152,6 +155,20 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
               </button>
             </>
           )}
+        </div>
+        )}
+        {patchLocal && (
+          <NotesBox
+            app={app}
+            patchLocal={patchLocal}
+            viewer={viewer}
+            section="documents"
+            docId={doc.id}
+            title="Notes on this document"
+            placeholder="e.g. Mr. Hamed approved going ahead with this document as it is."
+            compact
+          />
+        )}
         </div>
       )}
 

@@ -60,9 +60,9 @@ export function emailFactsText(app, max = 80) {
   return `Facts the client stated in their emails (their own words — not yet proven by documents; use them where relevant, never contradict a document with them):\n${lines.slice(-max).join('\n')}`;
 }
 
-/** What a viewer may see of a file: the emails and their analysis are for the team. */
+/** What a viewer may see of a file: the emails, their analysis and the team's notes are for the team. */
 export function forViewer(app, staff) {
   if (staff || !app) return app;
-  const { emails, ...rest } = app;
+  const { emails, notes, ...rest } = app;
   return rest;
 }

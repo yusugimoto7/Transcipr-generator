@@ -10,12 +10,15 @@ import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
 import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
 import EmailsPanel from '@/components/panels/EmailsPanel';
+import { NotesBox } from '@/components/Notes';
 import { primaryLetter, getAppType } from '@/lib/appTypes';
 import { fileProgress } from '@/lib/progress';
 import { ROLE_LABEL, displayName } from '@/lib/cases';
 import { initials } from '@/components/TopBar';
 
 const SECTION_IDS = ['overview', 'documents', 'emails', 'intake', 'sop', 'review', 'generate'];
+// Sections with their own team notes at the bottom (documents keep theirs per document and in the summary).
+const SECTION_NOTES = { emails: 'the emails', intake: 'the intake', sop: 'the letter', review: 'the review', generate: 'the final files' };
 
 /** Read "#section" or "#section:sub" from the URL. */
 function readHash() {
@@ -30,9 +33,10 @@ function readHash() {
  * the selected stage. The position is kept in the URL (#documents, #intake:family…)
  * so a refresh or a shared link opens the same place.
  */
-export default function Workspace({ initialApp, schema, viewerRole, family, driveOn = false }) {
+export default function Workspace({ initialApp, schema, viewerRole, viewerId = null, family, driveOn = false }) {
   const [app, setApp] = useState(initialApp);
   const staff = viewerRole === 'admin' || viewerRole === 'manager';
+  const viewer = { id: viewerId, role: viewerRole };
   const [tab, setTabState] = useState('overview');
   const [sub, setSubState] = useState(null);
   const [saveState, setSaveState] = useState('saved'); // saved | saving | error | conflict
@@ -137,6 +141,11 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
   );
 
   const attention = p.check.red + p.check.orange;
+  // Open a document from a note: under its checklist item when it has one.
+  const openDoc = (docId) => {
+    const item = (p.checklist || []).find((c) => (c.docIds || []).includes(docId));
+    go('documents', item ? `item=${item.id}|file=${docId}` : `doc=${docId}`);
+  };
   const fieldLabels = useMemo(() => new Map(schema.steps.flatMap((st) => st.fields.map((f) => [f.id, f.label]))), [schema]);
   const nav = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -244,7 +253,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
         </nav>
 
         <main className="ws-main">
-          {tab === 'overview' && <OverviewPanel app={app} progress={p} staff={staff} showFinal={showFinal} go={go} letterTitle={letter.title.replace(/ \(.*\)$/, '')} />}
+          {tab === 'overview' && <OverviewPanel app={app} progress={p} staff={staff} showFinal={showFinal} go={go} letterTitle={letter.title.replace(/ \(.*\)$/, '')} patchLocal={patchLocal} viewer={viewer} openDoc={openDoc} />}
           {tab === 'documents' && (
             <DocumentsPanel
               app={app}
@@ -256,6 +265,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
               selected={sub}
               onSelect={setSub}
               driveOn={driveOn}
+              viewer={viewer}
             />
           )}
           {tab === 'emails' && staff && (
@@ -267,6 +277,11 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
           {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
           {tab === 'review' && <ReviewPanel app={app} progress={p} patchLocal={patchLocal} go={go} />}
           {tab === 'generate' && showFinal && <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => go('intake')} progress={p} driveOn={driveOn} />}
+          {staff && SECTION_NOTES[tab] && (
+            <section className="card section-notes" aria-label={`Notes on ${SECTION_NOTES[tab]}`}>
+              <NotesBox app={app} patchLocal={patchLocal} viewer={viewer} section={tab} title={`Team notes on ${SECTION_NOTES[tab]}`} placeholder="A note for the team — the review and the letters read it too." compact />
+            </section>
+          )}
         </main>
       </div>
     </>
