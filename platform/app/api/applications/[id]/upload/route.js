@@ -5,6 +5,7 @@ import { saveUpload, deleteUpload, docFile } from '@/lib/uploads';
 import { classifyByFilename } from '@/lib/generators/classify';
 import { json, error, requireOwnedApp } from '@/lib/api';
 import { queueSync } from '@/lib/driveStore';
+import { notifyTeam, fileLabel } from '@/lib/notify';
 
 export const runtime = 'nodejs';
 
@@ -43,7 +44,7 @@ export async function GET(req, { params }) {
 // Upload one or more documents for an application. Categories are guessed from
 // filenames immediately; AI refines them during the extract step.
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, role, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
 
   let form;
@@ -77,6 +78,15 @@ export async function POST(req, { params }) {
     return a;
   });
   queueSync(app.id); // copy the new files to the client's Drive folder
+  if (role === 'applicant') {
+    // The client uploaded through their own login: tell the team on the file.
+    await notifyTeam(updated, {
+      kind: 'documents',
+      text: `${fileLabel(updated)} uploaded ${saved.length} document${saved.length === 1 ? '' : 's'}`,
+      link: `/application/${app.id}#documents`,
+      by: { id: user.id, name: user.name || user.email },
+    });
+  }
   return json({ documents: updated.documents, added: saved }, 201);
 }
 

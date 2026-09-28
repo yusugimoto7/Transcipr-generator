@@ -737,3 +737,41 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .missing-all { background: #fff6e8; border: 1px solid #f1d3a3; border-radius: var(--radius); padding: 10px 14px; }
 .missing-all > summary { cursor: pointer; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; color: #8a4b00; font-size: 14px; }
 .missing-groups { display: grid; gap: 10px; margin-top: 10px; }
+
+/* Notification center */
+.notif { position: relative; }
+.top-btn.icon-only { padding: 7px 9px; position: relative; }
+.notif-count { position: absolute; top: -5px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--brand, #d52b1e); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--navy-900, #0f1729); }
+.notif-panel { position: absolute; right: 0; top: calc(100% + 10px); width: min(400px, calc(100vw - 24px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 12px 40px rgba(15, 23, 41, .22); z-index: 60; overflow: hidden; }
+.notif-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.notif-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+.notif-list > li + li { border-top: 1px solid var(--line); }
+.notif-item { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 10px 14px; }
+.notif-item:hover { background: var(--hover, #f3f5f8); }
+.notif-item.unread { background: #f4f7fd; }
+.notif-item.unread .notif-text { font-weight: 600; }
+.notif-ico { flex: 0 0 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #eef1f6; color: var(--ink-soft); }
+.notif-ico.k-mention { background: #eaf1ff; color: #1f5fbf; }
+.notif-ico.k-documents { background: #e8f5ee; color: #1a7f4b; }
+.notif-ico.k-email { background: #fff4e3; color: #a35a00; }
+.notif-ico.k-assigned { background: #f3ecff; color: #6b3fc2; }
+.notif-body { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.notif-text { font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.notif-when { font-size: 12px; color: var(--ink-soft); }
+.notif-dot { flex: 0 0 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--brand, #d52b1e); }
+.notif-all { display: block; padding: 10px 14px; border-top: 1px solid var(--line); text-align: center; font-size: 13px; font-weight: 600; }
+.notif-list.page .notif-row { display: flex; align-items: center; gap: 8px; padding-right: 10px; }
+.notif-list.page .notif-item { padding: 12px 16px; }
+
+/* Mentions */
+.note-input { position: relative; }
+.note-form .note-hint { grid-column: 1 / -1; display: inline-flex; align-items: center; gap: 4px; margin-top: -2px; }
+.mention { background: #eaf1ff; color: #1f5fbf; font-weight: 600; border-radius: 4px; padding: 0 3px; }
+.mention-menu { position: absolute; left: 0; top: calc(100% + 4px); z-index: 40; list-style: none; margin: 0; padding: 4px; min-width: 260px; background: #fff; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 30px rgba(15, 23, 41, .18); }
+.mention-menu button { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; border-radius: 6px; font-size: 13.5px; }
+.mention-menu button.on, .mention-menu button:hover { background: #eef3fb; }
+.avatar.sm { width: 24px; height: 24px; font-size: 10px; }
+.note.hl { border-left-color: #1f5fbf; box-shadow: 0 0 0 3px rgba(31, 95, 191, .18); }
+.side-item.divided { margin-top: 10px; position: relative; }
+.side-item.divided::before { content: ''; position: absolute; left: 12px; right: 12px; top: -6px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) { .notif-panel { position: fixed; left: 12px; right: 12px; top: calc(var(--top-h) + 6px); width: auto; } }

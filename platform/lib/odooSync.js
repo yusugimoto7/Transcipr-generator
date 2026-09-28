@@ -4,6 +4,7 @@ import { DATA_DIR, listAllApplications, updateApplication, createApplication, li
 import { odooConfig, listCards, cardUrl, workStages } from './odoo';
 import { caseKeyOf, normNumber, displayName, isDefaultTitle } from './cases';
 import { isTemplateName } from './unused';
+import { notify, fileLabel } from './notify';
 
 /**
  * Keeps the platform in step with the TR Visa project in Odoo:
@@ -192,6 +193,9 @@ export async function syncOdoo({ create = true } = {}) {
             { quiet: true }
           );
           store.imported[card.taskId] = app.id;
+          if (app.assignedTo?.length) {
+            await notify(app.assignedTo, { kind: 'assigned', text: `New client from Odoo: ${fileLabel(app)}${card.type ? '' : ' (check the type)'}`, appId: app.id, link: `/case/${encodeURIComponent(card.number || app.id)}`, by: { id: null, name: 'Odoo' } }).catch(() => {});
+          }
           result.created++;
           log(`New file from Odoo: ${card.number || ''} ${card.name}${card.type ? '' : ' (type to check)'}`.trim(), app.id);
         }

@@ -10,6 +10,7 @@ import { startExtractJob, getExtractJob } from './extractJob';
 import { driveStatus, parseDriveLink, uploadFile } from './drive';
 import { recordEmail, analyzeEmailSafe } from './emailFacts';
 import { MAX_BODY } from './emails';
+import { notifyTeam, fileLabel } from './notify';
 
 /**
  * Email intake: documents clients send to the team's mailbox
@@ -375,6 +376,11 @@ export async function processInto(msg, app, { how = 'assigned by staff' } = {}) 
   try {
     await recordEmail(app.id, msg, how);
     const { added, skipped } = await attachToApplication(msg, app);
+    const sender = { id: null, name: msg.from?.name || msg.from?.address || 'the client' };
+    // Tell the team on the file: documents, or an email without documents.
+    await notifyTeam(app, added.length
+      ? { kind: 'documents', text: `${fileLabel(app)} emailed ${added.length} document${added.length === 1 ? '' : 's'}${msg.subject ? ` — “${msg.subject.slice(0, 80)}”` : ''}`, link: `/application/${app.id}#documents`, by: sender }
+      : { kind: 'email', text: `${fileLabel(app)}: new email${msg.subject ? ` — “${msg.subject.slice(0, 80)}”` : ''}`, link: `/application/${app.id}#emails`, by: sender });
     if (!added.length) {
       await analyzeEmailSafe(app.id, msg.id);
       await saveMailStore((s) => Object.assign(s.messages[msg.id], { status: msg.attachments.length ? 'no-attachments' : 'processed', files: [], skipped, processedAt: new Date().toISOString() }));

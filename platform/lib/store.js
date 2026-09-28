@@ -30,7 +30,7 @@ export const ROLES = ['admin', 'manager', 'applicant'];
 
 // Serialize writes to a given file to avoid interleaved read-modify-write races.
 const locks = new Map();
-async function withLock(key, fn) {
+export async function withLock(key, fn) {
   const prev = locks.get(key) || Promise.resolve();
   let release;
   const next = new Promise((r) => (release = r));

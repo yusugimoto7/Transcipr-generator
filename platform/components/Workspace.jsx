@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, FileStack, ClipboardList, PenLine, ShieldCheck, PackageCheck, CheckCircle2, ChevronRight, Loader2, CloudOff, AlertTriangle, Mail } from 'lucide-react';
+import { LayoutDashboard, FileStack, ClipboardList, PenLine, ShieldCheck, PackageCheck, CheckCircle2, ChevronRight, Loader2, CloudOff, AlertTriangle, Mail, StickyNote } from 'lucide-react';
 import OverviewPanel from '@/components/panels/OverviewPanel';
 import DocumentsPanel from '@/components/panels/DocumentsPanel';
 import IntakePanel from '@/components/panels/IntakePanel';
@@ -10,13 +10,14 @@ import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
 import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
 import EmailsPanel from '@/components/panels/EmailsPanel';
+import NotesPanel from '@/components/panels/NotesPanel';
 import { NotesBox } from '@/components/Notes';
 import { primaryLetter, getAppType } from '@/lib/appTypes';
 import { fileProgress } from '@/lib/progress';
 import { ROLE_LABEL, displayName } from '@/lib/cases';
 import { initials } from '@/components/TopBar';
 
-const SECTION_IDS = ['overview', 'documents', 'emails', 'intake', 'sop', 'review', 'generate'];
+const SECTION_IDS = ['overview', 'documents', 'emails', 'intake', 'sop', 'review', 'generate', 'notes'];
 // Sections with their own team notes at the bottom (documents keep theirs per document and in the summary).
 const SECTION_NOTES = { emails: 'the emails', intake: 'the intake', sop: 'the letter', review: 'the review', generate: 'the final files' };
 
@@ -174,6 +175,9 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
           done: p.final.count > 0 && !p.final.stale,
         }]
       : []),
+    ...(staff
+      ? [{ id: 'notes', label: 'Team notes', icon: StickyNote, sub: app.notes?.length ? `${app.notes.length} note${app.notes.length === 1 ? '' : 's'}` : 'None yet', divider: true }]
+      : []),
   ];
 
   return (
@@ -236,7 +240,7 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
           {nav.map((n) => {
             const Icon = n.icon;
             return (
-              <button key={n.id} type="button" className={`side-item${tab === n.id ? ' on' : ''}`} onClick={() => go(n.id)} aria-current={tab === n.id ? 'page' : undefined}>
+              <button key={n.id} type="button" className={`side-item${tab === n.id ? ' on' : ''}${n.divider ? ' divided' : ''}`} onClick={() => go(n.id)} aria-current={tab === n.id ? 'page' : undefined}>
                 <span className="ico"><Icon size={18} aria-hidden="true" /></span>
                 <span>
                   {n.label}
@@ -253,7 +257,7 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
         </nav>
 
         <main className="ws-main">
-          {tab === 'overview' && <OverviewPanel app={app} progress={p} staff={staff} showFinal={showFinal} go={go} letterTitle={letter.title.replace(/ \(.*\)$/, '')} patchLocal={patchLocal} viewer={viewer} openDoc={openDoc} />}
+          {tab === 'overview' && <OverviewPanel app={app} progress={p} staff={staff} showFinal={showFinal} go={go} letterTitle={letter.title.replace(/ \(.*\)$/, '')} />}
           {tab === 'documents' && (
             <DocumentsPanel
               app={app}
@@ -268,6 +272,7 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
               viewer={viewer}
             />
           )}
+          {tab === 'notes' && staff && <NotesPanel app={app} patchLocal={patchLocal} viewer={viewer} go={go} openDoc={openDoc} highlight={sub} />}
           {tab === 'emails' && staff && (
             <EmailsPanel app={app} patchLocal={patchLocal} onFieldChange={onFieldChange} fieldLabel={(id) => fieldLabels.get(id)} />
           )}

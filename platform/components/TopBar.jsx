@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { FolderOpen, Settings2, LogOut } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 
 export function initials(name = '', email = '') {
   const src = (name || email.split('@')[0] || '?').trim();
@@ -38,6 +39,7 @@ export default function TopBar({ user }) {
         )}
       </nav>
       <div className="top-spacer" />
+      {staff && <NotificationBell />}
       {user?.email && (
         <div className="user-chip" title={user.email}>
           <span className="avatar" aria-hidden="true">{initials(user.name, user.email)}</span>

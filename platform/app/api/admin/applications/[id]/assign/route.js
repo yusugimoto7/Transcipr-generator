@@ -1,5 +1,6 @@
 import { updateApplication, getApplication, getUserById, effectiveRole } from '@/lib/store';
 import { json, error, requireAdmin } from '@/lib/api';
+import { notify, fileLabel } from '@/lib/notify';
 
 /** Body: { assignedTo: [userId...] } — replaces the file's manager list. */
 export async function POST(req, { params }) {
@@ -22,5 +23,9 @@ export async function POST(req, { params }) {
     a.assignedTo = ids;
     return a;
   }, { by: admin.id });
+  const newcomers = ids.filter((id) => !(app.assignedTo || []).includes(id));
+  if (newcomers.length) {
+    await notify(newcomers, { kind: 'assigned', text: `${admin.name || admin.email} gave you ${fileLabel(updated)}`, appId: app.id, link: `/application/${app.id}`, by: { id: admin.id, name: admin.name || admin.email } }).catch(() => {});
+  }
   return json({ assignedTo: updated.assignedTo });
 }

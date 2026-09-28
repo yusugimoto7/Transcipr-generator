@@ -186,11 +186,32 @@ try {
   ok((await admin('POST', `/api/applications/${naz.id}/notes`, { action: 'add', docId: 'nope', text: 'x' })).status === 400, 'a note on a document that is not on the file is refused');
   nr = await admin('POST', `/api/applications/${naz.id}/notes`, { action: 'delete', id: nr.json.notes.find((x) => x.by.name === 'Maryam').id });
   ok(nr.status === 200 && nr.json.notes.length === 1, 'an admin can remove any note');
+  // Mentions notify, and bring an account manager who is not on the file into it.
+  const rezaU = (await admin('POST', '/api/admin/users', { email: 'reza@firm.test', name: 'Reza', password: 'password123', role: 'manager' })).json.user;
+  const rz2 = client();
+  await rz2('POST', '/api/auth/login', { email: 'reza@firm.test', password: 'password123' });
+  ok((await rz2('GET', `/api/applications/${naz.id}`)).status === 403, 'Reza cannot open the file before he is mentioned');
+  nr = await mar('POST', `/api/applications/${naz.id}/notes`, { action: 'add', section: 'overview', text: '@Reza please check the bank letter', mentions: [rezaU.id] });
+  const mNote = nr.json.notes.find((x) => x.text.startsWith('@Reza'));
+  ok(mNote?.mentions?.[0]?.id === rezaU.id, 'the note records who was mentioned');
+  let inbox = (await rz2('GET', '/api/notifications')).json;
+  ok(inbox.unread === 1 && inbox.items[0].kind === 'mention' && inbox.items[0].link === `/application/${naz.id}#notes:${mNote.id}` && /Maryam mentioned you/.test(inbox.items[0].text), 'the mentioned colleague gets a notification that opens the note');
+  ok((await rz2('GET', `/api/applications/${naz.id}`)).status === 200, 'a mentioned account manager is added to the file so the link opens');
+  ok(!(await mar('GET', '/api/notifications')).json.items.some((x) => x.kind === 'mention'), 'the writer is not notified of their own note');
+  inbox = (await rz2('POST', '/api/notifications', { action: 'read' })).json;
+  ok(inbox.unread === 0 && inbox.items[0].readAt, 'notifications can be marked read');
+  ok((await rz2('GET', '/api/team')).json.team.some((u) => u.id === maryam.id), 'the team list for @mentions');
+  // Being given a file.
+  const parisaApp = (await admin('GET', '/api/applications')).json.applications.find((x) => x.clientNumber === 'S26400');
+  await admin('POST', `/api/admin/applications/${parisaApp.id}/assign`, { assignedTo: [rezaU.id] });
+  inbox = (await rz2('GET', '/api/notifications')).json;
+  ok(inbox.unread === 1 && inbox.items[0].kind === 'assigned' && /gave you S26400/.test(inbox.items[0].text), 'an account manager is told when a file is given to them');
+
   const { notesText } = await loadLib('notes.js');
   const withNotes = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
   ok(/WhatsApp/.test(notesText(withNotes)) && /respect them/.test(notesText(withNotes)), 'the notes are given to the AI as the team’s decisions');
   const { forViewer } = await loadLib('emails.js');
-  ok(!('notes' in forViewer(withNotes, false)) && forViewer(withNotes, true).notes.length === 1, 'clients never receive the team’s notes');
+  ok(!('notes' in forViewer(withNotes, false)) && forViewer(withNotes, true).notes.length >= 1, 'clients never receive the team’s notes');
   ok(writes === 0, 'nothing is ever written to Odoo');
 } catch (e) {
   failures++;

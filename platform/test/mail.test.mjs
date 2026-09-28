@@ -272,6 +272,9 @@ try {
 
   r = await admin('POST', '/api/admin/mail', { action: 'check' });
   ok(r.data.counts.fetched === 0, 'a second check fetches nothing new');
+  const inbox = (await admin('GET', '/api/notifications?limit=50')).data;
+  ok(inbox.items.some((n) => n.kind === 'documents' && /S26160.*emailed 2 documents/.test(n.text) && n.link.endsWith('#documents')), `the team is told when a client emails documents (${inbox.items.length} notifications)`);
+  ok(inbox.items.some((n) => n.kind === 'email' && /new email/.test(n.text) && n.link.endsWith('#emails')), 'and when a client emails without documents');
 } catch (e) {
   console.error('ERROR', e);
   failures++;
