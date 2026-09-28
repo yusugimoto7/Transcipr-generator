@@ -23,6 +23,8 @@ export default function AdminMail() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState('');
   const [pick, setPick] = useState({}); // messageId -> { appId, remember }
+  const [sel, setSel] = useState(() => new Set()); // waiting messages ticked for a bulk action
+  const [bulk, setBulk] = useState({ appId: '', remember: true, progress: null });
   const timer = useRef(null);
 
   const load = async () => {
@@ -62,6 +64,47 @@ export default function AdminMail() {
   const msgs = data?.messages || [];
   const apps = data?.apps || [];
   const appOf = (id) => apps.find((a) => a.id === id);
+  const isWaiting = (m) => m.status === 'unassigned' || (m.status === 'no-attachments' && !m.appId);
+  const waiting = msgs.filter(isWaiting);
+  const chosen = waiting.filter((m) => sel.has(m.id));
+  const allOn = waiting.length > 0 && chosen.length === waiting.length;
+  const toggle = (id) => setSel((x) => {
+    const n = new Set(x);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+
+  async function ignoreChosen() {
+    if (!chosen.length || !window.confirm(`Ignore ${chosen.length} email${chosen.length === 1 ? '' : 's'}? You can put them back later.`)) return;
+    await act({ action: 'ignore', ids: chosen.map((m) => m.id) }, 'bulk');
+    setSel(new Set());
+  }
+
+  // One by one, so each email's documents are read and filed like a single "File it".
+  async function fileChosen() {
+    const list = chosen;
+    if (!list.length || !bulk.appId) return;
+    const target = appOf(bulk.appId);
+    if (!window.confirm(`File ${list.length} email${list.length === 1 ? '' : 's'} on ${target?.clientNumber ? `${target.clientNumber} — ` : ''}${target?.title || 'this file'}?`)) return;
+    setBusy('bulk');
+    setErr('');
+    let done = 0;
+    for (const m of list) {
+      setBulk((b) => ({ ...b, progress: `Filing ${done + 1} of ${list.length}…` }));
+      try {
+        const res = await fetch('/api/admin/mail', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'assign', id: m.id, appId: bulk.appId, remember: bulk.remember }) });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed.');
+        done++;
+      } catch (e) {
+        setErr(`${m.subject || '(no subject)'}: ${e.message}`);
+      }
+    }
+    setBulk((b) => ({ ...b, progress: null }));
+    setSel(new Set());
+    setBusy('');
+    await load();
+  }
 
   return (
     <div className="card">
@@ -106,12 +149,50 @@ export default function AdminMail() {
       {err && <div className="alert err">{err}</div>}
       {!msgs.length && <p className="muted">Nothing received yet.</p>}
 
+      {waiting.length > 0 && (
+        <div className={`mail-bulk${chosen.length ? ' on' : ''}`}>
+          <label className="check-label" style={{ margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={allOn}
+              ref={(el) => { if (el) el.indeterminate = chosen.length > 0 && !allOn; }}
+              onChange={() => setSel(allOn ? new Set() : new Set(waiting.map((m) => m.id)))}
+            />
+            {chosen.length ? `${chosen.length} of ${waiting.length} selected` : `Select all (${waiting.length} waiting)`}
+          </label>
+          {chosen.length > 0 && (
+            <>
+              <select value={bulk.appId} onChange={(e) => setBulk({ ...bulk, appId: e.target.value })} style={{ maxWidth: 320, padding: '6px 8px' }} aria-label="File the selected emails on">
+                <option value="">— file them on… —</option>
+                {apps.map((a) => (
+                  <option key={a.id} value={a.id}>{a.clientNumber ? `${a.clientNumber} — ` : ''}{a.title}</option>
+                ))}
+              </select>
+              <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center', fontWeight: 400, margin: 0 }}>
+                <input type="checkbox" style={{ width: 14 }} checked={bulk.remember} onChange={(e) => setBulk({ ...bulk, remember: e.target.checked })} />
+                remember the senders
+              </label>
+              <button type="button" className="btn-sm" onClick={fileChosen} disabled={!bulk.appId || busy === 'bulk'}>
+                {busy === 'bulk' && bulk.progress ? <><span className="spinner" /> {bulk.progress}</> : `File ${chosen.length}`}
+              </button>
+              <button type="button" className="btn-secondary btn-sm" onClick={ignoreChosen} disabled={busy === 'bulk'}>Ignore {chosen.length}</button>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => setSel(new Set())} disabled={busy === 'bulk'}>Clear</button>
+            </>
+          )}
+        </div>
+      )}
+
       {msgs.map((m) => {
         const st = STATUS[m.status] || { label: m.status, cls: '' };
         const app = appOf(m.appId);
         const p = pick[m.id] || { appId: m.candidates?.[0] || '', remember: true };
         return (
           <div className="row" key={m.id} style={{ alignItems: 'flex-start' }}>
+            {waiting.length > 0 && (
+              <div style={{ width: 22, flex: '0 0 22px', paddingTop: 3 }}>
+                {isWaiting(m) && <input type="checkbox" checked={sel.has(m.id)} onChange={() => toggle(m.id)} aria-label={`Select ${m.subject || 'this email'}`} style={{ width: 16, height: 16 }} />}
+              </div>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>
                 {m.subject || '(no subject)'} <span className={`chip ${st.cls}`} style={{ marginLeft: 6 }}>{st.label}</span>
@@ -148,7 +229,10 @@ export default function AdminMail() {
               )}
               {m.skipped?.length > 0 && <div className="small muted">Left out: {m.skipped.map((x) => `${x.name} (${x.reason})`).join('; ')}</div>}
               {m.error && <div className="small" style={{ color: 'var(--danger)' }}>{m.error}</div>}
-              {(m.status === 'unassigned' || (m.status === 'no-attachments' && !m.appId)) && (
+              {m.status === 'ignored' && (
+                <button type="button" className="btn-ghost btn-sm" style={{ paddingLeft: 0 }} onClick={() => act({ action: 'restore', id: m.id }, `r${m.id}`)} disabled={busy === `r${m.id}`}>Put back</button>
+              )}
+              {isWaiting(m) && !chosen.length && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
                   <select value={p.appId} onChange={(e) => setPick({ ...pick, [m.id]: { ...p, appId: e.target.value } })} style={{ maxWidth: 360, padding: '6px 8px' }}>
                     <option value="">— choose the client&apos;s file —</option>

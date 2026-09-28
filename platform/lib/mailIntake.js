@@ -472,9 +472,21 @@ export async function assignMessage(id, appId, { remember = false } = {}) {
 }
 
 export async function ignoreMessage(id) {
-  pending.delete(id);
   await saveMailStore((s) => {
-    if (s.messages[id]) s.messages[id].status = 'ignored';
+    const m = s.messages[id];
+    if (!m || m.status === 'ignored' || !['unassigned', 'no-attachments'].includes(m.status)) return;
+    m.prevStatus = m.status;
+    m.status = 'ignored';
+  });
+}
+
+/** Undo "Ignore": the message waits for a file again (its content is fetched again when filed). */
+export async function restoreMessage(id) {
+  await saveMailStore((s) => {
+    const m = s.messages[id];
+    if (m?.status !== 'ignored') return;
+    m.status = m.prevStatus || 'unassigned';
+    delete m.prevStatus;
   });
 }
 

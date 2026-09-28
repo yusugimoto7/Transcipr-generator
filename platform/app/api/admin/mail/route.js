@@ -1,4 +1,4 @@
-import { readMailStore, mailConfig, checkMail, assignMessage, ignoreMessage, startBackfill, backfillStatus } from '@/lib/mailIntake';
+import { readMailStore, mailConfig, checkMail, assignMessage, ignoreMessage, restoreMessage, startBackfill, backfillStatus } from '@/lib/mailIntake';
 import { ensureMailPoller } from '@/lib/mailPoller';
 import { listAllApplications } from '@/lib/store';
 import { json, error, requireStaff } from '@/lib/api';
@@ -25,7 +25,7 @@ export async function GET() {
   });
 }
 
-/** { action: 'check' } | { action: 'backfill' } | { action: 'assign', id, appId, remember? } | { action: 'ignore', id } */
+/** { action: 'check' } | { action: 'backfill' } | { action: 'assign', id, appId, remember? } | { action: 'ignore', id | ids } | { action: 'restore', id } */
 export async function POST(req) {
   const { error: err } = await requireStaff();
   if (err) return err;
@@ -46,7 +46,12 @@ export async function POST(req) {
     }
     if (body.action === 'assign') return json({ message: await assignMessage(String(body.id), String(body.appId), { remember: Boolean(body.remember) }) });
     if (body.action === 'ignore') {
-      await ignoreMessage(String(body.id));
+      const ids = Array.isArray(body.ids) ? body.ids.map(String) : [String(body.id)];
+      for (const id of ids) await ignoreMessage(id);
+      return json({ ok: true, ignored: ids.length });
+    }
+    if (body.action === 'restore') {
+      await restoreMessage(String(body.id));
       return json({ ok: true });
     }
     return error('Unknown action.');
