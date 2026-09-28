@@ -326,9 +326,22 @@ export default function App() {
       // the deck stays available next run.
       const fresh = parsed.filter((t) => !isSeen(t, seenTitles, seenUrls));
 
+      // A tab opened from "Next topic" carries ?after=<key of the card that
+      // was showing>: start on the card after it. Consumed once, so a later
+      // refresh does not keep skipping.
+      let start = 0;
+      try {
+        const after = new URLSearchParams(window.location.search).get("after");
+        if (after) {
+          const i = fresh.findIndex((t) => (urlKey(t) || topicKey(t)) === after);
+          if (i >= 0) start = Math.min(i + 1, Math.max(0, fresh.length - 1));
+          window.history.replaceState(null, "", window.location.pathname);
+        }
+      } catch (_) {}
+
       resetHistory();
       setTopics(fresh);
-      setIndex(0);
+      setIndex(start);
       setUpdatedAt(new Date());
       if (fresh.length === 0) {
         setTopicError("خبر تازه‌ای که قبلاً ندیده باشی وجود نداره. اخبار مهاجرتی هر روز منتشر نمی‌شه — بعداً دوباره «Refresh» رو بزن.");
@@ -643,6 +656,22 @@ export default function App() {
               <ActionBtn kind="reject" onClick={doReject} disabled={!!exiting} />
               <ActionBtn kind="approve" onClick={doApprove} disabled={!!exiting} />
             </div>
+          )}
+          {!loadingTopics && current && topics[index + 1] && (
+            // A real link: left-click skips to the next card without deciding
+            // on this one (it stays unseen); right-click / middle-click opens
+            // the deck in a new tab already positioned on the next card.
+            <a
+              href={"/?after=" + encodeURIComponent(urlKey(current) || topicKey(current))}
+              onClick={(e) => {
+                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault();
+                if (!exiting) advance();
+              }}
+              style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 16, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              Next topic →
+            </a>
           )}
           {!loadingTopics && current && (
             <div style={{ textAlign: "center", marginTop: 12, fontSize: 11.5, color: "rgba(242,229,192,0.4)" }}>
