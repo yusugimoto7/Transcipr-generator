@@ -5,6 +5,10 @@ import { json, error, requireAppAccess } from '@/lib/api';
 import { ROLES, normNumber, isDefaultTitle, intakeName } from '@/lib/cases';
 import { forViewer } from '@/lib/emails';
 import { logActivity } from '@/lib/activity';
+import { teamFilename } from '@/lib/mailIntake';
+import { renameFile } from '@/lib/drive';
+import { startExtractJob } from '@/lib/extractJob';
+import { getAppType } from '@/lib/appTypes';
 
 export async function GET(_req, { params }) {
   const { app, role, error: err } = await requireAppAccess(params.id);
@@ -39,6 +43,8 @@ export async function PATCH(req, { params }) {
   const validIds = new Set(everyField().map((f) => f.id));
   const staff = ['admin', 'manager'].includes(effectiveRole(user));
   let conflict = null;
+  let typeChanged = false;
+  const renamed = [];
 
   const updated = await updateApplication(
     app.id,
@@ -53,6 +59,8 @@ export async function PATCH(req, { params }) {
         for (const [k, v] of Object.entries(body.data)) {
           if (validIds.has(k)) a.data[k] = v;
         }
+        // Study permits: the intended date of entry follows the program start date unless set.
+        if (body.data.programStart && !a.data.entryDate && validIds.has('entryDate')) a.data.entryDate = body.data.programStart;
         a.dataVersion = (Number(a.dataVersion) || 0) + 1;
         // A file created without a name takes the name from the intake (as in the passport).
         if (isDefaultTitle(a.title) && intakeName(a)) a.title = intakeName(a);
@@ -66,7 +74,23 @@ export async function PATCH(req, { params }) {
         if ('groupId' in body) a.groupId = typeof body.groupId === 'string' && body.groupId.trim() ? body.groupId.trim() : null;
         if (body.representation === 'self' || body.representation === 'firm') a.representation = body.representation;
         if (typeof body.type === 'string' && APP_TYPES[body.type]) {
-          a.type = body.type;
+          if (a.type !== body.type) {
+            typeChanged = true;
+            // A new type asks for other fields and has another checklist: read every
+            // document again for it, and give files with no checklist code ("000 - …")
+            // their code in the new checklist.
+            a.type = body.type;
+            for (const d of a.documents || []) {
+              delete d.extractedAt;
+              if (/^000 - /.test(d.filename || '') && d.category) {
+                const nm = teamFilename(a, d);
+                if (nm && !/^000 - /.test(nm) && nm !== d.filename) {
+                  renamed.push({ driveId: d.driveId || null, name: nm });
+                  d.filename = nm;
+                }
+              }
+            }
+          }
           a.typeGuessed = false; // the team chose it
         }
         if (ROLES.includes(body.applicantRole)) a.applicantRole = body.applicantRole;
@@ -88,6 +112,12 @@ export async function PATCH(req, { params }) {
       { error: 'This file was changed by someone else since you opened it.', conflict: true, application: conflict },
       409
     );
+  }
+  if (typeChanged && updated) {
+    // Rename on Drive too, then read everything again with the new type's fields (background).
+    for (const r of renamed) if (r.driveId) renameFile(r.driveId, r.name).catch((e) => console.error(`[drive] rename: ${e.message}`));
+    if ((updated.documents || []).length && process.env.OPENAI_API_KEY) startExtractJob(app.id, { all: true }).catch((e) => console.error(`[extract] after type change: ${e.message}`));
+    await logActivity(app.id, user, 'Changed the application type — documents are read again', { detail: getAppType(updated.type).title, items: renamed.map((r) => r.name) });
   }
   // Team activity log.
   if (updated) {

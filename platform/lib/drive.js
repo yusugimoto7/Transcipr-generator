@@ -249,6 +249,15 @@ export async function updateFile(id, name, mime, buffer) {
   });
 }
 
+/** Rename a Drive file (metadata only). */
+export async function renameFile(id, name) {
+  return call(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,name`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+}
+
 /** Move a file to Drive's bin (recoverable for 30 days). */
 export async function trashFile(id) {
   return call(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id`, {

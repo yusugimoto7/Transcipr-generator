@@ -212,14 +212,20 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
       }
       return;
     }
-    const current = appRef.current.data || {};
+    // The server already filled the empty fields (data.filled): load its copy.
+    const before = appRef.current.data || {};
+    if (data.data) patchLocal({ data: data.data, dataVersion: data.dataVersion });
+    const filled = new Set(data.filled || []);
     const rows = [];
     let applied = 0;
     for (const [k, v] of entries) {
-      const yours = String(current[k] ?? '');
+      const yours = String((filled.has(k) ? before[k] : (data.data || before)[k]) ?? '');
       let status;
-      if (!yours.trim()) {
-        onExtracted(k, v);
+      if (filled.has(k)) {
+        applied++;
+        status = 'added';
+      } else if (!yours.trim()) {
+        onExtracted(k, v); // older servers: fill it from the page
         applied++;
         status = 'added';
       } else if (yours === String(v)) status = 'match';

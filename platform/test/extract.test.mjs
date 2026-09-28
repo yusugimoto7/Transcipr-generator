@@ -68,6 +68,11 @@ const stub = http.createServer((req, res) => {
       else if (/106 - School record - Nima/.test(h)) { cats[n] = 'transcripts'; owners[n] = 'child'; put(h, 'lastInstitution', 'Emam Reza High School'); }
       else if (/105 - Degree - Zahra/.test(h)) { cats[n] = 'transcripts'; put(h, 'highestEducation', 'Bachelor of Science'); put(h, 'lastInstitution', 'University of Tehran'); }
       else if (/132 - Work permit/.test(h)) { cats[n] = 'spouse-status'; owners[n] = 'spouse'; put(h, 'spouseName', 'Asghar M'); put(h, 'inviterPermitExpiry', '2027-05-01'); }
+      else if (/LOA/.test(h)) {
+        cats[n] = 'loa';
+        // Only a study file asks for these fields; the model answers the way it sees them.
+        if (/levelOfStudy/.test(instruction)) { put(h, 'levelOfStudy', "Master's degree"); put(h, 'tuitionCost', '$21,950 CAD'); put(h, 'programStart', '2019-01-02'); put(h, 'programEnd', '2021-03-31'); put(h, 'schoolName', 'University Canada West'); }
+      }
       else if (/113 - /.test(h)) cats[n] = 'certificates'; // the AI guesses wrong; the code must win
       else if (/Intake/.test(h)) cats[n] = 'internal';
       else cats[n] = 'other';
@@ -260,11 +265,32 @@ try {
   r = await call('PATCH', `/api/applications/${appId}/upload`, { docId: doc('103 - Passport - Zahra').id, reviewed: true });
   ok(r.status === 200 && r.data.documents.find((d) => d.filename.startsWith('103 - Passport - Zahra')).verification.reviewedBy === 'Boss', 'a person can sign off a document');
   ok(after.readFor === 'Zahra Mousavi' && (await call('GET', `/api/applications/${appId}/extract`)).data.applicant === 'Zahra Mousavi', 'the applicant name is remembered for next time');
-  ok((after.dataVersion || 0) === (before.dataVersion || 0), 'reading does not touch the intake version');
+  ok(after.data.givenName === 'Zahra' && after.lastReading?.filled?.includes('givenName'), 'the reading fills empty intake fields itself, even with nobody on the page');
+  ok((after.dataVersion || 0) === (before.dataVersion || 0) + 1, 'once, as one change to the intake');
 
-  // The page then fills the intake — with the version it loaded before reading.
-  r = await call('PATCH', `/api/applications/${appId}`, { data: { givenName: 'Zahra' }, baseDataVersion: before.dataVersion || 0 });
-  ok(r.status === 200 && r.data.application.data.givenName === 'Zahra', 'filling the intake after reading saves without a conflict');
+  // The page loads that version from the reading result, so its next save has no conflict.
+  const res = (await call('GET', `/api/applications/${appId}/extract`)).data.job?.result;
+  r = await call('PATCH', `/api/applications/${appId}`, { data: { cityOfBirth: 'Tehran' }, baseDataVersion: res?.dataVersion ?? after.dataVersion });
+  ok(r.status === 200 && r.data.application.data.givenName === 'Zahra' && r.data.application.data.cityOfBirth === 'Tehran', 'saving after reading works without a conflict');
+
+  // A file read as a visitor visa, then changed to a study permit: read again for the study fields.
+  r = await call('POST', '/api/applications', { type: 'trv-outside', title: 'Hamed Test', clientNumber: 'S26281' });
+  const loaApp = r.data.application.id;
+  await upload(loaApp, [['000 - LOA - Hamed.pdf', await smallPdf('loa'), 'application/pdf']]);
+  await call('POST', `/api/applications/${loaApp}/extract`, {});
+  await waitJob(loaApp);
+  let la = (await call('GET', `/api/applications/${loaApp}`)).data.application;
+  ok(!la.data.levelOfStudy && la.documents[0].category === 'loa', 'read as a visitor visa: no study fields');
+  await call('PATCH', `/api/applications/${loaApp}`, { type: 'study-permit' });
+  await new Promise((x) => setTimeout(x, 400));
+  await waitJob(loaApp);
+  la = (await call('GET', `/api/applications/${loaApp}`)).data.application;
+  ok(la.data.levelOfStudy === 'Master’s degree', `after the type change the LOA is read again: level of study ${la.data.levelOfStudy}`);
+  ok(la.data.tuitionCost === 21950, `the first-year tuition "$21,950 CAD" is stored as a number (${JSON.stringify(la.data.tuitionCost)})`);
+  ok(la.data.programStart === '2019-01-02' && la.data.programEnd === '2021-03-31', 'program dates exactly as on the letter');
+  ok(la.data.entryDate === '2019-01-02', 'the intended date of entry follows the program start date');
+  ok(!/^000 - /.test(la.documents[0].filename) && /LOA/.test(la.documents[0].filename), `the LOA gets its code in the study checklist (${la.documents[0].filename})`);
+  ok(seen.instructions.some((t) => /FIRST academic year/.test(t) && /never\s+rounded/.test(t)), 'the reading instructions cover LOAs: first-year tuition, exact dates');
 
   // Only new files are read next time.
   const callsBefore = seen.headers.length;

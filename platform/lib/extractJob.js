@@ -227,6 +227,26 @@ export function toOption(value, options) {
   return best && !tie ? best : value;
 }
 
+/**
+ * A model answer in the field's shape, or null to drop it: numbers without
+ * currency or thousands separators ("$21,950 CAD" → 21950), dates only as a
+ * real YYYY-MM-DD.
+ */
+export function cleanValue(def, v) {
+  if (def.type === 'number') {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    const m = String(v).replace(/[,\s]/g, '').match(/-?\d+(?:\.\d+)?/);
+    return m ? Number(m[0]) : null;
+  }
+  if (def.type === 'date') {
+    const m = String(v).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const d = new Date(`${m[0]}T00:00:00Z`);
+    return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== m[0] ? null : m[0];
+  }
+  return v;
+}
+
 async function run(appId, app, batches, job) {
   const merged = { fields: {}, confidence: {}, sources: {}, notes: [] };
   const categoryById = {};
@@ -263,6 +283,8 @@ async function run(appId, app, batches, job) {
             continue;
           }
           if (def.options && typeof v === 'string') v = toOption(v, def.options);
+          v = cleanValue(def, v);
+          if (v == null) continue;
           const newRank = CONF_RANK[res.confidence?.[k]] || 0;
           const curRank = CONF_RANK[merged.confidence[k]] || 0;
           if (!(k in merged.fields) || newRank > curRank) {
@@ -300,6 +322,15 @@ async function run(appId, app, batches, job) {
       if (merged.sources[found]) merged.sources[f] = merged.sources[found];
     }
   }
+  // Study permits: the intended date of entry is the program start date unless the team says otherwise.
+  if (fieldDefs.has('entryDate') && !merged.fields.entryDate && !app.data?.entryDate) {
+    const start = merged.fields.programStart || app.data?.programStart;
+    if (start) {
+      merged.fields.entryDate = start;
+      merged.sources.entryDate = merged.sources.programStart || 'the program start date';
+      merged.confidence.entryDate = 'medium';
+    }
+  }
   if (dropped.size) {
     merged.notes.push(`Not used for the applicant because the document belongs to someone else: ${[...dropped].slice(0, 8).join('; ')}.`);
   }
@@ -309,8 +340,24 @@ async function run(appId, app, batches, job) {
   }
 
   // Save categories and mark what was read, so the next run only reads new files.
+  // Fill the intake's EMPTY fields here, on the server — whether or not anyone
+  // has the page open (email intake, Drive imports and re-reads run on their
+  // own). An answer already there is never overwritten; the page shows the
+  // differences for the team to choose.
   const now = new Date().toISOString();
+  const filled = [];
   const updated = await updateApplication(appId, (a) => {
+    a.data ||= {};
+    for (const [k, v] of Object.entries(merged.fields)) {
+      if (!fieldDefs.has(k) || v == null || String(v).trim() === '') continue;
+      const cur = a.data[k];
+      if (cur == null || String(cur).trim() === '') {
+        a.data[k] = v;
+        filled.push(k);
+      }
+    }
+    if (filled.length) a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+    a.lastReading = { at: now, fields: merged.fields, sources: merged.sources, confidence: merged.confidence, filled, notes: merged.notes.slice(0, 20) };
     for (const d of a.documents || []) {
       if (readIds.has(d.id)) d.extractedAt = now;
       if (ownerById[d.id]) d.owner = ownerById[d.id];
@@ -380,7 +427,7 @@ async function run(appId, app, batches, job) {
   }
   job.checkCurrent = null;
 
-  job.result = { ...merged, documents: final?.documents || docsNow, check: verificationSummary(final?.documents || docsNow), version: final?.version };
+  job.result = { ...merged, filled, data: final?.data || updated?.data, dataVersion: final?.dataVersion ?? updated?.dataVersion, documents: final?.documents || docsNow, check: verificationSummary(final?.documents || docsNow), version: final?.version };
   job.status = 'done';
   job.finishedAt = new Date().toISOString();
 }

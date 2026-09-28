@@ -154,6 +154,7 @@ export const STUDY_PERMIT_SCHEMA = {
           label: 'Intended date of entry to Canada',
           type: 'date',
           required: true,
+          note: 'Filled from the program start date — change it if the client arrives earlier (e.g. for orientation).',
         },
       ],
     },

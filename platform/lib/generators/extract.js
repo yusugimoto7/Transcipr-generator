@@ -46,6 +46,19 @@ they (or a child) attend now. Iranian documents name levels in Persian:
 دکترای حرفه‌ای (پزشکی، دندانپزشکی، داروسازی) = Professional degree (medicine, dentistry, pharmacy, law).
 Most recent institution / field / dates / GPA describe the applicant's most recent studies.`;
 
+const STUDY_GUIDE = `Letters of acceptance (LOA), PAL and enrolment letters — read them fully, every page
+(a scanned LOA often has an IRCC information table on a later page):
+- levelOfStudy: the "Level of study" the school states (Master's degree, MBA, M.Sc., MEng → "Master’s degree";
+  Bachelor/BA/BSc → "Bachelor’s degree"; post-graduate/graduate certificate or diploma → "Post-graduate diploma";
+  college diploma/certificate → "College diploma / certificate"; PhD/doctorate → "Doctorate (PhD)").
+- tuitionCost: the estimated tuition for the FIRST academic year, as a number in CAD (e.g. "$21,950 CAD" → 21950).
+  Not the deposit or "fees prepaid".
+- programStart / programEnd: the program's start date and completion date EXACTLY as written (e.g. 2019-01-02 and
+  2021-03-31) — not the orientation dates, not the letter's expiry, and never rounded to the 1st of a month or the
+  end of a year. If only a month/term is given, leave the field out.
+- dliNumber (the O-number), schoolName, schoolCity, schoolProvince, programName from the same letter.
+Every date you return must be a real date that appears in a document — never estimate one.`;
+
 /**
  * Extract intake field values from uploaded documents.
  *
@@ -123,7 +136,7 @@ details), blank templates, sample files. Still extract any FIELD VALUES such for
 contain — classify the document itself as internal.)
 
 ${EDUCATION_GUIDE}
-${same ? `\nThe same person in two sections:\n${same}\n` : ''}
+${/levelOfStudy|programStart/.test(guide) ? `\n${STUDY_GUIDE}\n` : ''}${same ? `\nThe same person in two sections:\n${same}\n` : ''}
 Fields, by section:
 ${guide}
 
