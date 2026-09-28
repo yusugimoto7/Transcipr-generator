@@ -701,3 +701,4 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .em-quote { display: flex; gap: 6px; align-items: baseline; color: var(--ink-soft); font-size: 13px; font-style: italic; margin-top: 2px; }
 .em-body { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg, #f5f6f8); border-radius: 8px; padding: 10px 12px; margin-top: 8px; font-size: 13.5px; max-height: 420px; overflow: auto; }
 .em-mail h2 { overflow-wrap: anywhere; }
+.mail-sync { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--line); }
