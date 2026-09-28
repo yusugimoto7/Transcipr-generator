@@ -231,6 +231,16 @@ try {
   ok(ac.json.removed === 1 && (await hz('GET', `/api/applications/${naz.id}`)).status === 403, 'removing access closes the file for them');
   ok((await ng('POST', '/api/admin/access', { userId: negar.id, add: [naz.id] })).status === 400, 'access is set for account managers only (admins see everything)');
   ok((await hz('GET', '/api/admin/users')).status === 403, 'an account manager cannot open the admin panel');
+  // A super admin can limit an admin to chosen files (by default admins see everything).
+  ok((await ng('PATCH', '/api/admin/users', { id: negar.id, allFiles: false })).status === 403, 'an admin cannot limit their own (or another admin’s) files');
+  ok((await admin('PATCH', '/api/admin/users', { id: negar.id, allFiles: false })).status === 200, 'the super admin limits an admin');
+  ok((await ng('GET', `/api/applications/${naz.id}`)).status === 403, 'the limited admin no longer opens files not given to them');
+  const ngList = (await ng('GET', '/api/admin/applications')).json.applications;
+  ok(ngList.length === 0, 'and the admin panel lists only their files');
+  await admin('POST', '/api/admin/access', { userId: negar.id, add: [naz.id] });
+  ok((await ng('GET', `/api/applications/${naz.id}`)).status === 200, 'the super admin gives the admin a file');
+  await admin('PATCH', '/api/admin/users', { id: negar.id, allFiles: true });
+  ok((await ng('GET', '/api/admin/applications')).json.applications.length > 1, 'and can restore all files');
   // New files go to account managers automatically (unless turned off for them).
   let fresh = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Brand New', clientNumber: 'S29001' })).json.application;
   ok((await hz('GET', `/api/applications/${fresh.id}`)).status === 200, 'a new file is open to account managers by default');

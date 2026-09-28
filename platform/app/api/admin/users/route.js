@@ -72,6 +72,11 @@ export async function PATCH(req) {
   if (typeof body.active === 'boolean') patch.active = body.active;
   if (typeof body.name === 'string') patch.name = body.name;
   if (typeof body.autoNewFiles === 'boolean') patch.autoNewFiles = body.autoNewFiles;
+  if (typeof body.allFiles === 'boolean') {
+    if (me !== 'superadmin') return error('Only a super admin can change which files an admin sees.', 403);
+    if (theirs !== 'admin') return error('“All files” is set for admins only.');
+    patch.allFiles = body.allFiles;
+  }
   if (typeof body.password === 'string' && body.password) {
     if (body.password.length < 8) return error('Password must be at least 8 characters.');
     patch.passwordHash = await hashPassword(body.password);

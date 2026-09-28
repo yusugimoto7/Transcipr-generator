@@ -100,6 +100,8 @@ export function adminEmails() {
 export function userLevel(user) {
   if (!user) return null;
   if (adminEmails().includes(user.email)) return 'superadmin';
+  // The signed-in user (lib/auth getCurrentUser) carries its level; a stored record its role.
+  if (ROLES.includes(user.level)) return user.level;
   return ROLES.includes(user.role) ? user.role : 'applicant';
 }
 export const isSuperAdmin = (user) => userLevel(user) === 'superadmin';
@@ -124,7 +126,7 @@ export async function getUserById(id) {
 export async function listUsers() {
   const users = await readJson(USERS_FILE, []);
   // eslint-disable-next-line no-unused-vars
-  return users.map(({ passwordHash, ...u }) => ({ ...u, role: effectiveRole(u), level: userLevel(u), fixed: adminEmails().includes(u.email) }));
+  return users.map(({ passwordHash, ...u }) => ({ ...u, role: effectiveRole(u), level: userLevel(u), fixed: adminEmails().includes(u.email), allFilesAccess: seesAllFiles(u) }));
 }
 
 export async function createUser({ email, name, passwordHash, role = 'applicant', createdBy = null }) {
@@ -162,6 +164,7 @@ export async function updateUser(id, patch) {
     if (typeof patch.active === 'boolean') u.active = patch.active;
     if (typeof patch.name === 'string') u.name = patch.name.trim();
     if (typeof patch.autoNewFiles === 'boolean') u.autoNewFiles = patch.autoNewFiles;
+    if (typeof patch.allFiles === 'boolean') u.allFiles = patch.allFiles;
     if (typeof patch.passwordHash === 'string') u.passwordHash = patch.passwordHash;
     u.updatedAt = nowIso();
     await writeJson(USERS_FILE, users);
@@ -194,12 +197,22 @@ async function readAllApplications() {
 }
 
 /** Can this user open this application? */
+/**
+ * Does this user see every file? Super admins always; admins unless a super
+ * admin switched their "All files" off (then, like account managers, they see
+ * the files given to them).
+ */
+export function seesAllFiles(user) {
+  const level = userLevel(user);
+  return level === 'superadmin' || (level === 'admin' && user.allFiles !== false);
+}
+
 export function canAccess(user, app) {
   if (!user || !app) return false;
+  if (seesAllFiles(user)) return true;
   const role = effectiveRole(user);
-  if (role === 'admin') return true;
   if (app.userId === user.id || app.createdBy === user.id) return true;
-  if (role === 'manager') return (app.assignedTo || []).includes(user.id);
+  if (role === 'manager' || role === 'admin') return (app.assignedTo || []).includes(user.id);
   return false;
 }
 
@@ -236,7 +249,7 @@ export async function createApplication({
 }) {
   // Account managers get every new file by default (autoNewFiles, set per person in Team & access).
   const auto = (await readJson(USERS_FILE, []))
-    .filter((u) => u.active !== false && userLevel(u) === 'manager' && u.autoNewFiles !== false)
+    .filter((u) => u.active !== false && (userLevel(u) === 'manager' || (userLevel(u) === 'admin' && u.allFiles === false)) && u.autoNewFiles !== false)
     .map((u) => u.id);
   const app = {
     id: newId(),

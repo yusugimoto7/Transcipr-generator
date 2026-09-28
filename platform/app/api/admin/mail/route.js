@@ -1,6 +1,6 @@
 import { readMailStore, mailConfig, checkMail, assignMessage, ignoreMessage, restoreMessage, retryDrive, startBackfill, backfillStatus } from '@/lib/mailIntake';
 import { ensureMailPoller } from '@/lib/mailPoller';
-import { listAllApplications } from '@/lib/store';
+import { listAllApplications, canAccess } from '@/lib/store';
 import { json, error, requireStaff } from '@/lib/api';
 
 export const runtime = 'nodejs';
@@ -8,7 +8,7 @@ export const maxDuration = 300;
 
 /** Email intake: mailbox status, the messages seen, and the files to assign to. */
 export async function GET() {
-  const { error: err } = await requireStaff();
+  const { user, error: err } = await requireStaff();
   if (err) return err;
   ensureMailPoller();
   const cfg = mailConfig();
@@ -16,7 +16,7 @@ export async function GET() {
   const messages = Object.values(store.messages)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)))
     .slice(0, 200);
-  const apps = (await listAllApplications()).map((a) => ({ id: a.id, title: a.title, clientNumber: a.clientNumber || null, type: a.type }));
+  const apps = (await listAllApplications()).filter((a) => canAccess(user, a)).map((a) => ({ id: a.id, title: a.title, clientNumber: a.clientNumber || null, type: a.type }));
   return json({
     status: { configured: cfg.configured, host: cfg.host, user: cfg.user, folder: cfg.folder, pollMinutes: cfg.pollMinutes, clientsFolder: cfg.clientsFolder, lastCheckAt: store.lastCheckAt, lastError: store.lastError },
     messages,

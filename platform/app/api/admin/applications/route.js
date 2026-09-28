@@ -1,4 +1,4 @@
-import { listAllApplications, listUsers } from '@/lib/store';
+import { listAllApplications, listUsers, canAccess } from '@/lib/store';
 import { getAppType } from '@/lib/appTypes';
 import { unusedReason } from '@/lib/unused';
 import { caseKeyOf } from '@/lib/cases';
@@ -6,9 +6,10 @@ import { json, requireAdmin } from '@/lib/api';
 
 /** Every file in the system with owner and assignment info (admin only). */
 export async function GET() {
-  const { error: err } = await requireAdmin();
+  const { user: me, error: err } = await requireAdmin();
   if (err) return err;
-  const [apps, users] = await Promise.all([listAllApplications(), listUsers()]);
+  const [all, users] = await Promise.all([listAllApplications(), listUsers()]);
+  const apps = all.filter((a) => canAccess(me, a));
   const byId = new Map(users.map((u) => [u.id, u]));
   const name = (id) => byId.get(id)?.name || byId.get(id)?.email || '?';
   return json({
@@ -32,6 +33,6 @@ export async function GET() {
       caseKey: caseKeyOf(a),
       unused: unusedReason(a),
     })),
-    managers: users.filter((u) => u.level === 'manager' && u.active !== false),
+    managers: users.filter((u) => u.active !== false && !u.allFilesAccess && ['manager', 'admin'].includes(u.level)),
   });
 }

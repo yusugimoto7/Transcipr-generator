@@ -6,7 +6,6 @@ import { initials } from '@/components/TopBar';
 import { fmtDay } from '@/lib/format';
 
 const LEVEL = { superadmin: 'Super admin', admin: 'Admin', manager: 'Account manager', applicant: 'Client' };
-const ALL_FILES = new Set(['superadmin', 'admin']);
 
 /**
  * Admin → Team & access. Three layers: super admins (everything, including
@@ -68,7 +67,7 @@ export default function AdminTeam({ onChanged }) {
       <div className="levels">
         {[
           ['superadmin', ShieldCheck, 'Everything, including who is an admin. Set by ADMIN_EMAIL on the server, or by another super admin.'],
-          ['admin', Shield, 'Every client file. Adds account managers and decides which files each one can open.'],
+          ['admin', Shield, 'Every client file by default (a super admin can limit an admin to chosen files). Adds account managers and decides which files each one can open.'],
           ['manager', UserCog, 'Only the files given to them — they open and edit those, nothing else. By default they get every new file automatically.'],
         ].map(([k, Icon, text]) => (
           <div key={k} className={`level-card l-${k}`}>
@@ -116,10 +115,26 @@ export default function AdminTeam({ onChanged }) {
                       )}
                     </td>
                     <td>
-                      {ALL_FILES.has(u.level) ? (
+                      {u.level === 'superadmin' ? (
                         <span className="small muted">All files</span>
+                      ) : u.level === 'admin' && u.allFilesAccess ? (
+                        <div className="stack-xs">
+                          <span className="small muted">All files</span>
+                          {superMe && (
+                            <label className="check-label small" title="Untick to choose which files this admin can open">
+                              <input type="checkbox" checked onChange={() => patchUser(u.id, { allFiles: false }, `${u.name || u.email} now sees only the files you give them — choose them with Manage.`)} />
+                              Sees all files
+                            </label>
+                          )}
+                        </div>
                       ) : (
                         <div className="stack-xs">
+                          {u.level === 'admin' && superMe && (
+                            <label className="check-label small">
+                              <input type="checkbox" checked={false} onChange={() => patchUser(u.id, { allFiles: true }, `${u.name || u.email} sees every file again.`)} />
+                              Sees all files
+                            </label>
+                          )}
                           <button type="button" className={managing === u.id ? 'btn-navy btn-sm' : 'btn-secondary btn-sm'} onClick={() => setManaging(managing === u.id ? null : u.id)} disabled={u.active === false}>
                             <KeyRound size={14} aria-hidden="true" /> {clientsOf(u.id)} client{clientsOf(u.id) === 1 ? '' : 's'} · Manage
                           </button>

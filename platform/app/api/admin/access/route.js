@@ -1,4 +1,4 @@
-import { listAllApplications, updateApplication, getUserById, userLevel } from '@/lib/store';
+import { listAllApplications, updateApplication, getUserById, userLevel, seesAllFiles, canAccess } from '@/lib/store';
 import { notify, fileLabel } from '@/lib/notify';
 import { json, error, requireAdmin } from '@/lib/api';
 
@@ -18,11 +18,13 @@ export async function POST(req) {
   }
   const target = await getUserById(String(body.userId || ''));
   if (!target) return error('User not found.', 404);
-  if (userLevel(target) !== 'manager') return error('Admins and super admins already see every file; access is set for account managers only.');
+  if (seesAllFiles(target)) return error('This person already sees every file.');
+  if (userLevel(target) === 'admin' && userLevel(actor) !== 'superadmin') return error('Only a super admin can change an admin’s files.', 403);
   if (target.active === false) return error('This account is deactivated.');
   const add = new Set((Array.isArray(body.add) ? body.add : []).map(String));
   const remove = new Set((Array.isArray(body.remove) ? body.remove : []).map(String));
-  const apps = await listAllApplications();
+  // Only files the person giving access can see themselves.
+  const apps = (await listAllApplications()).filter((a) => canAccess(actor, a));
   const given = [];
   let removed = 0;
   for (const a of apps) {
