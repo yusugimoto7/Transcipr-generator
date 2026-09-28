@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { DATA_DIR, listAllApplications, updateApplication, createApplication, listUsers, adminEmails, getUserByEmail, effectiveRole } from './store';
-import { odooConfig, listCards, cardUrl } from './odoo';
+import { odooConfig, listCards, cardUrl, workStages } from './odoo';
 import { caseKeyOf, normNumber, displayName, isDefaultTitle } from './cases';
 
 /**
@@ -118,7 +118,7 @@ export async function syncOdoo({ create = true } = {}) {
     const log = (text, appId) => store.log.unshift({ at: new Date().toISOString(), text, appId: appId || null });
     try {
       store.lastError = null;
-      const cards = await listCards(); // open cards, newest first
+      const cards = await listCards({ stages: workStages() }); // cards in the stages the team works on, newest first
       result.cards = cards.length;
       const newestByNumber = new Map();
       for (const c of cards) if (c.number && !newestByNumber.has(c.number)) newestByNumber.set(c.number, c);
@@ -173,7 +173,7 @@ export async function syncOdoo({ create = true } = {}) {
           await updateApplication(
             app.id,
             (a) => {
-              a.odoo = { taskId: card.taskId, title: card.title, number: card.number, url: cardUrl(card.taskId), linkedAt: new Date().toISOString(), manual: false };
+              a.odoo = { taskId: card.taskId, title: card.title, number: card.number, url: cardUrl(card.taskId), linkedAt: new Date().toISOString(), manual: false, imported: true };
               if (!card.type) a.typeGuessed = true;
               return a;
             },
@@ -184,6 +184,7 @@ export async function syncOdoo({ create = true } = {}) {
           log(`New file from Odoo: ${card.number || ''} ${card.name}${card.type ? '' : ' (type to check)'}`.trim(), app.id);
         }
       }
+
     } catch (e) {
       store.lastError = e.message;
       result.error = e.message;

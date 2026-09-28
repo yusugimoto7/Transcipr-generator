@@ -27,12 +27,13 @@ ok(detectType('Study Permit') === 'study-permit' && detectType('Visitor visa') =
 /* ------------------------------ stub Odoo ------------------------------ */
 const projectsAsked = [];
 const tasks = [
-  { id: 11, name: 'S26213 - Anahita Mousavi', create_date: '2026-03-01 10:00:00', write_date: '2026-09-01 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [1], user_ids: [] },
-  { id: 12, name: 'S26213 - Anahita Mousavi - 2025', create_date: '2025-10-01 10:00:00', write_date: '2025-10-01 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [], user_ids: [] },
-  { id: 13, name: 'S26301 - Reza Karimi - Visitor', create_date: '2026-09-01 10:00:00', write_date: '2026-09-02 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [], user_ids: [5] },
-  { id: 14, name: 'S26302 - Nazanin Rahimi', create_date: '2026-09-10 10:00:00', write_date: '2026-09-10 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [], user_ids: [] },
+  { id: 11, name: 'S26213 - Anahita Mousavi', create_date: '2026-03-01 10:00:00', write_date: '2026-09-01 10:00:00', stage_id: [1, 'Documents Received from Client'], fold: false, tag_ids: [1], user_ids: [] },
+  { id: 12, name: 'S26213 - Anahita Mousavi - 2025', create_date: '2025-10-01 10:00:00', write_date: '2025-10-01 10:00:00', stage_id: [1, 'Documents Received from Client'], fold: false, tag_ids: [], user_ids: [] },
+  { id: 13, name: 'S26301 - Reza Karimi - Visitor', create_date: '2026-09-01 10:00:00', write_date: '2026-09-02 10:00:00', stage_id: [2, 'SOP Done'], fold: false, tag_ids: [], user_ids: [5] },
+  { id: 14, name: 'S26302 - Nazanin Rahimi', create_date: '2026-09-10 10:00:00', write_date: '2026-09-10 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
   { id: 15, name: 'S26100 - Old Closed', create_date: '2026-01-10 10:00:00', write_date: '2026-02-10 10:00:00', stage_id: [9, 'Done'], fold: true, tag_ids: [], user_ids: [] },
-  { id: 16, name: 'S26400 - Parisa New', create_date: '2026-09-20 10:00:00', write_date: '2026-09-20 10:00:00', stage_id: [1, 'In progress'], fold: false, tag_ids: [], user_ids: [] },
+  { id: 16, name: 'S26400 - Parisa New', create_date: '2026-09-20 10:00:00', write_date: '2026-09-20 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
+  { id: 17, name: 'S26500 - Other Stage', create_date: '2026-09-21 10:00:00', write_date: '2026-09-21 10:00:00', stage_id: [4, 'Submitted'], fold: false, tag_ids: [], user_ids: [] },
 ];
 let writes = 0;
 const odoo = http.createServer(async (req, res) => {
@@ -99,7 +100,7 @@ try {
 
   const st = (await admin('POST', '/api/admin/odoo')).json;
   ok(projectsAsked.length > 0 && projectsAsked.every((d) => d.includes('["project_id","=",3]')), 'the "Visa - TR" project is found among the others');
-  ok(!st.lastError && st.lastResult?.cards === 5, `the sync reads the open cards only (${st.lastResult?.cards} of 6; the closed one is left out)`);
+  ok(!st.lastError && st.lastResult?.cards === 5, `the sync reads only the cards in Documents Received / SOP Done / Documents Prepared (${st.lastResult?.cards} of 7)`);
   a = (await admin('GET', `/api/applications/${ana.id}`)).json.application;
   ok(a.clientNumber === 'S26213' && a.odoo?.taskId === 11, 'the unnumbered file is matched by name to the newest of its two cards');
   const c = (await admin('GET', `/api/applications/${child.id}`)).json.application;
@@ -115,6 +116,7 @@ try {
   const parisaFull = parisa && (await admin('GET', `/api/applications/${parisa.id}`)).json.application;
   ok(parisaFull?.typeGuessed === true, 'a card that doesn’t say the type is marked for the team to check');
   ok(!all.some((x) => x.clientNumber === 'S26100') && all.filter((x) => x.clientNumber === 'S26213').length === 2, 'no file for the closed card, and no second file for the older card');
+  ok(!all.some((x) => x.clientNumber === 'S26500'), 'no file for a card in another stage (Submitted)');
 
   const again = (await admin('POST', '/api/admin/odoo')).json;
   ok(again.lastResult?.created === 0 && again.lastResult?.linked === 0, 'a second sync changes nothing');

@@ -10,6 +10,9 @@ import { APP_TYPE_LIST } from './appTypes';
  *                  odoo.com it is usually the subdomain)
  *   ODOO_USER      the login (email) of the Odoo user whose API key is used
  *   ODOO_API_KEY   Odoo → My Profile → Account Security → New API Key
+ *   ODOO_STAGES    the stages (columns) whose cards the platform works on, separated
+ *                  by "|" (default "Documents Received|SOP Done|Documents Prepared";
+ *                  a stage matches when its name contains all the words)
  *   ODOO_PROJECT   project name to read (default "Visa - TR"; word order and
  *                  punctuation don't matter, so "TR Visa" finds it too)
  *
@@ -86,7 +89,7 @@ const TYPE_WORDS = [
   [/\bsowp\b/i, 'sowp-inside'],
   [/business/i, 'trv-business'],
   [/\bowp\b|open\s*work|work\s*permit/i, 'owp-outside'],
-  [/study|student|\bsp\b|college|university/i, 'study-permit'],
+  [/study|student|college|university/i, 'study-permit'],
   [/\btrv\b|visitor|visit|tourist|multiple\s*entry/i, 'trv-outside'],
 ];
 
@@ -126,11 +129,29 @@ async function findProject(name) {
 }
 
 /**
- * The open cards of the TR Visa project, newest first:
+ * The cards of the Visa - TR project, newest first (only those in `stages`
+ * when given; otherwise the open ones):
  * [{ taskId, title, number, name, type, createdAt, updatedAt, stage, tags, assignees }]
  * Archived cards and cards in folded (closed) stages are left out unless `all`.
  */
-export async function listCards({ all = false } = {}) {
+/** The stages the platform works on (ODOO_STAGES). */
+export function workStages() {
+  return String(process.env.ODOO_STAGES || 'Documents Received|SOP Done|Documents Prepared')
+    .split('|')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/** Is a card's stage one of these? ("Documents Received from Client" matches "Documents Received".) */
+export function inStages(stage, stages) {
+  const have = words(stage);
+  return stages.some((st) => {
+    const want = words(st);
+    return want.length > 0 && want.every((w) => have.includes(w));
+  });
+}
+
+export async function listCards({ all = false, stages = null } = {}) {
   const cfg = odooConfig();
   const project = await findProject(cfg.project);
 
@@ -138,7 +159,7 @@ export async function listCards({ all = false } = {}) {
   const has = (f) => fieldCache.includes(f);
   const fields = ['id', 'name', 'create_date', 'write_date', 'stage_id', ...['tag_ids', 'user_ids', 'user_id', 'partner_id'].filter(has)];
   const domain = [['project_id', '=', project.id]];
-  if (!all && has('stage_id')) domain.push(['stage_id.fold', '=', false]);
+  if (!all && !stages?.length && has('stage_id')) domain.push(['stage_id.fold', '=', false]);
   const tasks = await call('project.task', 'search_read', [domain], { fields, order: 'create_date desc', limit: 2000 });
 
   // Tag names and assignee emails, in two batch reads.
@@ -147,7 +168,7 @@ export async function listCards({ all = false } = {}) {
   const userIds = [...new Set(tasks.flatMap((t) => [...(t.user_ids || []), ...(Array.isArray(t.user_id) ? [t.user_id[0]] : [])]))];
   const users = userIds.length ? new Map((await call('res.users', 'read', [userIds], { fields: ['login', 'email'] })).map((u) => [u.id, String(u.email || u.login || '').toLowerCase()])) : new Map();
 
-  return tasks.map((t) => {
+  const cards = tasks.map((t) => {
     const p = parseTitle(t.name);
     const tagNames = (t.tag_ids || []).map((id) => tags.get(id)).filter(Boolean);
     const stage = Array.isArray(t.stage_id) ? t.stage_id[1] : '';
@@ -165,6 +186,7 @@ export async function listCards({ all = false } = {}) {
       assignees: [...(t.user_ids || []), ...(Array.isArray(t.user_id) ? [t.user_id[0]] : [])].map((id) => users.get(id)).filter(Boolean),
     };
   });
+  return stages?.length ? cards.filter((c) => inStages(c.stage, stages)) : cards;
 }
 
 /** Odoo datetimes are "YYYY-MM-DD HH:MM:SS" in UTC. */
