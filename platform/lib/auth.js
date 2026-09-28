@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-import { getUserById, effectiveRole } from './store';
+import { getUserById, effectiveRole, userLevel } from './store';
 
 const COOKIE_NAME = 'cvp_session';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
@@ -54,7 +54,7 @@ export async function getCurrentUser() {
     if (!user) return null;
     // eslint-disable-next-line no-unused-vars
     const { passwordHash, ...safe } = user;
-    return { ...safe, role: effectiveRole(user) };
+    return { ...safe, role: effectiveRole(user), level: userLevel(user) };
   } catch {
     return null;
   }

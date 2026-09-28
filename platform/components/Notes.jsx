@@ -6,6 +6,8 @@ import LocalTime from '@/components/LocalTime';
 import { notesFor, noteDocLabel, NOTE_SECTIONS } from '@/lib/notes';
 import { initials } from '@/components/TopBar';
 
+const LEVEL = { superadmin: 'Super admin', admin: 'Admin', manager: 'Account manager' };
+
 async function send(appId, body) {
   const res = await fetch(`/api/applications/${appId}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const d = await res.json().catch(() => ({}));
@@ -38,7 +40,7 @@ function NoteText({ n }) {
 function Note({ n, viewer, onDelete, where, highlight = false }) {
   const mine = viewer && (n.by?.id === viewer.id || viewer.role === 'admin');
   return (
-    <li className={`note${highlight ? ' hl' : ''}`} id={`note-${n.id}`}>
+    <li className={`tnote${highlight ? ' hl' : ''}`} id={`note-${n.id}`}>
       {where}
       <NoteText n={n} />
       <div className="note-meta">
@@ -151,7 +153,7 @@ function NoteForm({ app, patchLocal, section, docId, placeholder, onError }) {
               <li key={u.id} role="option" aria-selected={i === menu.active}>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); pick(u); }} className={i === menu.active ? 'on' : ''}>
                   <span className="avatar sm" aria-hidden="true">{initials(u.name, u.email)}</span>
-                  <span>{u.name}<span className="faint small"> · {u.role === 'admin' ? 'Admin' : 'Account manager'}</span></span>
+                  <span>{u.name}<span className="faint small"> · {LEVEL[u.level] || LEVEL[u.role] || 'Team'}</span></span>
                 </button>
               </li>
             ))}

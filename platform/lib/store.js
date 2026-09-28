@@ -26,7 +26,8 @@ const DATA_DIR = process.env.DATA_DIR
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const APPS_DIR = path.join(DATA_DIR, 'applications');
 
-export const ROLES = ['admin', 'manager', 'applicant'];
+export const ROLES = ['superadmin', 'admin', 'manager', 'applicant'];
+export const LEVEL_LABEL = { superadmin: 'Super admin', admin: 'Admin', manager: 'Account manager', applicant: 'Client' };
 
 // Serialize writes to a given file to avoid interleaved read-modify-write races.
 const locks = new Map();
@@ -87,11 +88,26 @@ export function adminEmails() {
     .filter(Boolean);
 }
 
-/** Role a user record effectively has (admin email always wins). */
-export function effectiveRole(user) {
+/**
+ * Three layers of staff:
+ *   super admin      the ADMIN_EMAIL account(s) and anyone made super admin — everything,
+ *                    including who is an admin;
+ *   admin            every file; manages account managers and which files they can open;
+ *   account manager  only the files given to them (app.assignedTo).
+ * `level` is that layer; `effectiveRole` is the access role used everywhere
+ * else, where a super admin counts as an admin.
+ */
+export function userLevel(user) {
   if (!user) return null;
-  if (adminEmails().includes(user.email)) return 'admin';
+  if (adminEmails().includes(user.email)) return 'superadmin';
   return ROLES.includes(user.role) ? user.role : 'applicant';
+}
+export const isSuperAdmin = (user) => userLevel(user) === 'superadmin';
+
+/** Role a user record effectively has for access (a super admin is an admin). */
+export function effectiveRole(user) {
+  const level = userLevel(user);
+  return level === 'superadmin' ? 'admin' : level;
 }
 
 export async function getUserByEmail(email) {
@@ -108,7 +124,7 @@ export async function getUserById(id) {
 export async function listUsers() {
   const users = await readJson(USERS_FILE, []);
   // eslint-disable-next-line no-unused-vars
-  return users.map(({ passwordHash, ...u }) => ({ ...u, role: effectiveRole(u) }));
+  return users.map(({ passwordHash, ...u }) => ({ ...u, role: effectiveRole(u), level: userLevel(u), fixed: adminEmails().includes(u.email) }));
 }
 
 export async function createUser({ email, name, passwordHash, role = 'applicant', createdBy = null }) {

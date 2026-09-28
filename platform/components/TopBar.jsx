@@ -45,7 +45,7 @@ export default function TopBar({ user }) {
           <span className="avatar" aria-hidden="true">{initials(user.name, user.email)}</span>
           <span className="who">
             <span>{user.name || user.email}</span>
-            <span>{user.role === 'applicant' ? 'Client' : user.role === 'manager' ? 'Account manager' : user.role}</span>
+            <span>{{ superadmin: 'Super admin', admin: 'Admin', manager: 'Account manager', applicant: 'Client' }[user.level || user.role] || user.role}</span>
           </span>
         </div>
       )}

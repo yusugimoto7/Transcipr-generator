@@ -713,8 +713,8 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .notes-head { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
 .notes-head .count { margin-left: 2px; }
 .note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.note { background: #fff; border: 1px solid var(--line); border-left: 3px solid #e8a33d; border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
-.note p { margin: 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tnote { background: #fff; border: 1px solid var(--line); border-left: 3px solid #e8a33d; border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; }
+.tnote p { margin: 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .note-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-soft); }
 .note-meta .btn-ghost { padding: 2px 6px; }
 .note-where { all: unset; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--link, #1f5fbf); display: inline-flex; gap: 4px; align-items: center; overflow-wrap: anywhere; }
@@ -771,7 +771,30 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .mention-menu button { all: unset; box-sizing: border-box; cursor: pointer; display: flex; gap: 8px; align-items: center; width: 100%; padding: 6px 8px; border-radius: 6px; font-size: 13.5px; }
 .mention-menu button.on, .mention-menu button:hover { background: #eef3fb; }
 .avatar.sm { width: 24px; height: 24px; font-size: 10px; }
-.note.hl { border-left-color: #1f5fbf; box-shadow: 0 0 0 3px rgba(31, 95, 191, .18); }
+.tnote.hl { border-left-color: #1f5fbf; box-shadow: 0 0 0 3px rgba(31, 95, 191, .18); }
 .side-item.divided { margin-top: 10px; position: relative; }
 .side-item.divided::before { content: ''; position: absolute; left: 12px; right: 12px; top: -6px; border-top: 1px solid var(--line); }
 @media (max-width: 720px) { .notif-panel { position: fixed; left: 12px; right: 12px; top: calc(var(--top-h) + 6px); width: auto; } }
+
+/* Team & access */
+.levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.level-card { background: var(--panel, #fff); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; border-top: 3px solid var(--line-strong); }
+.level-card p { margin: 6px 0 0; }
+.level-top { display: flex; align-items: center; gap: 6px; }
+.level-top .count { margin-left: auto; }
+.level-card.l-superadmin { border-top-color: #b8860b; }
+.level-card.l-admin { border-top-color: var(--brand, #d52b1e); }
+.level-card.l-manager { border-top-color: #1f5fbf; }
+.chip.lv-superadmin { background: #fbf1d6; color: #7a5a00; }
+.chip.lv-admin { background: #fde8e6; color: #a11d12; }
+.chip.lv-manager { background: #eaf1ff; color: #1f5fbf; }
+.avatar.lv-superadmin { background: #b8860b; }
+.avatar.lv-admin { background: var(--brand, #d52b1e); }
+.avatar.lv-manager { background: #1f5fbf; }
+.access-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); max-height: 520px; overflow-y: auto; }
+.access-list li + li { border-top: 1px solid var(--line); }
+.access-row { display: flex; gap: 12px; align-items: center; padding: 10px 12px; cursor: pointer; margin: 0; font-weight: 400; }
+.access-row input { width: 17px; height: 17px; flex: 0 0 auto; }
+.access-row.on { background: #f4f8ff; }
+.access-row:hover { background: var(--hover, #f3f5f8); }
+@media (max-width: 720px) { .levels { grid-template-columns: 1fr; } }

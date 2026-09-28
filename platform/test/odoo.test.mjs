@@ -207,6 +207,31 @@ try {
   inbox = (await rz2('GET', '/api/notifications')).json;
   ok(inbox.unread === 1 && inbox.items[0].kind === 'assigned' && /gave you S26400/.test(inbox.items[0].text), 'an account manager is told when a file is given to them');
 
+  // Three layers: super admin (ADMIN_EMAIL), admin, account manager.
+  let ul = (await admin('GET', '/api/admin/users')).json;
+  ok(ul.me.level === 'superadmin', 'the ADMIN_EMAIL account is the super admin');
+  const negar = (await admin('POST', '/api/admin/users', { email: 'n.abedi@firm.test', name: 'Negar', password: 'password123', role: 'admin' })).json.user;
+  ok(negar?.level === 'admin', 'the super admin creates an admin');
+  const ng = client();
+  await ng('POST', '/api/auth/login', { email: 'n.abedi@firm.test', password: 'password123' });
+  ok((await ng('POST', '/api/admin/users', { email: 'x@firm.test', name: 'X', password: 'password123', role: 'admin' })).status === 403, 'an admin cannot create admins');
+  const hamzeh = (await ng('POST', '/api/admin/users', { email: 'm.hamzeh@firm.test', name: 'Hamzeh', password: 'password123', role: 'manager' })).json.user;
+  ok(hamzeh?.level === 'manager', 'an admin creates an account manager');
+  const bossId = ul.users.find((u) => u.email === 'boss@firm.test').id;
+  ok((await ng('PATCH', '/api/admin/users', { id: bossId, active: false })).status === 403, 'an admin cannot touch the super admin');
+  ok((await ng('PATCH', '/api/admin/users', { id: hamzeh.id, role: 'admin' })).status === 403, 'an admin cannot promote someone to admin');
+  ok((await admin('PATCH', '/api/admin/users', { id: bossId, role: 'admin' })).status === 400, 'the configured super admin cannot be demoted');
+  const hz = client();
+  await hz('POST', '/api/auth/login', { email: 'm.hamzeh@firm.test', password: 'password123' });
+  ok((await hz('GET', `/api/applications/${naz.id}`)).status === 403 && (await ng('GET', `/api/applications/${naz.id}`)).status === 200, 'an admin opens every file; a new account manager none');
+  let ac = await ng('POST', '/api/admin/access', { userId: hamzeh.id, add: [naz.id] });
+  ok(ac.status === 200 && ac.json.added === 1 && (await hz('GET', `/api/applications/${naz.id}`)).status === 200, 'an admin gives an account manager a file; they can open it');
+  ok((await hz('GET', '/api/notifications')).json.items.some((x) => x.kind === 'assigned'), 'and the manager is notified');
+  ac = await ng('POST', '/api/admin/access', { userId: hamzeh.id, remove: [naz.id] });
+  ok(ac.json.removed === 1 && (await hz('GET', `/api/applications/${naz.id}`)).status === 403, 'removing access closes the file for them');
+  ok((await ng('POST', '/api/admin/access', { userId: negar.id, add: [naz.id] })).status === 400, 'access is set for account managers only (admins see everything)');
+  ok((await hz('GET', '/api/admin/users')).status === 403, 'an account manager cannot open the admin panel');
+
   const { notesText } = await loadLib('notes.js');
   const withNotes = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
   ok(/WhatsApp/.test(notesText(withNotes)) && /respect them/.test(notesText(withNotes)), 'the notes are given to the AI as the team’s decisions');

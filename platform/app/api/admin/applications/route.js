@@ -1,6 +1,7 @@
 import { listAllApplications, listUsers } from '@/lib/store';
 import { getAppType } from '@/lib/appTypes';
 import { unusedReason } from '@/lib/unused';
+import { caseKeyOf } from '@/lib/cases';
 import { json, requireAdmin } from '@/lib/api';
 
 /** Every file in the system with owner and assignment info (admin only). */
@@ -28,8 +29,9 @@ export async function GET() {
       updatedAt: a.updatedAt,
       version: a.version || 0,
       archived: Boolean(a.archived),
+      caseKey: caseKeyOf(a),
       unused: unusedReason(a),
     })),
-    managers: users.filter((u) => u.role === 'manager' || u.role === 'admin'),
+    managers: users.filter((u) => u.level === 'manager' && u.active !== false),
   });
 }
