@@ -31,6 +31,7 @@ const server = spawn('npx', ['next', 'start', '-p', String(PORT)], {
   env: { ...process.env, AUTH_SECRET: 'smoke-secret-value-at-least-32-chars', DATA_DIR: dataDir, UPLOAD_DIR: path.join(dataDir, 'up'),
          OPENAI_API_KEY: 'stub', OPENAI_BASE_URL: `http://127.0.0.1:${STUB}/v1`, ADMIN_EMAIL: 'boss@firm.test' },
   stdio: ['ignore', 'pipe', 'pipe'],
+  detached: true, // own process group, so the whole server stops at the end
 });
 let logs = '';
 server.stdout.on('data', (d) => (logs += d));
@@ -71,6 +72,10 @@ try {
   // Manager cannot reach admin API
   r = await mgr('GET', '/api/admin/users');
   ok(r.status === 403, 'manager blocked from admin API');
+
+  // These two get only the files they are given (new files are automatic by default).
+  await admin('PATCH', '/api/admin/users', { id: anaId, autoNewFiles: false });
+  await admin('PATCH', '/api/admin/users', { id: benId, autoNewFiles: false });
 
   // Admin creates a spousal OWP file for a client
   r = await admin('POST', '/api/applications', { type: 'sowp-inside', title: 'Maryam O.', clientNumber: 'S26213', representation: 'firm' });
@@ -168,7 +173,7 @@ try {
   console.error('ERROR', e);
   failures++;
 } finally {
-  server.kill('SIGKILL');
+  try { process.kill(-server.pid, 'SIGKILL'); } catch { server.kill('SIGKILL'); }
   stub.close();
   await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
 }
