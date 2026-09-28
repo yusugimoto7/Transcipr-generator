@@ -1,0 +1,399 @@
+<!-- Express Entry — English -->
+<!-- Paste this whole block into a WordPress "Custom HTML" block. -->
+<!-- Nothing else on the page is touched; the table loads live in the browser. -->
+<div class="sgv-draws" data-program="ee" data-lang="en" data-rows="10"></div>
+<script>
+/**
+ * sugimotovisa.com — embeddable draw window.
+ *
+ * One <div> dropped into an existing page renders a live table of that
+ * programme's newest draws. The host page is never rewritten: no n8n write, no
+ * WordPress revision, no cache to purge. The visitor's browser reads the feed.
+ *
+ *   <div class="sgv-draws" data-program="ee" data-lang="fa" data-rows="10"></div>
+ *
+ *   data-program  ee | bc | bce | on | mb   (any province code the feed serves)
+ *   data-lang     fa (right-to-left) | en
+ *   data-rows     how many draws to show (default 10)
+ *   data-title    override the heading
+ *
+ * Several windows may sit on one page; this script installs itself once and
+ * shares a single request per programme.
+ */
+(function () {
+  'use strict';
+
+  var ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVPTpr39_-ubP57wVDsuOFT80SCdQ-glVifWLlE5hf5VtGPQdqzt3-LQC-jVExDbQ4/exec';
+  var TIMEOUT_MS = 20000;
+  var DEFAULT_ROWS = 10;
+
+  if (window.__sgvDraws) { window.__sgvDraws.scan(); return; }
+
+  // ── programmes ───────────────────────────────────────────────────────────
+  // `key` is the feed's own code, and is what goes in ?only= so the endpoint
+  // scrapes one source instead of six.
+  var PROGRAMS = {
+    ee:  { key: 'EE',  kind: 'ee',  accent: '#2563eb',
+           url: 'https://www.canada.ca/en/immigration-refugees-citizenship/services/immigrate-canada/express-entry/submit-profile/rounds-invitations.html' },
+    bc:  { key: 'BC',  kind: 'pnp', accent: '#1d4ed8', flag: 'Flag_of_British_Columbia.svg' ,
+           url: 'https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program/invitations-to-apply' },
+    bce: { key: 'BCE', kind: 'pnp', accent: '#7c3aed', flag: 'Flag_of_British_Columbia.svg' ,
+           url: 'https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program/invitations-to-apply' },
+    on:  { key: 'ON',  kind: 'pnp', accent: '#0f766e', flag: 'Flag_of_Ontario.svg' ,
+           url: 'https://www.ontario.ca/page/2026-ontario-immigrant-nominee-program-updates' },
+    mb:  { key: 'MB',  kind: 'pnp', accent: '#6d28d9', flag: 'Flag_of_Manitoba.svg' ,
+           url: 'https://immigratemanitoba.com/draws/' },
+    ab:  { key: 'AB',  kind: 'pnp', accent: '#c2410c', flag: 'Flag_of_Alberta.svg' ,
+           url: 'https://www.alberta.ca/alberta-advantage-immigration-program-express-entry-stream' },
+    sk:  { key: 'SK',  kind: 'pnp', accent: '#15803d', flag: 'Flag_of_Saskatchewan.svg' ,
+           url: 'https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program' }
+  };
+
+  var T = {
+    fa: {
+      dir: 'rtl',
+      title: { ee: 'جدیدترین دراوهای اکسپرس انتری',
+               bc: 'جدیدترین دراوهای بریتیش کلمبیا — نیروی کار',
+               bce: 'جدیدترین دراوهای بریتیش کلمبیا — کارآفرینی',
+               on: 'جدیدترین دراوهای انتاریو (OINP)',
+               mb: 'جدیدترین دراوهای مانیتوبا (MPNP)',
+               ab: 'جدیدترین دراوهای آلبرتا (AAIP)',
+               sk: 'جدیدترین دراوهای ساسکاچوان (SINP)' },
+      eeHead: ['شماره', 'تاریخ', 'نوع دراو', 'تعداد دعوت‌نامه', 'حداقل امتیاز CRS'],
+      pnpHead: ['تاریخ', 'استریم', 'تعداد دعوت‌نامه', 'امتیاز'],
+      fresh: 'به‌روز',
+      quiet: 'بدون دراو جدید',
+      quietNote: 'در ۶۰ روز گذشته دراو تازه‌ای در این برنامه اعلام نشده است. جدول بالا جدیدترین دراوهای اعلام‌شده است.',
+      newest: 'جدیدترین دراو:',
+      source: 'منبع رسمی',
+      auto: 'این جدول به‌صورت خودکار از منبع رسمی به‌روز می‌شود.',
+      loading: 'در حال دریافت جدیدترین دراوها…',
+      empty: 'هنوز دراوی برای نمایش ثبت نشده است.',
+      error: 'دریافت جدیدترین دراوها در این لحظه ممکن نشد.',
+      retry: 'تلاش دوباره',
+      lessThan: function (n) { return 'کمتر از ' + n; }
+    },
+    en: {
+      dir: 'ltr',
+      title: { ee: 'Latest Express Entry draws',
+               bc: 'Latest BC PNP draws — Skills Immigration',
+               bce: 'Latest BC PNP draws — Entrepreneur',
+               on: 'Latest Ontario (OINP) draws',
+               mb: 'Latest Manitoba (MPNP) draws',
+               ab: 'Latest Alberta (AAIP) draws',
+               sk: 'Latest Saskatchewan (SINP) draws' },
+      eeHead: ['Round', 'Date', 'Draw type', 'Invitations', 'CRS cut-off'],
+      pnpHead: ['Date', 'Stream', 'Invitations', 'Score'],
+      fresh: 'Up to date',
+      quiet: 'No recent draw',
+      quietNote: 'No new draw has been announced in this programme in the last 60 days. The table above shows the most recent announced draws.',
+      newest: 'Newest draw:',
+      source: 'Official source',
+      auto: 'This table updates automatically from the official source.',
+      loading: 'Loading the latest draws…',
+      empty: 'No draws to show yet.',
+      error: 'The latest draws could not be loaded right now.',
+      retry: 'Try again',
+      lessThan: function (n) { return '<' + n; }
+    }
+  };
+
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Invitation counts arrive as strings and some of them are not numbers:
+  // BC suppresses small counts as "<5", meaning one to four. Never coerce —
+  // Number("<5") is NaN and printing 0 invitations is a wrong fact, not a gap.
+  // And "<5" set in a right-to-left line renders as "5>", which reads as MORE
+  // than five: the opposite of what BC published. So Farsi gets words.
+  function countLabel(raw, t) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (!s) return '—';
+    var m = s.match(/^<\s*(\d+)$/);
+    return m ? t.lessThan(m[1]) : s;
+  }
+
+  // How a draw was selected, taken from what the province itself published.
+  // BC's wage threshold moves every single draw ($55/$110k on 20 Aug,
+  // $58/$115k on 16 Jul, $62/$125k on 18 Jun), so this must never become a
+  // per-stream lookup table — it would publish a stale threshold for months.
+  // Farsi is produced only on an exact match; anything else passes through
+  // verbatim rather than being paraphrased.
+  function routeLabel(factors, lang) {
+    var f = String(factors == null ? '' : factors).trim();
+    if (!f) return '';
+    var m = f.match(/Minimum wage of \$([\d,.]+)\s*\/\s*hour and \$([\d,]+)\s*\/\s*year/i);
+    if (!m) {
+      // No pattern matched, so BC's own words go out untouched — only the
+      // trailing comma the 120-character cut can leave behind is trimmed.
+      return f.replace(/[\s,;]+$/, '');
+    }
+    // BC's wage clause is followed by an NOC list that the parser's 120-char cut
+    // usually slices mid-sentence, so both languages end at the matched clause.
+    if (lang !== 'fa') return 'Minimum wage of $' + m[1] + '/hour and $' + m[2] + '/year';
+    var year = parseInt(m[2].replace(/,/g, ''), 10);
+    var yr = (!isNaN(year) && year % 1000 === 0) ? (year / 1000) + ' \u0647\u0632\u0627\u0631' : m[2];
+    return '\u062d\u062f\u0627\u0642\u0644 \u062d\u0642\u0648\u0642 ' + m[1] + ' \u062f\u0644\u0627\u0631 \u062f\u0631 \u0633\u0627\u0639\u062a \u0648 ' + yr + ' \u062f\u0644\u0627\u0631 \u062f\u0631 \u0633\u0627\u0644';
+  }
+
+  // Ontario's parser returns a sentence fragment, not a stream name. Showing
+  // "the ... stream and who have" in a Stream column is worse than showing
+  // nothing, so prose is dropped.
+  function usableStream(s) {
+    var t = String(s == null ? '' : s).trim();
+    if (!t || t.length > 48) return false;
+    if (/^(the|to)\b/i.test(t)) return false;
+    return !/invitation|candidate|who may qualify|stream and/i.test(t);
+  }
+
+  function fmtISO(iso) {
+    var p = String(iso || '').split('-');
+    if (p.length !== 3) return String(iso || '');
+    var mi = Number(p[1]) - 1;
+    if (!(mi >= 0 && mi < 12)) return String(iso);
+    return MONTHS[mi] + ' ' + Number(p[2]) + ', ' + p[0];
+  }
+
+  function flagUrl(file) {
+    return 'https://commons.wikimedia.org/wiki/Special:FilePath/' + file + '?width=60';
+  }
+
+  // ── styles, injected once ────────────────────────────────────────────────
+  function injectCSS() {
+    if (document.getElementById('sgv-draws-css')) return;
+    var css = [
+      '.sgv-dw{--sgv-accent:#2563eb;background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.07);border-top:4px solid var(--sgv-accent);padding:18px 18px 14px;margin:28px 0;font-size:15px;line-height:1.8;color:#334155}',
+      '.sgv-dw *{box-sizing:border-box}',
+      '.sgv-dw[dir="rtl"]{direction:rtl;text-align:right}',
+      '.sgv-dw[dir="ltr"]{direction:ltr;text-align:left}',
+      '.sgv-dw__head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}',
+      '.sgv-dw__title{display:flex;align-items:center;gap:9px;margin:0;font-size:18px;font-weight:700;color:#1e293b;line-height:1.5}',
+      '.sgv-dw__flag{width:30px;height:auto;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.12);flex:0 0 auto}',
+      '.sgv-dw__badge{font-size:12px;font-weight:700;padding:4px 12px;border-radius:9999px;white-space:nowrap;background:#f1f5f9;color:#475569}',
+      '.sgv-dw__badge--fresh{background:#dcfce7;color:#15803d}',
+      '.sgv-dw__scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}',
+      '.sgv-dw__table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.9;min-width:520px}',
+      '.sgv-dw__table th{background:#f1f5f9;color:#475569;font-weight:700;padding:11px 8px;text-align:center;white-space:nowrap}',
+      // The stream header takes the SAME alignment as the stream cells. Centring
+      // it leaves the word floating beside its column instead of above it.
+      '.sgv-dw[dir="rtl"] .sgv-dw__table th.sgv-dw__stream{text-align:right}',
+      '.sgv-dw[dir="ltr"] .sgv-dw__table th.sgv-dw__stream{text-align:left}',
+      '.sgv-dw__table td{padding:11px 10px;text-align:center;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:middle}',
+      '.sgv-dw__table tr:last-child td{border-bottom:none}',
+      '.sgv-dw__table tbody tr:first-child{background:#eff6ff;font-weight:700}',
+      // Latin digits, always left-to-right, so a date or a count never mirrors.
+      '.sgv-dw__num{direction:ltr;font-variant-numeric:tabular-nums;white-space:nowrap;width:1%}',
+      '.sgv-dw__crs{font-weight:800;color:var(--sgv-accent)}',
+      '.sgv-dw[dir="rtl"] .sgv-dw__stream{text-align:right}',
+      '.sgv-dw[dir="ltr"] .sgv-dw__stream{text-align:left}',
+      '.sgv-dw__stream{font-size:13px;color:#475569;width:auto;min-width:150px}',
+      '.sgv-dw__route{display:block;margin-top:3px;font-size:12px;font-weight:400;color:#64748b;line-height:1.7}',
+      '.sgv-dw__foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#64748b}',
+      '.sgv-dw__foot a{color:#2563eb;font-weight:700;text-decoration:none}',
+      '.sgv-dw__foot a:hover{text-decoration:underline}',
+      '.sgv-dw__note{margin-top:10px;font-size:12px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:7px 11px;line-height:1.7}',
+      '.sgv-dw__state{padding:26px 10px;text-align:center;color:#64748b;font-size:14px}',
+      '.sgv-dw__retry{margin-top:10px;display:inline-block;background:#2563eb;color:#fff;border:0;border-radius:9999px;padding:7px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}',
+      '.sgv-dw__skel{height:13px;border-radius:6px;background:linear-gradient(90deg,#f1f5f9,#e2e8f0,#f1f5f9);background-size:200% 100%;animation:sgv-sh 1.2s linear infinite;margin:11px auto}',
+      '@keyframes sgv-sh{0%{background-position:200% 0}100%{background-position:-200% 0}}',
+      '@media (prefers-reduced-motion:reduce){.sgv-dw__skel{animation:none}}',
+      '@media (max-width:640px){.sgv-dw{padding:15px 13px 12px;border-radius:14px}.sgv-dw__title{font-size:16px}}'
+    ].join('\n');
+    var el = document.createElement('style');
+    el.id = 'sgv-draws-css';
+    el.appendChild(document.createTextNode(css));
+    (document.head || document.documentElement).appendChild(el);
+  }
+
+  // ── fetching ─────────────────────────────────────────────────────────────
+  // One request per programme, shared by every window on the page asking for it.
+  var inflight = {};
+
+  function fetchProgram(key) {
+    if (inflight[key]) return inflight[key];
+    var url = ENDPOINT + '?only=' + encodeURIComponent(key);
+    var ctl = ('AbortController' in window) ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, TIMEOUT_MS);
+
+    inflight[key] = fetch(url, ctl ? { signal: ctl.signal } : undefined)
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (d) { clearTimeout(timer); return d; })
+      .catch(function (err) {
+        clearTimeout(timer);
+        // Do not cache a failure — the retry button must be able to try again.
+        delete inflight[key];
+        throw err;
+      });
+    return inflight[key];
+  }
+
+  // ── rendering ────────────────────────────────────────────────────────────
+  function rowsEE(rounds, t) {
+    return rounds.map(function (r) {
+      return '<tr>' +
+        '<td class="sgv-dw__num">#' + esc(r.drawNumber) + '</td>' +
+        '<td class="sgv-dw__num">' + esc(r.drawDateFull || fmtISO(r.drawDate)) + '</td>' +
+        '<td class="sgv-dw__stream">' + esc(r.drawName || '—') + '</td>' +
+        '<td class="sgv-dw__num">' + esc(countLabel(r.drawSize, t)) + '</td>' +
+        '<td class="sgv-dw__num sgv-dw__crs">' + esc(r.drawCRS || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function rowsPNP(draws, t, lang) {
+    return draws.map(function (r) {
+      var stream = usableStream(r.stream) ? esc(r.stream) : '—';
+      var route = routeLabel(r.factors, lang);
+      // The wage route only earns a line when there is no score to show; where
+      // the province published a score, that IS the eligibility bar.
+      var routeHtml = (!String(r.score || '').trim() && route)
+        ? '<span class="sgv-dw__route">' + esc(route) + '</span>' : '';
+      return '<tr>' +
+        '<td class="sgv-dw__num">' + esc(r.date || fmtISO(r.dateISO) || '—') + '</td>' +
+        '<td class="sgv-dw__stream">' + stream + routeHtml + '</td>' +
+        '<td class="sgv-dw__num">' + esc(countLabel(r.invitations, t)) + '</td>' +
+        '<td class="sgv-dw__num sgv-dw__crs">' + esc(r.score || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function state(box, t, html) {
+    box.innerHTML = '<div class="sgv-dw__state">' + html + '</div>';
+  }
+
+  function showLoading(box, t) {
+    state(box, t, esc(t.loading) +
+      '<div class="sgv-dw__skel" style="width:86%"></div>' +
+      '<div class="sgv-dw__skel" style="width:72%"></div>' +
+      '<div class="sgv-dw__skel" style="width:79%"></div>');
+  }
+
+  function showError(box, t, sourceUrl) {
+    var link = sourceUrl
+      ? ' <a href="' + esc(sourceUrl) + '" target="_blank" rel="nofollow noopener">' + esc(t.source) + ' ↗</a>'
+      : '';
+    state(box, t, esc(t.error) + link +
+      '<br><button type="button" class="sgv-dw__retry">' + esc(t.retry) + '</button>');
+    var btn = box.querySelector('.sgv-dw__retry');
+    if (btn) btn.addEventListener('click', function () { load(box, true); });
+  }
+
+  function render(box, data) {
+    var lang = box.getAttribute('data-lang') === 'en' ? 'en' : 'fa';
+    var t = T[lang];
+    var name = (box.getAttribute('data-program') || 'ee').toLowerCase();
+    var prog = PROGRAMS[name];
+    var limit = parseInt(box.getAttribute('data-rows'), 10);
+    if (!(limit > 0)) limit = DEFAULT_ROWS;
+
+    var isEE = prog.kind === 'ee';
+    var src = isEE ? { draws: data.rounds || [], stale: false }
+                   : (data.pnpDraws || {})[prog.key] || {};
+    var draws = (src.draws || []).slice(0, limit);
+    var srcUrl = src.url || prog.url || '';
+
+    if (!draws.length) { state(box, t, esc(t.empty)); return; }
+
+    // "Updated" must come from the newest draw actually shown, never from the
+    // feed's own generation clock — otherwise the window looks like it changes
+    // every hour while showing exactly the same draws.
+    var iso = draws.map(function (r) { return String(r.dateISO || r.drawDate || ''); })
+                   .filter(Boolean).sort();
+    var newest = iso.length ? fmtISO(iso[iso.length - 1]) : '';
+
+    var quiet = !isEE && src.stale !== false;
+    var head = isEE ? t.eeHead : t.pnpHead;
+    var streamCol = isEE ? 2 : 1;
+    var title = box.getAttribute('data-title') || t.title[name] || t.title.ee;
+
+    box.innerHTML =
+      '<div class="sgv-dw__head">' +
+        '<h3 class="sgv-dw__title">' +
+          (prog.flag ? '<img class="sgv-dw__flag" src="' + flagUrl(prog.flag) + '" alt="" loading="lazy">' : '') +
+          '<span>' + esc(title) + '</span>' +
+        '</h3>' +
+        '<span class="sgv-dw__badge' + (quiet ? '' : ' sgv-dw__badge--fresh') + '">' +
+          esc(quiet ? t.quiet : t.fresh) + '</span>' +
+      '</div>' +
+      '<div class="sgv-dw__scroll"><table class="sgv-dw__table">' +
+        '<thead><tr>' + head.map(function (h, i) {
+          return '<th' + (i === streamCol ? ' class="sgv-dw__stream"' : '') + '>' + esc(h) + '</th>';
+        }).join('') + '</tr></thead>' +
+        '<tbody>' + (isEE ? rowsEE(draws, t) : rowsPNP(draws, t, lang)) + '</tbody>' +
+      '</table></div>' +
+      (quiet ? '<div class="sgv-dw__note">ℹ️ ' + esc(t.quietNote) + '</div>' : '') +
+      '<div class="sgv-dw__foot">' +
+        '<span>' + esc(t.auto) + (newest ? ' ' + esc(t.newest) + ' <span class="sgv-dw__num">' + esc(newest) + '</span>' : '') + '</span>' +
+        (srcUrl ? '<a href="' + esc(srcUrl) + '" target="_blank" rel="nofollow noopener">' + esc(t.source) + ' ↗</a>' : '') +
+      '</div>';
+
+    var img = box.querySelector('.sgv-dw__flag');
+    if (img) img.addEventListener('error', function () { img.remove(); });
+  }
+
+  function load(box, force) {
+    if (box.__sgvLoading && !force) return;
+    box.__sgvLoading = true;
+
+    var lang = box.getAttribute('data-lang') === 'en' ? 'en' : 'fa';
+    var t = T[lang];
+    var name = (box.getAttribute('data-program') || 'ee').toLowerCase();
+    var prog = PROGRAMS[name];
+
+    if (!prog) {
+      state(box, t, esc('Unknown data-program "' + name + '"'));
+      return;
+    }
+    box.setAttribute('dir', t.dir);
+    box.style.setProperty('--sgv-accent', prog.accent);
+    showLoading(box, t);
+
+    fetchProgram(prog.key)
+      .then(function (data) { render(box, data); })
+      .catch(function () {
+        box.__sgvLoading = false;
+        showError(box, t, prog.url);
+      });
+  }
+
+  // ── discovery ────────────────────────────────────────────────────────────
+  // Fetch only when the window is actually scrolled near, so a page carrying
+  // several of these does not fire every request on load.
+  function watch(box) {
+    if (box.__sgvSeen) return;
+    box.__sgvSeen = true;
+    box.classList.add('sgv-dw');
+    if (!('IntersectionObserver' in window)) { load(box); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) { io.disconnect(); load(box); }
+      });
+    }, { rootMargin: '250px' });
+    io.observe(box);
+  }
+
+  function scan() {
+    injectCSS();
+    var list = document.querySelectorAll('.sgv-draws');
+    for (var i = 0; i < list.length; i++) watch(list[i]);
+  }
+
+  window.__sgvDraws = { scan: scan, load: load };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scan);
+  } else {
+    scan();
+  }
+})();
+</script>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fa"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Draw window preview</title>
+<style>
+ body{font-family:Vazirmatn,Tahoma,system-ui,sans-serif;background:#f8fafc;margin:0;padding:24px;color:#0f172a}
+ .page{max-width:1180px;margin:0 auto}
+ h2{font-size:15px;color:#64748b;margin:34px 0 4px;font-weight:700}
+ .narrow{max-width:390px;border:1px dashed #cbd5e1;padding:8px;border-radius:10px}
+</style>
+</head><body><div class="page">
+
+<h2>1 — Express Entry · Farsi (RTL)</h2>
+<div class="sgv-draws" data-program="ee" data-lang="fa" data-rows="6"></div>
+
+<h2>2 — Express Entry · English (LTR)</h2>
+<div class="sgv-draws" data-program="ee" data-lang="en" data-rows="6"></div>
+
+<h2>3 — BC PNP Skills · Farsi (RTL) — includes a &lt;5 count and a wage-route draw with no score</h2>
+<div class="sgv-draws" data-program="bc" data-lang="fa" data-rows="8"></div>
+
+<h2>4 — BC PNP Skills · English (LTR)</h2>
+<div class="sgv-draws" data-program="bc" data-lang="en" data-rows="8"></div>
+
+<h2>5 — BC PNP Farsi at phone width</h2>
+<div class="narrow"><div class="sgv-draws" data-program="bc" data-lang="fa" data-rows="4"></div></div>
+
+<h2>6 — A quiet province (stale=true) · Farsi</h2>
+<div class="sgv-draws" data-program="mb" data-lang="fa" data-rows="3"></div>
+
+<h2>7 — Failure state · Farsi</h2>
+<div class="sgv-draws" data-program="on" data-lang="fa" data-rows="3"></div>
+
+</div>
+<script>
+// Stub the feed so the preview is deterministic and offline.
+const MOCK = {
+  EE: { rounds: [
+    { drawNumber:'361', drawDate:'2026-09-16', drawDateFull:'September 16, 2026', drawName:'Canadian Experience Class', drawSize:'3,000', drawCRS:'521' },
+    { drawNumber:'360', drawDate:'2026-09-09', drawDateFull:'September 9, 2026',  drawName:'Provincial Nominee Program', drawSize:'825',  drawCRS:'764' },
+    { drawNumber:'359', drawDate:'2026-09-02', drawDateFull:'September 2, 2026',  drawName:'French language proficiency', drawSize:'2,500', drawCRS:'470' },
+    { drawNumber:'358', drawDate:'2026-08-26', drawDateFull:'August 26, 2026',    drawName:'Healthcare and social services occupations', drawSize:'1,000', drawCRS:'463' },
+    { drawNumber:'357', drawDate:'2026-08-19', drawDateFull:'August 19, 2026',    drawName:'Canadian Experience Class', drawSize:'2,200', drawCRS:'534' },
+    { drawNumber:'356', drawDate:'2026-08-12', drawDateFull:'August 12, 2026',    drawName:'Trade occupations', drawSize:'400', drawCRS:'433' }
+  ], pnpDraws:{} },
+  BC: { rounds: [], pnpDraws: { BC: {
+    source:'British Columbia (BCPNP)',
+    url:'https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program/invitations-to-apply',
+    stale:false,
+    draws:[
+      { date:'August 20, 2026', dateISO:'2026-08-20', invitations:'337', stream:'Skilled Worker — Tech', score:'', factors:'Minimum wage of $55.00/hour and $110,000/year' },
+      { date:'August 20, 2026', dateISO:'2026-08-20', invitations:'<5',  stream:'Entry Level and Semi-Skilled', score:'102', factors:'' },
+      { date:'August 13, 2026', dateISO:'2026-08-13', invitations:'42',  stream:'International Graduate', score:'108', factors:'' },
+      { date:'July 16, 2026',   dateISO:'2026-07-16', invitations:'1,204', stream:'Skilled Worker', score:'', factors:'Minimum wage of $58.00/hour and $115,000/year' },
+      { date:'July 9, 2026',    dateISO:'2026-07-09', invitations:'N/A', stream:'Health Authority', score:'60', factors:'' },
+      { date:'June 18, 2026',   dateISO:'2026-06-18', invitations:'88',  stream:'Childcare: Early Childhood Educator', score:'', factors:'Targeted draw — childcare occupations only' }
+    ]}}},
+  MB: { rounds: [], pnpDraws: { MB: {
+    source:'Manitoba (MPNP)', url:'https://immigratemanitoba.com/draws/', stale:true,
+    draws:[
+      { date:'June 12, 2026', dateISO:'2026-06-12', invitations:'766', stream:'EOI Draw #276', score:'712', factors:'' },
+      { date:'May 29, 2026',  dateISO:'2026-05-29', invitations:'431', stream:'EOI Draw #275', score:'',    factors:'' }
+    ]}}}
+};
+window.fetch = function (url) {
+  const key = new URL(url, location.href).searchParams.get('only');
+  if (key === 'ON') return Promise.reject(new Error('simulated network failure'));
+  return new Promise(res => setTimeout(() =>
+    res({ ok:true, json:() => Promise.resolve(MOCK[key] || { rounds:[], pnpDraws:{} }) }), 260));
+};
+</script>
+<script src="sgv-draws.js"></script>
+</body></html>

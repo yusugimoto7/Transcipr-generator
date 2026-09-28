@@ -37,22 +37,66 @@ var BC_URL = 'https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-
 var ON_URL = 'https://www.ontario.ca/page/2026-ontario-immigrant-nominee-program-updates';
 var AB_URL = 'https://www.alberta.ca/alberta-advantage-immigration-program-express-entry-stream';
 
+// The page embeds on sugimotovisa.com call this from the VISITOR'S BROWSER, so a
+// request must never cost a full six-site scrape. `?only=` bounds the work to the
+// sources actually being rendered:
+//
+//   ?only=EE      → Express Entry rounds only
+//   ?only=BC      → one province only
+//   ?only=EE,BC   → both
+//   (omitted)     → everything, as before — what the n8n workflows still ask for
+//
+// Unrequested keys are omitted and `rounds` comes back empty, so the shape stays
+// the contract downstream already knows. n8n keeps asking for the whole payload
+// hourly, which is what keeps every source's cache warm for the browsers.
+// A FUNCTION, not a top-level object: MB_URL is assigned near the bottom of this
+// file, and `var` hoists the declaration without the value. Built at load time,
+// Manitoba's url would read `undefined` and the widget would link nowhere.
+function pnpSources_() { return {
+  ON:  ['Ontario (OINP)', ON_URL, getOINP_],
+  BC:  ['British Columbia (BCPNP)', BC_URL, getBCSkills_],
+  BCE: ['British Columbia \u2014 Entrepreneur', BC_URL, getBCEntrepreneur_],
+  AB:  ['Alberta (AAIP)', AB_URL, noParserYet_],
+  SK:  ['Saskatchewan (SINP)', 'https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program', noParserYet_],
+  MB:  ['Manitoba (MPNP)', MB_URL, getMPNP_],
+  NS:  ['Nova Scotia (NSNP)', 'https://liveinnovascotia.com/nova-scotia-nominee-program', noParserYet_],
+  NB:  ['New Brunswick (NBPNP)', 'https://www.welcomenb.ca/content/wel-bien/en/immigrating_and_settling/content/HowToImmigrate/NBProvincialNomineeProgram.html', noParserYet_],
+  PE:  ['Prince Edward Island', 'https://www.princeedwardisland.ca/en/information/office-of-immigration/expression-of-interest-draws', noParserYet_],
+  NL:  ['Newfoundland & Labrador', 'https://www.gov.nl.ca/immigration/immigrating-to-newfoundland-and-labrador/provincial-nominee-program/', noParserYet_]
+}; }
+
+// Returns null for "no filter, serve everything", otherwise a lookup of wanted keys.
+function wanted_(e) {
+  var raw = '';
+  try { raw = (e && e.parameter && e.parameter.only) || ''; } catch (err) { raw = ''; }
+  if (!raw) return null;
+  var want = {};
+  String(raw).toUpperCase().split(',').forEach(function (k) {
+    k = k.trim();
+    if (k) want[k] = true;
+  });
+  // An `only=` naming nothing we recognise would otherwise render an empty widget
+  // and look like "this province has no draws". Serve everything instead.
+  var sources = pnpSources_();
+  var any = false;
+  Object.keys(want).forEach(function (k) { if (k === 'EE' || sources[k]) any = true; });
+  return any ? want : null;
+}
+
 function doGet(e) {
+  var want = wanted_(e);
+  var sources = pnpSources_();
+  var pnpDraws = {};
+  Object.keys(sources).forEach(function (code) {
+    if (want && !want[code]) return;
+    var s = sources[code];
+    pnpDraws[code] = province_(s[0], s[1], s[2]);
+  });
+
   var payload = {
     updatedAt: new Date().toISOString(),
-    rounds: cachedRounds_(),
-    pnpDraws: {
-      ON:  province_('Ontario (OINP)', ON_URL, getOINP_),
-      BC:  province_('British Columbia (BCPNP)', BC_URL, getBCSkills_),
-      BCE: province_('British Columbia — Entrepreneur', BC_URL, getBCEntrepreneur_),
-      AB:  province_('Alberta (AAIP)', AB_URL, noParserYet_),
-      SK:  province_('Saskatchewan (SINP)', 'https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program', noParserYet_),
-      MB:  province_('Manitoba (MPNP)', MB_URL, getMPNP_),
-      NS:  province_('Nova Scotia (NSNP)', 'https://liveinnovascotia.com/nova-scotia-nominee-program', noParserYet_),
-      NB:  province_('New Brunswick (NBPNP)', 'https://www.welcomenb.ca/content/wel-bien/en/immigrating_and_settling/content/HowToImmigrate/NBProvincialNomineeProgram.html', noParserYet_),
-      PE:  province_('Prince Edward Island', 'https://www.princeedwardisland.ca/en/information/office-of-immigration/expression-of-interest-draws', noParserYet_),
-      NL:  province_('Newfoundland & Labrador', 'https://www.gov.nl.ca/immigration/immigrating-to-newfoundland-and-labrador/provincial-nominee-program/', noParserYet_)
-    }
+    rounds: (!want || want.EE) ? cachedRounds_() : [],
+    pnpDraws: pnpDraws
   };
   return ContentService.createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
