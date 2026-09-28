@@ -1,8 +1,8 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiArticle } from "../../../lib/openai";
-import { getInternalLinks } from "../../../lib/wordpress";
+import { getArticleLinks } from "../../../lib/wordpress";
 import { fetchArticleText } from "../../../lib/news";
-import { articlePrompt, parseArticle } from "../../../lib/prompts";
+import { articlePrompt, parseArticle, ARTICLE_MIN_CHARS, ARTICLE_MAX_CHARS } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +15,13 @@ function slugify(s) {
   return out || "immigration-news-" + Date.now();
 }
 
+// Length of the visible article text: tags removed, whitespace collapsed,
+// spaces counted, measured in characters (not UTF-16 units).
+function visibleChars(html) {
+  const t = String(html || "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  return Array.from(t).length;
+}
+
 export async function POST(request) {
   try {
     const { topic } = await request.json();
@@ -22,8 +29,9 @@ export async function POST(request) {
       return Response.json({ error: "bad request" }, { status: 400 });
     }
 
-    // Pull the site's pages as the allowed internal-link list (public, no auth).
-    const links = await getInternalLinks();
+    // Site pages/posts relevant to THIS topic (searched), then the main pages,
+    // as the allowed internal-link list (public, no auth).
+    const links = await getArticleLinks(topic);
     const today = new Date().toLocaleDateString("en-CA");
     // Ground the article in the REAL source article text (never fabricate).
     let sourceText = "";
@@ -31,22 +39,48 @@ export async function POST(request) {
     if (!sourceText && topic.snippet) sourceText = String(topic.snippet);
     const prompt = articlePrompt(topic, links, today, sourceText);
 
-    let text = "";
-    let provider = "anthropic";
-    if (openaiEnabled()) {
-      try {
-        text = await openaiArticle(prompt);
-        provider = "openai";
-      } catch (e) {
-        if (!process.env.ANTHROPIC_API_KEY) throw e;
-        text = await callClaude([{ role: "user", content: prompt }], false, 6000);
-        provider = "anthropic (openai failed)";
+    async function generate(p) {
+      if (openaiEnabled()) {
+        try {
+          return { text: await openaiArticle(p), provider: "openai" };
+        } catch (e) {
+          if (!process.env.ANTHROPIC_API_KEY) throw e;
+          return {
+            text: await callClaude([{ role: "user", content: p }], false, 6000),
+            provider: "anthropic (openai failed)",
+          };
+        }
       }
-    } else {
-      text = await callClaude([{ role: "user", content: prompt }], false, 6000);
+      return { text: await callClaude([{ role: "user", content: p }], false, 6000), provider: "anthropic" };
     }
 
-    const a = parseArticle(text);
+    let { text, provider } = await generate(prompt);
+
+    // Enforce the length here rather than trusting the model to count Farsi
+    // characters. One retry with the measured length; a small tolerance on
+    // the first check avoids paying for a retry over a few characters.
+    let a = parseArticle(text);
+    let chars = visibleChars(a.content_html);
+    const TOL = 60;
+    if (a.content_html && (chars < ARTICLE_MIN_CHARS - TOL || chars > ARTICLE_MAX_CHARS + TOL)) {
+      const fix =
+        `\n\nCORRECTION: your previous body was ${chars} visible characters. It must be between ` +
+        `${ARTICLE_MIN_CHARS} and ${ARTICLE_MAX_CHARS}. Rewrite the whole article to fit, ` +
+        (chars > ARTICLE_MAX_CHARS ? "cutting detail, not facts that matter." : "adding only facts from the source.") +
+        " Same output format.";
+      try {
+        const retry = await generate(prompt + fix);
+        const a2 = parseArticle(retry.text);
+        const c2 = visibleChars(a2.content_html);
+        const dist = (c) => (c < ARTICLE_MIN_CHARS ? ARTICLE_MIN_CHARS - c : c > ARTICLE_MAX_CHARS ? c - ARTICLE_MAX_CHARS : 0);
+        if (a2.content_html && dist(c2) < dist(chars)) {
+          a = a2;
+          chars = c2;
+          provider = retry.provider;
+        }
+      } catch (_) {}
+    }
+
 
     // Assemble final HTML: article body + a source-credit paragraph.
     const srcName = (() => {
@@ -74,6 +108,7 @@ export async function POST(request) {
         content_html: body + sourceP,
         source_url: topic.source_url || "",
         parse_ok: !!(a.title_fa && hasHtml),
+        length_chars: chars,
       },
     });
   } catch (e) {
