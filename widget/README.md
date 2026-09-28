@@ -46,6 +46,15 @@ https://script.google.com/macros/s/AKfycbwVPTpr39_-ubP57wVDsuOFT80SCdQ-glVifWLlE
 The hourly n8n workflows keep asking for the whole payload, which is what keeps
 every source's cache warm for the browsers.
 
+**Verified live on 28 Sep 2026**, after deployment:
+
+- `?only=EE` returns 40 rounds and no provinces; `?only=BC` returns one province
+  and no rounds. The full payload was 94KB; a window now pulls about 6KB.
+- The response carries `access-control-allow-origin: *` on both the 302 redirect
+  and the final JSON, so a browser on sugimotovisa.com is allowed to read it.
+  This was checked rather than assumed — if it had been missing, every window
+  would have shown its failure state.
+
 ## Step 2 — paste one block per page
 
 In `dist/`, ready to paste:
