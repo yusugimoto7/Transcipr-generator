@@ -121,6 +121,25 @@ try {
   const again = (await admin('POST', '/api/admin/odoo')).json;
   ok(again.lastResult?.created === 0 && again.lastResult?.linked === 0, 'a second sync changes nothing');
 
+  // Archiving: a card that leaves the working stages hides its file; nothing is deleted.
+  const countBefore = (await admin('GET', '/api/applications')).json.applications.length;
+  tasks.find((t) => t.id === 13).stage_id = [4, 'Submitted'];
+  tasks.find((t) => t.id === 14).stage_id = [4, 'Submitted'];
+  let r = (await admin('POST', '/api/admin/odoo')).json;
+  let rz = (await admin('GET', `/api/applications/${reza.id}`)).json.application;
+  let nz = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
+  ok(r.lastResult?.archived === 2 && rz.archived?.by === 'odoo' && nz.archived?.by === 'odoo', 'files whose cards left the working stages are archived');
+  ok((await admin('GET', '/api/applications')).json.applications.length === countBefore, 'archiving deletes nothing');
+  tasks.find((t) => t.id === 13).stage_id = [2, 'SOP Done'];
+  r = (await admin('POST', '/api/admin/odoo')).json;
+  rz = (await admin('GET', `/api/applications/${reza.id}`)).json.application;
+  ok(r.lastResult?.restored === 1 && !rz.archived, 'a file comes back when its card returns to a working stage');
+  await admin('PATCH', `/api/applications/${naz.id}`, { archived: false });
+  r = (await admin('POST', '/api/admin/odoo')).json;
+  nz = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
+  ok(!nz.archived && r.lastResult?.archived === 0, 'a file restored by the team is not archived again');
+  tasks.find((t) => t.id === 14).stage_id = [3, 'Documents Prepared'];
+
   const found = (await admin('GET', '/api/odoo/cards?q=Anahita')).json.cards || [];
   ok(found.length === 2, 'searching Odoo by name finds both of Anahita’s cards');
   await admin('POST', `/api/applications/${ana.id}/odoo`, { taskId: 12 });

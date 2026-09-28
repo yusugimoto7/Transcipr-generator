@@ -202,6 +202,16 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
         </div>
       </div>
 
+      {app.archived && (
+        <div className="ws-head-inner" style={{ paddingTop: 0 }}>
+          <div className="alert warn" style={{ margin: '10px 0 0', width: '100%' }}>
+            <span>
+              This file is archived{app.archived.reason ? ` — ${app.archived.reason}` : ''}. It is hidden from Client files; nothing was deleted.
+              {staff && family && <> <Link href={`/case/${encodeURIComponent(family.key)}`}>Restore it on the client page</Link>.</>}
+            </span>
+          </div>
+        </div>
+      )}
       <div className="ws">
         <nav className="ws-side" aria-label="File sections">
           <div className="side-label">{staff ? 'This file' : 'Your application'}</div>

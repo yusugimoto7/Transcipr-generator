@@ -10,7 +10,10 @@ import { caseKeyOf, normNumber, displayName, isDefaultTitle } from './cases';
  *     when the file has one, else by the applicant's name — and takes the card's
  *     number and name (the whole family gets the number);
  *  2. a card with no file yet becomes a new client file (type read from the card
- *     when it says; otherwise marked for the team to check).
+ *     when it says; otherwise marked for the team to check);
+ *  3. a file whose card left the working stages is archived — hidden, never
+ *     deleted — and restored when the card comes back (or by the team).
+ * Only cards in the stages the team works on count (ODOO_STAGES).
  * When a client has several cards, the most recent one wins.
  * Runs every ODOO_SYNC_MINUTES (default 15) and from Admin → Odoo.
  */
@@ -114,7 +117,7 @@ export async function syncOdoo({ create = true } = {}) {
   if (running) return running;
   running = (async () => {
     const store = await readOdooStore();
-    const result = { cards: 0, linked: 0, created: 0, unmatched: 0, at: new Date().toISOString() };
+    const result = { cards: 0, linked: 0, created: 0, archived: 0, restored: 0, unmatched: 0, at: new Date().toISOString() };
     const log = (text, appId) => store.log.unshift({ at: new Date().toISOString(), text, appId: appId || null });
     try {
       store.lastError = null;
@@ -185,6 +188,44 @@ export async function syncOdoo({ create = true } = {}) {
         }
       }
 
+
+      // 3. A file whose card is no longer in the working stages is archived (hidden,
+      //    never deleted), with its family; it comes back when the card does.
+      apps = await listAllApplications();
+      const liveIds = new Set(cards.map((c) => c.taskId));
+      const liveNumbers = new Set(cards.map((c) => c.number).filter(Boolean));
+      const importedIds = new Set(Object.values(store.imported));
+      const done = new Set();
+      for (const app of apps) {
+        const key = caseKeyOf(app);
+        if (done.has(key)) continue;
+        const fromOdoo = app.odoo?.taskId || importedIds.has(app.id);
+        if (!fromOdoo || app.odoo?.manual) continue;
+        done.add(key);
+        const live = liveIds.has(app.odoo?.taskId) || (app.clientNumber && liveNumbers.has(normNumber(app.clientNumber)));
+        const family = apps.filter((m) => caseKeyOf(m) === key);
+        if (!live && !family.some((m) => m.archiveOverride) && family.some((m) => !m.archived)) {
+          for (const m of family) {
+            if (m.archived) continue;
+            await updateApplication(m.id, (a) => {
+              a.archived = { at: new Date().toISOString(), by: 'odoo', reason: `Odoo card not in ${workStages().join(' / ')}` };
+              return a;
+            }, { quiet: true });
+          }
+          result.archived++;
+          log(`Archived ${app.clientNumber || ''} ${displayName(app)} — its Odoo card is not in ${workStages().join(' / ')}`.trim(), app.id);
+        } else if (live && family.some((m) => m.archived?.by === 'odoo')) {
+          for (const m of family) {
+            if (m.archived?.by !== 'odoo') continue;
+            await updateApplication(m.id, (a) => {
+              a.archived = null;
+              return a;
+            }, { quiet: true });
+          }
+          result.restored++;
+          log(`Restored ${app.clientNumber || ''} ${displayName(app)} — its Odoo card is back in a working stage`.trim(), app.id);
+        }
+      }
     } catch (e) {
       store.lastError = e.message;
       result.error = e.message;

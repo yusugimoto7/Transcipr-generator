@@ -36,5 +36,6 @@ export function summarizeFile(a, people = new Map()) {
     finalStale: Boolean(p?.final.stale),
     odoo: a.odoo ? { taskId: a.odoo.taskId, title: a.odoo.title, url: a.odoo.url, manual: Boolean(a.odoo.manual) } : null,
     typeGuessed: Boolean(a.typeGuessed),
+    archived: a.archived ? { at: a.archived.at, by: a.archived.by, reason: a.archived.reason } : null,
   };
 }

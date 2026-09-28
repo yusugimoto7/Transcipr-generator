@@ -34,7 +34,8 @@ export default function AdminOdoo() {
             <p className="muted small">
               Each main applicant&apos;s file is linked to their card (by client number, else by name; the most recent card
               when there are several) and takes the card&apos;s number and name. New cards become client files. Odoo is only
-              read, never changed. Syncs every 15 minutes.
+              read, never changed. Only cards in Documents Received, SOP Done and Documents Prepared are used; a file whose card
+              leaves these stages is archived (hidden, not deleted) and comes back when the card does. Syncs every 15 minutes.
             </p>
           </div>
           <button type="button" onClick={async () => { setBusy(true); await load('POST'); setBusy(false); }} disabled={busy || !s?.configured}>
@@ -61,7 +62,7 @@ export default function AdminOdoo() {
                 <dt>Result</dt>
                 <dd>
                   <span className="chip ok"><CheckCircle2 size={13} aria-hidden="true" /> {r.cards} open cards</span>{' '}
-                  {r.linked} linked · {r.created} new file(s) · {r.unmatched} file(s) without a matching card
+                  {r.linked} linked · {r.created} new file(s) · {r.archived || 0} archived · {r.restored || 0} restored · {r.unmatched} file(s) without a matching card
                 </dd>
               </>
             )}

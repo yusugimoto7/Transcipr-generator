@@ -68,6 +68,14 @@ export async function PATCH(req, { params }) {
           a.typeGuessed = false; // the team chose it
         }
         if (ROLES.includes(body.applicantRole)) a.applicantRole = body.applicantRole;
+        // Archive or restore by hand. Restoring keeps the Odoo sync from archiving it again.
+        if (body.archived === false) {
+          a.archived = null;
+          a.archiveOverride = true;
+        } else if (body.archived === true) {
+          a.archived = { at: new Date().toISOString(), by: user.name || user.email, reason: 'Archived by the team' };
+          a.archiveOverride = false;
+        }
       }
       return a;
     },

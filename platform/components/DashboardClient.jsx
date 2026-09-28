@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Search, FolderOpen, AlertOctagon, FileQuestion, CheckCircle2, X, ArrowLeft, ChevronRight, Users } from 'lucide-react';
+import { Plus, Search, FolderOpen, AlertOctagon, FileQuestion, CheckCircle2, X, ArrowLeft, ChevronRight, Users, Archive } from 'lucide-react';
 import { APP_TYPE_LIST, TYPE_GROUPS } from '@/lib/appTypes';
 import { groupCases, caseLabel, caseKeyOf, normNumber, ROLE_LABEL } from '@/lib/cases';
 import { fmtAgo } from '@/lib/format';
@@ -21,6 +21,7 @@ export default function DashboardClient({ initialApps, user }) {
   const [q, setQ] = useState('');
   const [group, setGroup] = useState('');
   const [quick, setQuick] = useState('all'); // all | serious | missing | ready
+  const [showArchived, setShowArchived] = useState(false);
   const [picker, setPicker] = useState(false);
 
   // One row per client: the main applicant with the family members applying with them.
@@ -29,25 +30,28 @@ export default function DashboardClient({ initialApps, user }) {
       groupCases(apps).map((c) => {
         const docs = c.members.reduce((acc, m) => ({ provided: acc.provided + (m.docs?.provided || 0), required: acc.required + (m.docs?.required || 0) }), { provided: 0, required: 0 });
         const team = [...new Map(c.members.flatMap((m) => m.assignedTo).map((t) => [t.id, t])).values()];
-        return { ...c, docs, check: sumChecks(c.members), team, ready: c.members.every((m) => m.stage === 'ready') };
+        return { ...c, docs, check: sumChecks(c.members), team, ready: c.members.every((m) => m.stage === 'ready'), archived: c.members.every((m) => m.archived) };
       }),
     [apps]
   );
 
+  const active = cases.filter((c) => !c.archived);
+  const archivedCount = cases.length - active.length;
   const stats = {
-    all: cases.length,
-    serious: cases.filter((c) => c.check.red).length,
-    missing: cases.filter((c) => c.docs.provided < c.docs.required).length,
-    ready: cases.filter((c) => c.ready).length,
+    all: active.length,
+    serious: active.filter((c) => c.check.red).length,
+    missing: active.filter((c) => c.docs.provided < c.docs.required).length,
+    ready: active.filter((c) => c.ready).length,
   };
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
     return cases
+      .filter((c) => (showArchived ? c.archived : !c.archived))
       .filter((c) => !t || c.members.some((m) => [m.title, m.clientNumber, m.typeTitle, m.service, ...m.assignedTo.map((x) => x.name)].join(' ').toLowerCase().includes(t)))
       .filter((c) => !group || c.members.some((m) => m.group === group))
       .filter((c) => quick === 'all' || (quick === 'serious' && c.check.red) || (quick === 'missing' && c.docs.provided < c.docs.required) || (quick === 'ready' && c.ready));
-  }, [cases, q, group, quick]);
+  }, [cases, q, group, quick, showArchived]);
 
   const groupsInUse = GROUPS.filter((g) => apps.some((a) => a.group === g));
   const clear = () => { setQ(''); setGroup(''); setQuick('all'); };
@@ -103,6 +107,11 @@ export default function DashboardClient({ initialApps, user }) {
                 <option value="">All services</option>
                 {groupsInUse.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
+              {(archivedCount > 0 || showArchived) && (
+                <button type="button" className={showArchived ? 'btn-navy btn-sm' : 'btn-secondary btn-sm'} onClick={() => setShowArchived(!showArchived)} aria-pressed={showArchived} title="Clients whose Odoo card left the working stages, or archived by the team">
+                  <Archive size={14} aria-hidden="true" /> Archived ({archivedCount})
+                </button>
+              )}
               {(q || group || quick !== 'all') && (
                 <button type="button" className="btn-ghost btn-sm" onClick={clear}><X size={14} aria-hidden="true" /> Clear</button>
               )}
@@ -127,7 +136,7 @@ export default function DashboardClient({ initialApps, user }) {
                       <tr key={c.key} className="clickable" onClick={() => router.push(href)}>
                         <td>
                           <Link href={href} className="file-cell" style={{ color: 'inherit' }} onClick={(e) => e.stopPropagation()}>
-                            <span className="t" style={{ fontSize: 15 }}>{caseLabel(c)}</span>
+                            <span className="t" style={{ fontSize: 15 }}>{caseLabel(c)}{c.archived && <span className="chip" style={{ marginLeft: 8 }}>Archived</span>}</span>
                             <span className="s">{c.main.typeTitle}{c.main.service ? ` · ${c.main.service}` : ''}</span>
                             {others.length > 0 && (
                               <span className="s cluster" style={{ gap: 6, marginTop: 3 }}>
@@ -152,7 +161,7 @@ export default function DashboardClient({ initialApps, user }) {
                 </tbody>
               </table>
             </div>
-            {!shown.length && <div className="empty small">No clients match. <button type="button" className="btn-ghost btn-sm" onClick={clear}>Show all</button></div>}
+            {!shown.length && <div className="empty small">{showArchived ? 'No archived clients.' : <>No clients match. <button type="button" className="btn-ghost btn-sm" onClick={clear}>Show all</button></>}</div>}
           </section>
         </>
       ) : (

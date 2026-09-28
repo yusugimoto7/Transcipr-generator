@@ -146,7 +146,10 @@ The platform reads the cards of the **Visa - TR** project in Odoo (read-only) ev
 - A new card (open, created in the last `ODOO_IMPORT_DAYS`, default 365) becomes a client file. The type is read
   from the card's title or tags (e.g. "Study Permit", "Visitor", "100-304"); when it can't be, the file is marked
   **Check the type**. Assignees in Odoo are assigned on the platform when their emails match.
-- Cards in closed (folded) stages and archived cards are ignored. A card chosen by hand (client page → pencil →
+- Only cards in **Documents Received from Client**, **SOP Done** and **Documents Prepared** are used
+  (`ODOO_STAGES`). A file whose card leaves these stages is **archived** with its family: hidden from Client files
+  (Client files → Archived shows them), never deleted, and restored automatically when the card comes back. The
+  client page has Archive client / Restore; a file restored by hand is not archived again. A card chosen by hand (client page → pencil →
   Odoo card → Link) stays linked.
 - Admin → **Odoo** shows the connection, the last sync and what it changed, with "Sync with Odoo now".
 

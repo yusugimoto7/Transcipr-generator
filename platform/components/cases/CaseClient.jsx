@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronRight, UserPlus, Pencil, X, ArrowLeft, Link2, FilePlus2, Crown, User } from 'lucide-react';
+import { ChevronRight, UserPlus, Pencil, X, ArrowLeft, Link2, FilePlus2, Crown, User, Archive } from 'lucide-react';
 import { getAppType, APP_TYPE_LIST } from '@/lib/appTypes';
 import { groupCases, caseLabel, caseKeyOf, isDefaultTitle, normNumber, ROLE_LABEL } from '@/lib/cases';
 import { fmtAgo } from '@/lib/format';
@@ -33,6 +33,21 @@ export default function CaseClient({ caseKey, files, others, staff, odooOn }) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
   const check = sumChecks(c.members);
+  const archived = c.members.every((m) => m.archived);
+  const [archiving, setArchiving] = useState(false);
+  const [archErr, setArchErr] = useState('');
+  async function setArchived(value) {
+    setArchiving(true);
+    setArchErr('');
+    try {
+      for (const m of c.members) await send(`/api/applications/${m.id}`, 'PATCH', { archived: value });
+      router.refresh();
+    } catch (e) {
+      setArchErr(e.message);
+    } finally {
+      setArchiving(false);
+    }
+  }
 
   return (
     <>
@@ -64,11 +79,28 @@ export default function CaseClient({ caseKey, files, others, staff, odooOn }) {
           )}
         </div>
         {staff && (
-          <button type="button" onClick={() => setAdding(true)}>
-            <UserPlus size={16} aria-hidden="true" /> Add family member
-          </button>
+          <div className="btn-row">
+            {!archived && (
+              <button type="button" className="btn-secondary" onClick={() => setArchived(true)} disabled={archiving}>
+                <Archive size={16} aria-hidden="true" /> Archive client
+              </button>
+            )}
+            <button type="button" onClick={() => setAdding(true)}>
+              <UserPlus size={16} aria-hidden="true" /> Add family member
+            </button>
+          </div>
         )}
       </div>
+      {archived && (
+        <div className="alert warn" style={{ alignItems: 'center' }}>
+          <Archive size={16} aria-hidden="true" />
+          <span style={{ flex: 1 }}>
+            This client is archived{c.main.archived?.reason ? ` — ${c.main.archived.reason}` : ''}. It is hidden from Client files; nothing was deleted.
+          </span>
+          {staff && <button type="button" className="btn-secondary btn-sm" onClick={() => setArchived(false)} disabled={archiving}>{archiving ? <span className="spinner dark" /> : 'Restore'}</button>}
+        </div>
+      )}
+      {archErr && <div className="alert err">{archErr}</div>}
 
       <div className="members">
         {c.members.map((m) => {
