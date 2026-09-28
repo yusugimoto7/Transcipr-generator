@@ -132,9 +132,15 @@ async function call(pathAndQuery, { raw = false, method = 'GET', body = null, he
   if (res.status === 404 || res.status === 403) {
     const who = status.email ? `the service account (${status.email})` : 'this server';
     if (method !== 'GET') {
-      throw new DriveError(`Drive refused to write there (${res.status}). Share the client folders with ${who} as Editor, not Viewer.`, 403);
+      // 404: the account cannot see the folder at all; 403: it can see it but not write.
+      throw new DriveError(
+        res.status === 404
+          ? `Drive can't find the folder for ${who} (404): it has no access there. If the client folders are in a shared drive, add that address as a member of the shared drive with the Content manager role; otherwise share the folder with it as Editor.`
+          : `Drive refused to write there (403). Give ${who} write access: Content manager on the shared drive, or Editor on the folder (not Viewer).`,
+        403
+      );
     }
-    throw new DriveError(`Drive item not found or not shared with ${who}. Share the folder with that address (Viewer) and try again.`, 404);
+    throw new DriveError(`Drive item not found or not shared with ${who}. Add that address to the shared drive (or share the folder with it) and try again.`, 404);
   }
   if (!res.ok) {
     const t = await res.text().catch(() => '');
