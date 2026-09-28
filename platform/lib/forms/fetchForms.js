@@ -60,12 +60,13 @@ export async function resolveLatestPdfUrl(key) {
     if (res.ok) {
       const html = await res.text();
       // Find the versioned PDF link for this exact form on the page.
+      // The page links it with a relative or absolute address.
       const re = new RegExp(
-        `https://www\\.canada\\.ca/content/dam/ircc/[^"']*?/forms/${key}/\\d{2}-\\d{2}-\\d{4}/${form.pdfBase || key + 'e'}\\.pdf`,
+        `(?:https://www\\.canada\\.ca)?/content/dam/ircc/[^"'\\s]*?/forms/${key}/\\d{2}-\\d{2}-\\d{4}/${form.pdfBase || key + 'e'}\\.pdf`,
         'i'
       );
       const m = html.match(re);
-      if (m) return { url: m[0], source: 'scrape' };
+      if (m) return { url: m[0].startsWith('http') ? m[0] : `https://www.canada.ca${m[0]}`, source: 'scrape' };
     }
   } catch {
     /* fall through to fallback */
