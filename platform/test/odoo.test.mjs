@@ -248,6 +248,15 @@ try {
   fresh = (await admin('POST', '/api/applications', { type: 'trv-outside', title: 'Another New', clientNumber: 'S29002' })).json.application;
   ok((await hz('GET', `/api/applications/${fresh.id}`)).status === 403, 'unless an admin turns that off for them');
 
+  // Team activity log.
+  await mar('PATCH', `/api/applications/${naz.id}`, { data: { givenName: 'Nazanin' } });
+  await mar('PATCH', `/api/applications/${naz.id}`, { data: { familyName: 'Rahimi' } });
+  let act = (await admin('GET', `/api/applications/${naz.id}/activity`)).json.activity;
+  const intakeEntry = act.find((x) => x.action === 'Edited the intake' && x.by.name === 'Maryam');
+  ok(intakeEntry && intakeEntry.items.includes('Given name(s)') && intakeEntry.items.includes('Family name (surname)') && intakeEntry.by.level === 'manager', 'intake edits are logged with who made them, merged into one entry');
+  ok(act.some((x) => x.action === 'Added a note' && x.by.name === 'Maryam') && act.some((x) => x.action === 'Gave access to the file' && x.by.name === 'Negar'), 'notes and access changes are logged, with the person');
+  ok((await hz('GET', `/api/applications/${naz.id}/activity`)).status === 403, 'someone without access to the file cannot read its activity');
+
   const { notesText } = await loadLib('notes.js');
   const withNotes = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
   ok(/WhatsApp/.test(notesText(withNotes)) && /respect them/.test(notesText(withNotes)), 'the notes are given to the AI as the team’s decisions');

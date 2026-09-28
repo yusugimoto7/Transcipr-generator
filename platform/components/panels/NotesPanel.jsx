@@ -1,6 +1,7 @@
 'use client';
 
 import { NotesBox, NotesFeed } from '@/components/Notes';
+import ActivityLog from '@/components/ActivityLog';
 
 /**
  * Team notes: every note on this file — on the file itself, on each section
@@ -14,7 +15,7 @@ export default function NotesPanel({ app, patchLocal, viewer, go, openDoc, highl
     <div className="stack">
       <div className="page-head" style={{ marginBottom: 0 }}>
         <div>
-          <h1 style={{ fontSize: 20 }}>Team notes</h1>
+          <h1 style={{ fontSize: 20 }}>Team notes &amp; activity</h1>
           <p className="muted small">
             Notes from account managers and admins on this file, its documents and each section. Type @ to mention a colleague — they get a
             notification. The review, the letters and the assistant take the notes into account.
@@ -37,6 +38,7 @@ export default function NotesPanel({ app, patchLocal, viewer, go, openDoc, highl
           empty="No notes yet. Notes written on documents and in each section appear here too."
         />
       </section>
+      <ActivityLog app={app} />
     </div>
   );
 }

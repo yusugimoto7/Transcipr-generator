@@ -1,5 +1,6 @@
 import { planFinalFiles, startFinalJob, getFinalJob } from '@/lib/finalFiles';
 import { json, requireOwnedApp } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +13,7 @@ export async function GET(_req, { params }) {
 
 /** Build every final file (background job). Body: { cleanPages?, fixRotation? } */
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
   let body = {};
   try {
@@ -21,5 +22,6 @@ export async function POST(req, { params }) {
     /* optional */
   }
   const job = startFinalJob(app.id, { cleanPages: body.cleanPages !== false, fixRotation: body.fixRotation !== false });
+  await logActivity(app.id, user, app.finalFiles?.builtAt ? 'Rebuilt the final files' : 'Built the final files');
   return json({ job }, 202);
 }

@@ -1,6 +1,7 @@
 import { listAllApplications, updateApplication, getUserById, userLevel, seesAllFiles, canAccess } from '@/lib/store';
 import { notify, fileLabel } from '@/lib/notify';
 import { json, error, requireAdmin } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 /**
  * Which files an account manager can open and edit (admins and super admins
@@ -35,12 +36,14 @@ export async function POST(req) {
         return x;
       }, { by: actor.id, quiet: true });
       given.push(a);
+      await logActivity(a.id, actor, 'Gave access to the file', { items: [target.name || target.email] });
     } else if (remove.has(a.id) && has) {
       await updateApplication(a.id, (x) => {
         x.assignedTo = (x.assignedTo || []).filter((id) => id !== target.id);
         return x;
       }, { by: actor.id, quiet: true });
       removed++;
+      await logActivity(a.id, actor, 'Removed access to the file', { items: [target.name || target.email] });
     }
   }
   if (given.length) {

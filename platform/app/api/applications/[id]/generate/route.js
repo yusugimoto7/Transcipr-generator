@@ -1,5 +1,6 @@
 import { catalogue, produceDocs, refreshNextSteps } from '@/lib/generateDocs';
 import { json, error, requireOwnedApp } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 180;
@@ -10,7 +11,7 @@ export const maxDuration = 180;
  * Body: { docs: [keys] } — defaults to every letter and data sheet.
  */
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
 
   let body = {};
@@ -35,5 +36,6 @@ export async function POST(req, { params }) {
   } catch (e) {
     errors.push({ key: 'next-steps', message: e.message });
   }
+  await logActivity(app.id, user, 'Generated working files', { items: (produced || []).map((p) => p.filename || p.title || String(p)).slice(0, 20) });
   return json({ generated: updated.generated, produced, errors, note });
 }

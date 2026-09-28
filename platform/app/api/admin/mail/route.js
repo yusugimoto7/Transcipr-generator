@@ -2,6 +2,7 @@ import { readMailStore, mailConfig, checkMail, assignMessage, ignoreMessage, res
 import { ensureMailPoller } from '@/lib/mailPoller';
 import { listAllApplications, canAccess } from '@/lib/store';
 import { json, error, requireStaff } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -27,7 +28,7 @@ export async function GET() {
 
 /** { action: 'check' } | { action: 'backfill' } | { action: 'assign', id, appId, remember? } | { action: 'ignore', id | ids } | { action: 'restore', id } | { action: 'drive', id } */
 export async function POST(req) {
-  const { error: err } = await requireStaff();
+  const { user, error: err } = await requireStaff();
   if (err) return err;
   let body = {};
   try {
@@ -44,7 +45,11 @@ export async function POST(req) {
       if (!mailConfig().configured) return error('The mailbox is not configured (MAIL_USER / MAIL_PASSWORD).', 503);
       return json({ backfill: startBackfill() });
     }
-    if (body.action === 'assign') return json({ message: await assignMessage(String(body.id), String(body.appId), { remember: Boolean(body.remember) }) });
+    if (body.action === 'assign') {
+      const message = await assignMessage(String(body.id), String(body.appId), { remember: Boolean(body.remember) });
+      await logActivity(String(body.appId), user, 'Filed an email on this file', { items: [message?.subject || '(no subject)'] });
+      return json({ message });
+    }
     if (body.action === 'ignore') {
       const ids = Array.isArray(body.ids) ? body.ids.map(String) : [String(body.id)];
       for (const id of ids) await ignoreMessage(id);

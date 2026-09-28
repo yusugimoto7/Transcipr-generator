@@ -1,6 +1,7 @@
 import { getPackages } from '@/lib/compile';
 import { startCompileJob, getCompileJobs } from '@/lib/compileJob';
 import { json, error, requireOwnedApp } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +12,7 @@ export const runtime = 'nodejs';
  * finished, the result.
  */
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
 
   let body = {};
@@ -26,6 +27,7 @@ export async function POST(req, { params }) {
     cleanPages: body.cleanPages !== false, // default: remove blank pages
     fixRotation: body.fixRotation !== false, // default: auto-correct sideways/upside-down scans
   });
+  await logActivity(app.id, user, 'Compiled a package');
   return json({ job }, 202);
 }
 

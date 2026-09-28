@@ -1,6 +1,7 @@
 import { updateApplication } from '@/lib/store';
 import { analyzeEmail } from '@/lib/emailFacts';
 import { json, error, requireAppAccess } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -48,6 +49,8 @@ export async function POST(req, { params }) {
   } else {
     return error('Unknown action.');
   }
+  const em = (app.emails || []).find((e) => e.id === emailId);
+  await logActivity(app.id, user, { analyze: 'Read an email again', used: 'Took a value from an email', dismiss: body.undo ? 'Put an email fact back' : 'Left an email fact out' }[body.action], { items: [em?.subject || '(no subject)'], detail: body.field || '' });
   const { getApplication } = await import('@/lib/store');
   const fresh = await getApplication(app.id);
   return json({ emails: fresh.emails || [], data: fresh.data, dataVersion: fresh.dataVersion || 0 });

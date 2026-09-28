@@ -3,6 +3,7 @@ import { updateApplication, listUsers, effectiveRole } from '@/lib/store';
 import { notify, fileLabel } from '@/lib/notify';
 import { NOTE_SECTIONS, MAX_NOTE } from '@/lib/notes';
 import { json, error, requireAppAccess } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 /**
  * Team notes on a file (account managers and admins).
@@ -65,6 +66,8 @@ export async function POST(req, { params }) {
     return false;
   }, { by: user.id });
   if (failure) return error(failure, failure.startsWith('Only') ? 403 : 400);
+  if (added) await logActivity(app.id, user, 'Added a note', { detail: added.text.slice(0, 160), items: mentioned.length ? mentioned.map((u) => `@${u.name || u.email}`) : null });
+  if (body.action === 'delete') await logActivity(app.id, user, 'Removed a note');
   if (added && mentioned.length) {
     const excerpt = added.text.length > 140 ? `${added.text.slice(0, 137)}…` : added.text;
     await notify(mentioned.map((u) => u.id), {

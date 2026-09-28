@@ -176,7 +176,7 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
         }]
       : []),
     ...(staff
-      ? [{ id: 'notes', label: 'Team notes', icon: StickyNote, sub: app.notes?.length ? `${app.notes.length} note${app.notes.length === 1 ? '' : 's'}` : 'None yet', divider: true }]
+      ? [{ id: 'notes', label: 'Team notes', icon: StickyNote, sub: app.notes?.length ? `${app.notes.length} note${app.notes.length === 1 ? '' : 's'} · activity` : 'Notes & activity', divider: true }]
       : []),
   ];
 

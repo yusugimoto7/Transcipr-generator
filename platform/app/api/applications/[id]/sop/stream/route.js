@@ -5,6 +5,7 @@ import { buildDocBlocks } from '@/lib/uploads';
 import { primaryLetter } from '@/lib/appTypes';
 import { cleanAnswers } from '@/lib/sopQuestions';
 import { error, requireOwnedApp } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -15,7 +16,8 @@ export const maxDuration = 300;
  * client persists the final text (and renders the PDF) via POST /sop.
  */
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
+  await logActivity(app?.id, user, 'Drafted the letter');
   if (err) return err;
 
   let body = {};

@@ -6,6 +6,7 @@ import { cleanAnswers } from '@/lib/sopQuestions';
 import { primaryLetter } from '@/lib/appTypes';
 import { json, error, requireOwnedApp } from '@/lib/api';
 import { queueSync } from '@/lib/driveStore';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -29,7 +30,7 @@ export async function GET(_req, { params }) {
  * generated from intake data + these answers + relevant uploaded documents.
  */
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
 
   let body = {};
@@ -78,5 +79,6 @@ export async function POST(req, { params }) {
   });
   queueSync(app.id);
 
+  await logActivity(app.id, user, typeof body.editedText === 'string' && body.editedText.trim() ? `Saved the ${letter.title}` : `Drafted the ${letter.title}`);
   return json({ text, generated: updated.generated, sop: updated.sop, answers });
 }

@@ -6,6 +6,7 @@ import { classifyByFilename } from '@/lib/generators/classify';
 import { json, error, requireOwnedApp } from '@/lib/api';
 import { queueSync } from '@/lib/driveStore';
 import { notifyTeam, fileLabel } from '@/lib/notify';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -87,6 +88,7 @@ export async function POST(req, { params }) {
       by: { id: user.id, name: user.name || user.email },
     });
   }
+  await logActivity(app.id, user, `Uploaded ${saved.length} document${saved.length === 1 ? '' : 's'}`, { items: saved.map((d) => d.filename) });
   return json({ documents: updated.documents, added: saved }, 201);
 }
 
@@ -117,12 +119,15 @@ export async function PATCH(req, { params }) {
     }
     return a;
   });
+  const fname = (app.documents || []).find((d) => d.id === docId)?.filename || 'a document';
+  if ('reviewed' in body) await logActivity(app.id, user, body.reviewed ? 'Signed off a document' : 'Undid a sign-off', { items: [fname] });
+  else await logActivity(app.id, user, 'Changed a document’s type', { items: [fname], detail: category || 'none' });
   return json({ documents: updated.documents });
 }
 
 // Remove a document by id.
 export async function DELETE(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
   const { searchParams } = new URL(req.url);
   const docId = searchParams.get('docId');
@@ -135,5 +140,6 @@ export async function DELETE(req, { params }) {
     a.documents = (a.documents || []).filter((d) => d.id !== docId);
     return a;
   });
+  await logActivity(app.id, user, 'Removed a document', { items: [doc?.filename || docId] });
   return json({ documents: updated.documents });
 }

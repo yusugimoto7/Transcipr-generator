@@ -799,3 +799,13 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .access-row:hover { background: var(--hover, #f3f5f8); }
 @media (max-width: 720px) { .levels { grid-template-columns: 1fr; } }
 .stack-xs { display: grid; gap: 6px; justify-items: start; }
+
+/* Team activity */
+.act-log { list-style: none; margin: 0; padding: 0; display: grid; }
+.act-log li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.act-log li:first-child { border-top: 0; }
+.act-body { display: grid; gap: 4px; min-width: 0; }
+.act-items { display: flex; flex-wrap: wrap; gap: 4px; }
+.act-items .chip { font-weight: 500; overflow-wrap: anywhere; }
+.act-detail { overflow-wrap: anywhere; }
+.act-when { font-size: 12px; color: var(--ink-soft); }

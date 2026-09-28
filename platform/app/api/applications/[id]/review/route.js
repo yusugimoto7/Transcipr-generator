@@ -2,12 +2,13 @@ import { updateApplication } from '@/lib/store';
 import { reviewApplication } from '@/lib/generators/review';
 import { checklistStatus } from '@/lib/checklist';
 import { json, error, requireOwnedApp } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
 
 export async function POST(_req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
 
   let review;
@@ -22,6 +23,7 @@ export async function POST(_req, { params }) {
     return a;
   });
 
+  await logActivity(app.id, user, 'Ran the readiness review', { detail: review?.readinessScore != null ? `score ${review.readinessScore}/100` : '' });
   return json({ review, checklist: checklistStatus(app) });
 }
 

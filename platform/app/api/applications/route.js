@@ -2,6 +2,7 @@ import { listApplicationsFor, createApplication, effectiveRole, listUsers } from
 import { APP_TYPES, DEFAULT_TYPE, getAppType } from '@/lib/appTypes';
 import { json, error, requireUser } from '@/lib/api';
 import { ROLES, normNumber } from '@/lib/cases';
+import { logActivity } from '@/lib/activity';
 
 function summarize(a, users) {
   const byId = new Map((users || []).map((u) => [u.id, u]));
@@ -63,5 +64,6 @@ export async function POST(req) {
     representation: staff ? (body.representation === 'self' ? 'self' : 'firm') : 'self',
     assignedTo: role === 'manager' ? [user.id] : [],
   });
+  await logActivity(app.id, user, 'Created the file', { detail: `${app.clientNumber ? `${app.clientNumber} · ` : ''}${app.title}` });
   return json({ application: app }, 201);
 }

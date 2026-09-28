@@ -4,6 +4,7 @@ import { APP_TYPES, STAGE_LABELS } from '@/lib/appTypes';
 import { json, error, requireAppAccess } from '@/lib/api';
 import { ROLES, normNumber, isDefaultTitle, intakeName } from '@/lib/cases';
 import { forViewer } from '@/lib/emails';
+import { logActivity } from '@/lib/activity';
 
 export async function GET(_req, { params }) {
   const { app, role, error: err } = await requireAppAccess(params.id);
@@ -88,6 +89,18 @@ export async function PATCH(req, { params }) {
       409
     );
   }
+  // Team activity log.
+  if (updated) {
+    const labels = new Map(everyField().map((f) => [f.id, f.label]));
+    if (body.data && typeof body.data === 'object') {
+      const keys = Object.keys(body.data).filter((k) => validIds.has(k));
+      if (keys.length) await logActivity(app.id, user, 'Edited the intake', { items: keys.map((k) => labels.get(k) || k), merge: 'intake' });
+    }
+    const changed = ['title', 'clientNumber', 'type', 'representation', 'applicantRole', 'groupId'].filter((k) => k in body && body[k] !== app[k]);
+    if (changed.length) await logActivity(app.id, user, 'Changed the file details', { items: changed.map((k) => ({ title: 'name', clientNumber: 'file number', type: 'application type', representation: 'representation', applicantRole: 'family role', groupId: 'family' }[k])) });
+    if (body.archived === true) await logActivity(app.id, user, 'Archived the client');
+    if (body.archived === false) await logActivity(app.id, user, 'Restored the client from the archive');
+  }
   return json({ application: forViewer(updated, staff) });
 }
 
@@ -99,5 +112,6 @@ export async function DELETE(_req, { params }) {
     return error('Only the owner or an admin can delete a file.', 403);
   }
   await deleteApplication(params.id, { by: user.id });
+  await logActivity(app.id, user, 'Deleted the file', { detail: app.title });
   return json({ ok: true });
 }

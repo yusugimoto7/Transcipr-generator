@@ -3,6 +3,7 @@ import { resolveRoot } from '@/lib/driveImport';
 import { driveStatus, DriveError } from '@/lib/drive';
 import { startDriveJob, getDriveJob } from '@/lib/driveJob';
 import { json, error, requireAppAccess } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -50,5 +51,6 @@ export async function POST(req, { params }) {
   }
 
   const job = startDriveJob(app.id, { url, root, includeBackups: Boolean(body.includeBackups), userId: user.id });
+  await logActivity(app.id, user, 'Imported documents from Google Drive', { detail: root?.name || '' });
   return json({ job }, 202);
 }

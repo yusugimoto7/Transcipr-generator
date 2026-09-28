@@ -1,5 +1,6 @@
 import { startExtractJob, getExtractJob, applicantHint } from '@/lib/extractJob';
 import { json, error, requireOwnedApp } from '@/lib/api';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -14,7 +15,7 @@ export const runtime = 'nodejs';
  * documents), remembered on the file.
  */
 export async function POST(req, { params }) {
-  const { app, error: err } = await requireOwnedApp(params.id);
+  const { app, user, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
   let body = {};
   try {
@@ -27,6 +28,7 @@ export async function POST(req, { params }) {
       all: Boolean(body.all),
       applicant: typeof body.applicant === 'string' ? body.applicant : undefined,
     });
+    await logActivity(app.id, user, body.all ? 'Re-read and checked all documents' : 'Started Read & check');
     return json({ job }, 202);
   } catch (e) {
     return error(e.message || 'Could not start reading.', e.status || 500);
