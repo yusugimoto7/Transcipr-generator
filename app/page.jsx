@@ -1346,9 +1346,21 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
         </div>
       )}
 
-      <button onClick={onBack} style={{ marginTop: 12, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", border: "none", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
+      {/* A real link, so right-click / middle-click / Ctrl+click can open the
+          next topic in a new tab and this one stays on the current script. The
+          topic just handled is already marked seen, so a fresh tab's deck starts
+          at the next card. A plain left click still stays in-page. */}
+      <a
+        href="/"
+        onClick={(e) => {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          onBack();
+        }}
+        style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 12, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
+      >
         Next topic →
-      </button>
+      </a>
     </div>
   );
 }
