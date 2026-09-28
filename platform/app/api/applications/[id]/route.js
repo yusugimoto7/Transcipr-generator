@@ -3,11 +3,12 @@ import { everyField } from '@/lib/schema';
 import { APP_TYPES, STAGE_LABELS } from '@/lib/appTypes';
 import { json, error, requireAppAccess } from '@/lib/api';
 import { ROLES, normNumber, isDefaultTitle, intakeName } from '@/lib/cases';
+import { forViewer } from '@/lib/emails';
 
 export async function GET(_req, { params }) {
-  const { app, error: err } = await requireAppAccess(params.id);
+  const { app, role, error: err } = await requireAppAccess(params.id);
   if (err) return err;
-  return json({ application: app });
+  return json({ application: forViewer(app, role === 'admin' || role === 'manager') });
 }
 
 /**
@@ -87,7 +88,7 @@ export async function PATCH(req, { params }) {
       409
     );
   }
-  return json({ application: updated });
+  return json({ application: forViewer(updated, staff) });
 }
 
 export async function DELETE(_req, { params }) {

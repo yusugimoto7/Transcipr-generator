@@ -8,6 +8,8 @@ import { buildChecklist } from './checklist';
 import { ensureClientFolder } from './driveStore';
 import { startExtractJob, getExtractJob } from './extractJob';
 import { driveStatus, parseDriveLink, uploadFile } from './drive';
+import { recordEmail, analyzeEmailSafe } from './emailFacts';
+import { MAX_BODY } from './emails';
 
 /**
  * Email intake: documents clients send to the team's mailbox
@@ -15,8 +17,9 @@ import { driveStatus, parseDriveLink, uploadFile } from './drive';
  *
  * Every few minutes the mailbox is checked over IMAP (the mailbox is at
  * IONOS). For each new message:
- *   1. the sender is matched to a file — a client number in the subject or
- *      body ("S26160"), an address staff attached to the file, the intake's
+ *   1. the sender is matched to a file — the client (contract) number in the
+ *      subject or body ("S26160"), or the sender's address: the client's email
+ *      on their Odoo card, an address staff attached to the file, the intake's
  *      email address, or the applicant's login;
  *   2. the attachments (PDF, JPG, PNG, WEBP, DOCX; zips are unpacked) are
  *      saved on the file, then read and checked like any upload;
@@ -24,8 +27,12 @@ import { driveStatus, parseDriveLink, uploadFile } from './drive';
  *      "103 - Passport - Zahra.pdf" — and filed in the client's Drive folder
  *      under "01 - Documents" (the folder is created, mirroring the firm's
  *      layout, if the client has none yet).
- * A message that matches no file (or several) waits in the Email intake
- * inbox for staff to assign; the sender is then remembered for that file.
+ * Every filed message — with or without documents — also keeps its text on
+ * the file and is read for the facts it states (lib/emailFacts.js).
+ * A message with documents that matches no file (or several) waits in the
+ * Email intake inbox for staff to assign; the sender is then remembered for
+ * that file. One without documents that matches no file is listed too, and
+ * staff can file it the same way.
  *
  * The mailbox itself is never changed — the platform only remembers the last
  * message it processed (data/mail.json).
@@ -45,6 +52,7 @@ const MAX_ATTACHMENT = 25 * 1024 * 1024;
 const MAX_PER_RUN = 50;
 const BY_EXT = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
 const CLIENT_NO = /\b(S[A-Z]?\d{5,9})\b/i;
+const normNo = (s) => String(s || '').trim().toUpperCase();
 
 export function mailConfig() {
   const stub = process.env.MAIL_STUB_DIR || null;
@@ -88,6 +96,7 @@ async function parseMessage(uid, source) {
   const m = await simpleParser(source);
   const from = m.from?.value?.[0] || {};
   const text = `${m.subject || ''}\n${m.text || ''}`.slice(0, 20000);
+  const body = String(m.text || '').slice(0, MAX_BODY);
   return {
     id: m.messageId || `uid:${uid}`,
     uid,
@@ -95,6 +104,7 @@ async function parseMessage(uid, source) {
     subject: m.subject || '',
     date: (m.date || new Date()).toISOString(),
     text,
+    body,
     attachments: (m.attachments || []).map((a) => ({
       name: a.filename || 'attachment',
       size: a.size || a.content?.length || 0,
@@ -140,6 +150,35 @@ async function fetchNew(store) {
   return out;
 }
 
+/** Messages by UID (for staff filing after a restart, and for saving earlier emails' text). */
+async function fetchByUids(uids) {
+  const cfg = mailConfig();
+  const out = [];
+  if (!uids.length) return out;
+  if (cfg.stub) {
+    const files = (await fs.readdir(cfg.stub)).filter((f) => f.endsWith('.eml')).sort();
+    for (const uid of uids) if (files[uid - 1]) out.push(await parseMessage(uid, await fs.readFile(path.join(cfg.stub, files[uid - 1]))));
+    return out;
+  }
+  const { ImapFlow } = await import('imapflow');
+  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.port === 993, auth: { user: cfg.user, pass: process.env.MAIL_PASSWORD }, logger: false });
+  await client.connect();
+  try {
+    const lock = await client.getMailboxLock(cfg.folder);
+    try {
+      for (const uid of uids) {
+        const m = await client.fetchOne(String(uid), { source: true }, { uid: true });
+        if (m?.source) out.push(await parseMessage(uid, m.source));
+      }
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
+  return out;
+}
+
 /* ------------------------------- matching ------------------------------- */
 
 /** Which file a message belongs to: { app } | { candidates: [...] }. */
@@ -147,9 +186,11 @@ export async function matchApplication(msg, apps, users) {
   const addr = msg.from.address;
   const byUser = new Map((users || []).map((u) => [u.id, String(u.email || '').toLowerCase()]));
   const clientNo = (msg.text || '').match(CLIENT_NO)?.[1]?.toUpperCase();
+  const onCard = (a) => Boolean(addr) && (a.odoo?.emails || []).includes(addr);
   const fromSender = (a) =>
     addr &&
-    ((a.clientEmails || []).map((e) => e.toLowerCase()).includes(addr) ||
+    (onCard(a) ||
+      (a.clientEmails || []).map((e) => e.toLowerCase()).includes(addr) ||
       String(a.data?.email || '').toLowerCase() === addr ||
       byUser.get(a.userId) === addr);
   if (clientNo) {
@@ -166,7 +207,10 @@ export async function matchApplication(msg, apps, users) {
     }
   }
   const byEmail = apps.filter(fromSender);
-  if (byEmail.length === 1) return { app: byEmail[0], how: `sender ${addr}` };
+  if (byEmail.length === 1) return { app: byEmail[0], how: `sender ${addr}${onCard(byEmail[0]) ? ' (the email on the Odoo card)' : ''}` };
+  // Several files for one sender: a family — the main applicant's file.
+  const mainOnly = byEmail.filter((a) => (a.applicantRole || 'main') === 'main');
+  if (byEmail.length > 1 && mainOnly.length === 1 && new Set(byEmail.map((a) => normNo(a.clientNumber) || a.groupId || a.id)).size === 1) return { app: mainOnly[0], how: `sender ${addr} (main applicant's file)` };
   return { candidates: byEmail.map((a) => a.id) };
 }
 
@@ -324,17 +368,23 @@ async function waitForReading(appId) {
 /** Attach, read and check, name and file on Drive. Updates the message record. */
 export async function processInto(msg, app, { how = 'assigned by staff' } = {}) {
   const rec = { status: 'processing', appId: app.id, clientNumber: app.clientNumber || null, how };
-  await saveMailStore((s) => Object.assign((s.messages[msg.id] ||= {}), rec));
+  await saveMailStore((s) => {
+    Object.assign((s.messages[msg.id] ||= {}), rec);
+    delete s.messages[msg.id].body; // the text now lives on the file
+  });
   try {
+    await recordEmail(app.id, msg, how);
     const { added, skipped } = await attachToApplication(msg, app);
     if (!added.length) {
-      await saveMailStore((s) => Object.assign(s.messages[msg.id], { status: 'no-attachments', skipped, processedAt: new Date().toISOString() }));
+      await analyzeEmailSafe(app.id, msg.id);
+      await saveMailStore((s) => Object.assign(s.messages[msg.id], { status: msg.attachments.length ? 'no-attachments' : 'processed', files: [], skipped, processedAt: new Date().toISOString() }));
       return;
     }
     await waitForReading(app.id);
     await startExtractJob(app.id);
     await waitForReading(app.id);
     const filed = await fileOnDrive(app.id, added.map((d) => d.id));
+    await analyzeEmailSafe(app.id, msg.id); // after the documents, so their values come first
     const after = await getApplication(app.id);
     const files = (after.documents || []).filter((d) => added.some((x) => x.id === d.id)).map((d) => ({ docId: d.id, filename: d.filename, category: d.category, driveId: d.driveId || null, check: d.verification?.status || null }));
     await saveMailStore((s) => Object.assign(s.messages[msg.id], { status: 'processed', files, skipped, drive: filed, processedAt: new Date().toISOString() }));
@@ -362,14 +412,16 @@ export function checkMail() {
     const apps = await listAllApplications();
     const users = await listUsers();
     for (const msg of msgs) {
-      const base = { id: msg.id, uid: msg.uid, from: msg.from, subject: msg.subject, date: msg.date, receivedAt: new Date().toISOString(), attachments: msg.attachments.map(({ name, size, mime }) => ({ name, size, mime })) };
+      const base = { id: msg.id, uid: msg.uid, from: msg.from, subject: msg.subject, date: msg.date, snippet: snippet(msg.body), receivedAt: new Date().toISOString(), attachments: msg.attachments.map(({ name, size, mime }) => ({ name, size, mime })) };
       const known = store.messages[msg.id];
       if (known && known.status !== 'unassigned') continue; // seen before
-      if (!msg.attachments.length) {
+      const m = await matchApplication(msg, apps, users);
+      if (!msg.attachments.length && !m.app) {
+        // No documents and no file: listed (with its text) for staff to file if it matters.
         counts.noAttachments++;
-        await saveMailStore((s) => (s.messages[msg.id] = { ...base, status: 'no-attachments' }));
+        pending.set(msg.id, msg);
+        await saveMailStore((s) => (s.messages[msg.id] = { ...base, status: 'no-attachments', body: msg.body.slice(0, 20000), candidates: m.candidates }));
       } else {
-        const m = await matchApplication(msg, apps, users);
         if (m.app) {
           await saveMailStore((s) => (s.messages[msg.id] = { ...base, status: 'processing' }));
           pending.set(msg.id, msg); // kept in memory for staff re-assignment while the store lacks the content
@@ -389,6 +441,8 @@ export function checkMail() {
   return running;
 }
 
+const snippet = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 220);
+
 // Unassigned messages' attachments, kept until staff assign them (the mailbox
 // still has the original; after a restart, "Check now" fetches it again only
 // if it is newer than the last processed one — so staff should assign soon).
@@ -401,30 +455,10 @@ export async function assignMessage(id, appId, { remember = false } = {}) {
   let msg = pending.get(id);
   if (!msg) {
     // Not in memory (server restarted): fetch it again by UID.
-    const store = await readMailStore();
-    const rec = store.messages[id];
+    const rec = (await readMailStore()).messages[id];
     if (!rec) throw new Error('Message not found.');
-    const cfg = mailConfig();
-    if (cfg.stub) {
-      const files = (await fs.readdir(cfg.stub)).filter((f) => f.endsWith('.eml')).sort();
-      msg = await parseMessage(rec.uid, await fs.readFile(path.join(cfg.stub, files[rec.uid - 1])));
-    } else {
-      const { ImapFlow } = await import('imapflow');
-      const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.port === 993, auth: { user: cfg.user, pass: process.env.MAIL_PASSWORD }, logger: false });
-      await client.connect();
-      try {
-        const lock = await client.getMailboxLock(cfg.folder);
-        try {
-          const m = await client.fetchOne(String(rec.uid), { source: true }, { uid: true });
-          if (!m?.source) throw new Error('The message is no longer in the mailbox.');
-          msg = await parseMessage(rec.uid, m.source);
-        } finally {
-          lock.release();
-        }
-      } finally {
-        await client.logout().catch(() => {});
-      }
-    }
+    [msg] = await fetchByUids([rec.uid]);
+    if (!msg) throw new Error('The message is no longer in the mailbox.');
   }
   if (remember && msg.from.address) {
     await updateApplication(appId, (a) => {
@@ -442,4 +476,63 @@ export async function ignoreMessage(id) {
   await saveMailStore((s) => {
     if (s.messages[id]) s.messages[id].status = 'ignored';
   });
+}
+
+/* ------------------------- earlier emails' text ------------------------- */
+
+const B = (globalThis.__mailBackfill ||= { running: false, done: 0, total: 0, saved: 0, filed: 0, error: null, finishedAt: null });
+
+export function backfillStatus() {
+  return { ...B };
+}
+
+/**
+ * Save the text of emails processed before the platform kept it, and read
+ * them for facts: messages already filed get their text on the file; those
+ * without documents that matched no file are matched again (Odoo email,
+ * client number) and filed when they now match. Runs in the background.
+ */
+export function startBackfill({ limit = 150 } = {}) {
+  if (B.running) return backfillStatus();
+  Object.assign(B, { running: true, done: 0, total: 0, saved: 0, filed: 0, error: null, finishedAt: null });
+  (async () => {
+    const store = await readMailStore();
+    const apps = await listAllApplications();
+    const users = await listUsers();
+    const byId = new Map(apps.map((a) => [a.id, a]));
+    const todo = Object.values(store.messages)
+      .filter((r) => r.uid && !['ignored', 'processing', 'unassigned'].includes(r.status))
+      .filter((r) => (r.appId ? byId.has(r.appId) && !(byId.get(r.appId).emails || []).some((e) => e.id === r.id) : r.status === 'no-attachments'))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, limit);
+    B.total = todo.length;
+    for (let i = 0; i < todo.length; i += 10) {
+      const msgs = await fetchByUids(todo.slice(i, i + 10).map((r) => r.uid));
+      for (const msg of msgs) {
+        const rec = store.messages[msg.id];
+        if (rec?.appId) {
+          await recordEmail(rec.appId, msg, rec.how || 'earlier email');
+          await analyzeEmailSafe(rec.appId, msg.id);
+          B.saved++;
+        } else if (rec) {
+          const m = await matchApplication(msg, apps, users);
+          if (m.app) {
+            await recordEmail(m.app.id, msg, m.how);
+            await analyzeEmailSafe(m.app.id, msg.id);
+            await saveMailStore((s) => {
+              Object.assign(s.messages[msg.id], { status: 'processed', appId: m.app.id, clientNumber: m.app.clientNumber || null, how: m.how, files: [], processedAt: new Date().toISOString() });
+              delete s.messages[msg.id].body;
+            });
+            B.filed++;
+          } else {
+            await saveMailStore((s) => Object.assign(s.messages[msg.id], { body: msg.body.slice(0, 20000), snippet: snippet(msg.body) }));
+          }
+        }
+        B.done++;
+      }
+    }
+  })()
+    .catch((e) => (B.error = e.message))
+    .finally(() => Object.assign(B, { running: false, finishedAt: new Date().toISOString() }));
+  return backfillStatus();
 }

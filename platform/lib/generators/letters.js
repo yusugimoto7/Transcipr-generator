@@ -2,6 +2,7 @@ import { complete } from '../ai';
 import { factsText } from '../schema';
 import { getAppType, lettersFor, primaryLetter } from '../appTypes';
 import { answersToText } from '../sopQuestions';
+import { emailFactsText } from '../emails';
 import { pronouns, BOILERPLATE } from '../applicant';
 import { getFirm, signatureBlock } from '../firm';
 import { buildChecklist } from '../checklist';
@@ -62,7 +63,7 @@ function header(app) {
     t,
     p,
     name: `${d.givenName || ''} ${d.familyName || ''}`.trim(),
-    facts: factsText(d, app.type),
+    facts: [factsText(d, app.type), emailFactsText(app)].filter(Boolean).join('\n\n'),
     builder: answersToText(app.sopAnswers || {}, primaryLetter(app.type).kind),
   };
 }

@@ -2,19 +2,20 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { LayoutDashboard, FileStack, ClipboardList, PenLine, ShieldCheck, PackageCheck, CheckCircle2, ChevronRight, Loader2, CloudOff, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, FileStack, ClipboardList, PenLine, ShieldCheck, PackageCheck, CheckCircle2, ChevronRight, Loader2, CloudOff, AlertTriangle, Mail } from 'lucide-react';
 import OverviewPanel from '@/components/panels/OverviewPanel';
 import DocumentsPanel from '@/components/panels/DocumentsPanel';
 import IntakePanel from '@/components/panels/IntakePanel';
 import SopBuilderPanel from '@/components/panels/SopBuilderPanel';
 import ReviewPanel from '@/components/panels/ReviewPanel';
 import GeneratePanel from '@/components/panels/GeneratePanel';
+import EmailsPanel from '@/components/panels/EmailsPanel';
 import { primaryLetter, getAppType } from '@/lib/appTypes';
 import { fileProgress } from '@/lib/progress';
 import { ROLE_LABEL, displayName } from '@/lib/cases';
 import { initials } from '@/components/TopBar';
 
-const SECTION_IDS = ['overview', 'documents', 'intake', 'sop', 'review', 'generate'];
+const SECTION_IDS = ['overview', 'documents', 'emails', 'intake', 'sop', 'review', 'generate'];
 
 /** Read "#section" or "#section:sub" from the URL. */
 function readHash() {
@@ -86,6 +87,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
 
   // Merge a partial update into local app state.
   const patchLocal = useCallback((partial) => {
+    if (partial.dataVersion != null) versionRef.current = partial.dataVersion; // saved on the server alongside
     setApp((a) => ({ ...a, ...partial, data: { ...a.data, ...(partial.data || {}) } }));
   }, []);
 
@@ -135,6 +137,7 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
   );
 
   const attention = p.check.red + p.check.orange;
+  const fieldLabels = useMemo(() => new Map(schema.steps.flatMap((st) => st.fields.map((f) => [f.id, f.label]))), [schema]);
   const nav = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     {
@@ -145,6 +148,12 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
       badge: p.check.red ? { n: p.check.red, cls: 'danger', title: 'serious findings' } : attention ? { n: attention, cls: 'warn', title: 'need attention' } : null,
       done: p.documents.required > 0 && !p.documents.missing.length && !attention,
     },
+    ...(staff
+      ? [{
+          id: 'emails', label: 'Emails', icon: Mail,
+          sub: app.emails?.length ? `${app.emails.length} email${app.emails.length === 1 ? '' : 's'} · ${(app.emails || []).reduce((n, e) => n + (e.analysis?.facts || []).filter((f) => !f.dismissed).length, 0)} facts` : 'None yet',
+        }]
+      : []),
     { id: 'intake', label: staff ? 'Intake' : 'Your details', icon: ClipboardList, sub: `${p.intake.done} of ${p.intake.total} sections`, done: p.intake.done === p.intake.total },
     { id: 'sop', label: letter.title.replace(/ \(.*\)$/, ''), icon: PenLine, sub: p.letter.done ? 'Drafted' : 'Not written yet', done: p.letter.done },
     { id: 'review', label: 'Review', icon: ShieldCheck, sub: p.review ? `Readiness ${p.review.score}/100` : 'Not run yet' },
@@ -248,6 +257,9 @@ export default function Workspace({ initialApp, schema, viewerRole, family, driv
               onSelect={setSub}
               driveOn={driveOn}
             />
+          )}
+          {tab === 'emails' && staff && (
+            <EmailsPanel app={app} patchLocal={patchLocal} onFieldChange={onFieldChange} fieldLabel={(id) => fieldLabels.get(id)} />
           )}
           {tab === 'intake' && (
             <IntakePanel app={app} schema={schema} sections={p.intake.sections} onFieldChange={onFieldChange} onFinish={() => go(showFinal ? 'review' : 'overview')} activeStepId={sub} onStepChange={setSub} saveState={saveState} />

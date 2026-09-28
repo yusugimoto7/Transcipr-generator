@@ -3,6 +3,7 @@
 // team's way and filed on a stub Google Drive.
 //   npm run build && node test/mail.test.mjs
 import { spawn } from 'child_process';
+import { loadLib } from './_load.mjs';
 import http from 'http';
 import crypto from 'crypto';
 import fs from 'fs/promises';
@@ -102,7 +103,12 @@ const stub = http.createServer((req, res) => {
     const parts = JSON.parse(b || '{}').messages?.flatMap((m) => (Array.isArray(m.content) ? m.content : [])) || [];
     const text = parts.filter((p) => p.type === 'text').map((p) => p.text).join('\n');
     let out;
-    if (/"datePairs"/.test(text)) {
+    if (/Pull out the FACTS/.test(b)) {
+      const father = /father will pay/i.test(b);
+      out = father
+        ? { summary: 'The client explains who pays and where she was born.', facts: [{ topic: 'finances', about: 'applicant', text: 'Her father will pay for the trip.', quote: 'My father will pay for everything' }, { topic: 'identity', about: 'applicant', text: 'She was born in Shiraz.', quote: 'I was born in Shiraz' }], fields: { cityOfBirth: 'Shiraz', givenName: 'Zahra Sadat', notAField: 'x' }, requests: ['Will send the bank letter next week.'] }
+        : { summary: 'A short note.', facts: [], fields: {}, requests: [] };
+    } else if (/"datePairs"/.test(text)) {
       out = { documentType: 'stub', parts: { translation: true, certifiedCopy: true, original: true, translatorSeal: true }, legibility: 'good', facts: {}, datePairs: [], findings: /bank/i.test(text) ? [{ severity: 'medium', kind: 'vague', text: 'No balance stated.', page: 1 }] : [] };
     } else {
       const headers = parts.filter((p) => p.type === 'text' && /^--- Document \d+:/.test(p.text)).map((p) => p.text);
@@ -135,7 +141,9 @@ const zipBuf = await zip.generateAsync({ type: 'nodebuffer' });
 await fs.writeFile(path.join(mailDir, '001.eml'), eml('Zahra <client@mail.test>', 'my documents', [{ name: 'passport scan.pdf', mime: 'application/pdf', buf: await pdf('PASSPORT') }, { name: 'docs.zip', mime: 'application/zip', buf: zipBuf }]));
 await fs.writeFile(path.join(mailDir, '002.eml'), eml('stranger@x.test', 'papers', [{ name: 'bank.jpg', mime: 'image/jpeg', buf: Buffer.from('ffd8ffe000104a46494600', 'hex') }]));
 await fs.writeFile(path.join(mailDir, '003.eml'), eml('other@x.test', 'S26170 documents', [{ name: 'employment letter.pdf', mime: 'application/pdf', buf: await pdf('LETTER') }]));
-await fs.writeFile(path.join(mailDir, '004.eml'), eml('nobody@x.test', 'question', []));
+await fs.writeFile(path.join(mailDir, '004.eml'), eml('nobody@x.test', 'question', [], 'Is the fee refundable?'));
+await fs.writeFile(path.join(mailDir, '005.eml'), eml('Zahra M <zahra.card@mail.test>', 'about my trip', [], 'Hello,\nMy father will pay for everything. I was born in Shiraz.\n\nOn Mon, 1 Sep 2026 at 10:00 Team <visa@sugimotovisa.com> wrote:\n> What is your plan?'));
+await fs.writeFile(path.join(mailDir, '006.eml'), eml('someone.else@x.test', 'hello', [], 'Regarding file S26170: I will travel in May.'));
 
 /* --------------------------------- server --------------------------------- */
 const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mail-data-'));
@@ -176,11 +184,17 @@ try {
   const ali = r.data.application.id;
   await admin('PATCH', `/api/applications/${ali}`, { data: { givenName: 'Ali', familyName: 'Test' } });
 
+  // The client's email on their Odoo card (normally set by the Odoo sync).
+  const zFile = path.join(dataDir, 'applications', `${zahra}.json`);
+  const zj = JSON.parse(await fs.readFile(zFile, 'utf8'));
+  zj.odoo = { taskId: 99, emails: ['zahra.card@mail.test'] };
+  await fs.writeFile(zFile, JSON.stringify(zj));
+
   r = await applicant('GET', '/api/admin/mail');
   ok(r.status === 403, 'applicants cannot see the mailbox');
 
   r = await admin('POST', '/api/admin/mail', { action: 'check' });
-  ok(r.status === 200 && r.data.counts.fetched === 4 && r.data.counts.processed === 2 && r.data.counts.unassigned === 1 && r.data.counts.noAttachments === 1, `one check fetched 4 messages: 2 filed, 1 waiting, 1 without documents (${JSON.stringify(r.data?.counts)})`);
+  ok(r.status === 200 && r.data.counts.fetched === 6 && r.data.counts.processed === 4 && r.data.counts.unassigned === 1 && r.data.counts.noAttachments === 1, `one check fetched 6 messages: 4 filed, 1 waiting, 1 without documents or file (${JSON.stringify(r.data?.counts)})`);
 
   r = await admin('GET', '/api/admin/mail');
   const byFrom = Object.fromEntries(r.data.messages.map((m) => [m.from.address, m]));
@@ -205,7 +219,43 @@ try {
   const a = byFrom['other@x.test'];
   ok(a.status === 'processed' && a.appId === ali && /client number S26170/.test(a.how), 'a client number in the subject matches the message to the file');
   ok(a.files[0].filename === '113 - Employment - Ali.pdf' && !a.drive.folderCreated && uploads.some((u) => u.parent === 'aliDocs000001' && u.name === '113 - Employment - Ali.pdf'), "the existing client folder's 01 - Documents is used");
-  ok(byFrom['nobody@x.test'].status === 'no-attachments', 'a message without documents is recorded as such');
+  ok(byFrom['nobody@x.test'].status === 'no-attachments' && /refundable/.test(byFrom['nobody@x.test'].body), 'a message without documents or file is listed with its text');
+
+  // Email text and facts on the file.
+  const card = byFrom['zahra.card@mail.test'];
+  ok(card.status === 'processed' && card.appId === zahra && /Odoo card/.test(card.how), `a text-only email from the address on the Odoo card reaches the file (${card.how})`);
+  const six = byFrom['someone.else@x.test'];
+  ok(six.status === 'processed' && six.appId === ali && /S26170/.test(six.how), 'a client number in the text (not the subject) reaches the file');
+  let zf = (await admin('GET', `/api/applications/${zahra}`)).data.application;
+  const e5 = zf.emails.find((e) => e.from.address === 'zahra.card@mail.test');
+  ok(zf.emails.length === 2 && /father will pay/.test(e5.body) && zf.emails.some((e) => /documents are attached/.test(e.body)), 'the text of every email is kept on the file');
+  ok(e5.analysis?.facts?.length === 2 && e5.analysis.facts[0].topic === 'finances' && e5.analysis.requests.length === 1, 'the email is read for facts, grouped by topic');
+  ok(zf.data.cityOfBirth === 'Shiraz' && e5.analysis.filled.includes('cityOfBirth'), 'an empty intake field is filled from the email');
+  ok(zf.data.givenName === 'Zahra' && e5.analysis.conflicts.some((c) => c.field === 'givenName' && c.email === 'Zahra Sadat'), 'an answer is never overwritten: a different value is shown to the team');
+  ok(!('notAField' in zf.data), 'values for unknown fields are dropped');
+  r = await admin('POST', `/api/applications/${zahra}/emails`, { action: 'dismiss', emailId: e5.id, factId: e5.analysis.facts[1].id });
+  ok(r.status === 200 && r.data.emails.find((e) => e.id === e5.id).analysis.facts[1].dismissed === true, 'the team can leave a fact out');
+  const { emailFactsText } = await loadLib('emails.js');
+  zf = (await admin('GET', `/api/applications/${zahra}`)).data.application;
+  const ft = emailFactsText(zf);
+  ok(/father will pay/.test(ft) && !/Shiraz/.test(ft), 'the facts the letters and review get leave the dismissed one out');
+  r = await applicant('POST', `/api/applications/${zahra}/emails`, { action: 'analyze', emailId: e5.id });
+  ok(r.status === 403 || r.status === 404, 'clients cannot use the emails API');
+
+  // Staff can file a text-only email that matched nothing.
+  r = await admin('POST', '/api/admin/mail', { action: 'assign', id: byFrom['nobody@x.test'].id, appId: ali });
+  let af = (await admin('GET', `/api/applications/${ali}`)).data.application;
+  ok(r.status === 200 && r.data.message.status === 'processed' && af.emails.some((e) => /refundable/.test(e.body)), 'staff file a text-only email; its text lands on the file');
+
+  // Emails filed before the text was kept: "Save the text of earlier emails".
+  const aFile = path.join(dataDir, 'applications', `${ali}.json`);
+  const aj = JSON.parse(await fs.readFile(aFile, 'utf8'));
+  aj.emails = [];
+  await fs.writeFile(aFile, JSON.stringify(aj));
+  r = await admin('POST', '/api/admin/mail', { action: 'backfill' });
+  for (let i = 0; i < 40 && (r.data?.backfill?.running ?? true); i++) { await new Promise((x) => setTimeout(x, 250)); r = await admin('GET', '/api/admin/mail'); }
+  af = (await admin('GET', `/api/applications/${ali}`)).data.application;
+  ok(r.data.backfill.saved === 3 && af.emails.length === 3 && af.emails.every((e) => e.body), `earlier emails get their text back on the file (${r.data.backfill.saved} saved)`);
 
   const s = byFrom['stranger@x.test'];
   ok(s.status === 'unassigned' && s.candidates.length === 0, 'an unknown sender waits for staff');

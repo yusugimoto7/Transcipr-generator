@@ -200,22 +200,31 @@ Findings marked red or orange are also fed to the Review.
 ## Email intake (visa@sugimotovisa.com)
 
 Documents clients email to the team arrive on the right file by themselves
-(`lib/mailIntake.js`). The mailbox is checked every few minutes over IMAP; for
-each new message with documents:
+(`lib/mailIntake.js`). The mailbox is checked every 5 minutes over IMAP; for
+each new message:
 
-1. the sender is matched to a file — a client number in the subject or body
-   (`S26160`), a sender address remembered on the file, the intake's email or
-   the applicant's login;
-2. the attachments (PDF, JPG, PNG, WEBP, DOCX; zips unpacked) are saved on the
+1. the message is matched to a file — the client (contract) number in the
+   subject or text (`S26160`), or the sender's address: the client's email on
+   their Odoo card (customer email / email_from, read by the Odoo sync), an
+   address remembered on the file, the intake's email or the applicant's login;
+   a family's shared number or address goes to the main applicant's file;
+2. its text is kept on the file (**Emails** section, team only) and read for
+   the facts it states (`lib/emailFacts.js`): grouped by topic with the words
+   they come from, filling intake fields that are still empty (a different
+   value is shown for the team to choose), and given to the letter drafts, the
+   readiness review and the assistant as the client's own statements;
+3. the attachments (PDF, JPG, PNG, WEBP, DOCX; zips unpacked) are saved on the
    file, read and checked like any upload;
-3. each document is named the team's way from what the reading found
+4. each document is named the team's way from what the reading found
    (`103 - Passport - Zahra.pdf`) and copied into the client's Drive folder
    under **01 - Documents**. A client with no folder yet gets one — `S26160 -
    First Last` with `01 - Documents` and `02 - Final Files` — under this
    year's `… FILES` folder (or the clients folder).
 
 A message that matches no file, or several, waits under **Admin → Email
-intake** for staff to file it (the sender is then remembered for that file).
+intake** for staff to file it (the sender is then remembered for that file) —
+with or without documents. **Save the text of earlier emails** there fetches
+the messages filed before the text was kept and adds them to their files.
 The mailbox itself is never modified.
 
 **Setup:**

@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { getApplication, canAccess, listApplicationsFor } from '@/lib/store';
+import { getApplication, canAccess, listApplicationsFor, effectiveRole } from '@/lib/store';
+import { forViewer } from '@/lib/emails';
 import { caseKeyOf, groupCases, caseLabel, displayName } from '@/lib/cases';
 import { driveOn } from '@/lib/driveStore';
 import { getSchema } from '@/lib/schema';
@@ -34,7 +35,7 @@ export default async function ApplicationPage({ params }) {
   return (
     <>
       <TopBar user={user} />
-      <Workspace initialApp={app} schema={getSchema(app.type)} viewerRole={user.role} family={family} driveOn={driveOn()} />
+      <Workspace initialApp={forViewer(app, ['admin', 'manager'].includes(effectiveRole(user)))} schema={getSchema(app.type)} viewerRole={user.role} family={family} driveOn={driveOn()} />
       <AssistantWidget appId={app.id} initialHistory={app.assistantHistory || []} />
     </>
   );

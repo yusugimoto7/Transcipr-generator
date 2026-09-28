@@ -81,7 +81,7 @@ async function linkFile(app, card, apps, { manual = false } = {}) {
         }
         if (m.id === app.id) {
           if (card.name && (isDefaultTitle(a.title) || manual)) a.title = card.name;
-          a.odoo = { taskId: card.taskId, title: card.title, number: card.number, url: cardUrl(card.taskId), linkedAt: new Date().toISOString(), manual: Boolean(manual) };
+          a.odoo = { taskId: card.taskId, title: card.title, number: card.number, emails: card.emails || [], url: cardUrl(card.taskId), linkedAt: new Date().toISOString(), manual: Boolean(manual) };
         }
         return a;
       },
@@ -142,6 +142,12 @@ export async function syncOdoo({ create = true } = {}) {
           result.linked++;
           log(`Linked ${card.number || ''} ${card.name} to its Odoo card`.trim(), app.id);
           apps = await listAllApplications();
+        } else if (app.odoo?.taskId === card.taskId && (app.odoo.emails || []).join() !== (card.emails || []).join()) {
+          // The client's email on the card changed: keep it for matching their emails.
+          await updateApplication(app.id, (a) => {
+            if (a.odoo) a.odoo.emails = card.emails || [];
+            return a;
+          }, { quiet: true });
         }
       }
 
@@ -179,7 +185,7 @@ export async function syncOdoo({ create = true } = {}) {
           await updateApplication(
             app.id,
             (a) => {
-              a.odoo = { taskId: card.taskId, title: card.title, number: card.number, url: cardUrl(card.taskId), linkedAt: new Date().toISOString(), manual: false, imported: true };
+              a.odoo = { taskId: card.taskId, title: card.title, number: card.number, emails: card.emails || [], url: cardUrl(card.taskId), linkedAt: new Date().toISOString(), manual: false, imported: true };
               if (!card.type) a.typeGuessed = true;
               return a;
             },

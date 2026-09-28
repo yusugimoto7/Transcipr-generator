@@ -131,7 +131,8 @@ async function findProject(name) {
 /**
  * The cards of the Visa - TR project, newest first (only those in `stages`
  * when given; otherwise the open ones):
- * [{ taskId, title, number, name, type, createdAt, updatedAt, stage, tags, assignees }]
+ * [{ taskId, title, number, name, type, createdAt, updatedAt, stage, tags, assignees, emails }]
+ * `emails`: the client's addresses on the card (its customer's email, email_from, partner_email).
  * Archived cards and cards in folded (closed) stages are left out unless `all`.
  */
 /** The stages the platform works on (ODOO_STAGES). */
@@ -157,7 +158,7 @@ export async function listCards({ all = false, stages = null } = {}) {
 
   if (!fieldCache) fieldCache = Object.keys(await call('project.task', 'fields_get', [], { attributes: ['type'] }));
   const has = (f) => fieldCache.includes(f);
-  const fields = ['id', 'name', 'create_date', 'write_date', 'stage_id', ...['tag_ids', 'user_ids', 'user_id', 'partner_id'].filter(has)];
+  const fields = ['id', 'name', 'create_date', 'write_date', 'stage_id', ...['tag_ids', 'user_ids', 'user_id', 'partner_id', 'email_from', 'partner_email'].filter(has)];
   const domain = [['project_id', '=', project.id]];
   if (!all && !stages?.length && has('stage_id')) domain.push(['stage_id.fold', '=', false]);
   const tasks = await call('project.task', 'search_read', [domain], { fields, order: 'create_date desc', limit: 2000 });
@@ -167,6 +168,16 @@ export async function listCards({ all = false, stages = null } = {}) {
   const tags = tagIds.length ? new Map((await call('project.tags', 'read', [tagIds], { fields: ['name'] })).map((x) => [x.id, x.name])) : new Map();
   const userIds = [...new Set(tasks.flatMap((t) => [...(t.user_ids || []), ...(Array.isArray(t.user_id) ? [t.user_id[0]] : [])]))];
   const users = userIds.length ? new Map((await call('res.users', 'read', [userIds], { fields: ['login', 'email'] })).map((u) => [u.id, String(u.email || u.login || '').toLowerCase()])) : new Map();
+  // The customers' email addresses (used to match the client's emails to their file).
+  const partnerIds = [...new Set(tasks.map((t) => (Array.isArray(t.partner_id) ? t.partner_id[0] : null)).filter(Boolean))];
+  let partners = new Map();
+  if (partnerIds.length) {
+    try {
+      partners = new Map((await call('res.partner', 'read', [partnerIds], { fields: ['email'] })).map((x) => [x.id, x.email || '']));
+    } catch {
+      /* no access to contacts: the card's own email fields still count */
+    }
+  }
 
   const cards = tasks.map((t) => {
     const p = parseTitle(t.name);
@@ -184,9 +195,17 @@ export async function listCards({ all = false, stages = null } = {}) {
       stage,
       tags: tagNames,
       assignees: [...(t.user_ids || []), ...(Array.isArray(t.user_id) ? [t.user_id[0]] : [])].map((id) => users.get(id)).filter(Boolean),
+      emails: emailsIn([t.email_from, t.partner_email, Array.isArray(t.partner_id) ? partners.get(t.partner_id[0]) : '']),
     };
   });
   return stages?.length ? cards.filter((c) => inStages(c.stage, stages)) : cards;
+}
+
+/** Addresses in Odoo email fields ("Name <a@b.com>, c@d.com"), lower-case, unique. */
+export function emailsIn(values) {
+  const out = new Set();
+  for (const v of values) for (const m of String(v || '').matchAll(/[\w.+'-]+@[\w-]+(?:\.[\w-]+)+/g)) out.add(m[0].toLowerCase());
+  return [...out];
 }
 
 /** Odoo datetimes are "YYYY-MM-DD HH:MM:SS" in UTC. */

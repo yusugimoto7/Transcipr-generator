@@ -86,8 +86,8 @@ export default function AddDocuments({ app, patchLocal, staff, open, onClose, on
             </dl>
             <p className="small faint" style={{ margin: 0 }}>
               {app.clientNumber
-                ? `The file number ${app.clientNumber} in the subject makes sure the email reaches this file.`
-                : 'Add a client file number to this file so emails can be matched reliably.'}
+                ? `An email reaches this file when it mentions ${app.clientNumber} (subject or text), or comes from the email on the client's Odoo card.`
+                : "Add a client file number to this file so emails can be matched reliably (or they must come from the email on the client's Odoo card)."}
               {staff ? ' Emails that match no file wait in Admin → Email intake.' : ''}
             </p>
           </div>

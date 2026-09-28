@@ -2,6 +2,7 @@ import { completeJson } from '../ai';
 import { checklistStatus } from '../checklist';
 import { getAppType } from '../appTypes';
 import { requiredMissing } from '../schema';
+import { emailFactsText } from '../emails';
 
 /**
  * AI readiness review: compares the applicant's data + uploaded documents against
@@ -45,6 +46,7 @@ ${checklist.map((c) => `- ${c.code} ${c.label}${c.cond ? ` (${c.cond})` : ''} â€
 ${checkLines ? `\nDocument check (each document read against its translation, the intake and the passport):\n${checkLines}\nTreat red items as refusal risks to fix before submission.` : ''}
 
 Uploaded document categories: ${uploadedKeys.length ? uploadedKeys.join(', ') : '(none yet)'}
+${emailFactsText(app) ? `\n${emailFactsText(app)}\nUse them to spot gaps and inconsistencies (e.g. an email that contradicts the intake or a document, or a promised document still missing).\n` : ''}
 
 Required intake fields still empty: ${
     missingRequiredFields.length ? missingRequiredFields.join(', ') : '(none)'

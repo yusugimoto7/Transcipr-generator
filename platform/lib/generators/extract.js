@@ -11,7 +11,7 @@ export const OWNERS = ['applicant', 'spouse', 'child', 'parent', 'host', 'sponso
  * it describes — so a child's or spouse's document fills that person's
  * fields and never the applicant's.
  */
-function fieldGuide(type) {
+export function fieldGuide(type) {
   return getSchema(type)
     .steps.map((step) => {
       const fields = step.fields

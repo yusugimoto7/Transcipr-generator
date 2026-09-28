@@ -9,7 +9,7 @@ const STATUS = {
   processed: { label: 'Filed', cls: 'ok' },
   processing: { label: 'Reading…', cls: 'warn' },
   unassigned: { label: 'Needs a file', cls: 'danger' },
-  'no-attachments': { label: 'No documents', cls: '' },
+  'no-attachments': { label: 'No documents · no file', cls: '' },
   failed: { label: 'Failed', cls: 'danger' },
   ignored: { label: 'Ignored', cls: '' },
 };
@@ -33,7 +33,7 @@ export default function AdminMail() {
       if (!res.ok) throw new Error(d.error || 'Could not load.');
       setData(d);
       setErr('');
-      if (d.messages.some((m) => m.status === 'processing')) timer.current = setTimeout(load, 4000);
+      if (d.messages.some((m) => m.status === 'processing') || d.backfill?.running) timer.current = setTimeout(load, 4000);
     } catch (e) {
       setErr(e.message);
     }
@@ -85,10 +85,24 @@ export default function AdminMail() {
         </p>
       )}
       <p className="muted small" style={{ marginTop: 0 }}>
-        Every message with documents is matched to a file by the client number in the subject, the sender&apos;s address on
-        the file, or the intake email. Its documents are saved on the file, read and checked, named the team&apos;s way and
-        copied to the client&apos;s Drive folder under &ldquo;01 - Documents&rdquo;. Messages that match no file wait here.
+        A message is matched to a client&apos;s file by the <strong>client number</strong> (e.g. S26281) in the subject or text,
+        or by the <strong>sender&apos;s address</strong>: the email on the client&apos;s Odoo card, an address remembered for the file,
+        or the intake email. Its text is kept on the file and read for facts useful to the application; its documents are
+        saved, read and checked, named the team&apos;s way and copied to the client&apos;s Drive folder under &ldquo;01 - Documents&rdquo;.
+        Messages that match no file wait here.
       </p>
+      {s?.configured && (
+        <div className="cluster small" style={{ marginBottom: 12 }}>
+          <button type="button" className="btn-secondary btn-sm" onClick={() => act({ action: 'backfill' }, 'backfill')} disabled={busy === 'backfill' || data?.backfill?.running}>
+            {data?.backfill?.running ? <><span className="spinner" /> Saving earlier emails… {data.backfill.done}/{data.backfill.total}</> : 'Save the text of earlier emails'}
+          </button>
+          {!data?.backfill?.running && data?.backfill?.finishedAt && (
+            <span className="muted">
+              {data.backfill.saved} saved on their files, {data.backfill.filed} newly matched{data.backfill.error ? ` · stopped: ${data.backfill.error}` : ''}
+            </span>
+          )}
+        </div>
+      )}
       {err && <div className="alert err">{err}</div>}
       {!msgs.length && <p className="muted">Nothing received yet.</p>}
 
@@ -106,6 +120,14 @@ export default function AdminMail() {
                 {m.from?.name ? `${m.from.name} <${m.from.address}>` : m.from?.address} · {when(m.date)} ·{' '}
                 {m.attachments?.length || 0} attachment(s){m.how ? ` · matched by ${m.how}` : ''}
               </div>
+              {(m.body || m.snippet) && (
+                m.body ? (
+                  <details className="small" style={{ marginTop: 4 }}>
+                    <summary>{m.snippet || 'Show the email'}</summary>
+                    <div style={{ whiteSpace: 'pre-wrap', background: 'var(--surface-2, #f5f6f8)', borderRadius: 6, padding: '8px 10px', marginTop: 6, maxHeight: 280, overflow: 'auto' }}>{m.body}</div>
+                  </details>
+                ) : <div className="small muted" style={{ marginTop: 2 }}>{m.snippet}</div>
+              )}
               {app && (
                 <div className="small">
                   Filed on <Link href={`/application/${app.id}`}>{app.clientNumber ? `${app.clientNumber} — ` : ''}{app.title}</Link>
@@ -126,7 +148,7 @@ export default function AdminMail() {
               )}
               {m.skipped?.length > 0 && <div className="small muted">Left out: {m.skipped.map((x) => `${x.name} (${x.reason})`).join('; ')}</div>}
               {m.error && <div className="small" style={{ color: 'var(--danger)' }}>{m.error}</div>}
-              {m.status === 'unassigned' && (
+              {(m.status === 'unassigned' || (m.status === 'no-attachments' && !m.appId)) && (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
                   <select value={p.appId} onChange={(e) => setPick({ ...pick, [m.id]: { ...p, appId: e.target.value } })} style={{ maxWidth: 360, padding: '6px 8px' }}>
                     <option value="">— choose the client&apos;s file —</option>

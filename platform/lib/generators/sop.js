@@ -1,5 +1,6 @@
 import { complete } from '../ai';
 import { answersToText } from '../sopQuestions';
+import { emailFactsText } from '../emails';
 
 /** Uploaded document categories most useful for drafting the SOP. */
 const SOP_DOC_CATEGORIES = ['cv', 'loa', 'transcripts', 'certificates', 'job-offer', 'language', 'sop'];
@@ -41,7 +42,7 @@ placeholder in [SQUARE BRACKETS] for the applicant to complete.`;
 - Why this program/school: ${d.whyProgram || ''}
 - Why Canada: ${d.whyCanada || ''}
 - Ties to home country: ${d.homeTies || ''}
-- Previous refusal: ${d.previousRefusal ? 'YES — ' + (d.refusalDetails || '') : 'No'}`;
+- Previous refusal: ${d.previousRefusal ? 'YES — ' + (d.refusalDetails || '') : 'No'}${emailFactsText(app) ? `\n\n${emailFactsText(app)}` : ''}`;
 
   const instruction = `Write an EXTENSIVE Statement of Purpose (Study Plan) of about
 1,100-1,500 words (a full 3-4 page letter), addressed "Dear Visa Officer,", in first

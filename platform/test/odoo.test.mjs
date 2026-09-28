@@ -30,7 +30,7 @@ const tasks = [
   { id: 11, name: 'S26213 - Anahita Mousavi', create_date: '2026-03-01 10:00:00', write_date: '2026-09-01 10:00:00', stage_id: [1, 'Documents Received from Client'], fold: false, tag_ids: [1], user_ids: [] },
   { id: 12, name: 'S26213 - Anahita Mousavi - 2025', create_date: '2025-10-01 10:00:00', write_date: '2025-10-01 10:00:00', stage_id: [1, 'Documents Received from Client'], fold: false, tag_ids: [], user_ids: [] },
   { id: 13, name: 'S26301 - Reza Karimi - Visitor', create_date: '2026-09-01 10:00:00', write_date: '2026-09-02 10:00:00', stage_id: [2, 'SOP Done'], fold: false, tag_ids: [], user_ids: [5] },
-  { id: 14, name: 'S26302 - Nazanin Rahimi', create_date: '2026-09-10 10:00:00', write_date: '2026-09-10 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
+  { id: 14, name: 'S26302 - Nazanin Rahimi', create_date: '2026-09-10 10:00:00', write_date: '2026-09-10 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [], partner_id: [55, 'Nazanin Rahimi'], email_from: 'Nazanin <Naz@Mail.test>' },
   { id: 15, name: 'S26100 - Old Closed', create_date: '2026-01-10 10:00:00', write_date: '2026-02-10 10:00:00', stage_id: [9, 'Done'], fold: true, tag_ids: [], user_ids: [] },
   { id: 16, name: 'S26400 - Parisa New', create_date: '2026-09-20 10:00:00', write_date: '2026-09-20 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
   { id: 18, name: '000 Template', create_date: '2026-09-22 10:00:00', write_date: '2026-09-22 10:00:00', stage_id: [3, 'Documents Prepared'], fold: false, tag_ids: [], user_ids: [] },
@@ -48,14 +48,15 @@ const odoo = http.createServer(async (req, res) => {
   if (db !== 'firm' || uid !== 7 || key !== 'key-123') return fail('Access denied');
   if (!['search_read', 'read', 'fields_get'].includes(method)) { writes++; return fail('read only in this test'); }
   if (model === 'project.project') return reply([{ id: 1, name: 'Visa - PR' }, { id: 2, name: 'SUV-Biz-Team' }, { id: 3, name: 'Visa - TR' }, { id: 4, name: 'Marketing' }]);
-  if (model === 'project.task' && method === 'fields_get') return reply({ name: {}, stage_id: {}, tag_ids: {}, user_ids: {}, partner_id: {}, create_date: {}, write_date: {} });
+  if (model === 'project.task' && method === 'fields_get') return reply({ name: {}, stage_id: {}, tag_ids: {}, user_ids: {}, partner_id: {}, email_from: {}, create_date: {}, write_date: {} });
   if (model === 'project.task') {
     projectsAsked.push(JSON.stringify(args[0]));
     const openOnly = JSON.stringify(args[0]).includes('stage_id.fold');
     const rows = tasks.filter((t) => !openOnly || !t.fold).sort((a, b) => b.create_date.localeCompare(a.create_date));
-    return reply(rows.map(({ fold, ...t }) => ({ ...t, partner_id: false })));
+    return reply(rows.map(({ fold, ...t }) => ({ ...t, partner_id: t.partner_id || false, email_from: t.email_from || false })));
   }
   if (model === 'project.tags') return reply(args[0].map((i) => ({ id: i, name: i === 1 ? 'Study Permit' : 'Other' })));
+  if (model === 'res.partner') return reply(args[0].map((i) => ({ id: i, email: i === 55 ? 'naz.partner@mail.test' : false })));
   if (model === 'res.users') return reply(args[0].map((i) => ({ id: i, login: i === 5 ? 'maryam@firm.test' : 'x@y', email: i === 5 ? 'maryam@firm.test' : 'x@y' })));
   return fail(`unknown ${model}.${method}`);
 });
@@ -108,6 +109,7 @@ try {
   ok(c.clientNumber === 'S26213', 'the family member gets the same client number');
   const n = (await admin('GET', `/api/applications/${naz.id}`)).json.application;
   ok(n.odoo?.taskId === 14, 'a file with a number is linked to the card with that number');
+  ok((n.odoo?.emails || []).sort().join() === 'naz.partner@mail.test,naz@mail.test', `the client's email addresses on the card are kept for matching their emails (${n.odoo?.emails})`);
 
   const all = (await admin('GET', '/api/applications')).json.applications;
   const reza = all.find((x) => x.clientNumber === 'S26301');
