@@ -1,0 +1,55 @@
+# Topic harvester: accumulates candidate topics every two hours so the pool
+# the app draws from covers the last 45 days, not just what each feed happens
+# to show at the moment the button is pressed. See scripts/harvest.mjs.
+#
+# Output goes to the `harvest-data` branch as a single force-pushed commit, so
+# it never bloats history and never touches main (Render deploys only main).
+# Needs no secrets: the built-in token is allowed to push that branch.
+name: harvest
+
+on:
+  schedule:
+    - cron: "17 */2 * * *" # off the hour; top-of-hour schedules queue longest
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # 22: runs lib/*.js as ES modules without a package.json "type" change
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Load previous pool
+        run: |
+          mkdir -p harvest-data
+          if git fetch --depth=1 origin harvest-data 2>/dev/null; then
+            git show FETCH_HEAD:candidates.json > harvest-data/candidates.json || true
+          fi
+
+      - name: Harvest
+        run: node scripts/harvest.mjs harvest-data
+
+      - name: Publish pool
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          cd harvest-data
+          git init -q -b harvest-data
+          git config user.name "harvest-bot"
+          git config user.email "harvest-bot@users.noreply.github.com"
+          git add candidates.json health.json
+          git commit -q -m "harvest $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" harvest-data

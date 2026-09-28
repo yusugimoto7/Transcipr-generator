@@ -48,16 +48,21 @@ async function fetchTopics(exclude = [], force = false) {
     body: JSON.stringify({ exclude, force }),
   });
   const data = await res.json().catch(() => null);
+  const stats = (data && data.stats) || null;
   if (!res.ok) {
     // Surface the server's real reason (e.g. an OpenAI quota / auth error) so
     // it can be diagnosed instead of hidden behind a generic fallback.
     const detail = data && (data.message || data.error) ? ": " + (data.message || data.error) : "";
-    throw new Error("API " + res.status + detail);
+    const err = new Error("API " + res.status + detail);
+    err.stats = stats;
+    throw err;
   }
   if (!data || !Array.isArray(data.topics) || data.topics.length === 0) {
-    throw new Error("parse");
+    const err = new Error("parse");
+    err.stats = stats;
+    throw err;
   }
-  return data.topics;
+  return { topics: data.topics, stats };
 }
 
 // ---- topic memory (so a news article/topic is shown only ONCE, ever, on this
@@ -219,6 +224,7 @@ export default function App() {
   const [loadingTopics, setLoadingTopics] = useState(true);
   const [topicError, setTopicError] = useState(null);
   const [errDetail, setErrDetail] = useState("");
+  const [deckStats, setDeckStats] = useState(null);
   const [usingFallback, setUsingFallback] = useState(false);
   const [view, setView] = useState("deck"); // deck | script
   const [scripts, setScripts] = useState({ fa: "", en: "" });
@@ -311,7 +317,8 @@ export default function App() {
 
       // Page-load fetches use the server cache (near-instant); the explicit
       // "Refresh trends" button forces a live regenerate.
-      const parsed = await fetchTopics(exclude, force);
+      const { topics: parsed, stats } = await fetchTopics(exclude, force);
+      setDeckStats(stats);
 
       // Drop topics already ACTED ON (approved/rejected) on this device or
       // approved on any device. Topics are NOT marked seen just for appearing —
@@ -340,6 +347,7 @@ export default function App() {
       setUpdatedAt(new Date());
       setTopicError("نتونستم اخبار تازه رو بیارم. دوباره «Refresh» رو بزن.");
       setErrDetail(String(e?.message || e));
+      setDeckStats(e?.stats || null);
     } finally {
       setLoadingTopics(false);
     }
@@ -596,6 +604,8 @@ export default function App() {
             </div>
           )}
 
+          {!loadingTopics && <DeckWhy stats={deckStats} />}
+
           {loadingTopics ? (
             <CardSkeleton />
           ) : current ? (
@@ -691,6 +701,47 @@ function Stat({ label, value, accent }) {
 
 function heat(score) {
   return Math.max(0, Math.min(100, score));
+}
+
+// One line explaining where this deck came from, so a short deck explains
+// itself: how big the pool was, how much of it you had already used, and how
+// fresh the harvest is. Tap to see the full breakdown.
+function DeckWhy({ stats }) {
+  if (!stats) return null;
+  const ago = (iso) => {
+    const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (!Number.isFinite(m)) return "";
+    return m < 90 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+  };
+  const src = stats.harvest
+    ? `harvested ${ago(stats.harvest.at)}`
+    : stats.liveFetch && !stats.liveFetch.failed
+      ? `live: ${stats.liveFetch.feedsOk}/${stats.liveFetch.feedsTotal} feeds`
+      : "no source reachable";
+  const full = (stats.written || 0) - (stats.headlineOnly || 0);
+  const row = (k, v) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+      <span>{k}</span>
+      <span style={{ fontWeight: 700 }}>{v}</span>
+    </div>
+  );
+  return (
+    <details style={{ fontSize: 11.5, color: "rgba(242,229,192,0.7)", fontFamily: "'Space Grotesk', sans-serif", marginBottom: 12, direction: "ltr" }}>
+      <summary style={{ cursor: "pointer" }}>
+        {stats.eligible ?? 0} fresh topics in the last 30 days · {stats.written ?? 0} cards ({full} with full article text) · {src}
+      </summary>
+      <div style={{ marginTop: 8, padding: "8px 10px", background: "rgba(242,229,192,0.06)", borderRadius: 10, display: "grid", gap: 3 }}>
+        {row("Articles in pool", stats.pool ?? 0)}
+        {row("Already approved or rejected", stats.alreadyUsed ?? 0)}
+        {row("Off-topic or draw results", stats.offTopic ?? 0)}
+        {row("Same story, other outlet", stats.duplicateStories ?? 0)}
+        {row("Fresh candidates", stats.eligible ?? 0)}
+        {row("Chosen by the editor model", stats.selected ?? 0)}
+        {row("Cards written", stats.written ?? 0)}
+        {row("…headline only (check source)", stats.headlineOnly ?? 0)}
+      </div>
+    </details>
+  );
 }
 
 function sourceHost(url) {
@@ -798,6 +849,14 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
             {formatNewsDate(topic.date) && (
               <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", direction: "ltr" }}>
                 📅 {formatNewsDate(topic.date)}
+              </span>
+            )}
+            {topic.grounding === "headline" && (
+              <span
+                title="Only the headline could be read for this one. Open the source and check it before writing a script."
+                style={{ fontSize: 11, fontWeight: 600, color: C.orangeDeep, fontFamily: "'Space Grotesk', sans-serif", direction: "ltr", border: `1px solid ${C.orangeDeep}`, borderRadius: 99, padding: "1px 8px" }}
+              >
+                headline only
               </span>
             )}
           </div>

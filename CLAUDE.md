@@ -36,6 +36,8 @@ npm run build        # must print "✓ Compiled successfully"
 There is no test suite. Diagnostics live in the deployed app instead:
 - `/api/status` — one-page health check of every integration
 - `/api/feeds` — which news sources are actually delivering
+- GitHub → Actions → **harvest** → latest run summary — per-feed health from the scheduled harvest, plus how many Google News links resolved
+- Tap the line above the deck in the app — why the deck has the cards it has
 
 ## Where things are
 
@@ -43,6 +45,9 @@ There is no test suite. Diagnostics live in the deployed app instead:
 |---|---|
 | **Feed list — add sources here** | `lib/feeds.js` |
 | News ingest logic: parsing, dedupe, YouTube resolution | `lib/news.js` |
+| Candidate pool: relevance scoring, merge, reading the harvest | `lib/candidates.js` |
+| Scheduled harvester (every 2h, GitHub Actions → `harvest-data` branch) | `scripts/harvest.mjs`, `.github/workflows/harvest.yml` |
+| Google News link → real publisher URL | `lib/gnews.js` |
 | Topic generation pipeline, caching, cost caps | `app/api/topics/route.js` |
 | All LLM prompts + output parsing | `lib/prompts.js` |
 | Model selection per job (env-overridable) | `lib/openai.js`, `lib/anthropic.js` |
@@ -63,4 +68,4 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 ## Current direction
 
-Topic supply is being rebuilt from fetch-on-click to continuous harvesting with a durable candidate store, plus new source lanes (primary government sources, silent page-change detection, practitioner feeds). Ask the other person which lane they are on before starting one.
+Topic supply now runs on a harvested pool: `scripts/harvest.mjs` accumulates candidates every two hours into `candidates.json` on the `harvest-data` branch (never edit that branch by hand; it is force-pushed each run). The app reads it, filters, shortlists, has the model SELECT, fetches real text for each pick, then has the model WRITE cards from that text only. Next lanes: silent page-change detection on canada.ca, practitioner feeds, audience-demand signals. Ask the other person which lane they are on before starting one.

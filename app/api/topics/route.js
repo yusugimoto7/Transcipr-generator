@@ -1,10 +1,19 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiTopics, openaiRewrite } from "../../../lib/openai";
 import { sheetEnabled, getSeen, normalizeUrl } from "../../../lib/sheet";
-import { fetchNews } from "../../../lib/news";
+import {
+  fetchFeedItems,
+  fetchArticleText,
+  collapseStories,
+  articleKey,
+  isGoogleNews,
+} from "../../../lib/news";
+import { loadHarvest, mergeCandidates, relevance, isDrawResult } from "../../../lib/candidates";
+import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import {
   topicPrompt,
-  topicsFromNewsPrompt,
+  selectTopicsPrompt,
+  writeCardsPrompt,
   parseTopics,
 } from "../../../lib/prompts";
 
@@ -52,9 +61,14 @@ function underHourlyCap() {
 }
 
 const MAX_AGE_DAYS = 30; // drop any dated news older than this — hard recency guard
-const NEWS_WINDOW_DAYS = 30; // how far back the feed ingest looks
-const POOL_SIZE = 40; // articles shown to the model per generation (token cap)
-const MAX_CARDS = 12; // cards returned per generation
+const NEWS_WINDOW_DAYS = 30; // how far back topics are drawn from
+const SELECT_FROM = 70; // candidates shown to the selection call (token cap)
+const MAX_CARDS = 14; // cards returned per generation
+const MAX_PER_SOURCE = 4; // shortlist slots any one source may take
+const MAX_CASES = 3; // shortlist slots for individual court decisions
+const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
+const GROUND_BUDGET_MS = 12000; // wall-clock cap on fetching text for chosen items
+const MIN_GROUND = 200; // characters of real text needed to call a card fully grounded
 
 // Why the last generation produced what it did — surfaced in the API response
 // so an empty deck explains itself instead of just saying "no new topics".
@@ -165,71 +179,188 @@ async function generate(clientExclude) {
   return out;
 }
 
-// Fetch real articles, then have a cheap model turn the relevant ones into
-// Farsi hooks. Real source_url + published date are re-attached server-side
-// from the article the model referenced by id (the model never invents them).
-async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
-  // The seen filter is handed to fetchNews so it applies BEFORE the newest-N
-  // cap. Filtering afterwards was the reason the deck ran dry: the newest 30
-  // articles were a fixed window that gradually filled with articles already
-  // used, and nothing older could move up to take their place.
-  const { items, feedStatus, stats } = await fetchNews({
-    maxAgeDays: NEWS_WINDOW_DAYS,
-    limit: 120,
-    nowMs,
-    isSeen: seenUrlSet
-      ? (it) => {
-          const k = normalizeUrl(it.source_url);
-          return !!(k && seenUrlSet.has(k));
-        }
-      : null,
-  });
-  const okFeeds = feedStatus.filter((f) => f.ok).map((f) => f.name);
-  lastStats = { ...stats, feedsOkNames: [...new Set(okFeeds)] };
-  console.log(
-    `[topics] feeds ${stats.feedsOk}/${stats.feedsTotal} ok · fetched ${stats.fetched} · ` +
-      `already used ${stats.alreadyUsed} · duplicate stories ${stats.duplicateStories} · ` +
-      `usable ${stats.usable}`
-  );
-  if (!items.length) return [];
-
-  const pool = items.slice(0, POOL_SIZE);
-
-  const prompt = topicsFromNewsPrompt(pool, today, exclude);
-  let text = "";
+// Plain model call used by both topic stages, with the Claude fallback.
+async function rewrite(prompt, maxTokens) {
   if (openaiEnabled()) {
     try {
-      text = await openaiRewrite(prompt);
+      return await openaiRewrite(prompt);
     } catch (e) {
       if (!process.env.ANTHROPIC_API_KEY) throw e;
-      text = await callClaude([{ role: "user", content: prompt }], false, 4000);
     }
-  } else {
-    text = await callClaude([{ role: "user", content: prompt }], false, 4000);
+  }
+  return callClaude([{ role: "user", content: prompt }], false, maxTokens);
+}
+
+function recencyBoost(ms, nowMs) {
+  if (!ms) return 2;
+  const days = (nowMs - ms) / 86400000;
+  return days <= 2 ? 12 : days <= 7 ? 8 : days <= 14 ? 4 : 0;
+}
+
+// Real article text for a chosen item, from the harvest if it already has it,
+// otherwise fetched now. Google News links are resolved to the publisher first
+// — the redirect page itself holds no article text.
+async function groundTextFor(item) {
+  if (item.text && item.text.length >= MIN_GROUND) return item.text;
+  if ((item.snippet || "").length >= MIN_GROUND) return item.snippet;
+  let url = item.resolved_url || "";
+  if (!url && isGoogleNews(item.source_url) && item.resolved_url === undefined) {
+    url = (await resolveGoogleNewsUrl(item.source_url, { timeoutMs: 6000 })) || "";
+    if (url) item.resolved_url = url;
+  }
+  if (!url && !isGoogleNews(item.source_url)) url = item.source_url;
+  if (!url) return "";
+  const t = await fetchArticleText(url, { timeoutMs: 8000, maxChars: 1500 });
+  return t && t.length >= MIN_GROUND ? t : "";
+}
+
+// Candidates come from the harvested pool (accumulated every two hours by
+// .github/workflows/harvest.yml), topped up with a live fetch when the pool is
+// stale or unreachable. Then: filter -> collapse duplicates -> rank -> model
+// SELECTS -> real text fetched for each pick -> model WRITES only from it.
+async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
+  const harvest = await loadHarvest();
+  const harvestAge = harvest ? nowMs - Date.parse(harvest.harvested_at || 0) : Infinity;
+  const needLive = !(harvestAge < HARVEST_FRESH_MS);
+  const live = needLive
+    ? await fetchFeedItems({ maxAgeDays: NEWS_WINDOW_DAYS, nowMs }).catch(() => null)
+    : null;
+
+  const merged = mergeCandidates(harvest ? harvest.items : [], live ? live.items : [], nowMs).items;
+  // The brand's own published titles. They are Farsi and the news is mostly
+  // English, so word matching cannot connect the two; they go to the
+  // selection model as "already covered", which can.
+  const ownTitles = [...((harvest && harvest.own_titles) || []), ...((live && live.ownTitles) || [])];
+  const cutoff = nowMs - NEWS_WINDOW_DAYS * 86400000;
+
+  const counts = { alreadyUsed: 0, offTopic: 0 };
+  const eligible = [];
+  for (const c of merged) {
+    const t = c.published_ms || Date.parse(c.first_seen || "") || 0;
+    if (t && t < cutoff) continue;
+    const keys = [articleKey(c.source_url), articleKey(c.resolved_url)].filter(Boolean);
+    if (seenUrlSet && keys.some((k) => seenUrlSet.has(k))) {
+      counts.alreadyUsed++;
+      continue;
+    }
+    if (isDrawResult(c) || relevance(c) === 0) {
+      counts.offTopic++;
+      continue;
+    }
+    eligible.push(c);
+  }
+  eligible.sort((a, b) => (b.published_ms || 0) - (a.published_ms || 0));
+  const { items: unique, collapsed } = collapseStories(eligible);
+
+  // Diversity caps on the shortlist. Without them one prolific source fills
+  // it: the Federal Court feed alone took 12 of 70 slots with bare case names
+  // ("Williams v. Canada"), which tell the selector nothing, and one content
+  // farm took 7. The selector can only choose from what it is shown.
+  const perSource = new Map();
+  let cases = 0;
+  const ranked = [];
+  const byRank = unique
+    .map((c) => ({ c, rank: Math.min(relevance(c), 12) + recencyBoost(c.published_ms, nowMs) }))
+    .sort((a, b) => b.rank - a.rank);
+  for (const { c } of byRank) {
+    const n = perSource.get(c.source_name) || 0;
+    if (n >= MAX_PER_SOURCE) continue;
+    const isCase = /\bv\.?\s+canada\b|\bc\.\s+canada\b/i.test(c.title);
+    if (isCase && cases >= MAX_CASES) continue;
+    perSource.set(c.source_name, n + 1);
+    if (isCase) cases++;
+    ranked.push(c);
+    if (ranked.length >= SELECT_FROM) break;
   }
 
-  const parsed = parseTopics(text) || [];
+  lastStats = {
+    harvest: harvest ? { at: harvest.harvested_at, size: harvest.items.length } : null,
+    liveFetch: needLive
+      ? live
+        ? {
+            feedsOk: live.feedStatus.filter((f) => f.ok).length,
+            feedsTotal: live.feedStatus.length,
+          }
+        : { failed: true }
+      : null,
+    pool: merged.length,
+    ...counts,
+    duplicateStories: collapsed,
+    eligible: unique.length,
+    selected: 0,
+    written: 0,
+    headlineOnly: 0,
+  };
+  console.log("[topics]", JSON.stringify(lastStats));
+  if (!ranked.length) return [];
+
+  // Stage 1 — select.
+  for (const c of ranked) {
+    const body = c.text || c.snippet || "";
+    c.brief = body ? body.slice(0, 160).replace(/\s+/g, " ") : "";
+  }
+  const excludeAll = [...exclude, ...ownTitles].slice(-120);
+  let picks = [];
+  try {
+    const sel = parseTopics(await rewrite(selectTopicsPrompt(ranked, today, excludeAll, MAX_CARDS), 2000)) || [];
+    const seenIdx = new Set();
+    for (const p of sel) {
+      const i = Number(p.id);
+      if (!Number.isInteger(i) || !ranked[i] || seenIdx.has(i)) continue;
+      seenIdx.add(i);
+      picks.push({ item: ranked[i], field: p.field || "Policy", score: Number(p.score) || 75 });
+      if (picks.length >= MAX_CARDS) break;
+    }
+  } catch (e) {
+    console.log("[topics] selection failed:", String(e?.message || e));
+  }
+  // A failed selection must not empty the deck: fall back to the ranking.
+  if (!picks.length) {
+    picks = ranked.slice(0, MAX_CARDS).map((item) => ({ item, field: "Policy", score: 70 }));
+  }
+  lastStats.selected = picks.length;
+
+  // Ground each pick in real text, under one overall time budget.
+  const budget = new Promise((r) => setTimeout(r, GROUND_BUDGET_MS, "timeout"));
+  await Promise.all(
+    picks.map((p) =>
+      Promise.race([groundTextFor(p.item).then((t) => (p.groundText = t)), budget]).catch(() => {})
+    )
+  );
+
+  // Stage 2 — write, only from the text each pick carries.
+  const toWrite = picks.map((p) => ({ ...p.item, groundText: p.groundText || "" }));
+  const written = parseTopics(await rewrite(writeCardsPrompt(toWrite, today), 5000)) || [];
   const topics = [];
-  for (const p of parsed) {
-    const idx = Number(p.id);
-    const src = Number.isInteger(idx) ? pool[idx] : null;
-    if (!src || !p.title_fa) continue;
-    const field = p.field || "Policy";
+  const doneIdx = new Set();
+  for (const w of written) {
+    const i = Number(w.id);
+    const p = picks[i];
+    if (!p || doneIdx.has(i) || !w.title_fa) continue;
+    doneIdx.add(i);
+    const src = p.item;
+    const field = p.field;
+    const grounded = (p.groundText || "").length >= MIN_GROUND;
     topics.push({
-      title_fa: p.title_fa,
-      title_en: p.title_en || "",
+      title_fa: w.title_fa,
+      title_en: w.title_en || src.title,
       field,
-      page: p.page || (String(field).toLowerCase() === "europe" ? "EU" : "CA"),
-      why_now: p.why_now || "",
+      page: w.page || (String(field).toLowerCase() === "europe" ? "EU" : "CA"),
+      why_now: w.why_now || "",
       date: src.published ? src.published.slice(0, 10) : "",
-      source_url: src.source_url,
+      // The publisher's own article when known: better for you to read, and
+      // the script/article steps fetch their source text from this link.
+      source_url: src.resolved_url || src.source_url,
       source_name: src.source_name,
-      snippet: src.snippet || "",
-      score: Number(p.score) || 75,
+      snippet: (p.groundText || src.snippet || "").slice(0, 1500),
+      grounding: grounded ? "full" : "headline",
+      score: p.score,
     });
   }
   topics.sort((a, b) => (b.score || 0) - (a.score || 0));
-  return topics.slice(0, MAX_CARDS);
+  lastStats.written = topics.length;
+  lastStats.headlineOnly = topics.filter((t) => t.grounding === "headline").length;
+  return topics;
 }
 
 // Old path: ask an LLM (OpenAI search model, else Claude web search) to both
@@ -319,7 +450,7 @@ export async function POST(request) {
       if (sinceLastForce < FORCE_COOLDOWN_MS && cache.topics) {
         return Response.json({
           topics: cache.topics,
-          cached: true,
+          cached: true, stats: lastStats,
           throttled: true,
           retryAfterMs: FORCE_COOLDOWN_MS - sinceLastForce,
         });
@@ -330,27 +461,27 @@ export async function POST(request) {
       const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
 
       if (age < FRESH_MS) {
-        return Response.json({ topics: cache.topics, cached: true });
+        return Response.json({ topics: cache.topics, cached: true, stats: lastStats });
       }
 
       if (age < SERVE_MAX_MS) {
         // Stale but usable: serve instantly, refresh for next time.
         refreshInBackground(exclude);
-        return Response.json({ topics: cache.topics, cached: true, stale: true });
+        return Response.json({ topics: cache.topics, cached: true, stats: lastStats, stale: true });
       }
 
       // No usable cache at all — must wait on a live generation. Join an
       // already-running one if another request beat us to it.
       if (inFlight) {
         const topics = await inFlight.then(() => cache.topics);
-        if (topics) return Response.json({ topics, cached: true });
+        if (topics) return Response.json({ topics, cached: true, stats: lastStats });
       }
 
       // Hourly cap hit: serve whatever cache exists, however old, rather
       // than a hard failure; only error out if there's truly nothing.
       if (!underHourlyCap()) {
         if (cache.topics) {
-          return Response.json({ topics: cache.topics, cached: true, stale: true });
+          return Response.json({ topics: cache.topics, cached: true, stats: lastStats, stale: true });
         }
         return Response.json(
           { error: "rate_limited", message: "Too many live searches this hour — try again shortly." },
@@ -361,7 +492,7 @@ export async function POST(request) {
       return Response.json(
         {
           topics: cache.topics || [],
-          cached: true,
+          cached: true, stats: lastStats,
           throttled: true,
           message: "Hourly live-search limit reached — showing the last known topics.",
         },
