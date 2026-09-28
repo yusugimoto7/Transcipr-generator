@@ -2741,6 +2741,28 @@ action = {'type': 'ir.actions.act_window_close'}
 """ % {"model": FOLLOWERS_MODEL}
 
 
+def install_assignee_domain(odoo):
+    """A task's Assignees can be picked only among the followers of its project
+    (Studio had pinned the list to four fixed people). The project's followers
+    reach the form through a non-stored related field."""
+    _field(odoo, "project.task", "x_project_follower_ids", {
+        "field_description": "Project followers", "ttype": "many2many", "relation": "res.partner",
+        "related": "project_id.message_partner_ids", "store": False, "readonly": True})
+    base = odoo.search_read("ir.ui.view", [("model", "=", "project.task"), ("type", "=", "form"),
+                                           ("inherit_id", "=", False), ("name", "=", "project.task.form")], ["id"], limit=1)[0]["id"]
+    # After Studio's own view (priority 1000), so this domain is the one that counts.
+    arch = ('<data><xpath expr="//field[@name=\'user_ids\'][contains(@class, \'o_task_user_field\')]" position="attributes">'
+            '<attribute name="domain">[(\'share\', \'=\', False), (\'partner_id\', \'in\', x_project_follower_ids)]</attribute>'
+            '</xpath>'
+            '<xpath expr="//field[@name=\'user_ids\'][contains(@class, \'o_task_user_field\')]" position="after">'
+            '<field name="x_project_follower_ids" invisible="1"/>'
+            '</xpath></data>')
+    odoo.upsert("p2view", "task_assignee_followers", "ir.ui.view", {
+        "name": "project.task.form.assignees.followers", "model": "project.task", "inherit_id": base,
+        "arch_db": arch, "priority": 1100})
+    log.info("  task Assignees limited to the project's followers")
+
+
 def install_project_followers(odoo):
     """People icon on each project card -> edit that board's followers."""
     # 1. the throwaway model the dialog is built on
@@ -2922,6 +2944,7 @@ def install(odoo, rcic_email):
     install_mail_cc(odoo)
     set_quotation_prefix(odoo)
     install_project_followers(odoo)
+    install_assignee_domain(odoo)
     relax_card_required(odoo)
     install_default_plans(odoo)
     return ids
