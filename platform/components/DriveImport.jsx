@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import ProgressBar from '@/components/ProgressBar';
+import { fmtTime } from '@/lib/format';
 
 /**
  * Staff-only: import every document from a client's Google Drive folder
@@ -181,8 +182,17 @@ export default function DriveImport({ app, patchLocal, onImported }) {
 
       {source && !result && !busy && (
         <p className="muted small" style={{ margin: 0 }}>
-          Last imported from <strong>{source.rootName}</strong> on {new Date(source.lastImportAt).toLocaleString()}.{' '}
-          <a href="#" onClick={(e) => { e.preventDefault(); run(source.url); }}>Sync again</a> — only new or changed files are downloaded.
+          {source.lastImportAt ? (
+            <>
+              Last imported from <strong>{source.rootName}</strong> on <span suppressHydrationWarning>{fmtTime(source.lastImportAt)}</span>.{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); run(source.url); }}>Sync again</a> — only new or changed files are downloaded.
+            </>
+          ) : (
+            <>
+              Client folder: <strong>{source.rootName}</strong>.{' '}
+              <a href="#" onClick={(e) => { e.preventDefault(); run(source.url); }}>Import from it</a> — files already here are skipped.
+            </>
+          )}
         </p>
       )}
 
