@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Sparkbridge clause library (English + Farsi), copied from the current Word templates."""
-from lib import P, PS, H, UL, OL, FEE, esc
+from lib import P, PS, H, UL, OL, FEE, FEE_D, esc
 
 SB_ADDR_EN = "250 - 997 Seymour St. Vancouver, BC"
 
@@ -63,7 +63,7 @@ def sig_block_sb(name_en, name_fa, date_en, date_fa):
     return (en, fa)
 
 # ---------- SB-A: EU Study Admission service agreement ----------
-def sba_rows(no, date_en, name_en, name_fa, addr_en, addr_fa, country_en, country_fa, phone, email, initial, post, total, total_words_fa):
+def sba_rows(no, date_en, name_en, name_fa, addr_en, addr_fa, country_en, country_fa, phone, email, initial, post, total, total_words_fa, rows_en=None, rows_fa=None, total_en=None, total_fa=None):
     return [
       (P(f"Client File Number: {no}"), P(f"شماره قرارداد : {no}")),
       (P(f"This Agreement was made on {date_en}, between Sparkbridge represented by Ken Sugimoto, located at {SB_ADDR_EN}, and the Client {name_en} located at {addr_en}."),
@@ -108,9 +108,9 @@ def sba_rows(no, date_en, name_en, name_fa, addr_en, addr_fa, country_en, countr
           "۴.۳ متقاضی تایید کرده است که مسئول ارائه رزومه (CV) و تمامی مدارک و اطلاعات مورد نیاز به زبان انگلیسی می‌باشد. اسپارک بریج تنها می‌تواند در مورد ساختار مشاوره ارائه دهد. تنها مسئولیت ارائه، بررسی و تایید رزومه بر عهده مشتری است.",
           "۴.۴ اگر متقاضی نتواند مدارک درخواستی را در مدت ۶۰ روز به اسپارک بریج ارائه دهد، اسپارک بریج حق دارد که این توافق‌نامه را لغو کند. در این صورت، او مجاز است تمامی هزینه‌های خدمات را به عنوان دستمزد دریافت کند.")),
       (H("5. Fees") + P("5.1 Billing Method") + P("The Client will be billed with a flat fee by milestones. All payments will be in Euros. The details of the payment terms and conditions are as follows:") +
-       FEE([("Initial Payment (upon contract signature - within 7 days)", f"€ {initial}"), ("Post Admission (after admission is secured - within 7 days)", f"€ {post}")], ("Total Cost", f"€ {total}")),
+       (FEE_D(rows_en, "Total Cost", total_en) if rows_en else FEE([("Initial Payment (upon contract signature - within 7 days)", f"€ {initial}"), ("Post Admission (after admission is secured - within 7 days)", f"€ {post}")], ("Total Cost", f"€ {total}"))),
        H("۵. هزینه ها") + P("۵.۱ روش پرداخت") + P("متقاضی متعهد گردید که طبق برنامه پرداختی زیر عمل کند. تمام پرداخت‌ها به یورو انجام خواهد شد. جزئیات شرایط و مقررات پرداخت به شرح زیر است:") +
-       FEE([("پرداخت اولیه (پس از امضای قرارداد - ظرف ۷ روز)", f"{initial} €"), ("پرداخت پایانی (پس از اخذ پذیرش - ظرف ۷ روز)", f"{post} €")], ("هزینه کل", f"{total} € - {total_words_fa}"))),
+       (FEE_D(rows_fa, "هزینه کل", total_fa) if rows_fa else FEE([("پرداخت اولیه (پس از امضای قرارداد - ظرف ۷ روز)", f"{initial} €"), ("پرداخت پایانی (پس از اخذ پذیرش - ظرف ۷ روز)", f"{post} €")], ("هزینه کل", f"{total} € - {total_words_fa}")))),
       (H("6. Communications") + PS("6.1 SparkBridge will keep the Client informed regularly of the progress of, and issues relating to the matter. SparkBridge will also keep a copy for the Client of pertinent correspondence and documents created on their behalf.", "6.2 It is agreed by all parties that the only and most preferred fashion of communication is by email."),
        H("۶. ارتباطات") + PS("۶.۱ متقاضی را به طور مرتب از پیشرفت و مسائل مربوط به پرونده مطلع خواهد کرد. همچنین، اسپارک بریج نسخه‌ای از مکاتبات و اسناد مربوطه ایجاد شده به نمایندگی از مشتری را نیز برای او نگهداری خواهد کرد.", "۶.۲ تمامی طرف‌ها توافق کرده اند که تنها و ترجیح داده شده ترین روش ارتباط از طریق ایمیل است.")),
       (H("7. Refund Policy") + P("In case the admission is refused, all fees shall be refunded to the Client. The Client acknowledges that granting a visa or status and the time required for processing this application is at the sole discretion of the government bodies and not SparkBridge and any staff and/or contractors."),

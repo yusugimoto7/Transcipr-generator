@@ -620,6 +620,19 @@ else:
             out[key + '_note_fa'] = (' (%s)' % n_fa) if n_fa else ''
         return out
     plan_en, plan_fa, plan_fa_html = fmt_plan(rows)
+    def sba_plan(rs):
+        # SB-A (EU study admission) fee table: one line per payment-plan row.
+        lab_en = ['Initial Payment (upon contract signature - within 7 days)', 'Post Admission (after admission is secured - within 7 days)']
+        lab_fa = ['پرداخت اولیه (پس از امضای قرارداد - ظرف ۷ روز)', 'پرداخت پایانی (پس از اخذ پذیرش - ظرف ۷ روز)']
+        if len(rs) == 1:
+            lab_en, lab_fa = ['Full Payment (upon contract signature - within 7 days)'], ['پرداخت کامل (پس از امضای قرارداد - ظرف ۷ روز)']
+        en, fa_ = [], []
+        i = 0
+        for r in rs:
+            en.append([lab_en[i] if i < len(lab_en) else 'Payment %d' % (i + 1), '€ ' + num(r.x_amount)])
+            fa_.append([lab_fa[i] if i < len(lab_fa) else 'پرداخت %d' % (i + 1), num(r.x_amount) + ' €'])
+            i += 1
+        return en, fa_
     fee_rows_en, fee_rows_fa = fee_rows_for({'pro': pro, 'disc': disc, 'tax': tax, 'gov': gov, 'total': total})
 
     # People. Names/addresses in Farsi come from the customer (or the card).
@@ -745,6 +758,7 @@ else:
         'fee_total': num(pro - disc), 'p1': num(rows[0].x_amount) if rows else '', 'p2': num(rows[1].x_amount) if len(rows) > 1 else '',
         'inst_en': ['%s Euro %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[0]) for r in rows],
         'inst_fa': ['مبلغ %s یورو %s' % (num(r.x_amount), due.get(r.x_due, due['sub_app'])[1]) for r in rows],
+        'sba_rows_en': sba_plan(rows)[0], 'sba_rows_fa': sba_plan(rows)[1],
     }
     d.update(phase_notes(rows))
     def apply_kind(kind):
@@ -757,7 +771,8 @@ else:
         pe, pf, _h = fmt_plan(rs)
         d.update({'fee_rows_en': fe, 'fee_rows_fa': ff, 'total': money(f['total'] + f['gov']) if f['gov'] else money(f['total']),
                   'schedule_en': pe, 'schedule_fa': pf, 'fee_total': num(f['pro'] - f['disc']),
-                  'p1': num(rs[0].x_amount) if rs else '', 'p2': num(rs[1].x_amount) if len(rs) > 1 else ''})
+                  'p1': num(rs[0].x_amount) if rs else '', 'p2': num(rs[1].x_amount) if len(rs) > 1 else '',
+                  'sba_rows_en': sba_plan(rs)[0], 'sba_rows_fa': sba_plan(rs)[1]})
         d.update(phase_notes(rs))
     if 'PR' in kinds and not order.x_agr_subject:
         d['program_en'] = 'Permanent Residence Application by following the program: %s' % (services_en[0] if services_en else '')

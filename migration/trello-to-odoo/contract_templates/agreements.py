@@ -155,7 +155,10 @@ DOCS["ENT"] = dict(company="SG", title=D("title"), file_label=D("file_label"), l
 
 # ---------------- SB-A EU study admission (bilingual) ----------------
 _rows = sb.sba_rows(D("file_no"), D("date_en"), D("client_en"), D("client_fa"), D("addr_en"), D("addr_fa"),
-                    D("country_en"), D("country_fa"), D("phone"), D("email"), D("p1"), D("p2"), D("fee_total"), D("fee_total"))[1:]
+                    D("country_en"), D("country_fa"), D("phone"), D("email"), D("p1"), D("p2"), D("fee_total"), D("fee_total"),
+                    # One fee line per payment-plan row (a one-payment plan prints one line).
+                    rows_en=L("sba_rows_en"), rows_fa=L("sba_rows_fa"),
+                    total_en="'€ ' + d['fee_total']", total_fa="d['fee_total'] + ' €'")[1:]
 _rows.append(SIG_SB_BI)
 DOCS["SB-A"] = dict(company="SB", title=D("title"), file_label=D("file_label"), layout="bilingual", sig_page=True, rows=_rows)
 
