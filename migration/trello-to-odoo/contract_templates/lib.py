@@ -26,9 +26,11 @@ CSS = """
 .fa{font-family:'VazirNL','Lato','DejaVu Sans',sans-serif;direction:rtl;text-align:right;unicode-bidi:embed;line-height:1.85;display:block;}
 .fa p,.fa li{text-align:justify;}
 .en p,.en li,.page p,.page li{text-align:justify;}
-table.bi{width:100%;border-collapse:collapse;table-layout:fixed;}
+table.bi{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;border:none !important;}
+/* No grid lines around the two-language layout (client's request, 2026-09-30). */
+table.bi > tbody > tr, table.bi > tbody > tr > td, table.bi > tr, table.bi > tr > td{border:none !important;border-width:0 !important;}
 table.bi tr{page-break-inside:avoid;}
-table.bi td{vertical-align:top !important;padding:5px 9px 5px 0;border-bottom:1px solid #d9d9d9;}
+table.bi td{vertical-align:top !important;padding:5px 9px 5px 0;}
 table.bi td.facell{padding:5px 0 5px 9px;}
 table.bi td.full{padding:5px 0;}
 h1.t{font-size:18pt;margin:0 0 4px 0;font-weight:700;text-align:center;}
