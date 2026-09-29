@@ -2741,6 +2741,29 @@ action = {'type': 'ir.actions.act_window_close'}
 """ % {"model": FOLLOWERS_MODEL}
 
 
+def install_sign_read_for_sales(odoo):
+    """A quotation shows its signature request, but Sign lets a user read only
+    the requests they sent or follow, and contracts go out from the company
+    sender account. So salespeople read (never edit) the requests linked to the
+    quotations they can already see: all of them with "All Documents", their
+    own quotations' with "Own Documents Only"."""
+    _field(odoo, "sign.request", "x_order_ids", {
+        "field_description": "Quotations", "ttype": "one2many", "relation": "sale.order",
+        "relation_field": "x_sign_request_id"})
+    model = _model_id(odoo, "sign.request")
+    groups = {g["name"]: g["id"] for g in odoo.search_read("res.groups", [("category_id.name", "=", "Sales")], ["name"])}
+    own, allg = groups.get("User: Own Documents Only"), groups.get("User: All Documents")
+    odoo.upsert("p2acl", "sign_request_sales_read", "ir.model.access", {
+        "name": "sign.request read for sales", "model_id": model, "group_id": own,
+        "perm_read": True, "perm_write": False, "perm_create": False, "perm_unlink": False})
+    for key, grp, dom in [("sign_read_sales_all", allg, "[('x_order_ids', '!=', False)]"),
+                          ("sign_read_sales_own", own, "['|', ('x_order_ids.user_id', '=', user.id), ('x_order_ids.create_uid', '=', user.id)]")]:
+        odoo.upsert("p2rule", key, "ir.rule", {
+            "name": "Sign requests of visible quotations (%s)" % key, "model_id": model, "groups": [(6, 0, [grp])],
+            "domain_force": dom, "perm_read": True, "perm_write": False, "perm_create": False, "perm_unlink": False})
+    log.info("  sales users can read the signature requests of their quotations")
+
+
 def install_assignee_domain(odoo):
     """A task's Assignees can be picked only among the followers of its project
     (Studio had pinned the list to four fixed people). The project's followers
@@ -2945,6 +2968,7 @@ def install(odoo, rcic_email):
     set_quotation_prefix(odoo)
     install_project_followers(odoo)
     install_assignee_domain(odoo)
+    install_sign_read_for_sales(odoo)
     relax_card_required(odoo)
     install_default_plans(odoo)
     return ids
