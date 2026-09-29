@@ -2040,6 +2040,8 @@ ADDRESS_FIELDS = ["street", "street2", "city", "zip", "state_id", "country_id",
 # Stages whose reach means the client has paid: 21- Payment Receipt Sent,
 # 22- Sent to Execution Team, 25- Sent to Finance Unit.
 PAID_STAGE_IDS = (25, 17, 48)
+# The user the lead-intake integration (n8n -> leads engine) creates cards as.
+INTAKE_UID = 2
 # The Contract block's own fields (crm_contract.py); the dispatcher watches
 # the two fees so the total follows them.
 FEE_FIELDS = ["x_fee_sg", "x_fee_sb"]
@@ -2117,6 +2119,27 @@ Action = env['ir.actions.server'].sudo()
 for lead in records:
     changed = old_values.get(lead.id)   # None on create: everything counts as changed
     ctx = {'active_model': 'crm.lead', 'active_id': lead.id, 'active_ids': [lead.id]}
+    # Intake guard: the form integration (n8n -> leads engine) re-sends a lead
+    # when it misses the answer, so the same person arrived 2-4 times, 2 minutes
+    # apart. A card the integration user creates for an email or phone it
+    # already sent in the last hour is archived at once, its Survey task goes,
+    # and the first card gets a note.
+    if changed is None and lead.active and lead.create_uid.id == __INTAKE_UID__:
+        email = (lead.email_from or '').strip()
+        phone = (lead.phone or '').strip()
+        match = [('email_from', '=ilike', email)] if email else ([('phone', '=', phone)] if phone else [])
+        first = env['crm.lead'].sudo().with_context(active_test=False).search(
+            [('id', '<', lead.id), ('create_uid', '=', lead.create_uid.id),
+             ('create_date', '>=', lead.create_date - datetime.timedelta(minutes=60))] + match,
+            order='id', limit=1) if match else False
+        if first:
+            env['project.task'].sudo().with_context(active_test=False).search(
+                [('project_id', '=', 5), ('x_link', 'ilike', 'id=%d&model=crm.lead' % lead.id)]).unlink()
+            lead.sudo().write({'active': False})
+            first.sudo().message_post(
+                body='The intake form sent this lead again; the copy #%d was archived automatically.' % lead.id,
+                message_type='comment', subtype_xmlid='mail.mt_note')
+            continue
     # Card -> customer address (only when the customer or an address field changed).
     if lead.partner_id and (changed is None or 'partner_id' in changed or any(f in changed for f in __ADDRESS_FIELDS__)):
         Action.browse(__SYNC__).with_context(**ctx).run()
@@ -2170,7 +2193,8 @@ def install_card_rules(odoo):
     code = (CARD_RULES_CODE.replace("__ADDRESS_FIELDS__", repr(ADDRESS_FIELDS)).replace("__SYNC__", str(sync))
             .replace("__GATE__", str(gate)).replace("__EXEC_STAGE__", str(stage[0]["id"]))
             .replace("__ROUTE__", str(route_action)).replace("__PAID_STAGES__", repr(PAID_STAGE_IDS))
-            .replace("__COPY_NOTES__", str(install_copy_notes(odoo) if route_action else 0)))
+            .replace("__COPY_NOTES__", str(install_copy_notes(odoo) if route_action else 0))
+            .replace("__INTAKE_UID__", str(INTAKE_UID)))
     act_id = _server_action(odoo, "card_rules", {"name": "CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
                                                  "state": "code", "code": code, "binding_model_id": False})
     fields = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"),
