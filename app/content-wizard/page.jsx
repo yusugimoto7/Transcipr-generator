@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // Light, minimal theme shared with the Topic Engine (app/globals.css).
 // Keys kept from the original dark theme so every use site still reads the
@@ -90,6 +90,8 @@ const FIELDS_BY_COUNTRY = {
 };
 
 const EUROPE_COUNTRIES = ["finland", "germany", "netherlands", "spain", "france"];
+
+const COMPARISON_FIELD = "مقایسه‌ای";
 
 function fieldsForCountry(country) {
   if (!country) return FIELDS_BY_COUNTRY.canada;
@@ -221,10 +223,18 @@ function Spinner() {
 
 function SetupStep({ settings, onChange, onNext, loading, error }) {
   const fields = fieldsForCountry(settings.country);
-  const isComparison = settings.field === "مقایسه‌ای";
+  const isComparison = settings.field === COMPARISON_FIELD;
   // second country must differ from first and not be empty
   const country2Options = COUNTRIES.filter((c) => c.value !== settings.country);
   const ready = settings.country && settings.format && (!isComparison || settings.country2);
+  const country2Ref = useRef(null);
+
+  useEffect(() => {
+    if (isComparison && country2Ref.current) {
+      country2Ref.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [isComparison]);
+
   return (
     <div>
       <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 24, direction: "rtl" }}>
@@ -237,9 +247,19 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         <PillSelect options={fields} value={settings.field} onChange={(v) => onChange("field", v)} />
       </Section>
       {isComparison && (
-        <Section label="کشور دوم (مقایسه)">
+        <div
+          ref={country2Ref}
+          style={{
+            marginBottom: 22,
+            padding: "12px 14px",
+            borderRadius: 10,
+            border: `1.5px solid ${C.orange}`,
+            background: "rgba(241,114,18,0.07)",
+          }}
+        >
+          <FieldLabel>کشور دوم (مقایسه) ✱</FieldLabel>
           <PillSelect options={country2Options} value={settings.country2} onChange={(v) => onChange("country2", v)} />
-        </Section>
+        </div>
       )}
       <Section label="لحن">
         <PillSelect options={TONES} value={settings.tone} onChange={(v) => onChange("tone", v)} />
@@ -757,7 +777,7 @@ export default function ContentWizard() {
     setSuggestError("");
     try {
       const countryParam =
-        settings.field === "مقایسه‌ای" && settings.country2
+        settings.field === COMPARISON_FIELD && settings.country2
           ? `${settings.country},${settings.country2}`
           : settings.country;
       const res = await fetch("/api/suggest-topics", {
@@ -813,7 +833,7 @@ export default function ContentWizard() {
 
   function handlePickTopic(topic) {
     const countryParam =
-      settings.field === "مقایسه‌ای" && settings.country2
+      settings.field === COMPARISON_FIELD && settings.country2
         ? `${settings.country},${settings.country2}`
         : settings.country;
     const merged = {
