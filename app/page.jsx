@@ -582,6 +582,17 @@ export default function App() {
             <span>⟳</span>
             {loadingTopics ? "Loading…" : "Refresh"}
           </button>
+          <a
+            href="/content-wizard"
+            style={{
+              background: "transparent", color: C.orange, border: `1px solid ${C.orange}`,
+              borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
+              textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
+              display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+            }}
+          >
+            Wizard →
+          </a>
         </div>
       </div>
 

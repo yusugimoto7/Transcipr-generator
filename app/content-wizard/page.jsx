@@ -61,18 +61,25 @@ const COUNTRIES = [
 ];
 
 const FIELDS = [
-  { label: "ویزای کاری", value: "work visa" },
-  { label: "اقامت دائم", value: "permanent residence" },
-  { label: "ویزای تحصیلی", value: "study visa" },
-  { label: "سرمایه‌گذاری", value: "investment immigration" },
-  { label: "خبرهای مهاجرتی", value: "immigration news" },
+  { label: "تحصیل", value: "تحصیل" },
+  { label: "ورک پرمیت", value: "ورک پرمیت" },
+  { label: "Express Entry", value: "Express Entry" },
+  { label: "PNP", value: "PNP" },
+  { label: "Startup Visa", value: "Startup Visa" },
+  { label: "مهاجرت خانوادگی", value: "مهاجرت خانوادگی" },
+  { label: "اقامت دائم", value: "اقامت دائم" },
+  { label: "سیاست‌گذاری", value: "سیاست‌گذاری" },
+  { label: "مقایسه‌ای", value: "مقایسه‌ای" },
+  { label: "خبرهای مهاجرتی", value: "خبرهای مهاجرتی" },
+  { label: "عمومی", value: "عمومی" },
 ];
 
 const TONES = [
-  { label: "آموزشی", value: "educational" },
-  { label: "خبری", value: "news" },
-  { label: "الهام‌بخش", value: "inspirational" },
-  { label: "رسمی", value: "formal" },
+  { label: "آموزشی و رسمی", value: "آموزشی و رسمی" },
+  { label: "صمیمی و ساده", value: "صمیمی و ساده" },
+  { label: "فوری و خبری", value: "فوری و خبری" },
+  { label: "تحلیلی و عمیق", value: "تحلیلی و عمیق" },
+  { label: "انگیزشی", value: "انگیزشی" },
 ];
 
 const FORMATS = [
@@ -306,10 +313,36 @@ function SuggestStep({ topics, onPick, onBack }) {
 
 // ── Result rendering ──────────────────────────────────────────────────────────
 
-function ResultDisplay({ format, parsed }) {
+function ResultDisplay({ format, parsed, raw }) {
   if (!parsed) return null;
 
+  function RawFallback() {
+    if (!raw) return null;
+    return (
+      <div style={{ marginTop: 8 }}>
+        <div style={{ color: C.inkSoft, fontSize: 11, marginBottom: 6, direction: "rtl" }}>
+          خروجی خام مدل (پارس نشد):
+        </div>
+        <pre
+          style={{
+            color: C.cream,
+            fontSize: 12,
+            whiteSpace: "pre-wrap",
+            background: C.ground2,
+            padding: 16,
+            borderRadius: 10,
+            direction: "rtl",
+            margin: 0,
+          }}
+        >
+          {raw}
+        </pre>
+      </div>
+    );
+  }
+
   if (format === "carousel") {
+    if (!parsed.slides?.length && !parsed.caption) return <RawFallback />;
     return (
       <div>
         {(parsed.slides || []).map((s, i) => (
@@ -353,6 +386,7 @@ function ResultDisplay({ format, parsed }) {
   }
 
   if (format === "telegram") {
+    if (!parsed.text) return <RawFallback />;
     return (
       <div
         style={{
@@ -373,6 +407,7 @@ function ResultDisplay({ format, parsed }) {
   }
 
   if (format === "article") {
+    if (!parsed.title && !parsed.content) return <RawFallback />;
     return (
       <div style={{ direction: "rtl" }}>
         {parsed.title && (
@@ -397,6 +432,7 @@ function ResultDisplay({ format, parsed }) {
   }
 
   if (format === "reel") {
+    if (!parsed.hook && !parsed.body) return <RawFallback />;
     const sections = [
       { key: "hook", label: "هوک" },
       { key: "body", label: "متن" },
@@ -447,6 +483,7 @@ function ResultDisplay({ format, parsed }) {
   }
 
   if (format === "infographic") {
+    if (!parsed.title && !parsed.stats?.length) return <RawFallback />;
     return (
       <div style={{ direction: "rtl" }}>
         {parsed.title && (
@@ -559,7 +596,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <ResultDisplay format={result.format} parsed={result.parsed} />
+        <ResultDisplay format={result.format} parsed={result.parsed} raw={result.raw} />
       </div>
 
       <div style={{ marginBottom: 16 }}>
@@ -654,8 +691,8 @@ export default function ContentWizard() {
   const [step, setStep] = useState(1);
   const [settings, setSettings] = useState({
     country: "",
-    field: "immigration news",
-    tone: "educational",
+    field: "خبرهای مهاجرتی",
+    tone: "آموزشی و رسمی",
     format: "carousel",
     slideCount: 7,
     language: "persian",
