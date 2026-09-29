@@ -197,7 +197,7 @@ try {
   ok(r.data.sources.map((s) => s.id).join(',') === 'checklist:imm5488,office:work:IR', 'a work permit from Iran uses IMM 5488 and the work-permit country list');
   ok(r.data.sources[1].documents.length === 1 && r.data.sources[1].documents[0].code === 'IMM 5896' && r.data.sources[1].documents[0].version === '03-2026', 'Iran → the Ankara work instructions IMM 5896 (03-2026)');
   ok(r.data.covered.some((c) => c.category === 'employment-letter' && /^113 /.test(c.coveredBy)), "the employer's reference letter is covered by the firm's 113");
-  ok(r.data.extra.some((e) => e.key === 'transcripts' && !e.optional), "Ankara's transcripts requirement, missing from the firm's spouse-of-worker list, is added to the file");
+  ok(r.data.covered.some((c) => c.category === 'transcripts' && /^10[56] /.test(c.coveredBy)) && !r.data.extra.some((e) => e.key === 'transcripts'), "Ankara's transcripts requirement is covered by the firm's 105/106 on the spouse-of-worker list");
 
   // A country with no office instructions: no office documents, no AI call.
   const callsBefore = Object.values(parsed).reduce((a, b) => a + b, 0);

@@ -67,13 +67,15 @@ export const IRCC_FORMS = {
       'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5708/01-06-2026/imm5708e.pdf',
   },
   imm5257b: {
-    code: 'IMM 5257B',
-    title: 'Schedule 1 — Application for a Temporary Resident Visa Made Outside Canada',
+    code: 'IMM 5257 SCH1',
+    title: 'Schedule 1 — Application for Temporary Residence',
     role: 'form',
-    pdfBase: 'imm5257b_1e',
-    page: `${PAGE}/imm5257b.html`,
+    // IRCC files it as "imm5257-sch1" and names the PDF imm5257_1e.
+    pathKey: 'imm5257-sch1',
+    pdfBase: 'imm5257_1e',
+    page: `${PAGE}/imm5257-sch1.html`,
     fallbackPdf:
-      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5257b/01-01-2021/imm5257b_1e.pdf',
+      'https://www.canada.ca/content/dam/ircc/documents/pdf/english/kits/forms/imm5257-sch1/01-09-2023/imm5257_1e.pdf',
   },
   imm5476: {
     code: 'IMM 5476',

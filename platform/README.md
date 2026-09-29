@@ -281,6 +281,47 @@ Client Information holds everything else, with its table of contents, and never
 repeats a document that has its own slot. Official forms are passed through
 untouched. **Download all (.zip)** gives the whole set.
 
+The panel shows, before anything is built, what each file will contain — the
+sections of Client Information with the uploads behind each, and any uploaded
+document no file would take — and each file has its own rebuild button.
+Problems (a form that could not be pre-filled, a Word file left out) stay listed
+with the set until the next build.
+
+### Inside a package
+
+- The **contents page is clickable** (each line jumps to its section) and the
+  PDF has bookmarks: `lib/forms/toc_links.py` (pikepdf) adds them after the
+  parts are joined, so the file is never held in memory.
+- Sections come from the type's package layout (`lib/appTypes.js`, planned by
+  `lib/packagePlan.js`): a section can hold a drafted letter, the uploads of some
+  categories, a/b/c sub-sections, or — with `perDoc` — one entry per upload,
+  named from the document check's `tocTitle` ("Title Deed (An Apartment)"), else
+  from the file name, with "1st / 2nd" added when names repeat.
+- Every translated document is filed **translation → certified copy →
+  original**: the document check says which page is which (`pageParts`) and the
+  package builder sorts the pages (`lib/packageDocs.js`).
+- A plain file that holds two or more documents (Birth Certificate & National
+  ID Card) gets a title page before each document.
+
+The spouse-abroad open work permit types (`owp-worker-spouse`, `owp-outside`)
+follow the firm's "Zahra - SOWP" folder: forms, Passport, Photo, Client
+Information (Purpose of Travel, Invitation Letter, Occupational Documents,
+Education, Financial Documents with cover letter / summary / bank statement /
+source of funds / title deeds, Military, Residence Abroad, Previous
+Applications, Flight, Accommodation, Other), then Family Proof of Status, Birth
+Certificate & National ID Card, Marriage Certificate, Police Clearance,
+Education and Certificates, Submission Letter.
+
+### Official forms
+
+`lib/generators/xfaFill.js` pre-fills the IRCC XFA forms with pikepdf. Hand
+maps exist for IMM 1294, IMM 5645 (family information: applicant, spouse,
+parents, first child and sibling), IMM 5476 (the firm's RCIC and office as the
+representative — `lib/firm.js`, overridable with `RCIC_*` / `FIRM_*` env vars)
+and Schedule 1; other forms use the automatic map. Yes/No radio groups and
+signatures are left for the client. When a form cannot be pre-filled the
+reason is shown on its slot and the data sheet is there to fill it by hand.
+
 ### Page orientation
 
 Scans are turned upright by reading their text (Tesseract OCR with Persian +

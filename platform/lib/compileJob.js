@@ -6,7 +6,8 @@ import { readGenerated, readUpload, saveGenerated, generatedTarget, buildDocBloc
 import { renderDocPdf, textToBlocks } from './pdf';
 import { generateLetter, letterSpec, selectLetterDocs } from './generators/letters';
 import { compilePackage, getPackages, packageCategories } from './compile';
-import { prepareDocument } from './packageDocs';
+import { prepareDocument, bundleOrder } from './packageDocs';
+import { planPackage } from './packagePlan';
 import { queueSync } from './driveStore';
 
 /**
@@ -112,10 +113,6 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
   return { ...out.stats, generated: out.app.generated, key: out.meta.key };
 }
 
-// Never compiled into any file: agency paperwork, the firm's questionnaire,
-// forms (they go out as their own files) and the photo.
-const NEVER = new Set(['internal', 'questionnaire', 'rep-form']);
-
 /**
  * Build one PDF from a package definition (sections of uploaded documents and
  * generated letters) and save it as the generated file `key`.
@@ -129,28 +126,12 @@ const NEVER = new Set(['internal', 'questionnaire', 'rep-form']);
  * @returns {{ app, meta, stats }}
  */
 export async function buildPackageFile(app, def, { cleanPages = true, fixRotation = true, job = {}, owned = null, claimed = null, plain = false, key, filename }) {
-  // Plan first, so progress has a total: which letters need drafting, and which
-  // uploaded files each section takes (a catch-all takes what is left over).
-  const neededGen = [...new Set(def.sections.filter((s) => s.generatedKey).map((s) => s.generatedKey))];
+  // Plan first (lib/packagePlan.js), so progress has a total: which letters
+  // need drafting, and which uploaded files each section takes.
+  const walk = (nodes) => nodes.flatMap((n) => [n, ...(n.children || [])]);
+  const neededGen = [...new Set(walk(def.sections).filter((s) => s.generatedKey).map((s) => s.generatedKey))];
   const missingGen = neededGen.filter((k) => !(app.generated || []).some((g) => g.key === k && g.stored) && letterSpec(app, k));
-  const usedDocIds = new Set();
-  const planDocs = (node) => {
-    if (node.generatedKey) return [];
-    let docs = [];
-    if (node.catchAll) {
-      docs = (app.documents || []).filter((d) => {
-        if (usedDocIds.has(d.id) || NEVER.has(d.category) || d.category === 'photo') return false;
-        if (claimed) return !claimed.has(d.category);
-        return !d.category || (owned && owned.has(d.category));
-      });
-    } else if (node.categories?.length) {
-      const wanted = new Set(node.categories);
-      docs = (app.documents || []).filter((d) => wanted.has(d.category) && !usedDocIds.has(d.id));
-    }
-    docs.forEach((d) => usedDocIds.add(d.id));
-    return docs;
-  };
-  const plan = def.sections.map((sec) => ({ sec, docs: planDocs(sec), children: (sec.children || []).map((c) => ({ child: c, docs: planDocs(c) })) }));
+  const plan = planPackage(app, def, { owned, claimed });
   const fileCount = plan.reduce((n, p) => n + p.docs.length + p.children.reduce((m, c) => m + c.docs.length, 0), 0);
 
   job.total = missingGen.length + fileCount + 1; // + assembling the PDF
@@ -168,7 +149,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
     if (drafting) job.done++;
   }
 
-  const stats = { droppedPages: 0, rotatedPages: 0, mirroredPages: 0, skippedFiles: [], included: [], pages: 0, uncertainPages: [] };
+  const stats = { droppedPages: 0, rotatedPages: 0, mirroredPages: 0, skippedFiles: [], included: [], pages: 0, uncertainPages: [], reorderedFiles: [] };
 
   // Every upload — PDF of any geometry, or a photo — becomes a list of upright
   // page pictures (lib/packageDocs.js), written straight to disk so a
@@ -191,10 +172,11 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
             continue;
           }
           const bytes = await readUpload(app.id, d);
-          const prepared = await prepareDocument({ bytes, mime: d.mime }, { cleanPages, fixRotation });
+          const prepared = await prepareDocument({ bytes, mime: d.mime }, { cleanPages, fixRotation, order: bundleOrder(d.verification) });
           stats.droppedPages += prepared.dropped;
           stats.mirroredPages += prepared.mirrored;
           stats.rotatedPages += prepared.rotated;
+          if (prepared.reordered) stats.reorderedFiles.push(d.filename);
           if (prepared.uncertain?.length) stats.uncertainPages.push(`${d.filename} (page ${prepared.uncertain.join(', ')})`);
           for (const p of prepared.pages) {
             const file = path.join(work, `p-${String(++pageNo).padStart(5, '0')}.jpg`);
@@ -222,13 +204,11 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
 
     const d = app.data || {};
     const sections = [];
-    for (const { sec, docs, children } of plan) {
-      let name = sec.name;
-      if (sec.supporter && (d.sponsorName || '').trim()) name = `${sec.name} (${d.sponsorName.trim()})`;
-      const items = sec.generatedKey ? await generatedItems(sec) : await loadDocs(docs);
+    for (const sec of plan) {
+      const items = sec.generatedKey ? await generatedItems(sec) : await loadDocs(sec.docs);
       const kids = [];
-      for (const c of children) kids.push({ name: c.child.name, items: c.child.generatedKey ? await generatedItems(c.child) : await loadDocs(c.docs) });
-      sections.push({ name, items, children: kids });
+      for (const c of sec.children) kids.push({ name: c.name, items: c.generatedKey ? await generatedItems(c) : await loadDocs(c.docs) });
+      sections.push({ name: sec.name, items, children: kids });
     }
 
     const includedCount = sections.filter((s) => s.items.length || s.children.some((c) => c.items.length)).length;
@@ -250,6 +230,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
     }
     stats.skippedFiles = [...new Set([...stats.skippedFiles, ...compiled.skipped])];
     stats.pages = compiled.pages;
+    stats.linked = Boolean(compiled.linked);
     stats.included = sections.map((s) => ({ name: s.name, count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0) }));
     const meta = await target.meta();
     const updated = await updateApplication(app.id, (a) => {

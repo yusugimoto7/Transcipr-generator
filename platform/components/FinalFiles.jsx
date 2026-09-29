@@ -1,12 +1,50 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, Hammer, AlertTriangle } from 'lucide-react';
+import { Download, Hammer, AlertTriangle, FileText, PenLine, RefreshCw } from 'lucide-react';
 import ProgressBar from '@/components/ProgressBar';
 import { requiredMissing } from '@/lib/schema';
 
-const KIND = { form: 'IRCC form', photo: 'Photo (JPG)', package: 'With table of contents', documents: 'Document', letter: 'Letter' };
+const KIND = { form: 'IRCC form', photo: 'Photo (JPG)', package: 'With clickable table of contents', documents: 'Document', letter: 'Letter' };
 const size = (b) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
+
+/**
+ * What a final file will contain, as its contents page will show it: numbered
+ * sections, a/b/c sub-sections, and the uploaded file(s) behind each.
+ */
+function Contents({ contents, kind }) {
+  const count = contents.reduce((n, s) => n + s.files.length + s.children.reduce((m, c) => m + c.files.length, 0), 0);
+  const letters = contents.filter((s) => s.letter).length + contents.reduce((n, s) => n + s.children.filter((c) => c.letter).length, 0);
+  const summary = [count ? `${count} file${count === 1 ? '' : 's'}` : '', letters ? `${letters} letter${letters === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
+  if (!summary) return null;
+  const Files = ({ files }) => files.map((f, i) => <span key={i} className="contents-file"><FileText size={11} aria-hidden="true" /> {f}</span>);
+  return (
+    <details className="contents">
+      <summary>{summary}{kind === 'package' ? ` in ${contents.length} section${contents.length === 1 ? '' : 's'}` : ''}</summary>
+      <ol>
+        {contents.map((s, i) => (
+          <li key={i}>
+            {kind === 'package' && <span className="contents-name">{s.name}</span>}
+            {s.letter && <span className="contents-file"><PenLine size={11} aria-hidden="true" /> drafted letter</span>}
+            <Files files={s.files} />
+            {s.children.length > 0 && (
+              <ol className="sub">
+                {s.children.map((c, j) => (
+                  <li key={j}>
+                    <span className="contents-name">{s.children.length > 1 ? `${LETTERS[j] || j + 1}) ` : ''}{c.name}</span>
+                    {c.letter && <span className="contents-file"><PenLine size={11} aria-hidden="true" /> drafted letter</span>}
+                    <Files files={c.files} />
+                  </li>
+                ))}
+              </ol>
+            )}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
 
 /**
  * The numbered files that go to the IRCC portal, one per upload slot, named as
@@ -80,14 +118,15 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
     else buildAll();
   }
 
-  async function buildAll() {
+  /** Build the whole set, or one file (`slot`). */
+  async function buildAll(slot = null) {
     setMissingModal(null);
     setMsg(null);
     try {
       const res = await fetch(`/api/applications/${app.id}/final-files`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cleanPages, fixRotation }),
+        body: JSON.stringify({ cleanPages, fixRotation, ...(slot ? { slot } : {}) }),
       });
       const text = await res.text();
       let d;
@@ -106,11 +145,14 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
 
   const plan = data?.plan || [];
   const builtByN = new Map((data?.built?.files || []).map((f) => [f.n, f]));
+  const problemBySlot = new Map((data?.built?.problems || []).filter((p) => p.slot).map((p) => [p.slot, p.reason]));
   const genKeys = new Set((app.generated || []).map((g) => g.key));
   const progress = job
     ? {
         value: job.total ? (job.done + (job.inner?.total ? job.inner.done / job.inner.total : 0)) / job.total : null,
-        label: `Building file ${Math.min(job.done + 1, job.total)} of ${job.total}: ${job.current || ''}${job.inner?.current ? ` — ${job.inner.current}` : ''}`,
+        label: job.only
+          ? `Rebuilding ${job.current && job.current !== 'planning' ? job.current : 'one file'}${job.inner?.current ? ` — ${job.inner.current}` : ''}`
+          : `Building file ${Math.min(job.done + 1, job.total)} of ${job.total}: ${job.current || ''}${job.inner?.current ? ` — ${job.inner.current}` : ''}`,
       }
     : null;
 
@@ -164,6 +206,12 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
           )}
         </div>
       )}
+      {data?.unplaced?.length > 0 && !job && (
+        <div className="alert warn" style={{ margin: 0, display: 'block' }}>
+          <AlertTriangle size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 6 }} />
+          <strong>Not in any final file:</strong> {data.unplaced.map((d) => d.filename).join(', ')}. Give each one its checklist code in the file name (e.g. &ldquo;113 - Employment Letter&rdquo;) or read &amp; check it so it gets a type; otherwise it stays out of the portal files.
+        </div>
+      )}
       {note && (note.missingDocuments?.length > 0 || note.missingFields?.length > 0) && (
         <details className="hint-box">
           <summary className="small strong" style={{ cursor: 'pointer' }}>
@@ -209,16 +257,24 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                   {e.kind === 'form' ? <span className="mono">{e.name}</span> : KIND[e.kind]}
                   {e.note ? <span> · {e.note}</span> : null}
                 </div>
+                {e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />}
               </div>
               <div className="act">
                 {current ? (
                   <a href={`/api/applications/${app.id}/download/${b.key}`} className="btn btn-secondary btn-sm" title={b.filename}>
                     <Download size={14} aria-hidden="true" /> {size(b.size)}{b.pages ? ` · ${b.pages} p.` : ''}
                   </a>
+                ) : e.n && problemBySlot.has(e.slot) ? (
+                  <span className="chip warn" title={problemBySlot.get(e.slot)}>Not built · {problemBySlot.get(e.slot)}</span>
                 ) : e.n ? (
                   <span className={`chip ${e.ready || e.kind === 'form' || e.kind === 'letter' ? '' : 'warn'}`}>{e.ready || e.kind === 'form' || e.kind === 'letter' ? 'Not built yet' : 'Needs input'}</span>
                 ) : (
                   <span className="small faint">Nothing to include</span>
+                )}
+                {e.n && (
+                  <button type="button" className="icon-btn" onClick={() => buildAll(e.slot)} disabled={Boolean(job)} title={current ? 'Rebuild only this file' : 'Build only this file'} aria-label={current ? 'Rebuild only this file' : 'Build only this file'}>
+                    <RefreshCw size={14} aria-hidden="true" />
+                  </button>
                 )}
               </div>
             </div>
@@ -259,6 +315,8 @@ function summary(r) {
   const fixes =
     (r.rotatedPages ? ` Turned ${r.rotatedPages} page(s) upright.` : '') +
     (r.droppedPages ? ` Removed ${r.droppedPages} blank page(s).` : '') +
-    (r.mirroredPages ? ` Removed ${r.mirroredPages} mirrored scan page(s).` : '');
-  return { type: list.length ? 'warn' : 'ok', text: `Built ${r.files.length} final file(s).${fixes}`, list };
+    (r.mirroredPages ? ` Removed ${r.mirroredPages} mirrored scan page(s).` : '') +
+    (r.reorderedFiles?.length ? ` Put ${r.reorderedFiles.length} document(s) in order: translation, certified copy, original.` : '');
+  const what = r.only ? (r.built?.length ? `Rebuilt ${r.built.join(', ')}.` : 'Nothing was rebuilt.') : `Built ${r.files.length} final file(s).`;
+  return { type: list.length ? 'warn' : 'ok', text: `${what}${fixes}`, list };
 }

@@ -34,6 +34,8 @@ import { dateFindings } from './dateRules';
 
 const PAGES = 14; // pages sent per document (as images for large scans)
 const SKIP = new Set(['internal', 'questionnaire', 'photo']);
+// The parts of a translation bundle, in the order the firm files them.
+export const PAGE_PARTS = ['translation', 'certifiedCopy', 'original', 'other'];
 
 export const STATUS_ORDER = ['green', 'yellow', 'orange', 'red'];
 
@@ -153,7 +155,7 @@ function mergeModels(a, b, labels) {
     seenPairs.add(k);
     return true;
   });
-  return { findings, facts: fa, factsSecond: fb, disagreements, partsDiffer, parts, legibility, datePairs, documentType: a.documentType || b.documentType, languages: a.languages.length ? a.languages : b.languages };
+  return { findings, facts: fa, factsSecond: fb, disagreements, partsDiffer, parts, legibility, datePairs, documentType: a.documentType || b.documentType, tocTitle: a.tocTitle || b.tocTitle, pageParts: Object.keys(a.pageParts || {}).length ? a.pageParts : b.pageParts || {}, languages: a.languages.length ? a.languages : b.languages };
 }
 
 /** Did the quoted text appear on the page? Only Latin quotes can be checked (OCR of Persian scans is unreliable). */
@@ -227,7 +229,9 @@ ${d.givenName || d.familyName ? `Intake says the applicant is ${[d.givenName, d.
 Check the document and return JSON:
 {
   "documentType": "<what it is, e.g. Birth certificate (shenasnameh) with certified translation>",
+  "tocTitle": "<its title on the contents page of the submission package, 2-6 English words in the firm's style, e.g. 'Employment Letter', 'Pay Slips', 'Leave of Absence', 'Title Deed (An Apartment)', 'Bank Statement (Savings)', 'Source of Funds (Gold Sales Invoices)', 'Bachelor's Degree', 'Social Insurance Records' — say WHAT it is, never the person's name>",
   "languages": ["fa", "en"],
+  "pageParts": { "1": "translation"|"certifiedCopy"|"original"|"other", "2": "..." },  // EVERY page image: which part of the bundle it is (certifiedCopy = a copy of the original bearing the translator's stamp; original = the document itself without that stamp; other = anything else)
   "parts": {
     "translation": true|false,      // certified English translation present
     "certifiedCopy": true|false,    // copy of the original with the translator's true-copy stamp
@@ -304,6 +308,11 @@ If nothing is wrong, return an empty findings list. ${pages ? `(${pages} page im
       legibility: ['good', 'partial', 'poor'].includes(res.legibility) ? res.legibility : 'good',
       datePairs: Array.isArray(res.datePairs) ? res.datePairs : [],
       documentType: res.documentType || null,
+      tocTitle: typeof res.tocTitle === 'string' && res.tocTitle.trim() ? res.tocTitle.trim().replace(/\.$/, '').slice(0, 60) : null,
+      pageParts: Object.fromEntries(
+        Object.entries(res.pageParts && typeof res.pageParts === 'object' ? res.pageParts : {})
+          .filter(([k, v]) => /^\d+$/.test(k) && PAGE_PARTS.includes(v))
+      ),
       languages: Array.isArray(res.languages) ? res.languages : [],
     };
   };
@@ -379,6 +388,10 @@ If nothing is wrong, return an empty findings list. ${pages ? `(${pages} page im
   return {
     status: statusOf(findings),
     documentType: merged.documentType,
+    tocTitle: merged.tocTitle || null,
+    // Which page is the translation, the certified copy, the original — the
+    // package builder files them in that order (lib/packageDocs.js).
+    pageParts: pages && merged.pageParts && Object.keys(merged.pageParts).length ? merged.pageParts : null,
     languages: merged.languages,
     parts,
     legibility,

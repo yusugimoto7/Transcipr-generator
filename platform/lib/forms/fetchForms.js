@@ -62,7 +62,7 @@ export async function resolveLatestPdfUrl(key) {
       // Find the versioned PDF link for this exact form on the page.
       // The page links it with a relative or absolute address.
       const re = new RegExp(
-        `(?:https://www\\.canada\\.ca)?/content/dam/ircc/[^"'\\s]*?/forms/${key}/\\d{2}-\\d{2}-\\d{4}/${form.pdfBase || key + 'e'}\\.pdf`,
+        `(?:https://www\\.canada\\.ca)?/content/dam/ircc/[^"'\\s]*?/forms/${form.pathKey || key}/\\d{2}-\\d{2}-\\d{4}/${form.pdfBase || key + 'e'}\\.pdf`,
         'i'
       );
       const m = html.match(re);

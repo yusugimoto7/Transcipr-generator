@@ -8,7 +8,7 @@ import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
 import JSZip from 'jszip';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, StandardFonts, PDFName } from 'pdf-lib';
 import { loadLib } from './_load.mjs';
 
 const PORT = 3381;
@@ -82,15 +82,18 @@ try {
   add('104 - Photo - Zahra.png', await sharp({ create: { width: 420, height: 540, channels: 3, background: '#dfe6ee' } }).png().toBuffer(), 'image/png');
   add('116 - Marriage Certificate - Zahra.pdf', await pdf('MARRIAGE CERTIFICATE', 2));
   add('101 - Birth Certificate - Zahra.pdf', await pdf('BIRTH CERTIFICATE'));
+  add('102 - National ID Card - Zahra.pdf', await pdf('NATIONAL ID CARD'));
   add('115 - Police Clearance - Zahra.jpg', sidewaysScan, 'image/jpeg');
   add('127 - CV - Zahra.pdf', await pdf('CURRICULUM VITAE'));
   add('105 - Degree - Zahra.pdf', await pdf('DEGREE'));
   add('113 - Employment Letter - Zahra.pdf', await pdf('EMPLOYMENT LETTER'));
+  add('113 - Employment Letter - Zahra (2).pdf', await pdf('SECOND EMPLOYMENT LETTER'));
+  add('112 - Bank Statement - Zahra.pdf', await pdf('BANK STATEMENT', 2));
   add('120 - Ties - Zahra.pdf', await pdf('TIES TO HOME'));
   add('132 - Spouse Work Permit.pdf', await pdf('SPOUSE WORK PERMIT'));
   add('imm5476e Signed - Zahra.pdf', await pdf('IMM 5476 SIGNED'));
   r = await call('POST', `/api/applications/${appId}/upload`, null, fd);
-  ok(r.status === 201 && r.data.documents.length === 11, 'uploaded 11 files');
+  ok(r.status === 201 && r.data.documents.length === 14, `uploaded 14 files (${r.data.documents?.length})`);
 
   r = await call('GET', `/api/applications/${appId}/final-files`);
   const plan = r.data.plan;
@@ -99,6 +102,13 @@ try {
   ok(names.includes('04 - imm5476e Signed - Zahra.pdf'), 'the uploaded signed IMM 5476 is used as the form');
   ok(names.indexOf('05 - Passport - Zahra.pdf') === 4 && names.indexOf('06 - Photo - Zahra.jpg') === 5 && names.indexOf('07 - Client Information - Zahra.pdf') === 6, 'then Passport, Photo, Client Information');
   ok(names.some((n) => /Marriage Certificate - Zahra\.pdf$/.test(n)), 'the marriage certificate has its own file');
+  ok(names.some((n) => /Family Proof of Status/.test(n)) && names.some((n) => /Education and Certificates/.test(n)) && !names.some((n) => /CV/.test(n)), `the spouse-abroad set: Family Proof of Status, Education and Certificates, no separate CV (${names.slice(6).join(', ')})`);
+  const ci = plan.find((e) => e.slot === 'client-info');
+  const secNames = (ci.contents || []).map((s) => s.name);
+  ok(secNames.includes('Occupational Documents') && secNames.includes('Financial Documents') && !secNames.some((n) => /Marriage|Police|Birth/.test(n)), `the plan shows what Client Information will hold (${secNames.join(' · ')})`);
+  const occ = ci.contents.find((s) => s.name === 'Occupational Documents');
+  ok(occ && occ.children.slice(0, 2).map((c) => c.name).join('|') === '1st Employment Letter|2nd Employment Letter', `two employment letters become 1st / 2nd entries (${occ?.children.map((c) => c.name).join(' | ')})`);
+  ok(Array.isArray(r.data.unplaced) && r.data.unplaced.length === 0, 'every uploaded document has a place in the set');
   ok(/Submission Letter - Zahra\.pdf$/.test(names[names.length - 1]), 'the submission letter is last');
 
   r = await call('POST', `/api/applications/${appId}/final-files`, { cleanPages: true, fixRotation: true });
@@ -115,7 +125,9 @@ try {
   ok(labels.size > 3, `progress names each file as it is built (${labels.size} seen)`);
   const res = job.result;
   const built = new Map(res.files.map((f) => [f.name, f]));
-  ok(res.problems.some((p) => /imm1295e/.test(p.filename) && /data sheet/.test(p.reason)) && res.problems.some((p) => /imm5645e/.test(p.filename)), 'forms that could not be pre-filled are reported (not faked), pointing to the data sheet');
+  const formProblem = res.problems.find((p) => /imm1295e/.test(p.filename));
+  if (formProblem) ok(/data sheet/.test(formProblem.reason) && formProblem.slot, 'a form that could not be pre-filled is reported (not faked), pointing to the data sheet, with its slot');
+  else ok(built.has('imm1295e') && built.has('imm5645e'), 'the official forms were pre-filled (python + IRCC templates available)');
   const genKeys = new Set(res.generated.map((x) => x.key));
   ok(['sop', 'submission-letter', 'imm1295', 'imm5645', 'imm5476', 'next-steps'].every((k) => genKeys.has(k)), 'the one build also drafted the letters, made the data sheets and the next-steps note');
   ok(labels.has('Preparing letters and forms'), 'progress shows the preparation step');
@@ -126,7 +138,28 @@ try {
   const clientText = pdfText(client);
   ok(/Client Information/.test(clientText) && /Contents/.test(clientText), 'Client Information has its table of contents');
   ok(!/Marriage/i.test(clientText) && !/Birth Certificate/i.test(clientText) && !/Police/i.test(clientText), 'Client Information leaves out documents that have their own slot');
-  ok(/Employment Letter/.test(clientText) && /Ties to Home Country/.test(clientText), 'and keeps the supporting documents');
+  ok(/Occupational Documents/.test(clientText) && /1st Employment Letter/.test(clientText) && /2nd Employment Letter/.test(clientText) && /Financial Documents/.test(clientText) && /Title Deed/.test(clientText), 'and keeps the supporting documents in the firm\'s layout (occupational a/b, financial a/b/c)');
+  const ciDoc = await PDFDocument.load(client);
+  const annots = ciDoc.getPage(0).node.Annots();
+  const linked = annots && annots.size() > 0;
+  const hasOutlines = Boolean(ciDoc.catalog.get(PDFName.of('Outlines')));
+  if (process.env.PYTHON_BIN || spawnSync('python3', ['-c', 'import pikepdf']).status === 0) ok(linked && hasOutlines, `the contents page is clickable and the PDF has bookmarks (${annots?.size()} links)`);
+  else console.log('SKIP  contents links (pikepdf not installed)');
+
+  const idFile = await download(g('Birth Certificate & National ID Card'));
+  const idText = pdfText(idFile);
+  ok((await PDFDocument.load(idFile)).getPageCount() === 4 && /Birth Certificate/.test(idText) && /National ID Card/.test(idText), 'a file holding two documents gets a title page before each');
+
+  // One file can be rebuilt on its own; the rest of the set stays.
+  r = await call('POST', `/api/applications/${appId}/final-files`, { slot: 'marriage' });
+  ok(r.status === 202 && r.data.job.only === 'marriage', 'a single file can be rebuilt on its own');
+  let one;
+  for (let i = 0; i < 600; i++) {
+    one = (await call('GET', `/api/applications/${appId}/final-files`)).data;
+    if (!one.job || one.job.status !== 'running') break;
+    await new Promise((res) => setTimeout(res, 200));
+  }
+  ok(one.job?.status === 'done' && one.job.result.built.length === 1 && /Marriage Certificate/.test(one.job.result.built[0]) && one.built.files.length === res.files.length, `only that file was rebuilt (${one.job?.result?.built?.join(', ')}); the set still has ${one.built?.files?.length} files`);
 
   const marriage = await download(g('Marriage Certificate'));
   ok((await PDFDocument.load(marriage)).getPageCount() === 2 && !/Contents/.test(pdfText(marriage)), 'Marriage Certificate is just its 2 pages (no contents page)');

@@ -331,6 +331,17 @@ ${facts}`,
     };
   }
 
+  if (K === 'invitation' && (t.key === 'owp-worker-spouse' || t.key === 'owp-outside')) {
+    const student = t.key === 'owp-outside';
+    return {
+      system: `You draft Invitation / Support Letters from a spouse who is ${student ? 'studying' : 'working'} in Canada, for their spouse's open work permit application from abroad, written in the first person for the spouse in Canada to sign. It goes inside the "Client Information" file, right after the Purpose of Travel. ${NO_INVENT}`,
+      instruction: `Write an "Invitation Letter" (400-600 words) from ${d.inviterName || '[spouse name]'} (${d.inviterStatus || '[status in Canada]'}${d.inviterPermitExpiry ? `, permit valid until ${d.inviterPermitExpiry}` : ''}, ${d.inviterInstitution || (student ? '[school]' : '[employer]')}, ${d.inviterProgramOrJob || (student ? '[program]' : '[job title, NOC / TEER]')}, ${d.inviterAddress || '[address in Canada]'}) to IRCC about my spouse ${name || '[applicant]'} (DOB ${d.dob || '[DOB]'}, passport ${d.passportNumber || '[number]'}). Cover: our marriage on ${d.marriageDate || '[date]'} and relationship${d.relationshipHistory ? ` (${d.relationshipHistory})` : ''}; my ${student ? 'studies' : 'job'} in Canada and my status; that I invite my spouse to join me and that they will live with me at the address above; that I support the household (income CAD ${d.inviterIncome || '[amount]'} per year) and the enclosed documents show it; my spouse's plans to work in Canada; and that we will respect the conditions of our permits and leave Canada when they end. Signature block with name, address, phone and email placeholders and a date line.
+
+Facts:
+${facts}`,
+    };
+  }
+
   if (K === 'invitation') {
     return {
       system: `You draft Invitation Letters for Canadian visitor visa applications, written by the HOST in Canada in the first person, for the host to sign. ${NO_INVENT}`,

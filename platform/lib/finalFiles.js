@@ -8,6 +8,7 @@ import { produceDocs, refreshNextSteps } from './generateDocs';
 import { buildPackageFile, ensureGenerated } from './compileJob';
 import { letterSpec } from './generators/letters';
 import { rasterizePdf } from './raster';
+import { NEVER, narrowPackage, planPackage, describePlan } from './packagePlan';
 
 /**
  * The files the firm uploads to the IRCC portal — one PDF per portal slot —
@@ -33,7 +34,7 @@ const SLOT = {
   marriage: { name: 'Marriage Certificate', categories: ['marriage-cert'] },
   'birth-nid': { name: 'Birth Certificate & National ID Card', categories: ['national-id'] },
   police: { name: 'Police Clearance Certificate', categories: ['police-clearance'] },
-  education: { name: 'Education', categories: ['transcripts', 'certificates'] },
+  education: { name: 'Education and Certificates', categories: ['transcripts', 'certificates'] },
   transcript: { name: 'Recent Education Transcript', categories: ['transcripts'] },
   completion: { name: 'Completion of Studies Letter', categories: ['completion-letter'] },
   cv: { name: 'CV', categories: ['cv'] },
@@ -43,6 +44,8 @@ const SLOT = {
   deposit: { name: 'Tuition Payment Confirmation', categories: ['deposit', 'gic'] },
   relationship: { name: 'Proof of Relationship', categories: ['relationship-proof'] },
   'family-status': { name: 'Family Member Proof of Status', categories: ['spouse-status'] },
+  // A spouse abroad: the spouse in Canada's permit and passport / visa together.
+  'spouse-status': { name: 'Family Proof of Status', categories: ['spouse-status', 'supporter-id'] },
   enrolment: { name: "Proof of Student's Enrolment", categories: ['enrolment-letter'] },
   medical: { name: 'Medical Exam', categories: ['medical'] },
   insurance: { name: 'Health Insurance', categories: ['medical-insurance'] },
@@ -65,8 +68,12 @@ const LISTS = {
   'study-permit-child-of-worker': [...STUDY_MINOR.slice(0, -1), 'inviter', 'submission'],
   'study-permit-inside': ['forms', 'passport', 'client-info', 'financial', 'photo', 'loa', 'pal', 'marriage', 'submission'],
   'study-permit-inside-child': ['forms', 'passport', 'client-info', 'financial', 'photo', 'loa', 'pal', 'consent', 'custody', 'submission'],
-  'owp-outside': ['forms', 'passport', 'photo', 'client-info', 'family-status', 'enrolment', 'birth-nid', 'cv', 'education', 'marriage', 'police', 'inviter', 'submission'],
-  'owp-worker-spouse': ['forms', 'passport', 'photo', 'client-info', 'family-status', 'birth-nid', 'cv', 'education', 'marriage', 'police', 'inviter', 'submission'],
+  // Spouse abroad (open work permit), as in the firm's "Zahra - SOWP" folder:
+  // Client Information holds the letters, work, financial and ties documents;
+  // the spouse's status, the applicant's identity, marriage, police and
+  // education documents each have their own file.
+  'owp-outside': ['forms', 'passport', 'photo', 'client-info', 'spouse-status', 'enrolment', 'birth-nid', 'marriage', 'police', 'education', 'submission'],
+  'owp-worker-spouse': ['forms', 'passport', 'photo', 'client-info', 'spouse-status', 'birth-nid', 'marriage', 'police', 'education', 'submission'],
   'imp-c11': ['forms', 'passport', 'photo', 'client-info', 'business', 'financial', 'cv', 'education', 'police', 'marriage', 'submission'],
   'iranian-owp': OWP_INSIDE,
   'sowp-inside': OWP_INSIDE,
@@ -93,10 +100,22 @@ function signedUpload(app, formKey) {
   return (app.documents || []).find((d) => d.category === 'rep-form' && re.test(d.filename) && d.mime === 'application/pdf') || null;
 }
 
+/** The package definition a slot compiles, or a one-section one for a plain document slot. */
+function slotPackage(app, def, pkgs, claimed) {
+  if (def.pkg && pkgs[def.pkg]) return def.pkg === 'client-info' ? narrowPackage(pkgs[def.pkg], claimed) : pkgs[def.pkg];
+  const sections = [];
+  if (def.generatedKey && app.data?.palExempt && letterSpec(app, def.generatedKey)) sections.push({ name: def.generatedName || def.name, generatedKey: def.generatedKey });
+  // One entry per document, named from its check — so a file that holds
+  // several documents gets a title page before each (lib/compile.js).
+  sections.push({ name: def.name, categories: def.categories, perDoc: true });
+  return { title: def.name, sections };
+}
+
 /**
  * The final-file plan for an application: ordered slots with what each one
- * would contain right now.
- * @returns {Array<{ n, slot, name, filename, kind, ready, note, ... }>}
+ * would contain right now — `contents` lists the sections and files a package
+ * takes, so the team sees where every document goes before building.
+ * @returns {Array<{ n, slot, name, filename, kind, ready, note, contents, ... }>}
  */
 export function planFinalFiles(app) {
   const t = getAppType(app.type);
@@ -106,6 +125,7 @@ export function planFinalFiles(app) {
   const gen = new Map((app.generated || []).map((g) => [g.key, g]));
   const who = firstName(app);
   const hasCat = (cats) => docs.some((d) => cats.includes(d.category));
+  const hasLetter = (key) => gen.has(key) || Boolean(letterSpec(app, key));
 
   const entries = [];
   for (const slotKey of list) {
@@ -131,22 +151,31 @@ export function planFinalFiles(app) {
     const def = SLOT[slotKey];
     if (!def) continue;
     if (def.pkg && !pkgs[def.pkg] && !def.categories) continue; // the type has no such package
-    let ready = false;
-    let note = '';
-    if (def.photo) {
-      ready = hasCat(['photo']);
-      note = ready ? '' : 'upload the digital photo';
-    } else if (def.generatedKey && !def.categories) {
-      ready = gen.has(def.generatedKey) || Boolean(letterSpec(app, def.generatedKey));
-      note = gen.has(def.generatedKey) ? '' : 'drafted when built';
-    } else if (def.pkg && pkgs[def.pkg]) {
-      const sections = pkgs[def.pkg].sections;
-      ready = sections.some((s) => s.generatedKey || s.catchAll) || hasCat(sections.flatMap((s) => s.categories || []));
+    entries.push({ slot: slotKey, kind: def.photo ? 'photo' : def.pkg && pkgs[def.pkg] ? 'package' : def.generatedKey && !def.categories ? 'letter' : 'documents', name: def.name, ready: false, note: '', contents: null });
+  }
+
+  // What each slot takes. Client Information is planned last: it holds
+  // whatever no other file claims.
+  const claimed = claimedCategories(entries, app);
+  for (const e of entries) {
+    const def = SLOT[e.slot];
+    if (e.kind === 'form') continue;
+    if (e.kind === 'photo') {
+      const photo = docs.find((d) => d.category === 'photo');
+      e.ready = Boolean(photo);
+      e.note = e.ready ? '' : 'upload the digital photo';
+      e.contents = photo ? [{ name: def.name, letter: false, files: [photo.filename], children: [] }] : [];
+    } else if (e.kind === 'letter') {
+      e.ready = hasLetter(def.generatedKey);
+      e.note = gen.has(def.generatedKey) ? '' : 'drafted when built';
+      e.contents = e.ready ? [{ name: def.name, letter: true, files: [], children: [] }] : [];
     } else {
-      ready = hasCat(def.categories) || Boolean(def.generatedKey && (gen.has(def.generatedKey) || (app.data?.palExempt && letterSpec(app, def.generatedKey))));
-      note = ready ? '' : 'no documents of this type yet';
+      const pkgDef = slotPackage(app, def, pkgs, claimed);
+      const plan = planPackage(app, pkgDef, e.slot === 'client-info' ? { claimed } : { owned: new Set() });
+      e.contents = describePlan(plan, { hasLetter });
+      e.ready = e.contents.length > 0;
+      if (!e.ready) e.note = e.kind === 'package' ? 'nothing to put in it yet' : 'no documents of this type yet';
     }
-    entries.push({ slot: slotKey, kind: def.photo ? 'photo' : def.pkg && pkgs[def.pkg] ? 'package' : def.generatedKey && !def.categories ? 'letter' : 'documents', name: def.name, ready, note });
   }
 
   // Number only the files that will exist; empty optional slots are listed unnumbered.
@@ -161,6 +190,17 @@ export function planFinalFiles(app) {
   });
 }
 
+/**
+ * Uploaded documents that no final file would take (so the team can give them
+ * a checklist code or category before building). Agency paperwork, forms and
+ * the photo are never listed.
+ */
+export function unplacedDocuments(app, plan = planFinalFiles(app)) {
+  const placed = new Set();
+  for (const e of plan) for (const s of e.contents || []) for (const f of [s, ...s.children]) f.files.forEach((name) => placed.add(name));
+  return (app.documents || []).filter((d) => !NEVER.has(d.category) && !placed.has(d.filename)).map((d) => ({ id: d.id, filename: d.filename, category: d.category || null }));
+}
+
 /** Categories that go out as their own files (so Client Information leaves them out). */
 function claimedCategories(plan, app) {
   const pkgs = packagesFor(app.type);
@@ -170,7 +210,11 @@ function claimedCategories(plan, app) {
     const def = SLOT[e.slot];
     if (!def) continue;
     (def.categories || []).forEach((c) => claimed.add(c));
-    if (def.pkg && pkgs[def.pkg]) pkgs[def.pkg].sections.forEach((s) => (s.categories || []).forEach((c) => claimed.add(c)));
+    const walk = (s) => {
+      (s.categories || []).forEach((c) => claimed.add(c));
+      (s.children || []).forEach(walk);
+    };
+    if (def.pkg && pkgs[def.pkg]) pkgs[def.pkg].sections.forEach(walk);
   }
   return claimed;
 }
@@ -181,21 +225,21 @@ const jobs = (globalThis.__finalJobs ||= new Map()); // appId -> job
 
 function view(job) {
   if (!job) return null;
-  const { status, done, total, current, inner, startedAt, finishedAt, error, result } = job;
-  return { status, done, total, current, inner, startedAt, finishedAt, error, ...(status === 'done' ? { result } : {}) };
+  const { status, only, done, total, current, inner, startedAt, finishedAt, error, result } = job;
+  return { status, only, done, total, current, inner, startedAt, finishedAt, error, ...(status === 'done' ? { result } : {}) };
 }
 
 export function getFinalJob(appId) {
   return view(jobs.get(appId));
 }
 
-/** Build every final file (in the background). */
-export function startFinalJob(appId, { cleanPages = true, fixRotation = true } = {}) {
+/** Build every final file (in the background) — or just one slot (`only`). */
+export function startFinalJob(appId, { cleanPages = true, fixRotation = true, only = null } = {}) {
   const running = jobs.get(appId);
   if (running?.status === 'running') return view(running);
-  const job = { status: 'running', done: 0, total: 0, current: 'planning', inner: null, startedAt: new Date().toISOString(), finishedAt: null, error: null, result: null };
+  const job = { status: 'running', only, done: 0, total: 0, current: 'planning', inner: null, startedAt: new Date().toISOString(), finishedAt: null, error: null, result: null };
   jobs.set(appId, job);
-  build(appId, { cleanPages, fixRotation }, job)
+  build(appId, { cleanPages, fixRotation, only }, job)
     .then((result) => {
       job.result = result;
       job.status = 'done';
@@ -212,21 +256,42 @@ export function startFinalJob(appId, { cleanPages = true, fixRotation = true } =
   return view(job);
 }
 
-async function build(appId, { cleanPages, fixRotation }, job) {
+/** What one slot needs prepared before it can be built (letters, data sheet, pre-filled form). */
+function prepFor(app, entries, have) {
+  const keys = [];
+  for (const e of entries) {
+    if (e.kind === 'form') {
+      keys.push(e.formKey);
+      if (!signedUpload(app, e.formKey)) keys.push(`${e.formKey}-filled`);
+    } else if (e.kind === 'letter') {
+      const k = SLOT[e.slot].generatedKey;
+      if (!have.has(k)) keys.push(k);
+    }
+    // Packages draft the letters they hold themselves (lib/compileJob.js).
+  }
+  return [...new Set(keys)];
+}
+
+async function build(appId, { cleanPages, fixRotation, only = null }, job) {
   let app = await getApplication(appId);
   const problems = [];
+  const wanted = (e) => e.n && (!only || e.slot === only);
 
   // 1. Prepare everything the files are made from, in the same run:
   //    letters not drafted yet (drafted or edited ones are kept — redraft them
   //    individually), data sheets refreshed from the latest intake, and each
   //    official form pre-filled unless a signed copy was uploaded.
+  //    For one file: only what that file needs.
   const have = new Set((app.generated || []).filter((g) => g.stored).map((g) => g.key));
-  const prep = [
-    ...lettersFor(app).map((l) => l.key).filter((k) => !have.has(k)),
-    ...formsFor(app).map((f) => f.key),
-    ...formsFor(app).filter((f) => !signedUpload(app, f.key)).map((f) => `${f.key}-filled`),
-  ];
-  const planned = planFinalFiles(app).filter((e) => e.n).length;
+  const prep = only
+    ? prepFor(app, planFinalFiles(app).filter(wanted), have)
+    : [
+        ...lettersFor(app).map((l) => l.key).filter((k) => !have.has(k)),
+        ...formsFor(app).map((f) => f.key),
+        ...formsFor(app).filter((f) => !signedUpload(app, f.key)).map((f) => `${f.key}-filled`),
+      ];
+  const planned = planFinalFiles(app).filter(wanted).length;
+  if (only && !planned) throw new Error('There is nothing to put in that file yet.');
   job.total = planned + 1; // + preparing
   job.current = 'Preparing letters and forms';
   job.inner = { done: 0, total: prep.length };
@@ -236,17 +301,17 @@ async function build(appId, { cleanPages, fixRotation }, job) {
   app = prepared.app;
   // A form that couldn't be pre-filled is reported with its final file below.
   const fillErrors = new Map(prepared.errors.filter((e) => e.key.endsWith('-filled')).map((e) => [e.key.replace(/-filled$/, ''), e.message]));
-  for (const e of prepared.errors.filter((x) => !x.key.endsWith('-filled'))) problems.push({ filename: e.key, name: e.key, reason: e.message });
+  for (const e of prepared.errors.filter((x) => !x.key.endsWith('-filled'))) problems.push({ slot: null, filename: e.key, name: e.key, reason: e.message });
   job.done = 1;
 
   // 2. The numbered files.
-  const plan = planFinalFiles(app).filter((e) => e.n);
-  const claimed = claimedCategories(plan, app);
+  const plan = planFinalFiles(app).filter(wanted);
+  const claimed = claimedCategories(planFinalFiles(app).filter((e) => e.n), app);
   const pkgs = packagesFor(app.type);
   job.total = plan.length + 1;
 
   const built = [];
-  const stats = { rotatedPages: 0, droppedPages: 0, mirroredPages: 0, skippedFiles: [], uncertainPages: [] };
+  const stats = { rotatedPages: 0, droppedPages: 0, mirroredPages: 0, skippedFiles: [], uncertainPages: [], reorderedFiles: [] };
   const addStats = (s) => {
     if (!s) return;
     stats.rotatedPages += s.rotatedPages || 0;
@@ -254,6 +319,7 @@ async function build(appId, { cleanPages, fixRotation }, job) {
     stats.mirroredPages += s.mirroredPages || 0;
     stats.skippedFiles.push(...(s.skippedFiles || []));
     stats.uncertainPages.push(...(s.uncertainPages || []));
+    stats.reorderedFiles.push(...(s.reorderedFiles || []));
   };
   const record = async (key, meta) => {
     app = await updateApplication(app.id, (a) => {
@@ -306,59 +372,48 @@ async function build(appId, { cleanPages, fixRotation }, job) {
       } else {
         // A package with a table of contents (Client Information, Financial
         // Support, Inviter's Documents), or a plain file of one document type.
+        // Client Information leaves out everything that has its own portal slot.
         const def = SLOT[e.slot];
-        let pkgDef;
-        let plain = false;
-        let opts = {};
-        if (e.kind === 'package') {
-          pkgDef = pkgs[def.pkg];
-          if (e.slot === 'client-info') {
-            // Leave out everything that has its own portal slot.
-            pkgDef = {
-              ...pkgDef,
-              sections: pkgDef.sections
-                .map((s) => (s.categories ? { ...s, categories: s.categories.filter((c) => !claimed.has(c)) } : s))
-                .filter((s) => s.generatedKey || s.catchAll || s.categories?.length),
-            };
-            opts = { claimed };
-          } else {
-            opts = { owned: new Set() };
-          }
-        } else {
-          plain = true;
-          const sections = [];
-          if (def.generatedKey && app.data?.palExempt && letterSpec(app, def.generatedKey)) sections.push({ name: def.generatedName || def.name, generatedKey: def.generatedKey });
-          sections.push({ name: def.name, categories: def.categories });
-          pkgDef = { title: def.name, sections };
-          opts = { owned: new Set() };
-        }
+        const pkgDef = slotPackage(app, def, pkgs, claimed);
+        const plain = e.kind !== 'package';
+        const opts = e.slot === 'client-info' ? { claimed } : { owned: new Set() };
         const out = await buildPackageFile(app, pkgDef, { cleanPages, fixRotation, job: job.inner, plain, key, filename: e.filename, ...opts });
         app = out.app;
         addStats(out.stats);
         built.push({ ...e, key, size: out.meta.size, pages: out.stats.pages });
       }
     } catch (err) {
-      problems.push({ filename: e.filename, name: e.name, reason: err.message });
+      problems.push({ slot: e.slot, filename: e.filename, name: e.name, reason: err.message });
     }
     job.done++;
   }
 
-  // Drop final files left over from an earlier build that no longer exist.
-  const keep = new Set(built.map((b) => b.key));
+  // Record the set (one rebuilt file replaces its earlier version; the rest
+  // stay) and drop final files left over from an earlier build that no longer
+  // exist. Problems are kept with the set, so the reason a file was not built
+  // stays visible after the page is reloaded.
+  const fresh = built.map(({ n, slot, name, filename, key, size, pages }) => ({ n, slot, name, filename, key, size, pages }));
+  const freshKeys = new Set(fresh.map((f) => f.key));
   app = await updateApplication(app.id, (a) => {
+    const prev = only ? (a.finalFiles?.files || []).filter((f) => f.slot !== only && !freshKeys.has(f.key)) : [];
+    const files = [...prev, ...fresh].sort((x, y) => x.n - y.n);
+    const keep = new Set(files.map((f) => f.key));
+    const prevProblems = only ? (a.finalFiles?.problems || []).filter((p) => p.slot !== only) : [];
     a.generated = (a.generated || []).filter((g) => !g.key.startsWith('final-') || keep.has(g.key));
-    a.finalFiles = { builtAt: new Date().toISOString(), files: built.map(({ n, slot, name, filename, key, size, pages }) => ({ n, slot, name, filename, key, size, pages })) };
+    a.finalFiles = { builtAt: only && a.finalFiles?.builtAt ? a.finalFiles.builtAt : new Date().toISOString(), files, problems: [...prevProblems, ...problems] };
     return a;
   });
 
-  // 3. What is still missing, and what to do next.
+  // 3. What is still missing, and what to do next (after a full build).
   let note = null;
-  try {
-    ({ app, note } = await refreshNextSteps(app));
-  } catch (e) {
-    console.error(`[finalFiles] next-steps note failed: ${e.message}`);
+  if (!only) {
+    try {
+      ({ app, note } = await refreshNextSteps(app));
+    } catch (e) {
+      console.error(`[finalFiles] next-steps note failed: ${e.message}`);
+    }
   }
 
   queueSync(app.id); // copy the final and working files to the client's Drive folder
-  return { files: app.finalFiles.files, problems, generated: app.generated, note, ...stats, skippedFiles: [...new Set(stats.skippedFiles)] };
+  return { files: app.finalFiles.files, built: fresh.map((f) => f.filename), only, problems, generated: app.generated, note, ...stats, skippedFiles: [...new Set(stats.skippedFiles)] };
 }

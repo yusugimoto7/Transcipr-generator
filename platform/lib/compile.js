@@ -4,6 +4,9 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
+const TOC_LINKER = path.join(process.cwd(), 'lib', 'forms', 'toc_links.py');
+const pickPython = () => process.env.PYTHON_BIN || 'python3';
+
 /**
  * Compile a submission package: merge section content (generated docs + uploaded
  * files) into one PDF with a title block, Table of Contents (with nested a/b/c
@@ -109,6 +112,14 @@ function footer(page, font, n, total) {
 async function drawBlock(doc, fonts, block) {
   if (block.type === 'divider') {
     const dp = doc.addPage([PAGE_W, PAGE_H]);
+    if (block.number == null) {
+      // A title page before one document in a file that holds several.
+      const size = 20;
+      const w = fonts.bold.widthOfTextAtSize(block.name, size);
+      if (w <= PAGE_W - MARGIN * 2) dp.drawText(block.name, { x: (PAGE_W - w) / 2, y: PAGE_H / 2, size, font: fonts.bold, color: INK });
+      else wrapText(dp, fonts.bold, block.name, MARGIN, PAGE_H / 2 + 12, size, PAGE_W - MARGIN * 2, INK);
+      return [dp];
+    }
     dp.drawText(`${block.number})`, { x: MARGIN, y: PAGE_H / 2 + 20, size: 22, font: fonts.bold, color: INK });
     wrapText(dp, fonts.bold, block.name, MARGIN, PAGE_H / 2 - 12, 22, PAGE_W - MARGIN * 2, INK);
     return [dp];
@@ -155,6 +166,10 @@ export async function compilePackage(title, applicantName, sections, { outPath =
   const marks = []; // { label, page (0-based in body), level }
   let bodyPages = 0;
   let number = 0;
+  // A plain file holding two or more documents (birth certificate + national
+  // ID card) gets a title page before each of them.
+  const plainGroups = plain ? sections.reduce((n, s) => n + ((s.items || []).length ? 1 : 0) + (s.children || []).filter((c) => (c.items || []).length).length, 0) : 0;
+  const titled = plain && plainGroups >= 2;
   for (const sec of sections) {
     const own = [];
     for (const item of sec.items || []) {
@@ -175,10 +190,18 @@ export async function compilePackage(title, applicantName, sections, { outPath =
     // A section with nothing that embeds gets no divider and no TOC entry.
     if (!own.length && !kids.length) continue;
     if (plain) {
-      // A single document for its own portal slot: just its pages, in order.
-      for (const b of [...own, ...kids.flatMap((k) => k.blocks)]) {
-        blocks.push(b);
-        bodyPages += b.pages;
+      // A document for its own portal slot: just its pages, in order — with a
+      // title page before each document when the file holds several.
+      const groups = [...(own.length ? [{ name: sec.name, blocks: own }] : []), ...kids];
+      for (const g of groups) {
+        if (titled) {
+          blocks.push({ type: 'divider', number: null, name: g.name, pages: 1 });
+          bodyPages += 1;
+        }
+        for (const b of g.blocks) {
+          blocks.push(b);
+          bodyPages += b.pages;
+        }
       }
       continue;
     }
@@ -205,6 +228,7 @@ export async function compilePackage(title, applicantName, sections, { outPath =
   const total = tocPageCount + bodyPages;
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'package-'));
+  const links = []; // contents lines → target pages (made clickable after the join)
   try {
     const parts = [];
     // 2. Table of contents (title block, dotted leaders, children indented).
@@ -239,6 +263,8 @@ export async function compilePackage(title, applicantName, sections, { outPath =
       if (dotsEnd > dotsStart) {
         page.drawText('.'.repeat(Math.max(0, Math.floor((dotsEnd - dotsStart) / 3))), { x: dotsStart, y, size: 11, font: tFont, color: MUTED });
       }
+      // The whole line, label to page number, becomes a link once the parts are joined.
+      links.push({ tocPage: tp, rect: [x - 2, y - 5, PAGE_W - MARGIN + 2, y + 12], target: tocPageCount + m.page, label: m.label, level: m.level });
       y -= 22;
     }
     tocPages.forEach((p, i) => footer(p, tFont, i + 1, total));
@@ -273,17 +299,33 @@ export async function compilePackage(title, applicantName, sections, { outPath =
     await flush();
 
     // 4. Join the parts.
-    const out = path.join(dir, 'package.pdf');
+    let out = path.join(dir, 'package.pdf');
     if (!parts.length) throw new Error('nothing to write');
     if (parts.length === 1) await fs.copyFile(parts[0], out);
     else await run('pdfunite', [...parts, out]);
 
+    // 5. Make the contents page clickable and add bookmarks (pikepdf, on disk).
+    //    Best effort: a package without links is still a good package.
+    let linked = false;
+    if (links.length) {
+      const linksFile = path.join(dir, 'links.json');
+      const withLinks = path.join(dir, 'package-linked.pdf');
+      await fs.writeFile(linksFile, JSON.stringify(links));
+      try {
+        await run(pickPython(), [TOC_LINKER, out, linksFile, withLinks]);
+        out = withLinks;
+        linked = true;
+      } catch (e) {
+        console.warn(`[compile] contents links skipped: ${e.message.slice(0, 200)}`);
+      }
+    }
+
     if (outPath) {
       await fs.mkdir(path.dirname(outPath), { recursive: true });
       await fs.copyFile(out, outPath);
-      return { path: outPath, pages: total, skipped };
+      return { path: outPath, pages: total, skipped, linked };
     }
-    return { bytes: await fs.readFile(out), pages: total, skipped };
+    return { bytes: await fs.readFile(out), pages: total, skipped, linked };
   } finally {
     fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   }

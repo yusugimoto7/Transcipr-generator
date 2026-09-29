@@ -62,6 +62,9 @@ const BUSINESS = I(119, 'business-docs', 'Business documents', {
   hint: 'Establishment and latest-changes notices (Official Gazette), business licence, tax receipts for the last 3 years, staff insurance, professional licences.',
 });
 const TIES = I(120, 'ties-docs', 'Proof of ties to home country', { hint: 'Property deeds, car, other assets, or circumstances that require you at home.' });
+const TIES_DEEDS = I(120, 'title-deeds', 'Title deeds — apartment, land, vehicle (proof of ties)', { tr: true, hint: 'Each deed goes in the Financial Documents section of Client Information under its own heading.' });
+const SOURCE_OF_FUNDS = I('112-1', 'source-of-funds', 'Source of funds — sale contract, invoices, gift letter', { tr: true, cond: 'if a large deposit needs explaining' });
+const CV_OPT = I(127, 'cv', 'Resume / CV', { cond: 'if available', hint: 'Use the 127 Word template.' });
 const FLIGHT_FIRM = I(121, 'flight', 'Flight reservation', { party: 'firm' });
 const HOTEL_FIRM = I(122, 'accommodation', 'Hotel reservation', { party: 'firm' });
 const SPONSOR = I(123, 'supporter-bank', "Sponsor's documents", {
@@ -252,21 +255,56 @@ const PKG = {
       { name: "Spouse's Financial Documents", categories: ['supporter-bank'] },
     ],
   },
-  clientInfoOwpOutside: {
+  // Spouse applying from abroad (open work permit): the layout of the firm's
+  // "Client Information" files for these applications — Purpose of Travel,
+  // the spouse's invitation letter, occupational documents (one entry per
+  // letter), financial documents with a/b/c sub-sections, then the rest.
+  // Documents that go out as their own final files (marriage certificate,
+  // birth certificate & ID, police clearance, education) drop out by themselves.
+  clientInfoSpouseAbroad: {
     key: 'client-info', title: 'Client Information', filename: 'Client Information.pdf',
     sections: [
       { name: 'Purpose of Travel', generatedKey: 'sop' },
-      { name: 'Marriage Certificate', categories: ['marriage-cert'] },
-      { name: 'Curriculum Vitae', categories: ['cv'] },
-      { name: 'Degree Certificate and Transcripts', categories: ['transcripts'] },
-      { name: 'Employment Letter, Pay Slips and Leave of Absence', categories: ['employment-letter', 'leave-of-absence', 'job-offer'] },
-      { name: 'Social Insurance Records', categories: ['insurance'] },
-      { name: 'Certificates', categories: ['certificates'] },
-      { name: 'Ties to Home Country', categories: ['ties-docs', 'title-deeds'] },
-      { name: 'Birth Certificate and National Identity Card', categories: ['national-id'] },
+      { name: 'Invitation Letter', categories: ['invitation-letter'] },
+      {
+        name: 'Occupational Documents',
+        children: [
+          { name: 'Employment Letter', categories: ['employment-letter', 'job-offer'], perDoc: 'Employment Letter' },
+          { name: 'Leave of Absence', categories: ['leave-of-absence'] },
+          { name: 'Social Insurance Records', categories: ['insurance'] },
+          { name: 'Business Documents', categories: ['business-docs', 'business-financials'] },
+          { name: 'Curriculum Vitae', categories: ['cv'] },
+        ],
+      },
+      { name: 'Education — Degree, Transcripts and Certificates', categories: ['transcripts', 'certificates'] },
+      {
+        name: 'Financial Documents',
+        children: [
+          { name: 'Financial Cover Letter', generatedKey: 'financial-cover-letter' },
+          { name: 'Financial Summary Report', generatedKey: 'financial-summary' },
+          { name: 'Bank Statement', categories: ['proof-of-funds'], perDoc: 'Bank Statement' },
+          { name: 'Source of Funds', categories: ['source-of-funds'], perDoc: 'Source of Funds' },
+          { name: 'Title Deed', categories: ['title-deeds'], perDoc: 'Title Deed' },
+          { name: "My Spouse's Bank Statement", categories: ['supporter-bank'] },
+          { name: "My Spouse's Employment Letter and Pay Slips", categories: ['inviter-docs', 'supporter-income'] },
+          { name: 'Affidavit of Financial Support', categories: ['affidavit-support'] },
+        ],
+      },
+      { name: 'Ties to Home Country', categories: ['ties-docs'] },
       { name: 'Military Service Card', categories: ['military'] },
+      { name: 'Marriage Certificate', categories: ['marriage-cert'] },
+      { name: 'Birth Certificate and National Identity Card', categories: ['national-id'] },
       { name: 'Police Clearance Certificate', categories: ['police-clearance'] },
+      { name: 'Residence in Another Country', categories: ['residence-abroad'] },
+      {
+        name: 'Previous Canadian Applications',
+        children: [
+          { name: 'Letter of Explanation', generatedKey: 'letter-of-explanation' },
+          { name: 'Previous Decision', categories: ['refusal-letter'] },
+        ],
+      },
       { name: 'Flight Ticket', categories: ['flight'] },
+      { name: 'Accommodation Arrangement', categories: ['accommodation', 'supporter-deeds'] },
       { name: 'Other Supporting Documents', catchAll: true },
     ],
   },
@@ -468,13 +506,18 @@ export const APP_TYPES = {
     forms: [F.imm1295, F.imm5257b, F.imm5645, F.imm5476, F.imm5713],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result', { cond: 'not required for the spouse — better to provide if available' }),
-      FINANCIAL, WORK_LETTER, INSURANCE, POLICE_SEALED,
+      FINANCIAL, SOURCE_OF_FUNDS, WORK_LETTER, INSURANCE, POLICE_SEALED,
       I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
-      COURSES, RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM, HOTEL_FIRM, PROFILE, CV, BACKGROUND,
+      COURSES, RESIDENCE_ABROAD, BUSINESS, TIES_DEEDS, FLIGHT_FIRM, PROFILE, CV_OPT, BACKGROUND,
       I(129, 'sop', 'Purpose of Travel', { party: 'firm', hint: 'Tailored to the applicant — the 129 sample is for ideas only.' }),
-      MILITARY, PREVIOUS, REP, FAMILY_REP],
-    packages: [PKG.clientInfoOwpOutside, PKG.financialProof],
-    letters: [LETTER.pot, LETTER.finCover, LETTER.finSummary, LETTER.explanation, LETTER.submission],
+      MILITARY, PREVIOUS, REP, FAMILY_REP,
+      I(132, 'spouse-status', "Spouse's study permit", { party: 'principal' }),
+      I(133, 'supporter-id', "Spouse's passport (with Canadian visa label)", { party: 'principal' }),
+      I(135, 'supporter-bank', "Spouse's proof of funds + 6-month statement", { party: 'principal', hint: 'Valid 1 month — get it last, in coordination with your case officer.' }),
+      I(137, 'enrolment-letter', "Spouse's enrolment letter from the school (DLI)", { party: 'principal' }),
+      I(138, 'accommodation', "Accommodation arrangement — spouse's lease or deed in Canada", { party: 'principal' })],
+    packages: [PKG.clientInfoSpouseAbroad, PKG.financialProof],
+    letters: [LETTER.pot, LETTER.invitation, LETTER.finCover, LETTER.finSummary, LETTER.explanation, LETTER.submission],
     stages: STAGES_DEFAULT,
   },
   'trv-child-of-student': {
@@ -492,18 +535,25 @@ export const APP_TYPES = {
     description: 'The spouse of a worker already in Canada, applying from abroad for an open work permit (IMM 1295).',
     steps: ['personal', 'passport', 'contact', 'family', 'spouseInCanada', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm1295, F.imm5257b, F.imm5645, F.imm5476],
-    checklist: [FORM100, BIRTH, NID, passport(2), PHOTO,
+    // The firm's document set for these files: the applicant's own identity,
+    // education, work, financial and ties documents, plus the spouse's status,
+    // employment, funds, invitation letter and housing in Canada.
+    checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result', { cond: 'not required for the spouse — better to provide if available' }),
-      POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, POLICE_SEALED,
+      POT_Q, FINANCIAL, SOURCE_OF_FUNDS, WORK_LETTER, INSURANCE, POLICE_SEALED,
       I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
-      RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM, PROFILE, CV, BACKGROUND,
+      I(117, 'certificates', 'Certificates — courses, licences, awards', { tr: true, cond: 'if available' }),
+      RESIDENCE_ABROAD, BUSINESS, TIES_DEEDS, FLIGHT_FIRM, PROFILE, CV_OPT, BACKGROUND,
       I(129, 'sop', 'Purpose of Travel', { party: 'firm' }),
       MILITARY, PREVIOUS, REP,
-      P_PERMIT('Spouse'), P_ID('Spouse'), P_WORK('Spouse'), P_FUNDS('Spouse'),
+      I(132, 'spouse-status', "Spouse's work permit", { party: 'principal', hint: 'At least 16 months left on the permit when you apply (confirm the current IRCC rule with your case officer).' }),
+      P_ID('Spouse'),
+      I(134, 'inviter-docs', "Spouse's employment letter", { party: 'principal', hint: 'Letterhead, full name, date of birth, exact dates, title, duties, salary, NOC / TEER — the job must be in an eligible TEER category for a spousal open work permit. Reviewed before printing.' }),
+      P_FUNDS('Spouse'),
       I(136, 'supporter-income', "Spouse's last 3 pay slips", { party: 'principal' }),
-      I(137, 'invitation-letter', 'Invitation letter from your spouse in Canada', { party: 'principal', hint: 'From the firm sample. Notarization not required; reviewed with your case officer.' }),
-      I(138, 'accommodation', "Spouse's residence in Canada — deed or lease", { party: 'principal' })],
-    packages: [PKG.clientInfoOwpOutside, PKG.inviterDocs, PKG.financialProof],
+      I(137, 'invitation-letter', 'Invitation letter from your spouse in Canada', { party: 'firm', hint: 'Drafted by the firm from the intake, for your spouse to sign. Notarization not required.' }),
+      I(138, 'accommodation', "Accommodation arrangement — spouse's lease or deed in Canada", { party: 'principal' })],
+    packages: [PKG.clientInfoSpouseAbroad, PKG.financialProof],
     letters: [LETTER.pot, LETTER.invitation, LETTER.finCover, LETTER.finSummary, LETTER.explanation, LETTER.submission],
     stages: STAGES_DEFAULT,
   },

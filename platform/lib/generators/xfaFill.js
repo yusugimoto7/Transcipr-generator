@@ -5,7 +5,12 @@ import os from 'os';
 import crypto from 'crypto';
 import { getFormPdf } from '../forms/fetchForms';
 import { FIELD_MAPS } from '../forms/fieldmaps/imm1294';
+import { imm5645FieldMap, imm5645Data } from '../forms/fieldmaps/imm5645';
+import { imm5476FieldMap, imm5476Data } from '../forms/fieldmaps/imm5476';
+import { IMM5257B_FIELD_MAP } from '../forms/fieldmaps/imm5257b';
 import { autoFieldMap } from '../forms/fieldmaps/auto';
+import { getFirm } from '../firm';
+import { getAppType } from '../appTypes';
 
 const FILLER = path.join(process.cwd(), 'lib', 'forms', 'fill_form.py');
 const DUMPER = path.join(process.cwd(), 'lib', 'forms', 'dump_schema.py');
@@ -85,6 +90,16 @@ export async function fillOfficialForm(formKey, app) {
   // Hand-verified map when we have one; otherwise derive a best-effort map
   // from the form's own field paths (IRCC reuses field names across forms).
   let fieldMap = FIELD_MAPS[formKey];
+  let data = app.data || {};
+  if (formKey === 'imm5645') {
+    fieldMap = imm5645FieldMap(app.type);
+    data = imm5645Data(data);
+  } else if (formKey === 'imm5476') {
+    fieldMap = imm5476FieldMap();
+    data = imm5476Data(data, getFirm(), getAppType(app.type).title);
+  } else if (formKey === 'imm5257b') {
+    fieldMap = IMM5257B_FIELD_MAP;
+  }
   if (!fieldMap) {
     const schema = await dumpFormSchema(formKey);
     if (!schema?.ok || !Array.isArray(schema.paths)) throw new Error(`cannot read fields of ${formKey}`);
@@ -98,7 +113,7 @@ export async function fillOfficialForm(formKey, app) {
   await fs.writeFile(templatePath, templateBytes);
 
   try {
-    const instructions = buildInstructions(fieldMap, app.data || {});
+    const instructions = buildInstructions(fieldMap, data);
     if (!instructions.length) throw new Error('no fields to fill');
     const summary = await runFiller(templatePath, outPath, instructions);
     if (!summary.ok) throw new Error(summary.error || 'filler failed');

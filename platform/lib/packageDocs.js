@@ -9,22 +9,46 @@ import {
 import { detectOrientations, pickUpright } from './generators/orientation';
 import { orientationByText, tesseractAvailable } from './orientationOcr';
 
+// The firm files every translated document the same way: the certified
+// translation first, then the copy bearing the translator's stamp, then the
+// original. The document check says which page is which (verification.pageParts).
+const PART_RANK = { translation: 0, certifiedCopy: 1, original: 2, other: 3 };
+
+/**
+ * The page order for a document from its check: { [pageNumber]: rank }, or null
+ * when the check did not classify its pages or they are all of one kind.
+ */
+export function bundleOrder(verification) {
+  const parts = verification?.pageParts;
+  if (!parts || typeof parts !== 'object') return null;
+  const order = {};
+  const kinds = new Set();
+  for (const [page, part] of Object.entries(parts)) {
+    if (!(part in PART_RANK)) continue;
+    order[String(Number(page))] = PART_RANK[part];
+    kinds.add(part);
+  }
+  return kinds.size >= 2 ? order : null;
+}
+
 /**
  * Prepare one uploaded document for package compilation.
  *
  * Whatever comes in — a PDF of any page size / orientation / box layout, or a
  * JPEG / PNG / WEBP photo — comes out as a list of upright page pictures that
  * the compiler simply places fit-to-page. Blank scan pages and mirrored scan
- * artifacts are dropped; sideways/upside-down pages are rotated on the pixels.
+ * artifacts are dropped; sideways/upside-down pages are rotated on the pixels;
+ * with `order` (bundleOrder) the pages are filed translation → certified copy
+ * → original.
  *
  * @returns {Promise<{
  *   pages: Array<{ buffer: Buffer, width: number, height: number }>,
- *   dropped: number, mirrored: number, rotated: number, uncertain: number[]
+ *   dropped: number, mirrored: number, rotated: number, uncertain: number[], reordered: boolean
  * }>}
  */
-export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixRotation = true } = {}) {
+export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixRotation = true, order = null } = {}) {
   // uncertain: pages whose orientation could not be established (left as scanned)
-  const stats = { dropped: 0, mirrored: 0, rotated: 0, uncertain: [] };
+  const stats = { dropped: 0, mirrored: 0, rotated: 0, uncertain: [], reordered: false };
 
   // --- Photos -------------------------------------------------------------
   if (mime === 'image/jpeg' || mime === 'image/png' || mime === 'image/webp') {
@@ -60,6 +84,15 @@ export async function prepareDocument({ bytes, mime }, { cleanPages = true, fixR
       stats.dropped += rendered.length - nonBlank.length;
       kept = nonBlank;
     }
+  }
+
+  // The firm's order within a translation bundle (a stable sort: pages of the
+  // same part keep their scanned order; unclassified pages go last).
+  if (order && kept.length > 1) {
+    const rank = (p) => (p.page in order ? order[p.page] : 9);
+    const sorted = kept.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map((x) => x.p);
+    stats.reordered = sorted.some((p, i) => p !== kept[i]);
+    kept = sorted;
   }
 
   // Orientation: the render already honours each page's /Rotate flag, so this
