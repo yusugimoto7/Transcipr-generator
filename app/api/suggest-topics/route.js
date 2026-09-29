@@ -27,9 +27,8 @@ export async function POST(req) {
     ? facts.map((f) => `- ${f.fact} (${f.source_url}, ${f.date})`).join("\n")
     : "(no verified facts found — suggest based on general knowledge of this country's immigration landscape)";
 
-  const langNote = language === "english"
-    ? "Write all titles and summaries in English."
-    : "Write all titles and summaries in Persian (Farsi).";
+  // Suggestions are for the team, not end users — always English regardless of content language.
+  const langNote = "Write all titles and summaries in English.";
 
   const prompt = `${BRAND_CONTEXT}
 

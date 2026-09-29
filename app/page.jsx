@@ -582,18 +582,21 @@ export default function App() {
             <span>⟳</span>
             {loadingTopics ? "Loading…" : "Refresh"}
           </button>
-          <a
-            href="/content-wizard"
-            style={{
-              background: "transparent", color: C.orange, border: `1px solid ${C.orange}`,
-              borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
-              textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
-              display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-            }}
-          >
-            Wizard →
-          </a>
         </div>
+      </div>
+      {/* Content Wizard link — below header so it doesn't crowd the button row on mobile */}
+      <div style={{ width: "100%", maxWidth: 460, marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+        <a
+          href="/content-wizard"
+          style={{
+            background: "transparent", color: C.orange, border: `1px solid ${C.orange}`,
+            borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600,
+            textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
+            display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
+          }}
+        >
+          Content Wizard →
+        </a>
       </div>
 
       {/* Stat strip */}

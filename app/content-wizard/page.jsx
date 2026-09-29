@@ -60,19 +60,38 @@ const COUNTRIES = [
   { label: "فرانسه", value: "france", flag: "🇫🇷" },
 ];
 
-const FIELDS = [
-  { label: "تحصیل", value: "تحصیل" },
-  { label: "ورک پرمیت", value: "ورک پرمیت" },
-  { label: "Express Entry", value: "Express Entry" },
-  { label: "PNP", value: "PNP" },
-  { label: "Startup Visa", value: "Startup Visa" },
-  { label: "مهاجرت خانوادگی", value: "مهاجرت خانوادگی" },
-  { label: "اقامت دائم", value: "اقامت دائم" },
-  { label: "سیاست‌گذاری", value: "سیاست‌گذاری" },
-  { label: "مقایسه‌ای", value: "مقایسه‌ای" },
-  { label: "خبرهای مهاجرتی", value: "خبرهای مهاجرتی" },
-  { label: "عمومی", value: "عمومی" },
-];
+const FIELDS_BY_COUNTRY = {
+  canada: [
+    { label: "Express Entry", value: "Express Entry" },
+    { label: "PNP", value: "PNP" },
+    { label: "Startup Visa", value: "Startup Visa" },
+    { label: "ورک پرمیت", value: "ورک پرمیت" },
+    { label: "تحصیل", value: "تحصیل" },
+    { label: "مهاجرت خانوادگی", value: "مهاجرت خانوادگی" },
+    { label: "اقامت دائم", value: "اقامت دائم" },
+    { label: "سیاست‌گذاری", value: "سیاست‌گذاری" },
+    { label: "مقایسه‌ای", value: "مقایسه‌ای" },
+    { label: "خبرهای مهاجرتی", value: "خبرهای مهاجرتی" },
+    { label: "عمومی", value: "عمومی" },
+  ],
+  europe: [
+    { label: "تحصیل", value: "تحصیل" },
+    { label: "ورک پرمیت", value: "ورک پرمیت" },
+    { label: "Startup Visa", value: "Startup Visa" },
+    { label: "مهاجرت خانوادگی", value: "مهاجرت خانوادگی" },
+    { label: "سیاست‌گذاری", value: "سیاست‌گذاری" },
+    { label: "مقایسه‌ای", value: "مقایسه‌ای" },
+    { label: "خبرهای مهاجرتی", value: "خبرهای مهاجرتی" },
+    { label: "عمومی", value: "عمومی" },
+  ],
+};
+
+const EUROPE_COUNTRIES = ["finland", "germany", "netherlands", "spain", "france"];
+
+function fieldsForCountry(country) {
+  if (!country) return FIELDS_BY_COUNTRY.canada;
+  return EUROPE_COUNTRIES.includes(country) ? FIELDS_BY_COUNTRY.europe : FIELDS_BY_COUNTRY.canada;
+}
 
 const TONES = [
   { label: "آموزشی و رسمی", value: "آموزشی و رسمی" },
@@ -198,7 +217,11 @@ function Spinner() {
 // ── Step 1: Setup ──────────────────────────────────────────────────────────────
 
 function SetupStep({ settings, onChange, onNext, loading, error }) {
-  const ready = settings.country && settings.format;
+  const fields = fieldsForCountry(settings.country);
+  const isComparison = settings.field === "مقایسه‌ای";
+  // second country must differ from first and not be empty
+  const country2Options = COUNTRIES.filter((c) => c.value !== settings.country);
+  const ready = settings.country && settings.format && (!isComparison || settings.country2);
   return (
     <div>
       <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 24, direction: "rtl" }}>
@@ -208,8 +231,13 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         <PillSelect options={COUNTRIES} value={settings.country} onChange={(v) => onChange("country", v)} />
       </Section>
       <Section label="حوزه">
-        <PillSelect options={FIELDS} value={settings.field} onChange={(v) => onChange("field", v)} />
+        <PillSelect options={fields} value={settings.field} onChange={(v) => onChange("field", v)} />
       </Section>
+      {isComparison && (
+        <Section label="کشور دوم (مقایسه)">
+          <PillSelect options={country2Options} value={settings.country2} onChange={(v) => onChange("country2", v)} />
+        </Section>
+      )}
       <Section label="لحن">
         <PillSelect options={TONES} value={settings.tone} onChange={(v) => onChange("tone", v)} />
       </Section>
@@ -691,6 +719,7 @@ export default function ContentWizard() {
   const [step, setStep] = useState(1);
   const [settings, setSettings] = useState({
     country: "",
+    country2: "",
     field: "خبرهای مهاجرتی",
     tone: "آموزشی و رسمی",
     format: "carousel",
@@ -707,18 +736,32 @@ export default function ContentWizard() {
   const [saved, setSaved] = useState(false);
 
   function changeSetting(key, value) {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+    setSettings((prev) => {
+      const next = { ...prev, [key]: value };
+      // When country changes, reset field to first valid option for new country
+      if (key === "country") {
+        const validFields = fieldsForCountry(value);
+        const stillValid = validFields.some((f) => f.value === prev.field);
+        if (!stillValid) next.field = validFields[0]?.value || "";
+        next.country2 = "";
+      }
+      return next;
+    });
   }
 
   async function handleSetupNext() {
     setSuggestLoading(true);
     setSuggestError("");
     try {
+      const countryParam =
+        settings.field === "مقایسه‌ای" && settings.country2
+          ? `${settings.country},${settings.country2}`
+          : settings.country;
       const res = await fetch("/api/suggest-topics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          country: settings.country,
+          country: countryParam,
           field: settings.field,
           language: settings.language,
         }),
@@ -766,9 +809,13 @@ export default function ContentWizard() {
   }
 
   function handlePickTopic(topic) {
+    const countryParam =
+      settings.field === "مقایسه‌ای" && settings.country2
+        ? `${settings.country},${settings.country2}`
+        : settings.country;
     const merged = {
       ...topic,
-      country: settings.country,
+      country: countryParam,
       field: settings.field,
       tone: settings.tone,
       language: settings.language,
