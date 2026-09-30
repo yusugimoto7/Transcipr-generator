@@ -2536,35 +2536,29 @@ def install_sheet_fields(odoo):
         _field(odoo, "sale.order", name, {"field_description": label, "ttype": ttype})
 
 
-def _payment_html():
-    """The block under the contract e-mail. No payment details here: the payment
-    method only ever comes with the invoice, from the two finance mailboxes."""
-    sg = '<span dir="ltr"><b>finance@sugimotovisa.com</b></span>'
-    sb = '<span dir="ltr"><b>finance@sparkbridge.ca</b></span>'
+def _payment_html(company_en, company_fa, finance_email):
+    """The block under the contract e-mail, for one company. No payment details
+    here: the payment method only ever comes with the invoice, from that
+    company's finance mailbox."""
+    em = '<span dir="ltr"><b>%s</b></span>' % finance_email
     return (
         '<div style="margin:16px 0; padding:12px 16px; background:#f4f6f8; border-radius:4px; line-height:1.8;">'
         '<div dir="rtl" style="text-align:right;">'
         '<p><b>پرداخت</b></p>'
-        '<p>روش پرداخت همراه با صورت‌حساب (Invoice) برای شما ایمیل می‌شود:</p><ul>'
-        '<li>قراردادهای سوگیموتو ویزا: از ایمیل %(sg)s</li>'
-        '<li>قراردادهای اسپارک‌بریج: از ایمیل %(sb)s</li>'
-        '</ul>'
-        '<p><b>به هیچ عنوان مبلغ را از روشی غیر از روش اعلام‌شده در ایمیل این دو آدرس واریز نکنید.</b></p>'
+        '<p>روش پرداخت همراه با صورت‌حساب (Invoice) از ایمیل %(em)s (%(co_fa)s) برای شما ارسال می‌شود.</p>'
+        '<p><b>به هیچ عنوان مبلغ را از روشی غیر از روش اعلام‌شده در ایمیل این آدرس واریز نکنید.</b></p>'
         '</div>'
         '<div dir="ltr" style="text-align:left; color:#444;">'
         '<p><b>Payment</b></p>'
-        '<p>The payment method is e-mailed to you together with the invoice:</p><ul>'
-        '<li>Sugimoto Visa contracts: from %(sg)s</li>'
-        '<li>Sparkbridge contracts: from %(sb)s</li>'
-        '</ul>'
-        '<p><b>Never pay through any method other than the one sent from these two addresses.</b></p>'
+        '<p>The payment method is e-mailed to you together with the invoice, from %(em)s (%(co_en)s).</p>'
+        '<p><b>Never pay through any method other than the one sent from this address.</b></p>'
         '</div></div>'
-    ) % {'sg': sg, 'sb': sb}
+    ) % {'em': em, 'co_en': company_en, 'co_fa': company_fa}
 
 
 PAYMENT_DEFAULTS = {
-    "phase2.sg_payment_html": _payment_html(),
-    "phase2.sb_payment_html": _payment_html(),
+    "phase2.sg_payment_html": _payment_html("Sugimoto Visa", "سوگیموتو ویزا", "finance@sugimotovisa.com"),
+    "phase2.sb_payment_html": _payment_html("Sparkbridge", "اسپارک‌بریج", "finance@sparkbridge.ca"),
 }
 
 
