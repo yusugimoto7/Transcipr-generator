@@ -15,7 +15,7 @@ export function fieldGuide(type) {
   return getSchema(type)
     .steps.map((step) => {
       const fields = step.fields
-        .filter((f) => f.type !== 'bool') // booleans are confirmed by the user
+        .filter((f) => f.type !== 'bool' && !f.derived) // booleans are confirmed by the user; derived answers are built
         .map((f) => {
           let desc = `- ${f.id} (${f.type}): ${f.label}`;
           if (f.options) desc += ` [one of: ${f.options.join(' | ')}]`;

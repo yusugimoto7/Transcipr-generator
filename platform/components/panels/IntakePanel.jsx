@@ -30,7 +30,7 @@ function Field({ field, value, onChange, missing = false }) {
     );
   } else if (field.type === 'bool') {
     control = (
-      <div className="seg" role="radiogroup" aria-labelledby={`${field.id}-l`}>
+      <div className="seg" role="radiogroup" id={field.id} tabIndex={-1} aria-labelledby={`${field.id}-l`}>
         {[['no', 'No', false], ['yes', 'Yes', true]].map(([k, l, v]) => (
           <button key={k} type="button" role="radio" aria-checked={value === v} aria-pressed={value === v} onClick={() => onChange(field.id, value === v ? '' : v)}>
             {l}
@@ -90,7 +90,17 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
   const missingCount = missingAll.reduce((n, x) => n + x.fields.length, 0);
   const focusField = (id) => setTimeout(() => {
     const el = typeof document !== 'undefined' && document.getElementById(id);
-    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.focus({ preventScroll: true }); }
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // A Yes/No question is a group of buttons: focus its first one.
+    const target = el.matches('input, select, textarea, button') ? el : el.querySelector('button, input, select, textarea') || el;
+    target.focus({ preventScroll: true });
+    const box = el.closest('.field');
+    if (box) {
+      box.classList.remove('flash');
+      void box.offsetWidth;
+      box.classList.add('flash');
+    }
   }, 150);
   const goToField = (i, id) => {
     if (i !== stepIdx) {

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { completeJson } from './ai';
-import { allFields } from './schema';
+import { allFields, deriveData } from './schema';
 import { getAppType } from './appTypes';
 import { getApplication, updateApplication } from './store';
 import { fieldGuide } from './generators/extract';
@@ -120,7 +120,10 @@ ${text.slice(0, 20000)}`;
         conflicts.push({ field: k, label: fields.get(k)?.label || k, entered: cur, email: v });
       }
     }
-    if (filled.length) a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+    if (filled.length) {
+      deriveData(a.data);
+      a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+    }
     e.analysis = {
       summary: String(out.summary || '').slice(0, 400),
       facts,

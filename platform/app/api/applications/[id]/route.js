@@ -1,5 +1,5 @@
 import { updateApplication, deleteApplication, effectiveRole } from '@/lib/store';
-import { everyField } from '@/lib/schema';
+import { everyField, deriveData } from '@/lib/schema';
 import { APP_TYPES, STAGE_LABELS } from '@/lib/appTypes';
 import { json, error, requireAppAccess } from '@/lib/api';
 import { ROLES, normNumber, isDefaultTitle, intakeName } from '@/lib/cases';
@@ -61,6 +61,7 @@ export async function PATCH(req, { params }) {
         }
         // Study permits: the intended date of entry follows the program start date unless set.
         if (body.data.programStart && !a.data.entryDate && validIds.has('entryDate')) a.data.entryDate = body.data.programStart;
+        deriveData(a.data);
         a.dataVersion = (Number(a.dataVersion) || 0) + 1;
         // A file created without a name takes the name from the intake (as in the passport).
         if (isDefaultTitle(a.title) && intakeName(a)) a.title = intakeName(a);

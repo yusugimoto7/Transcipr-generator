@@ -5,7 +5,7 @@ import { codeCategory, firmCode } from './generators/classify';
 import { rasterizePdf } from './raster';
 import { buildChecklist } from './checklist';
 import { getAppType } from './appTypes';
-import { allFields, APPLICANT_ONLY_STEPS, SAME_PERSON_FIELDS } from './schema';
+import { allFields, APPLICANT_ONLY_STEPS, SAME_PERSON_FIELDS, deriveData } from './schema';
 import { verifyDocument, crossCheck, needsCheck, verificationSummary } from './verify';
 
 /**
@@ -356,7 +356,10 @@ async function run(appId, app, batches, job) {
         filled.push(k);
       }
     }
-    if (filled.length) a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+    if (filled.length) {
+      deriveData(a.data);
+      a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+    }
     a.lastReading = { at: now, fields: merged.fields, sources: merged.sources, confidence: merged.confidence, filled, notes: merged.notes.slice(0, 20) };
     for (const d of a.documents || []) {
       if (readIds.has(d.id)) d.extractedAt = now;

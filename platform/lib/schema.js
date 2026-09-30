@@ -451,9 +451,10 @@ const EXTRA_STEPS = [
     title: 'Family members',
     help: 'Needed for IMM 5645 (Family Information) and for spouse-based applications.',
     fields: [
-      { id: 'spouseName', label: 'Spouse / partner full name (English)', type: 'text', required: true, showIf: MARRIED },
+      { id: 'spouseGivenName', label: 'Spouse given name(s) (as on their passport)', type: 'text', required: true, showIf: MARRIED, note: "Read from the spouse's passport when it is in the file; the full name is built from these two." },
       { id: 'spouseFamilyName', label: 'Spouse family name (as on their passport)', type: 'text', required: true, showIf: MARRIED },
-      { id: 'spouseGivenName', label: 'Spouse given name(s) (as on their passport)', type: 'text', required: true, showIf: MARRIED },
+      // Built from the given and family names (deriveData) — never typed.
+      { id: 'spouseName', label: 'Spouse / partner full name', type: 'text', derived: true },
       { id: 'spouseNameNative', label: 'Spouse full name in the native language', type: 'text', showIf: MARRIED },
       { id: 'marriageDate', label: 'Date of marriage / start of common-law', type: 'date', required: true, showIf: MARRIED },
       { id: 'spouseDob', label: 'Spouse date of birth', type: 'date', required: true, showIf: MARRIED },
@@ -646,7 +647,8 @@ const EXTRA_STEPS = [
     title: 'Your spouse — the student or worker',
     help: 'The principal applicant you are accompanying or joining. Their status is what makes you eligible — be exact.',
     fields: [
-      { id: 'inviterName', label: 'Spouse full name', type: 'text', required: true },
+      // The same person as the spouse in Family members: built from their names.
+      { id: 'inviterName', label: 'Spouse full name', type: 'text', derived: true },
       { id: 'inviterStatus', label: 'Spouse status in Canada', type: 'select', options: ['Study permit holder', 'Work permit holder (skilled job)', 'Work permit holder (other)', 'PGWP holder', 'Permanent resident', 'Citizen'], required: true },
       { id: 'inviterPermitExpiry', label: "Spouse's permit expiry date", type: 'date' },
       { id: 'inviterInstitution', label: "Spouse's school (DLI) or employer", type: 'text', required: true },
@@ -896,6 +898,7 @@ export function getSchema(type = 'study-permit') {
  * { field, equals } | { field, in: [...] } | { any: [conditions] }.
  */
 export function fieldShown(f, data = {}) {
+  if (f.derived) return false;
   const test = (c) => {
     if (!c) return true;
     if (c.any) return c.any.some(test);
@@ -904,6 +907,20 @@ export function fieldShown(f, data = {}) {
     return v === c.equals;
   };
   return test(f.showIf);
+}
+
+/**
+ * Answers built from other answers, applied whenever the intake changes (a
+ * save, the AI reading documents, an email): the spouse's full name is their
+ * given name(s) + family name as on their passport.
+ */
+export function deriveData(data = {}) {
+  const given = String(data.spouseGivenName ?? '').trim();
+  const family = String(data.spouseFamilyName ?? '').trim();
+  if (given && family) data.spouseName = `${given} ${family}`;
+  else if ((given || family) && !String(data.spouseName ?? '').trim()) data.spouseName = given || family;
+  if (String(data.spouseName ?? '').trim()) data.inviterName = data.spouseName;
+  return data;
 }
 
 /** Required and asked (a hidden follow-up question is never missing). */
@@ -918,7 +935,7 @@ export const STEP_ABOUT = {
   family:
     "the applicant's family members — spouse/partner, parents, children, brothers and sisters (from the applicant's birth certificate, marriage certificate and family register, and those people's own IDs)",
   spouseInCanada:
-    "the applicant's spouse/partner who is (or is going) in Canada as a student or worker — the SAME person as spouseName in Family members. Their work or study permit, employment letter, pay slips, enrolment letter and address in Canada fill these fields",
+    "the applicant's spouse/partner who is (or is going) in Canada as a student or worker — the SAME person as the spouse (spouseGivenName / spouseFamilyName) in Family members. Their work or study permit, employment letter, pay slips, enrolment letter and address in Canada fill these fields",
   host: 'the host in Canada who invites the applicant',
   superVisa: "the applicant's child or grandchild in Canada who hosts them, and the applicant's Canadian medical insurance",
   minor: "the child applicant's parent in Canada, the other parent and the custodian, and the child's school arrangements",

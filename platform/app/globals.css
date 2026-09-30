@@ -748,6 +748,10 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 /* Intake: required answers still missing */
 .field.missing input, .field.missing select, .field.missing textarea { border-color: #e0a14a; background: #fffaf2; box-shadow: 0 0 0 3px rgba(224, 161, 74, .15); }
 .field.missing .seg { outline: 2px solid rgba(224, 161, 74, .6); outline-offset: 2px; border-radius: 8px; }
+/* The question a "missing answer" chip jumps to, briefly highlighted */
+.field.flash { animation: field-flash 1.6s ease-out; border-radius: 10px; }
+@keyframes field-flash { 0%, 30% { background: rgba(224, 161, 74, .22); box-shadow: 0 0 0 6px rgba(224, 161, 74, .22); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+@media (prefers-reduced-motion: reduce) { .field.flash { animation: none; } }
 .miss-note { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 12px; font-weight: 600; color: #a35a00; }
 .missing-here { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #fff6e8; border: 1px solid #f1d3a3; }
 .missing-here > span { display: inline-flex; gap: 4px; align-items: center; color: #8a4b00; font-weight: 600; }

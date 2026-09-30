@@ -18,7 +18,7 @@ const { irccData, irccFieldMap, normalizeUci, ym, rows } = await loadLib('forms/
 const { imm5645FieldMap, people } = await loadLib('forms/fieldmaps/imm5645.js');
 const { imm5257bFieldMap } = await loadLib('forms/fieldmaps/imm5257b.js');
 const { buildInstructions } = await loadLib('generators/xfaFill.js');
-const { getSchema, fieldShown, isRequired, requiredMissing } = await loadLib('schema.js');
+const { getSchema, fieldShown, isRequired, requiredMissing, deriveData } = await loadLib('schema.js');
 
 // --- small helpers ---
 ok(normalizeUci('11-2233-4455') === '1122334455', 'UCI with dashes becomes 10 digits');
@@ -114,6 +114,12 @@ ok(!fieldShown(spouseField, { maritalStatus: 'Never Married / Single' }) && isRe
 const steps = getSchema('owp-worker-spouse').steps.map((s) => s.id);
 ok(['language', 'background', 'workDetails'].every((s) => steps.includes(s)), 'a work permit (IMM 1295) intake asks languages, background and intended work');
 ok(!requiredMissing({ bgTbContact: false }, 'owp-worker-spouse').some((f) => f.id === 'bgTbContact'), 'a No answer counts as answered');
+const derived = deriveData({ spouseGivenName: 'Arash', spouseFamilyName: 'Karimi', spouseName: 'Arash' });
+ok(derived.spouseName === 'Arash Karimi' && derived.inviterName === 'Arash Karimi', "the spouse's full name is built from given + family name");
+ok(deriveData({ spouseName: 'Old Name' }).spouseName === 'Old Name', 'an older full name stays until the two names are entered');
+const allOwp = getSchema('owp-worker-spouse').steps.flatMap((s) => s.fields);
+ok(['spouseName', 'inviterName'].every((id) => !fieldShown(allOwp.find((f) => f.id === id), { maritalStatus: 'Married' })), 'the spouse full name is not asked — it is built');
+ok(!requiredMissing({ maritalStatus: 'Married' }, 'owp-worker-spouse').some((f) => ['spouseName', 'inviterName'].includes(f.id)), 'the built full name is never "missing"');
 
 // --- the Python side: resolver + filler conversions (needs lxml) ---
 const PY = process.env.PYTHON_BIN || 'python3';
