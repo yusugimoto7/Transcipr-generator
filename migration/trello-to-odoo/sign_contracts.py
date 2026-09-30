@@ -1207,20 +1207,19 @@ PREVIEW_TAIL = r"""
             old.unlink()
         made.append(_att.create({'name': name, 'datas': b64encode(pdf), 'mimetype': 'application/pdf',
                                  'res_model': 'sale.order', 'res_id': order.id}))
-    if len(made) == 1:
-        action = {'type': 'ir.actions.act_url', 'target': 'new',
-                  # No download parameter: Odoo treats *any* value of `download` as true
-                  # (the string 'false' is truthy), which sets Content-Disposition:
-                  # attachment and makes the browser download instead of display.
-                  'url': '/web/content/%s' % made[0].id}
-    else:
+    # Download managers (IDM) grab any response that is a PDF, so the preview
+    # opens in Odoo's own PDF viewer, fed a copy stored as plain bytes (not
+    # "application/pdf"): the viewer renders it, IDM leaves it alone. The real
+    # PDF stays attached for downloading and for the chatter.
+    view_name = 'PREVIEW-VIEW %s' % made[0].name[:-4]
+    _att.search([('res_model', '=', 'sale.order'), ('res_id', '=', order.id), ('name', '=like', 'PREVIEW-VIEW %')]).unlink()
+    view = _att.create({'name': view_name, 'raw': made[0].raw, 'mimetype': 'text/plain',
+                        'res_model': 'sale.order', 'res_id': order.id})
+    if len(made) > 1:
         order.message_post(body='Draft agreements attached for review: %s' % ', '.join(m.name for m in made),
                            attachment_ids=[m.id for m in made], message_type='comment', subtype_xmlid='mail.mt_note')
-        action = {'type': 'ir.actions.act_url', 'target': 'new',
-                  # No download parameter: Odoo treats *any* value of `download` as true
-                  # (the string 'false' is truthy), which sets Content-Disposition:
-                  # attachment and makes the browser download instead of display.
-                  'url': '/web/content/%s' % made[0].id}
+    action = {'type': 'ir.actions.act_url', 'target': 'new',
+              'url': '/web/static/lib/pdfjs/web/viewer.html?file=%%2Fweb%%2Fcontent%%2F%s#page=1&zoom=page-width' % view.id}
 """.rstrip()
 
 
