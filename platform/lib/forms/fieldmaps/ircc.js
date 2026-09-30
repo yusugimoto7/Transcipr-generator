@@ -131,6 +131,17 @@ export function irccData(d = {}, app = {}) {
     _militaryText: rows(d.militaryDetails).map((r) => r.filter(has).join(', ')).join('; '),
     _workPermitType: d.workPermitType || (/^owp|sowp/.test(type) ? 'Open Work Permit' : type === 'imp-c11' ? 'Exemption from Labour Market Impact Assessment' : ''),
     _intendedProv: provinceAbbr(d.intendedProvince),
+    _workPermitTypeInside:
+      d.workPermitTypeInside ||
+      (type === 'pgwp' ? 'Post Graduation Work Permit' : /iranian-owp|sowp/.test(type) ? 'Open Work Permit' : ''),
+    _applyExtend: /^Extend/.test(d.wpApplyingFor || '') ? '1' : d.wpApplyingFor ? '0' : '',
+    _applyNew: /^Get a permit/.test(d.wpApplyingFor || '') ? '1' : d.wpApplyingFor ? '0' : '',
+    _applyRestore: /^Restore/.test(d.wpApplyingFor || '') ? '1' : d.wpApplyingFor ? '0' : '',
+    _studyApplyExtend: d.studyInsideReason ? (/^Restore/.test(d.studyInsideReason) ? '0' : '1') : '',
+    _studyRestore: d.studyInsideReason ? (/^Restore/.test(d.studyInsideReason) ? '1' : '0') : '',
+    _firstEntryDate: d.firstEntryDate || d.lastEntryDate,
+    _firstEntryPlace: d.firstEntryPlace || d.lastEntryPlace,
+    _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
   };
   for (let i = 0; i < 2; i++) {
@@ -328,12 +339,13 @@ export const COMMON_RULES = [
 ];
 
 const LEVEL_OF_STUDY = {
-  'Secondary / high school': 'Secondary',
+  'Secondary / high school': 'Secondary School',
   'College diploma / certificate': 'College - Diploma',
-  'Bachelor’s degree': "University - Bachelor's Degree",
-  'Post-graduate diploma': 'College - Post Graduate Diploma',
-  'Master’s degree': "University - Master's Degree",
+  'Bachelor’s degree': "University - Bachelor's Deg.",
+  'Post-graduate diploma': 'College - Diploma',
+  'Master’s degree': "University - Master's Deg.",
   'Doctorate (PhD)': 'University - Doctorate',
+  Other: 'Other Studies',
 };
 const EXPENSES_PAID_BY = { Self: 'Myself', 'Parents / family': 'Parents', Scholarship: 'Other', Sponsor: 'Other', Loan: 'Myself', Combination: 'Other' };
 const VISIT_PURPOSE = {
@@ -388,19 +400,57 @@ export const EXTRA_RULES = {
   ],
   // Inside Canada: how and when the applicant came in.
   inside: [
-    [/ComingIntoCda\/OrigEntry\/DateLastEntry$/, { from: 'lastEntryDate', need: 'Date of first entry to Canada' }],
-    [/ComingIntoCda\/OrigEntry\/Place$/, { from: 'lastEntryPlace', need: 'Place of entry to Canada' }],
+    [/ComingIntoCda\/OrigEntry\/DateLastEntry$/, { from: '_firstEntryDate', need: 'Date of first entry to Canada' }],
+    [/ComingIntoCda\/OrigEntry\/Place$/, { from: '_firstEntryPlace', need: 'Place of first entry to Canada' }],
+    [/ComingIntoCda\/PurposeOfVisit\/PurposeOfVisit$/, { from: '_firstEntryPurpose', need: 'Original purpose of coming to Canada' }],
+    [/ComingIntoCda\/RecentEntry\/DateLastEntry$/, { from: 'lastEntryDate', when: (d) => d.firstEntryDate && d.lastEntryDate !== d.firstEntryDate }],
+    [/ComingIntoCda\/RecentEntry\/Place$/, { from: 'lastEntryPlace', when: (d) => d.firstEntryDate && d.lastEntryDate !== d.firstEntryDate }],
     [/ComingIntoCda\/PrevDocNum\/docNum$/, { from: 'permitNumber' }],
   ],
   imm5708: [
     [/ApplyingFor\/Extend$/, { const: '1' }],
+    [/DetailsOfVisit\/Purpose\/Purpose$/, { const: 'Visit' }],
+    [/DetailsOfVisit\/Purpose\/Other$/, { from: 'extendReason' }],
+    [/DetailsOfVisit\/Purpose\/Stay\/FromDate$/, { from: 'permitExpiry' }],
     [/DetailsOfVisit\/Purpose\/Stay\/ToDate$/, { from: 'extendUntil', need: 'Stay until (date)' }],
     [/DetailsOfVisit\/Funds\/FundsAvail$/, { from: 'extendFunds', need: 'Funds for the extended stay' }],
+    [/DetailsOfVisit\/WillVisit\/VisitList\/Rec1\/Name$/, { from: 'hostName' }],
+    [/DetailsOfVisit\/WillVisit\/VisitList\/Rec1\/Relationship$/, { from: 'hostRelationship' }],
+    [/DetailsOfVisit\/WillVisit\/VisitList\/Rec1\/Addr$/, { from: 'hostAddress' }],
+  ],
+  imm5709: [
+    [/ApplyingFor\/Extend$/, { from: '_studyApplyExtend', need: 'Reason for this application (extend / restore)' }],
+    [/ApplyingFor\/RestoreStat$/, { from: '_studyRestore' }],
+    [/SchoolDetails\/SchoolName$/, { from: 'schoolName', need: 'School name' }],
+    [/SchoolDetails\/StudyMajor\/Level$/, { from: 'levelOfStudy', valueMap: LEVEL_OF_STUDY, need: 'Level of study' }],
+    [/SchoolDetails\/Prov$/, { from: '_schoolProv', need: 'School province' }],
+    [/SchoolDetails\/CityTown$/, { from: 'schoolCity', lov: (d) => d._schoolProv && `CityList.${d._schoolProv}`, need: 'School city' }],
+    [/SchoolDetails\/DLI$/, { from: 'dliNumber', need: 'DLI number' }],
+    [/SchoolDetails\/StudyTerm\/FromDate$/, { from: 'programStart' }],
+    [/SchoolDetails\/StudyTerm\/ToDate$/, { from: 'programEnd', need: 'Program end date' }],
+    [/SchoolDetails\/EduCosts\/Tuition$/, { from: 'tuitionCost', need: 'Tuition cost' }],
+    [/SchoolDetails\/Funds\/FundsAvail$/, { from: 'totalFunds', need: 'Funds available' }],
+    [/SchoolDetails\/Funds\/ExpPaidBy$/, { from: 'fundingSource', valueMap: EXPENSES_PAID_BY }],
+    [/PAL\/PALDocNum$/, { from: 'palNumber' }],
+  ],
+  imm5710: [
+    [/ApplyingFor\/Extend$/, { from: '_applyExtend', need: 'Applying to extend / new employer / restore' }],
+    [/ApplyingFor\/NewEmployer$/, { from: '_applyNew' }],
+    [/ApplyingFor\/RestoreStat$/, { from: '_applyRestore' }],
+    [/DetailsOfWork\/Purpose\/Type$/, { from: '_workPermitTypeInside', need: 'Type of work permit' }],
+    [/DetailsOfWork\/Employer\/Name$/, { from: 'intendedEmployer' }],
+    [/DetailsOfWork\/Employer\/Addr$/, { from: 'intendedEmployerAddress' }],
+    [/DetailsOfWork\/Location\/Prov$/, { from: '_intendedProv', need: 'Province of work' }],
+    [/DetailsOfWork\/Location\/City$/, { from: 'intendedCity', lov: (d) => d._intendedProv && `CityList.${d._intendedProv}`, need: 'City of work' }],
+    [/DetailsOfWork\/Location\/Addr$/, { from: 'intendedAddress' }],
+    [/DetailsOfWork\/Occupation\/Job$/, { from: 'intendedJobTitle' }],
+    [/DetailsOfWork\/Occupation\/Desc$/, { from: 'intendedDuties' }],
+    [/DetailsOfWork\/Duration\/FromDate$/, { from: 'intendedFrom', need: 'Work permit from (date)' }],
+    [/DetailsOfWork\/Duration\/ToDate$/, { from: 'intendedTo', need: 'Work permit until (date)' }],
+    [/DetailsOfWork\/Duration\/LMO$/, { from: 'lmiaNumber' }],
   ],
 };
-EXTRA_RULES.imm5708.push(...EXTRA_RULES.inside);
-EXTRA_RULES.imm5709 = [...EXTRA_RULES.inside];
-EXTRA_RULES.imm5710 = [...EXTRA_RULES.inside];
+for (const k of ['imm5708', 'imm5709', 'imm5710']) EXTRA_RULES[k].push(...EXTRA_RULES.inside);
 
 /**
  * The field map of one form: every rule whose path ending matches exactly one

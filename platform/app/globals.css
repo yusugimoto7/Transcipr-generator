@@ -562,6 +562,11 @@ table.cmp tr.row-differ { background: #fff8ec; }
 .contents ol.sub { list-style: none; padding-left: 12px; margin-top: 3px; }
 .contents li { display: grid; gap: 2px; }
 .contents-name { font-weight: 600; color: var(--ink); }
+/* The IRCC portal slot a final file goes to */
+.portal-slot { margin-top: 3px; font-size: 12px; color: var(--ink-soft); }
+.portal-slot strong { color: var(--ink); font-weight: 600; }
+.portal-slot.warn { color: var(--warn); display: flex; gap: 5px; align-items: flex-start; }
+.portal-slot.warn svg { flex: none; margin-top: 2px; }
 /* What a pre-filled IRCC form still needs */
 .form-checks { margin-top: 4px; font-size: 12.5px; }
 .form-checks > summary { cursor: pointer; color: var(--warn); font-weight: 600; list-style: none; display: inline-flex; gap: 5px; align-items: center; }

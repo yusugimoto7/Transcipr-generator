@@ -50,6 +50,9 @@ function Contents({ contents, kind }) {
  * The numbered files that go to the IRCC portal, one per upload slot, named as
  * the team names them ("05 - Client Information - Zahra.pdf"), built in one go.
  */
+/** The IRCC portal's upload limit per file (lib/finalFiles.js PORTAL_MAX_BYTES). */
+const MAX_BYTES = 4 * 1024 * 1024;
+
 /** The boxes a pre-filled IRCC form still needs, from its last pre-fill. */
 function FormChecks({ checks }) {
   if (!checks.length) return null;
@@ -274,10 +277,20 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                   {e.kind === 'form' ? <span className="mono">{e.name}</span> : KIND[e.kind]}
                   {e.note ? <span> · {e.note}</span> : null}
                 </div>
+                {e.n && e.portal && (
+                  e.portal.name ? (
+                    <div className="portal-slot">Portal slot: <strong>{e.portal.name}</strong></div>
+                  ) : (
+                    <div className="portal-slot warn"><AlertTriangle size={12} aria-hidden="true" /> {e.portal.hint}</div>
+                  )
+                )}
                 {e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />}
                 {e.kind === 'form' && <FormChecks checks={formChecks(e)} />}
               </div>
               <div className="act">
+                {current && b.size > MAX_BYTES && (
+                  <span className="chip warn" title="IRCC's portal takes files up to 4 MB. Rebuild with blank pages removed, or split / compress this file.">Over 4 MB</span>
+                )}
                 {current ? (
                   <a href={`/api/applications/${app.id}/download/${b.key}`} className="btn btn-secondary btn-sm" title={b.filename}>
                     <Download size={14} aria-hidden="true" /> {size(b.size)}{b.pages ? ` · ${b.pages} p.` : ''}
@@ -330,6 +343,8 @@ function summary(r) {
   if (r.problems?.length) list.push(...r.problems.map((p) => `Not built — ${p.filename}: ${p.reason}`));
   if (r.uncertainPages?.length) list.push(`Check the orientation of: ${r.uncertainPages.join('; ')} (not enough text to be sure — left as scanned)`);
   if (r.skippedFiles?.length) list.push(`Left out (convert to PDF/JPG and re-upload): ${r.skippedFiles.join(', ')}`);
+  const big = (r.files || []).filter((f) => f.size > MAX_BYTES);
+  if (big.length) list.push(`Over the portal's 4 MB limit: ${big.map((f) => `${f.filename} (${(f.size / 1048576).toFixed(1)} MB)`).join(', ')} — compress or split before uploading`);
   const fixes =
     (r.rotatedPages ? ` Turned ${r.rotatedPages} page(s) upright.` : '') +
     (r.droppedPages ? ` Removed ${r.droppedPages} blank page(s).` : '') +

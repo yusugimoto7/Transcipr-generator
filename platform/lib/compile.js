@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { spawn } from 'child_process';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { winAnsiSafe } from './pdf';
 
 const TOC_LINKER = path.join(process.cwd(), 'lib', 'forms', 'toc_links.py');
 const pickPython = () => process.env.PYTHON_BIN || 'python3';
@@ -25,7 +26,7 @@ const INK = rgb(0.1, 0.12, 0.16);
 const MUTED = rgb(0.42, 0.45, 0.52);
 
 function wrapText(page, font, text, x, y, size, maxWidth, color) {
-  const words = String(text).replace(/\s+/g, ' ').trim().split(' ');
+  const words = winAnsiSafe(text).replace(/\s+/g, ' ').trim().split(' ');
   let line = '';
   let cy = y;
   for (const w of words) {
@@ -110,6 +111,8 @@ function footer(page, font, n, total) {
 }
 
 async function drawBlock(doc, fonts, block) {
+  // Section and file names are drawn with the standard fonts: no other script.
+  if (block.name) block = { ...block, name: winAnsiSafe(block.name) };
   if (block.type === 'divider') {
     const dp = doc.addPage([PAGE_W, PAGE_H]);
     if (block.number == null) {
@@ -238,6 +241,8 @@ export async function compilePackage(title, applicantName, sections, { outPath =
     const tFont = await toc.embedFont(StandardFonts.Helvetica);
     const tocPages = [];
     for (let i = 0; i < tocPageCount; i++) tocPages.push(toc.addPage([PAGE_W, PAGE_H]));
+    title = winAnsiSafe(title);
+    applicantName = applicantName && winAnsiSafe(applicantName);
     const w1 = tBold.widthOfTextAtSize(title, 16);
     tocPages[0].drawText(title, { x: (PAGE_W - w1) / 2, y: PAGE_H - MARGIN - 4, size: 16, font: tBold, color: INK });
     if (applicantName) {
@@ -256,6 +261,7 @@ export async function compilePackage(title, applicantName, sections, { outPath =
       const x = MARGIN + (m.level ? 26 : 0);
       const numStr = String(tocPageCount + m.page + 1); // 1-based page in the final doc
       const numW = tFont.widthOfTextAtSize(numStr, 11);
+      m.label = winAnsiSafe(m.label);
       page.drawText(m.label, { x, y, size: 11, font: tFont, color: INK });
       page.drawText(numStr, { x: PAGE_W - MARGIN - numW, y, size: 11, font: tFont, color: INK });
       const dotsStart = x + tFont.widthOfTextAtSize(m.label, 11) + 6;

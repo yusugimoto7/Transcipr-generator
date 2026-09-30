@@ -109,7 +109,7 @@ export const STUDY_PERMIT_SCHEMA = {
         { id: 'passportCountry', label: 'Passport country of issue', type: 'country', required: true },
         { id: 'passportIssue', label: 'Passport issue date', type: 'date', required: true },
         { id: 'passportExpiry', label: 'Passport expiry date', type: 'date', required: true },
-        { id: 'nationalIdNumber', label: 'National ID number (e.g. Iranian کارت ملی)', type: 'text', required: true, note: 'From the national ID card. Digits only.' },
+        { id: 'nationalIdNumber', label: 'National ID number (Iranian kart-e melli)', type: 'text', required: true, note: 'From the national ID card. Digits only.' },
         { id: 'nationalIdIssue', label: 'National ID issue date', type: 'date' },
         { id: 'nationalIdExpiry', label: 'National ID expiry date', type: 'date' },
         { id: 'usPermanentResident', label: 'Lawful permanent resident of the United States (green card)?', type: 'bool', required: true },
@@ -563,6 +563,37 @@ const EXTRA_STEPS = [
     ],
   },
   {
+    id: 'workDetailsInside',
+    title: 'The work permit you are applying for',
+    help: 'IMM 5710 "What are you applying for" and "Details of intended work in Canada".',
+    fields: [
+      {
+        id: 'wpApplyingFor',
+        label: 'Applying to',
+        type: 'select',
+        options: ['Extend my permit with the same employer', 'Get a permit for the first time or with a new employer', 'Restore my status as a worker'],
+        required: true,
+      },
+      {
+        id: 'workPermitTypeInside',
+        label: 'Type of work permit',
+        type: 'select',
+        options: ['Post Graduation Work Permit', 'Open Work Permit', 'Exemption from Labour Market Impact Assessment', 'Labour Market Impact Assessment Stream', 'Co-op Work Permit', 'Open Work Permit for Vulnerable Workers', 'Start-up Business Class', 'Other'],
+        required: true,
+      },
+      { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text' },
+      { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text' },
+      { id: 'intendedProvince', label: 'Province you will work in', type: 'select', options: PROVINCES, required: true },
+      { id: 'intendedCity', label: 'City / town', type: 'text', required: true },
+      { id: 'intendedAddress', label: 'Work address', type: 'text' },
+      { id: 'intendedJobTitle', label: 'Job title (if known)', type: 'text' },
+      { id: 'intendedDuties', label: 'Brief description of duties', type: 'text' },
+      { id: 'intendedFrom', label: 'Work permit wanted from', type: 'date', required: true },
+      { id: 'intendedTo', label: 'Work permit wanted until', type: 'date', required: true },
+      { id: 'lmiaNumber', label: 'LMIA number or offer of employment number (A1234567)', type: 'text' },
+    ],
+  },
+  {
     id: 'workDetails',
     title: 'Intended work in Canada',
     help: 'IMM 1295 "Details of intended work". For an open work permit there is no employer — give where you will live and the dates.',
@@ -595,8 +626,17 @@ const EXTRA_STEPS = [
       { id: 'currentStatusCanada', label: 'Current status in Canada', type: 'select', options: STATUS_OPTIONS, required: true },
       { id: 'permitNumber', label: 'Current permit / document number', type: 'text' },
       { id: 'permitExpiry', label: 'Current permit expiry date', type: 'date', required: true },
-      { id: 'lastEntryDate', label: 'Date of last entry to Canada', type: 'date', required: true },
-      { id: 'lastEntryPlace', label: 'Port of entry (city)', type: 'text' },
+      { id: 'firstEntryDate', label: 'Date of first entry to Canada', type: 'date', required: true },
+      { id: 'firstEntryPlace', label: 'Place of first entry (city / airport)', type: 'text', required: true },
+      {
+        id: 'originalEntryPurpose',
+        label: 'Original purpose of coming to Canada',
+        type: 'select',
+        options: ['Study', 'Work', 'Tourism', 'Family Visit', 'Business', 'Other'],
+        required: true,
+      },
+      { id: 'lastEntryDate', label: 'Date of most recent entry to Canada', type: 'date', required: true },
+      { id: 'lastEntryPlace', label: 'Place of most recent entry (city / airport)', type: 'text' },
       { id: 'canadaEmployerOrSchool', label: 'Current employer or school in Canada', type: 'text' },
       { id: 'sinNumber', label: 'SIN (if you have one)', type: 'text' },
     ],
@@ -768,6 +808,18 @@ const EXTRA_STEPS = [
     id: 'minor',
     title: 'Minor applicant details',
     fields: [
+      {
+        id: 'minorArrangement',
+        label: 'How the child travels and lives in Canada (IRCC portal question)',
+        type: 'select',
+        options: [
+          'Accompanied by both parents',
+          'With one parent — custody documents and the other parent\'s consent',
+          'Without a parent — custodian in Canada (IMM 5646)',
+        ],
+        required: true,
+        note: 'Decides which custody and consent documents the portal asks for.',
+      },
       { id: 'accompanyingParent', label: 'Parent the child will live with in Canada', type: 'text', required: true },
       { id: 'parentStatusCanada', label: "That parent's status in Canada", type: 'select', options: STATUS_OPTIONS, required: true },
       { id: 'otherParentName', label: 'Other parent full name', type: 'text' },
@@ -823,6 +875,7 @@ export function stepIds(t) {
   };
   const main = [...forms].some((k) => MAIN_FORMS.has(k));
   if (forms.has('imm1295')) insert('workDetails', ['education', 'history', 'fundsStay']);
+  if (forms.has('imm5710')) insert('workDetailsInside', ['education', 'history', 'fundsStay', 'tiesReturn']);
   if (main) insert('language', ['history', 'ties', 'tiesReturn', 'fundsStay']);
   if (main || forms.has('imm5257b')) insert('background', ['fundsStay', 'finances', 'ties', 'tiesReturn']);
   return ids;

@@ -116,6 +116,23 @@ ${facts}${builderNote}${docsNote}`,
     };
   }
 
+  if (K === 'worker') {
+    const inside = t.where === 'inside';
+    return {
+      system: `You are an expert Canadian immigration consultant drafting first-person Statements of Purpose for EMPLOYER-SPECIFIC work permit applications (LMIA or LMIA-exempt) made ${inside ? 'from inside Canada (IMM 5710)' : 'from outside Canada (IMM 1295)'}. You address the officer's concerns: a genuine job offer, that the applicant meets the job's requirements (education, experience, licences, language), ${inside ? 'the applicant\'s compliance with their current permit' : 'sufficient funds to settle'}, and that the applicant will leave Canada at the end of the authorized stay (R200(1)(b)). ${NO_INVENT}`,
+      instruction: `Write a "Statement of Purpose" (800-1,200 words) addressed "Dear Visa Officer,", first person as ${name || 'the applicant'}. Sections:
+**Introduction** — who I am, citizenship, ${inside ? `my current status in Canada (${d.currentStatusCanada || '[status]'}, expiring ${d.permitExpiry || '[date]'})` : 'current occupation'}, and what I am applying for.
+**The job offer** — ${d.intendedEmployer || '[employer]'}, ${d.intendedJobTitle || '[job title]'} in ${d.intendedCity || '[city]'}, ${d.intendedProvince || '[province]'}; LMIA / offer of employment number ${d.lmiaNumber || '[number]'}; main duties; start and end dates.
+**Why I meet the requirements** — education, directly related work experience with employers and dates, licences and certifications, language ability.
+**${inside ? 'My time in Canada so far' : 'Settling in Canada'}** — ${inside ? 'how I have respected my conditions, my employer and my work so far' : 'funds for the first months, accommodation, family members coming or staying'}.
+**Temporary intent** — ties to my home country, and my commitment to respect the conditions of my permit and leave Canada at the end of my authorized stay.
+Close with "Sincerely, ${name || '[name]'}".
+
+Facts:
+${facts}${builderNote}${docsNote}`,
+    };
+  }
+
   if (K === 'visit') {
     const isOwp = t.key === 'owp-outside';
     return {

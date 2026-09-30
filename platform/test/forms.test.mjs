@@ -139,7 +139,7 @@ T = '''<template xmlns="http://www.xfa.org/schema/xfa-template/3.3/"><subform na
 </subform></subform></template>'''
 f = Resolver(etree.fromstring(T)).run()
 paths = [x['path'] for x in f]
-lov = {'GenderMelList': [('Female', 'F Female'), ('Male', 'M Male')], 'CountryTravelDocumentList': [('223', 'IRN (Iran)')]}
+lov = {'GenderMelList': [('Female', 'F Female'), ('Male', 'M Male')], 'CountryTravelDocumentList': [('223', 'IRN (Iran)')], 'P': [('01', 'Business'), ('05', 'Work')], 'M': [('5', 'Married'), ('6', 'Single')]}
 out = {
   'paths': paths,
   'radioTrue': convert(f[1], 'Y', False, lov)[0],
@@ -148,6 +148,8 @@ out = {
   'persian': convert({'kind': 'text'}, 'تهران', False, lov),
   'nativeOk': convert({'kind': 'text'}, 'Sara سارا', True, lov)[0],
   'date': convert({'kind': 'date'}, '2022-3-5', False, lov)[0],
+  'work': convert({'kind': 'choice', 'lov': 'P'}, 'Work', False, lov)[0],
+  'marriedFiner': convert({'kind': 'choice', 'lov': 'M'}, 'Married-physically present', False, lov)[0],
   'badDate': convert({'kind': 'date'}, '1401/01/01x', False, lov)[1],
 }
 print(json.dumps(out, ensure_ascii=False))
@@ -166,6 +168,8 @@ print(json.dumps(out, ensure_ascii=False))
     ok(o.persian[0] === null && /English/.test(o.persian[1]), 'Persian text is refused in an English-only box');
     ok(o.nativeOk === 'Sara سارا', 'a native-name box keeps the Persian spelling');
     ok(o.date === '2022-03-05' && o.badDate, 'dates are normalised; a non-date is refused');
+    ok(o.work === '05', '"Work" is Work, never another entry');
+    ok(o.marriedFiner === '5', 'a finer answer falls back to the list\'s broader entry');
   }
 } else {
   console.log('- python/lxml not available: resolver checks skipped');

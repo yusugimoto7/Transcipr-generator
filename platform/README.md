@@ -277,6 +277,15 @@ only):
   LOA, PAL, Consent for Travel, Custody Document, Health Insurance, Medical Exam;
 - Submission Letter last.
 
+Each file shows the **IRCC portal slot** it is uploaded to, by the portal's exact
+name for that application flow ("Digital photo", "Marriage License/Certificate",
+"Proof of Means of Financial Support", "Representative's Submission Letter"…),
+from the portal captures in `research/ircc-portal/`. A file whose flow has no
+slot of its own (e.g. Inviter's Documents on a visitor visa) is flagged with
+where it can go instead, and any file over the portal's **4 MB** limit is
+flagged too. Custody and parental consent go out as one file (one portal
+slot); a study permit's tuition receipt and GIC are separate files.
+
 Client Information holds everything else, with its table of contents, and never
 repeats a document that has its own slot. Official forms are passed through
 untouched. **Download all (.zip)** gives the whole set.
@@ -350,6 +359,8 @@ automatically when the firm represents the client.
 | 100-302 | Work Permit — Spouse of a Student | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
 | 100-304 | Work Permit — Spouse of a Foreign Worker | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
 | 100-311 | Work Permit — IMP C11 (Entrepreneur / Significant Benefit) | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
+| — | Work Permit — Employer-Specific (LMIA or LMIA-exempt) | IMM 1295, IMM 5257B, IMM 5645 | Work — outside Canada |
+| — | Work Permit Extension — Employer-Specific (inside Canada) | IMM 5710 | Work — inside Canada |
 | 100-401 | Open Work Permit — Iranian Nationals (public policy) | IMM 5710 | Work — inside Canada |
 | 100-402 | Post-Graduation Work Permit (PGWP) | IMM 5710 | Work — inside Canada |
 | — | Spousal Open Work Permit (inside Canada) | IMM 5710 | Work — inside Canada |

@@ -23,6 +23,8 @@ export const CATEGORY_LABELS = {
   sop: 'Statement of Purpose',
   'employment-letter': 'Employment letter',
   'job-offer': 'Job offer letter',
+  lmia: 'LMIA / offer of employment (IMM 5802)',
+  'employment-contract': 'Employment contract',
   'leave-of-absence': 'Leave of absence letter',
   internship: 'Internship certificate',
   'ties-docs': 'Ties to home country docs',

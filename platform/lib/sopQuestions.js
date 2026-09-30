@@ -9,6 +9,7 @@
  *   owp          Statement of Purpose for a spousal open work permit (inside)
  *   visit        Purpose of Travel (visitor visa, OWP from outside)
  *   pgwp         Statement of Purpose for a PGWP
+ *   worker       Statement of Purpose for an employer-specific work permit
  *   reconsideration  Reconsideration request
  */
 
@@ -177,6 +178,13 @@ const PGWP = [
   { id: 'status', question: 'Your status', options: ['Study permit still valid', 'Applying within 180 days of completion letter', 'On maintained status'] },
 ];
 
+const WORKER = [
+  { id: 'offer', question: 'The job offer', options: ['LMIA approved by ESDC', 'LMIA-exempt offer (IMM 5802)', 'Same employer as now', 'New employer'] },
+  { id: 'fit', question: 'Why you meet the requirements', options: ['Degree in the same field', 'Years of directly related experience', 'Licence / certification the job requires', 'Language test at the required level'] },
+  { id: 'plan', question: 'Your plan in Canada', options: ['Family coming with me', 'Family staying at home', 'Housing already arranged', 'Savings for the first months'] },
+  { id: 'return', question: 'Why you will respect your stay', options: ['Property and family at home', 'Career progression at home after the job', 'Compliance with previous permits and visas'] },
+];
+
 const RECONSIDERATION = [
   { id: 'error', question: 'What was wrong in the decision?', options: ['The officer overlooked a document I submitted', 'A fact was misread (dates, funds, ties)', 'The reasons contradict the evidence', 'Procedural fairness — no chance to respond'] },
   { id: 'evidence', question: 'What can you show now?', options: ['The overlooked document, highlighted', 'Updated bank statements', 'Employer / school letters', 'GCMS notes that contradict the letter'] },
@@ -195,6 +203,7 @@ export const QUESTION_SETS = {
   owp: OWP,
   visit: VISIT,
   pgwp: PGWP,
+  worker: WORKER,
   reconsideration: RECONSIDERATION,
 };
 

@@ -11,6 +11,17 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
  *
  * Returns a Uint8Array (PDF bytes).
  */
+// Characters the standard PDF fonts (WinAnsi) can draw beyond Latin-1.
+const WIN_ANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
+
+/** Text the standard fonts can draw: any other script is marked, never crashes the PDF. */
+export function winAnsiSafe(text) {
+  return String(text ?? '')
+    .replace(/[\u200c\u200d\u200e\u200f\u202a-\u202e]/g, '')
+    .replace(/[^\n]/g, (ch) => (ch.charCodeAt(0) <= 0xff || WIN_ANSI_EXTRA.has(ch) ? ch : '\u0000'))
+    .replace(/\u0000+(\s+\u0000+)*/g, '[non-English text]');
+}
+
 export async function renderDocPdf({ blocks, meta = {} }) {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -41,7 +52,7 @@ export async function renderDocPdf({ blocks, meta = {} }) {
   }
 
   function wrap(text, f, size) {
-    const words = String(text).replace(/\s+/g, ' ').trim().split(' ');
+    const words = winAnsiSafe(text).replace(/\s+/g, ' ').trim().split(' ');
     const lines = [];
     let line = '';
     for (const w of words) {

@@ -42,8 +42,11 @@ const SLOT = {
   loa: { name: 'Letter of Acceptance', categories: ['loa', 'enrolment-letter'] },
   pal: { name: 'PAL', categories: ['pal'], generatedKey: 'pal-exemption', generatedName: 'PAL Exemption' },
   deposit: { name: 'Tuition Payment Confirmation', categories: ['deposit', 'gic'] },
+  // The study permit portal has separate slots for tuition and the GIC.
+  tuition: { name: 'Proof of Tuition Payment', categories: ['deposit'] },
+  gic: { name: 'GIC', categories: ['gic'] },
   relationship: { name: 'Proof of Relationship', categories: ['relationship-proof'] },
-  'family-status': { name: 'Family Member Proof of Status', categories: ['spouse-status'] },
+  'family-status': { name: 'Family Member Proof of Status', pkg: 'family-status', categories: ['spouse-status'] },
   // A spouse abroad: the spouse in Canada's permit and passport / visa together.
   'spouse-status': { name: 'Family Proof of Status', categories: ['spouse-status', 'supporter-id'] },
   enrolment: { name: "Proof of Student's Enrolment", categories: ['enrolment-letter'] },
@@ -52,22 +55,105 @@ const SLOT = {
   employment: { name: 'Employment Documents', categories: ['employment-letter', 'leave-of-absence'] },
   custody: { name: 'Custody Document', categories: ['custody-doc'] },
   consent: { name: 'Consent for Travel', categories: ['consent-letter'] },
+  // The portal has one slot for both: "Custody Documents, including a Parental Consent Letter".
+  'custody-consent': { name: 'Custody and Parental Consent', categories: ['custody-doc', 'consent-letter'] },
+  lmia: { name: 'LMIA or Offer of Employment', categories: ['lmia'] },
+  'job-offer': { name: 'Offer of Employment', categories: ['job-offer'] },
+  contract: { name: 'Employment Contract', categories: ['employment-contract'] },
+  'job-requirements': { name: 'Proof of Meeting the Job Requirements', categories: ['certificates'] },
+  degrees: { name: 'Education', categories: ['transcripts'] },
   invitation: { name: 'Invitation Letter', categories: ['invitation-letter'] },
   submission: { name: 'Submission Letter', generatedKey: 'submission-letter' },
 };
 
+/**
+ * The IRCC portal's upload slot for each final file, per portal application
+ * flow (research/ircc-portal/, captured 2026-09-30). The portal takes one file
+ * per slot, 4 MB at most. `null`: that flow has no slot of its own for it.
+ */
+const POOL = {
+  'Study — outside Canada': 'sp-out',
+  'Work — outside Canada': 'wp-out',
+  'Visit — outside Canada': 'trv',
+  'Visit — inside Canada': 'trv',
+  'Work — inside Canada': 'wp-ext',
+  'Study — inside Canada': 'sp-ext',
+};
+const portalPool = (t) => (t.key === 'visitor-record' ? 'vr' : t.key === 'reconsideration' ? null : POOL[t.group] || null);
+const ALL = (name) => ({ '*': name });
+const PORTAL = {
+  passport: ALL('Passport'),
+  photo: ALL('Digital photo'),
+  'client-info': ALL('Client Information'),
+  financial: ALL('Proof of Means of Financial Support'),
+  inviter: { '*': null },
+  business: { trv: 'Business Registration', '*': null },
+  marriage: ALL('Marriage License/Certificate'),
+  'birth-nid': { trv: 'Birth Registration/Certificate', '*': null },
+  police: { 'sp-out': 'Police certificate', 'wp-out': 'Police certificate', trv: 'Police certificate', '*': null },
+  education: { 'wp-out': 'Education (diplomas/degrees)', 'sp-out': 'Recent Education Transcript', 'wp-ext': 'Recent Education Transcript', '*': null },
+  transcript: ALL('Recent Education Transcript'),
+  completion: ALL('Completion of Studies Letter'),
+  cv: ALL('CV/résumé'),
+  language: { 'sp-out': 'Proof of IELTS language test results (or Proof of TEF language test results)', '*': 'Proof of Language Proficiency' },
+  loa: ALL('Letter of Acceptance or Letter of Enrollment / Registration'),
+  pal: ALL('Provincial or Territorial Attestation Letter (PAL or TAL)'),
+  deposit: ALL('Proof of tuition payment'),
+  tuition: ALL('Proof of tuition payment'),
+  gic: ALL('Proof of Guaranteed Investment Certificate (GIC)'),
+  relationship: { 'sp-out': null, 'wp-out': null, '*': 'Proof of Relationship' },
+  'family-status': { 'wp-ext': 'Family Member Proof of Status', 'sp-ext': 'Family Member Proof of Status', vr: 'Family Member Proof of Status', '*': null },
+  'spouse-status': { 'wp-ext': 'Family Member Proof of Status', 'sp-ext': 'Family Member Proof of Status', vr: 'Family Member Proof of Status', '*': null },
+  enrolment: ALL('Registration letter from a designated learning institution (DLI) / attestation letter detailing enrolment'),
+  medical: ALL('Proof of upfront medical exam'),
+  insurance: ALL('Medical Insurance Coverage'),
+  employment: { 'wp-out': 'Letter from Current Employer', '*': 'Employment Letter' },
+  custody: ALL('Custody Documents, including a Parental Consent Letter'),
+  consent: ALL('Custody Documents, including a Parental Consent Letter'),
+  'custody-consent': ALL('Custody Documents, including a Parental Consent Letter'),
+  invitation: { trv: null, '*': 'Invitation Letter' },
+  submission: ALL("Representative's Submission Letter"),
+  lmia: { 'wp-out': 'Labour Market Impact Assessment (LMIA) from ESDC — or IMM5802 Offer of Employment (LMIA-exempt)', '*': 'Labour Market Impact Assessments (LMIA) from ESDC or Proof of Submission — or IMM5802 Offer of Employment' },
+  'job-offer': ALL('Offer of Employment'),
+  contract: ALL('Employment Contract'),
+  'job-requirements': ALL('Proof that you Meet the Requirements of the Job Being Offered'),
+  degrees: { 'wp-out': 'Education (diplomas/degrees)', '*': 'Recent Education Transcript' },
+};
+// Where a file with no slot of its own can go instead.
+const NO_SLOT_HINT = {
+  inviter: 'Split it into Notice of Assessment, T4 or T1, Inviter\'s Employment Letter and Letter of Support — or upload it in Client Information',
+  invitation: 'The visitor visa flow has no Invitation Letter slot — put it in Client Information',
+};
+const FORM_PORTAL = { imm5476: 'Use of Representative (IMM5476)', imm5257b: 'Schedule 1 (IMM 5257) — optional slot', imm5645: 'Family Information (IMM5645) — optional slot' };
+
+/** The portal slot a final file is uploaded to: { name } or { name: null, hint }. */
+function portalSlot(slotKey, t, app) {
+  const pool = portalPool(t);
+  if (!pool) return null;
+  if (slotKey.startsWith('form:')) {
+    const key = slotKey.slice(5);
+    return { name: FORM_PORTAL[key] || (key === 'imm5713' ? null : 'Application Form(s)') };
+  }
+  const m = PORTAL[slotKey];
+  if (!m) return null;
+  let name = pool in m ? m[pool] : m['*'];
+  if (slotKey === 'pal' && (app.data?.palExempt === true || app.data?.palExempt === 'yes')) name = 'Proof of Provincial or Territorial Attestation Letter (PAL or TAL) Exception';
+  return name ? { name } : { name: null, hint: NO_SLOT_HINT[slotKey] || 'No slot of its own in this portal application — upload it in Client Information' };
+}
+
 // Final-file order per application type, as in the firm's 2026 final folders.
 // "forms" expands to the type's IRCC forms (main, Schedule 1, 5645, 5476 …).
-const STUDY_MINOR = ['forms', 'loa', 'pal', 'passport', 'photo', 'client-info', 'financial', 'consent', 'custody', 'police', 'submission'];
+// Custody and consent share one portal slot, so they go out as one file.
+const STUDY_MINOR = ['forms', 'loa', 'pal', 'passport', 'photo', 'client-info', 'financial', 'custody-consent', 'police', 'submission'];
 const TRV = ['forms', 'passport', 'photo', 'client-info', 'financial', 'relationship', 'marriage', 'police', 'inviter', 'submission'];
-const TRV_CHILD = ['forms', 'passport', 'photo', 'client-info', 'financial', 'consent', 'relationship', 'custody', 'inviter', 'submission'];
+const TRV_CHILD = ['forms', 'passport', 'photo', 'client-info', 'financial', 'custody-consent', 'relationship', 'inviter', 'submission'];
 const OWP_INSIDE = ['forms', 'passport', 'photo', 'client-info', 'marriage', 'medical', 'submission'];
 const LISTS = {
-  'study-permit': ['forms', 'passport', 'photo', 'client-info', 'financial', 'loa', 'pal', 'police', 'language', 'deposit', 'education', 'submission'],
+  'study-permit': ['forms', 'passport', 'photo', 'client-info', 'financial', 'loa', 'pal', 'police', 'language', 'tuition', 'gic', 'education', 'submission'],
   'study-permit-minor': STUDY_MINOR,
   'study-permit-child-of-worker': [...STUDY_MINOR.slice(0, -1), 'inviter', 'submission'],
   'study-permit-inside': ['forms', 'passport', 'client-info', 'financial', 'photo', 'loa', 'pal', 'marriage', 'submission'],
-  'study-permit-inside-child': ['forms', 'passport', 'client-info', 'financial', 'photo', 'loa', 'pal', 'consent', 'custody', 'submission'],
+  'study-permit-inside-child': ['forms', 'passport', 'client-info', 'financial', 'photo', 'loa', 'pal', 'custody-consent', 'submission'],
   // Spouse abroad (open work permit), as in the firm's "Zahra - SOWP" folder:
   // Client Information holds the letters, work, financial and ties documents;
   // the spouse's status, the applicant's identity, marriage, police and
@@ -75,9 +161,14 @@ const LISTS = {
   'owp-outside': ['forms', 'passport', 'photo', 'client-info', 'spouse-status', 'enrolment', 'birth-nid', 'marriage', 'police', 'education', 'submission'],
   'owp-worker-spouse': ['forms', 'passport', 'photo', 'client-info', 'spouse-status', 'birth-nid', 'marriage', 'police', 'education', 'submission'],
   'imp-c11': ['forms', 'passport', 'photo', 'client-info', 'business', 'financial', 'cv', 'education', 'police', 'marriage', 'submission'],
+  // Employer-specific permits: each job document has its own portal slot.
+  'wp-employer-outside': ['forms', 'passport', 'photo', 'client-info', 'lmia', 'job-offer', 'contract', 'job-requirements', 'employment', 'degrees', 'cv', 'language', 'financial', 'police', 'marriage', 'medical', 'submission'],
+  'wp-extension': ['forms', 'passport', 'photo', 'client-info', 'lmia', 'job-offer', 'contract', 'job-requirements', 'cv', 'language', 'marriage', 'medical', 'submission'],
   'iranian-owp': OWP_INSIDE,
-  'sowp-inside': OWP_INSIDE,
-  pgwp: ['forms', 'client-info', 'passport', 'photo', 'completion', 'transcript', 'marriage', 'submission'],
+  // The spouse in Canada's documents have their own slot in the extension flow.
+  'sowp-inside': ['forms', 'passport', 'photo', 'client-info', 'family-status', 'marriage', 'medical', 'submission'],
+  // PGWP applicants must now prove their language level.
+  pgwp: ['forms', 'client-info', 'passport', 'photo', 'completion', 'transcript', 'language', 'marriage', 'submission'],
   'trv-outside': TRV,
   'trv-spouse': TRV,
   'trv-business': ['forms', 'passport', 'photo', 'client-info', 'business', 'financial', 'marriage', 'police', 'submission'],
@@ -186,7 +277,8 @@ export function planFinalFiles(app) {
     const optionalEmpty = !e.ready && !['form', 'photo'].includes(e.kind);
     const num = optionalEmpty ? null : ++n;
     const ext = e.kind === 'photo' ? 'jpg' : 'pdf';
-    return { ...e, n: num, filename: num ? `${pad(num)} - ${safe(e.name)}${who ? ` - ${safe(who)}` : ''}.${ext}` : null };
+    const portal = portalSlot(e.slot, t, app);
+    return { ...e, n: num, filename: num ? `${pad(num)} - ${safe(e.name)}${who ? ` - ${safe(who)}` : ''}.${ext}` : null, ...(portal ? { portal } : {}) };
   });
 }
 
@@ -200,6 +292,9 @@ export function unplacedDocuments(app, plan = planFinalFiles(app)) {
   for (const e of plan) for (const s of e.contents || []) for (const f of [s, ...s.children]) f.files.forEach((name) => placed.add(name));
   return (app.documents || []).filter((d) => !NEVER.has(d.category) && !placed.has(d.filename)).map((d) => ({ id: d.id, filename: d.filename, category: d.category || null }));
 }
+
+/** The IRCC portal's upload limit per file. */
+export const PORTAL_MAX_BYTES = 4 * 1024 * 1024;
 
 /** Categories that go out as their own files (so Client Information leaves them out). */
 function claimedCategories(plan, app) {
