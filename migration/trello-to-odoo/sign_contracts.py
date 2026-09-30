@@ -464,12 +464,17 @@ if partner.country_id.code == 'CA' and not partner.state_id:
     raise UserError("Set the customer's province: GST/HST on the contract depends on it.")
 rcic_email = env['ir.config_parameter'].sudo().get_param('phase2.rcic_email') or ''
 rcic_user = env['res.users'].sudo().search(['|', ('login', '=ilike', rcic_email), ('email', '=ilike', rcic_email)], limit=1) if rcic_email else env['res.users']
-rcic = rcic_user.partner_id if rcic_user else env.user.partner_id
+# The countersigner is the RCIC's contract mailbox (a contact is enough: the
+# signer needs no Odoo login). Never fall back to whoever pressed the button:
+# that handed the RCIC's signature box to the agent (Sept 2026).
+rcic = rcic_user.partner_id if rcic_user else (env['res.partner'].sudo().search([('email', '=ilike', rcic_email)], order='id desc', limit=1) if rcic_email else env['res.partner'])
+if not rcic:
+    raise UserError("The RCIC signer (%s) was not found. Ask the administrator to check the setting phase2.rcic_email." % (rcic_email or 'not set'))
 sb_email = env['ir.config_parameter'].sudo().get_param('phase2.sparkbridge_email') or ''
 sb_user = env['res.users'].sudo().search(['|', ('login', '=ilike', sb_email), ('email', '=ilike', sb_email)], limit=1) if sb_email else env['res.users']
 sb_signer = sb_user.partner_id if sb_user else (env['res.partner'].sudo().search([('email', '=ilike', sb_email)], limit=1) if sb_email else env['res.partner'])
 if not sb_signer:
-    sb_signer = env.user.partner_id
+    raise UserError("The Sparkbridge signer (%s) was not found. Ask the administrator to check the setting phase2.sparkbridge_email." % (sb_email or 'not set'))
 
 if order.x_custom_agreement or (order.x_custom_agreement_url or '').strip():
     action = env.ref('__trello__.p2action_send_custom').with_context(
