@@ -28,6 +28,27 @@ export const EDUCATION_LEVELS = [
   'Professional degree (medicine, dentistry, pharmacy, law)',
 ];
 
+/** The marital statuses on IMM 5645 (Family Information). */
+export const MARITAL_5645 = [
+  'Single',
+  'Married-physically present',
+  'Married-not physically present',
+  'Common-law',
+  'Legally separated',
+  'Divorced',
+  'Annulled marriage',
+  'Widowed',
+];
+
+export const PROVINCES = [
+  'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador', 'Northwest Territories',
+  'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island', 'Quebec', 'Saskatchewan', 'Yukon',
+];
+
+const RESIDENCE_STATUS = ['Citizen', 'Permanent resident', 'Visitor', 'Worker', 'Student', 'Other'];
+const ENGLISH = 'In English (Latin letters) — IRCC forms reject Persian or any other script.';
+const MARRIED = { field: 'maritalStatus', in: ['Married', 'Common-Law'] };
+
 export const STUDY_PERMIT_SCHEMA = {
   type: 'study-permit',
   title: 'Study Permit',
@@ -39,6 +60,13 @@ export const STUDY_PERMIT_SCHEMA = {
       fields: [
         { id: 'familyName', label: 'Family name (surname)', type: 'text', required: true },
         { id: 'givenName', label: 'Given name(s)', type: 'text', required: true },
+        {
+          id: 'nativeName',
+          label: 'Full name in the native language (e.g. Persian script)',
+          type: 'text',
+          required: true,
+          note: 'Given name then family name, as on the birth certificate or national ID. IMM 5645 writes every name in English and in the native language.',
+        },
         { id: 'otherNames', label: 'Other names used (aliases, maiden)', type: 'text' },
         {
           id: 'sex',
@@ -48,7 +76,13 @@ export const STUDY_PERMIT_SCHEMA = {
           required: true,
         },
         { id: 'dob', label: 'Date of birth', type: 'date', required: true },
-        { id: 'cityOfBirth', label: 'City / town of birth', type: 'text', required: true },
+        {
+          id: 'cityOfBirth',
+          label: 'City / town of birth (in English)',
+          type: 'text',
+          required: true,
+          note: 'Spelled exactly as the passport\'s "Place of birth" (or the birth certificate\'s English translation) — never in Persian script.',
+        },
         { id: 'countryOfBirth', label: 'Country of birth', type: 'country', required: true },
         { id: 'citizenship', label: 'Country of citizenship', type: 'country', required: true },
         {
@@ -59,17 +93,26 @@ export const STUDY_PERMIT_SCHEMA = {
           default: 'Never Married / Single',
           required: true,
         },
-        { id: 'uci', label: 'UCI / client ID (if you have one)', type: 'text' },
+        {
+          id: 'uci',
+          label: 'UCI / client ID (if you have one)',
+          type: 'text',
+          note: 'Digits only: 8 digits (e.g. 12345678) or 10 digits (e.g. 1234567890). Dashes are removed on the forms.',
+        },
       ],
     },
     {
       id: 'passport',
-      title: 'Passport & residence',
+      title: 'Passport, ID & residence',
       fields: [
         { id: 'passportNumber', label: 'Passport number', type: 'text', required: true },
         { id: 'passportCountry', label: 'Passport country of issue', type: 'country', required: true },
         { id: 'passportIssue', label: 'Passport issue date', type: 'date', required: true },
         { id: 'passportExpiry', label: 'Passport expiry date', type: 'date', required: true },
+        { id: 'nationalIdNumber', label: 'National ID number (e.g. Iranian کارت ملی)', type: 'text', required: true, note: 'From the national ID card. Digits only.' },
+        { id: 'nationalIdIssue', label: 'National ID issue date', type: 'date' },
+        { id: 'nationalIdExpiry', label: 'National ID expiry date', type: 'date' },
+        { id: 'usPermanentResident', label: 'Lawful permanent resident of the United States (green card)?', type: 'bool', required: true },
         {
           id: 'countryOfResidence',
           label: 'Country of current residence',
@@ -80,17 +123,39 @@ export const STUDY_PERMIT_SCHEMA = {
           id: 'residenceStatus',
           label: 'Immigration status in country of residence',
           type: 'select',
-          options: ['Citizen', 'Permanent resident', 'Visitor', 'Worker', 'Student', 'Other'],
+          options: RESIDENCE_STATUS,
           required: true,
         },
-        { id: 'residenceFrom', label: 'Status valid from', type: 'date' },
+        { id: 'residenceFrom', label: 'Status valid from', type: 'date', note: 'For citizens: leave blank, or the date of birth.' },
         { id: 'residenceTo', label: 'Status valid to', type: 'date' },
+        {
+          id: 'applyingFromResidence',
+          label: 'Applying from the country of residence?',
+          type: 'bool',
+          required: true,
+          note: 'IRCC question: "Is the country from where you are applying the same as your current country of residence?"',
+        },
+        { id: 'applyCountry', label: 'Country applying from', type: 'country', required: true, showIf: { field: 'applyingFromResidence', equals: false } },
+        { id: 'applyStatus', label: 'Status in that country', type: 'select', options: RESIDENCE_STATUS, required: true, showIf: { field: 'applyingFromResidence', equals: false } },
+        { id: 'applyFrom', label: 'Status there from', type: 'date', showIf: { field: 'applyingFromResidence', equals: false } },
+        { id: 'applyTo', label: 'Status there to', type: 'date', showIf: { field: 'applyingFromResidence', equals: false } },
+        {
+          id: 'livedElsewhere5y',
+          label: 'In the past 5 years, lived more than 6 months in another country?',
+          type: 'bool',
+          required: true,
+          note: 'Any country other than the country of citizenship or current residence.',
+        },
+        { id: 'prevResidenceCountry', label: 'That country', type: 'country', required: true, showIf: { field: 'livedElsewhere5y', equals: true } },
+        { id: 'prevResidenceStatus', label: 'Status there', type: 'select', options: RESIDENCE_STATUS, required: true, showIf: { field: 'livedElsewhere5y', equals: true } },
+        { id: 'prevResidenceFrom', label: 'From', type: 'date', required: true, showIf: { field: 'livedElsewhere5y', equals: true } },
+        { id: 'prevResidenceTo', label: 'To', type: 'date', required: true, showIf: { field: 'livedElsewhere5y', equals: true } },
       ],
     },
     {
       id: 'contact',
       title: 'Contact information',
-      help: 'Your address broken into parts (this is how the official forms need it).',
+      help: 'Your address broken into parts, in English (this is how the official forms need it).',
       fields: [
         { id: 'mailingPobox', label: 'P.O. Box (if any)', type: 'text' },
         { id: 'mailingUnit', label: 'Apt / Unit', type: 'text' },
@@ -104,9 +169,15 @@ export const STUDY_PERMIT_SCHEMA = {
           id: 'sameResidential',
           label: 'Residential address same as mailing?',
           type: 'bool',
-          default: true,
-          note: 'If different, note it — most forms need the residential address too.',
+          required: true,
         },
+        { id: 'resUnit', label: 'Residential: Apt / Unit', type: 'text', showIf: { field: 'sameResidential', equals: false } },
+        { id: 'resStreetNo', label: 'Residential: street number', type: 'text', showIf: { field: 'sameResidential', equals: false } },
+        { id: 'resStreet', label: 'Residential: street name', type: 'text', required: true, showIf: { field: 'sameResidential', equals: false } },
+        { id: 'resCity', label: 'Residential: city / town', type: 'text', required: true, showIf: { field: 'sameResidential', equals: false } },
+        { id: 'resProvince', label: 'Residential: province / state / region', type: 'text', showIf: { field: 'sameResidential', equals: false } },
+        { id: 'resCountry', label: 'Residential: country', type: 'country', required: true, showIf: { field: 'sameResidential', equals: false } },
+        { id: 'resPostal', label: 'Residential: postal / ZIP code', type: 'text', showIf: { field: 'sameResidential', equals: false } },
         {
           id: 'phoneType',
           label: 'Phone type',
@@ -200,10 +271,11 @@ export const STUDY_PERMIT_SCHEMA = {
           required: true,
           note: 'The highest diploma or degree actually completed — not a school currently attended.',
         },
-        { id: 'lastInstitution', label: 'Most recent institution', type: 'text', required: true },
-        { id: 'lastFieldOfStudy', label: 'Field of study', type: 'text' },
-        { id: 'lastEduFrom', label: 'From (year/month)', type: 'text' },
-        { id: 'lastEduTo', label: 'To (year/month)', type: 'text' },
+        { id: 'lastInstitution', label: 'Most recent institution (in English)', type: 'text', required: true },
+        { id: 'lastFieldOfStudy', label: 'Field of study (in English)', type: 'text' },
+        { id: 'lastEduFrom', label: 'From (YYYY-MM)', type: 'text', placeholder: '2015-09' },
+        { id: 'lastEduTo', label: 'To (YYYY-MM)', type: 'text', placeholder: '2019-06' },
+        { id: 'lastEduCity', label: 'City of study', type: 'text' },
         { id: 'lastEduCountry', label: 'Country of study', type: 'country' },
         {
           id: 'gpa',
@@ -217,12 +289,29 @@ export const STUDY_PERMIT_SCHEMA = {
       id: 'language',
       title: 'Language ability',
       fields: [
-        { id: 'firstLanguage', label: 'Native language', type: 'text', required: true },
+        { id: 'firstLanguage', label: 'Native language (in English, e.g. Persian)', type: 'text', required: true },
+        {
+          id: 'ableToCommunicate',
+          label: 'Able to communicate in English and/or French?',
+          type: 'select',
+          options: ['English', 'French', 'Both', 'Neither'],
+          required: true,
+        },
+        {
+          id: 'mostAtEase',
+          label: 'Language most at ease in',
+          type: 'select',
+          options: ['English', 'French'],
+          required: true,
+          showIf: { field: 'ableToCommunicate', equals: 'Both' },
+        },
         {
           id: 'languageTest',
           label: 'English/French test taken',
           type: 'select',
           options: ['IELTS', 'TOEFL', 'PTE', 'CELPIP', 'TEF/TCF (French)', 'Duolingo', 'None yet'],
+          required: true,
+          note: 'Ticks "Have you taken a test from a designated testing agency?" on the forms — "None yet" answers No.',
         },
         { id: 'languageScore', label: 'Overall test score', type: 'text' },
         { id: 'languageTestDate', label: 'Test date', type: 'date' },
@@ -238,24 +327,38 @@ export const STUDY_PERMIT_SCHEMA = {
           type: 'bool',
         },
         {
-          id: 'previousRefusal',
-          label: 'Ever refused a visa/permit or removed from any country?',
+          id: 'travelledAbroad',
+          label: 'Travelled to any other country in the last 5 years (or since age 18)?',
           type: 'bool',
-          note: 'If yes, describe below — this must be disclosed and explained.',
+          required: true,
+          note: 'Countries other than the country of nationality or residence — IMM 5257 Schedule 1, question 8.',
         },
-        { id: 'refusalDetails', label: 'Refusal / removal details', type: 'textarea' },
         {
           id: 'countriesVisited',
-          label: 'Countries visited in the last 10 years',
+          label: 'Trips (one per line: from YYYY-MM | to YYYY-MM | country | city | purpose)',
           type: 'textarea',
-          note: 'List country + year(s), e.g. "UAE 2019, Turkey 2022".',
+          placeholder: '2022-03 | 2022-03 | Turkey | Istanbul | Tourism',
+          showIf: { field: 'travelledAbroad', equals: true },
+          note: 'The four most recent go on Schedule 1; the platform lists the rest.',
         },
         {
           id: 'currentOccupation',
-          label: 'Current occupation / job title',
+          label: 'Current occupation / activity (in English)',
           type: 'text',
+          required: true,
+          note: 'E.g. "Retired teacher", "Homemaker", "Software engineer". ' + ENGLISH,
         },
-        { id: 'employer', label: 'Current employer / institution', type: 'text' },
+        { id: 'employer', label: 'Current employer / institution (in English)', type: 'text', note: 'Leave blank for a homemaker or retired person.' },
+        { id: 'currentJobFrom', label: 'Current occupation since (YYYY-MM)', type: 'text', required: true, placeholder: '2018-04' },
+        { id: 'currentJobCity', label: 'City of the current occupation (in English)', type: 'text', required: true },
+        { id: 'currentJobCountry', label: 'Country of the current occupation', type: 'country', required: true },
+        {
+          id: 'employmentHistory',
+          label: 'Previous occupations, past 10 years (one per line: from YYYY-MM | to YYYY-MM | occupation | employer | city | country)',
+          type: 'textarea',
+          placeholder: '2012-01 | 2018-03 | Accountant | Pars Trading Co. | Tehran | Iran',
+          note: 'Most recent first, in English, with no gaps — include study, unemployment and homemaking.',
+        },
       ],
     },
     {
@@ -348,16 +451,140 @@ const EXTRA_STEPS = [
     title: 'Family members',
     help: 'Needed for IMM 5645 (Family Information) and for spouse-based applications.',
     fields: [
-      { id: 'spouseName', label: 'Spouse / partner full name', type: 'text' },
-      { id: 'spouseDob', label: 'Spouse date of birth', type: 'date' },
-      { id: 'spouseCitizenship', label: 'Spouse citizenship', type: 'country' },
-      { id: 'spouseAccompanying', label: 'Is your spouse applying with you / accompanying you?', type: 'bool' },
-      { id: 'fatherName', label: "Father's full name", type: 'text' },
+      { id: 'spouseName', label: 'Spouse / partner full name (English)', type: 'text', required: true, showIf: MARRIED },
+      { id: 'spouseFamilyName', label: 'Spouse family name (as on their passport)', type: 'text', required: true, showIf: MARRIED },
+      { id: 'spouseGivenName', label: 'Spouse given name(s) (as on their passport)', type: 'text', required: true, showIf: MARRIED },
+      { id: 'spouseNameNative', label: 'Spouse full name in the native language', type: 'text', showIf: MARRIED },
+      { id: 'marriageDate', label: 'Date of marriage / start of common-law', type: 'date', required: true, showIf: MARRIED },
+      { id: 'spouseDob', label: 'Spouse date of birth', type: 'date', required: true, showIf: MARRIED },
+      { id: 'spouseCountryOfBirth', label: 'Spouse country of birth', type: 'country', required: true, showIf: MARRIED },
+      { id: 'spouseCitizenship', label: 'Spouse citizenship', type: 'country', showIf: MARRIED },
+      { id: 'spouseAddress', label: "Spouse's present address (English)", type: 'text', showIf: MARRIED, note: 'Leave blank if the spouse is in Canada — the address on the spouse step is used.' },
+      { id: 'spouseOccupation', label: "Spouse's present occupation (English)", type: 'text', showIf: MARRIED },
+      { id: 'spouseAccompanying', label: 'Will your spouse accompany you to Canada?', type: 'bool', showIf: MARRIED, note: 'No if the spouse is already in Canada.' },
+      {
+        id: 'previouslyMarried',
+        label: 'Previously married or in a common-law relationship?',
+        type: 'bool',
+        required: true,
+      },
+      { id: 'prevSpouseFamilyName', label: 'Previous spouse: family name', type: 'text', required: true, showIf: { field: 'previouslyMarried', equals: true } },
+      { id: 'prevSpouseGivenName', label: 'Previous spouse: given name(s)', type: 'text', required: true, showIf: { field: 'previouslyMarried', equals: true } },
+      { id: 'prevSpouseDob', label: 'Previous spouse: date of birth', type: 'date', showIf: { field: 'previouslyMarried', equals: true } },
+      { id: 'prevRelationshipType', label: 'Type of relationship', type: 'select', options: ['Married', 'Common-Law'], required: true, showIf: { field: 'previouslyMarried', equals: true } },
+      { id: 'prevRelationshipFrom', label: 'Relationship from', type: 'date', required: true, showIf: { field: 'previouslyMarried', equals: true } },
+      { id: 'prevRelationshipTo', label: 'Relationship to', type: 'date', required: true, showIf: { field: 'previouslyMarried', equals: true } },
+      { id: 'fatherName', label: "Father's full name (English)", type: 'text', required: true },
+      { id: 'fatherNameNative', label: "Father's full name in the native language", type: 'text' },
       { id: 'fatherDob', label: "Father's date of birth", type: 'date' },
-      { id: 'motherName', label: "Mother's full name", type: 'text' },
+      { id: 'fatherBirthCountry', label: "Father's country of birth", type: 'country' },
+      { id: 'fatherAddress', label: "Father's present address (English)", type: 'text', note: 'If deceased: "Deceased — city, country, YYYY-MM-DD".' },
+      { id: 'fatherOccupation', label: "Father's present occupation (English)", type: 'text' },
+      { id: 'fatherMaritalStatus', label: "Father's marital status", type: 'select', options: MARITAL_5645 },
+      { id: 'fatherAccompanying', label: 'Will your father accompany you to Canada?', type: 'bool' },
+      { id: 'motherName', label: "Mother's full name (English)", type: 'text', required: true },
+      { id: 'motherNameNative', label: "Mother's full name in the native language", type: 'text' },
       { id: 'motherDob', label: "Mother's date of birth", type: 'date' },
-      { id: 'children', label: 'Children (name, date of birth, country — one per line)', type: 'textarea' },
-      { id: 'siblings', label: 'Brothers and sisters (name, date of birth, country — one per line)', type: 'textarea' },
+      { id: 'motherBirthCountry', label: "Mother's country of birth", type: 'country' },
+      { id: 'motherAddress', label: "Mother's present address (English)", type: 'text', note: 'If deceased: "Deceased — city, country, YYYY-MM-DD".' },
+      { id: 'motherOccupation', label: "Mother's present occupation (English)", type: 'text' },
+      { id: 'motherMaritalStatus', label: "Mother's marital status", type: 'select', options: MARITAL_5645 },
+      { id: 'motherAccompanying', label: 'Will your mother accompany you to Canada?', type: 'bool' },
+      {
+        id: 'children',
+        label: 'Children (one per line: English name | native name | date of birth | country of birth | Son/Daughter | marital status | address | occupation | accompanying yes/no)',
+        type: 'textarea',
+        placeholder: 'Sara Rahimi | سارا رحیمی | 2015-04-02 | Iran | Daughter | Single | 12 Azadi St, Tehran, Iran | Student | yes',
+      },
+      {
+        id: 'siblings',
+        label: 'Brothers and sisters (one per line: English name | native name | date of birth | country of birth | Brother/Sister | marital status | address | occupation | accompanying yes/no)',
+        type: 'textarea',
+      },
+    ],
+  },
+  {
+    id: 'background',
+    title: 'Background questions',
+    help: 'The Yes/No questions every IRCC application form asks. Answer each one — the forms are ticked from these answers.',
+    fields: [
+      { id: 'bgTbContact', label: 'In the past 2 years, had tuberculosis or been in close contact with a person with tuberculosis?', type: 'bool', required: true },
+      { id: 'bgMedicalCondition', label: 'Any physical or mental disorder that would require social or health services (other than medication) in Canada?', type: 'bool', required: true },
+      { id: 'medicalDetails', label: 'Health details', type: 'textarea', showIf: { any: [{ field: 'bgTbContact', equals: true }, { field: 'bgMedicalCondition', equals: true }] } },
+      { id: 'bgOverstay', label: 'Ever remained beyond your status, studied or worked without authorization in Canada?', type: 'bool', required: true },
+      {
+        id: 'previousRefusal',
+        label: 'Ever refused a visa or permit, denied entry or ordered to leave Canada or any other country?',
+        type: 'bool',
+        required: true,
+        note: 'If yes, describe below — this must be disclosed and explained.',
+      },
+      { id: 'previousCanadaApplication', label: 'Previously applied to enter or remain in Canada?', type: 'bool', required: true },
+      {
+        id: 'refusalDetails',
+        label: 'Details (refusals, overstay, previous applications)',
+        type: 'textarea',
+        showIf: { any: [{ field: 'bgOverstay', equals: true }, { field: 'previousRefusal', equals: true }, { field: 'previousCanadaApplication', equals: true }] },
+      },
+      { id: 'bgCriminal', label: 'Ever committed, been arrested, charged or convicted of any criminal offence in any country?', type: 'bool', required: true },
+      { id: 'criminalDetails', label: 'Criminal record details', type: 'textarea', showIf: { field: 'bgCriminal', equals: true } },
+      {
+        id: 'bgMilitary',
+        label: 'Served in any military, militia, civil defence, security organization or police (including national service)?',
+        type: 'bool',
+        required: true,
+        note: 'Iranian men: military (conscription) service counts — answer Yes.',
+      },
+      {
+        id: 'militaryDetails',
+        label: 'Service (one per line: from YYYY-MM | to YYYY-MM | unit / place stationed | province | country)',
+        type: 'textarea',
+        required: true,
+        placeholder: '2008-02 | 2010-01 | Army, 23rd Division, Tehran | Tehran | Iran',
+        showIf: { field: 'bgMilitary', equals: true },
+      },
+      { id: 'bgOrganization', label: 'Ever a member of or associated with a political party or group that used or advocated violence?', type: 'bool', required: true },
+      {
+        id: 'organizationDetails',
+        label: 'Organizations (one per line: from YYYY-MM | to YYYY-MM | organization | activities / position | province | country)',
+        type: 'textarea',
+        showIf: { field: 'bgOrganization', equals: true },
+      },
+      { id: 'bgGovPosition', label: 'Ever held a government position (civil servant, judge, police, mayor, military officer…)?', type: 'bool', required: true },
+      {
+        id: 'govPositionDetails',
+        label: 'Positions (one per line: from YYYY-MM | to YYYY-MM | country | level of jurisdiction | department / branch | position)',
+        type: 'textarea',
+        showIf: { field: 'bgGovPosition', equals: true },
+      },
+      { id: 'bgWitnessed', label: 'Ever witnessed or participated in the ill treatment of prisoners or civilians, looting or desecration of religious buildings?', type: 'bool', required: true },
+      { id: 'witnessedDetails', label: 'Details', type: 'textarea', showIf: { field: 'bgWitnessed', equals: true } },
+      { id: 'consentContact', label: 'Consent to be contacted by IRCC in the future (client surveys)?', type: 'bool', required: true },
+    ],
+  },
+  {
+    id: 'workDetails',
+    title: 'Intended work in Canada',
+    help: 'IMM 1295 "Details of intended work". For an open work permit there is no employer — give where you will live and the dates.',
+    fields: [
+      {
+        id: 'workPermitType',
+        label: 'Type of work permit',
+        type: 'select',
+        options: ['Open Work Permit', 'Exemption from Labour Market Impact Assessment', 'Labour Market Impact Assessment Stream', 'Start-up Business Class', 'Other'],
+        required: true,
+      },
+      { id: 'visaRequested', label: 'Visitor visa requested with the permit', type: 'select', options: ['Single', 'Multiple'], required: true, note: 'Needed when the applicant needs a visa to enter Canada (e.g. Iranian citizens).' },
+      { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text' },
+      { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text' },
+      { id: 'intendedProvince', label: 'Province you will live / work in', type: 'select', options: PROVINCES, required: true },
+      { id: 'intendedCity', label: 'City / town', type: 'text', required: true },
+      { id: 'intendedAddress', label: 'Address in Canada', type: 'text' },
+      { id: 'intendedJobTitle', label: 'Job title (if known)', type: 'text' },
+      { id: 'intendedDuties', label: 'Brief description of duties', type: 'text' },
+      { id: 'intendedFrom', label: 'Work permit wanted from', type: 'date', required: true },
+      { id: 'intendedTo', label: 'Work permit wanted until', type: 'date', required: true, note: "For a spouse: usually the spouse's permit expiry date." },
+      { id: 'lmiaNumber', label: 'LMIA number or offer of employment number', type: 'text' },
     ],
   },
   {
@@ -386,7 +613,6 @@ const EXTRA_STEPS = [
       { id: 'inviterProgramOrJob', label: "Spouse's program (level) or job title (NOC/TEER)", type: 'text', required: true },
       { id: 'inviterIncome', label: "Spouse's annual income in Canada (CAD)", type: 'number' },
       { id: 'inviterAddress', label: "Spouse's address in Canada", type: 'text' },
-      { id: 'marriageDate', label: 'Date of marriage / start of common-law', type: 'date', required: true },
       { id: 'relationshipHistory', label: 'How you met and your relationship history (dates, cohabitation)', type: 'textarea' },
     ],
   },
@@ -578,15 +804,57 @@ const STEP_BLOCKS = Object.fromEntries(
   [...STUDY_PERMIT_SCHEMA.steps, ...EXTRA_STEPS].map((s) => [s.id, s])
 );
 
+/** IRCC application forms that ask languages, background and history questions. */
+const MAIN_FORMS = new Set(['imm1294', 'imm1295', 'imm5257', 'imm5708', 'imm5709', 'imm5710']);
+
+/**
+ * The type's steps plus the ones its IRCC forms need: every main application
+ * form asks languages and the background Yes/No questions (Schedule 1 asks the
+ * background too), and IMM 1295 asks the details of the intended work.
+ */
+export function stepIds(t) {
+  const forms = new Set((t.forms || []).map((f) => f?.key));
+  const ids = [...t.steps];
+  const insert = (id, beforeIds) => {
+    if (ids.includes(id)) return;
+    const at = ids.findIndex((x) => beforeIds.includes(x));
+    if (at < 0) ids.push(id);
+    else ids.splice(at, 0, id);
+  };
+  const main = [...forms].some((k) => MAIN_FORMS.has(k));
+  if (forms.has('imm1295')) insert('workDetails', ['education', 'history', 'fundsStay']);
+  if (main) insert('language', ['history', 'ties', 'tiesReturn', 'fundsStay']);
+  if (main || forms.has('imm5257b')) insert('background', ['fundsStay', 'finances', 'ties', 'tiesReturn']);
+  return ids;
+}
+
 /** Intake schema for an application type: its ordered step blocks. */
 export function getSchema(type = 'study-permit') {
   const t = getAppType(type);
   return {
     type: t.key,
     title: t.title,
-    steps: t.steps.map((id) => STEP_BLOCKS[id]).filter(Boolean),
+    steps: stepIds(t).map((id) => STEP_BLOCKS[id]).filter(Boolean),
   };
 }
+
+/**
+ * Is a field asked, given the answers so far? `showIf` is
+ * { field, equals } | { field, in: [...] } | { any: [conditions] }.
+ */
+export function fieldShown(f, data = {}) {
+  const test = (c) => {
+    if (!c) return true;
+    if (c.any) return c.any.some(test);
+    const v = data?.[c.field];
+    if (c.in) return c.in.includes(v);
+    return v === c.equals;
+  };
+  return test(f.showIf);
+}
+
+/** Required and asked (a hidden follow-up question is never missing). */
+export const isRequired = (f, data = {}) => !!f.required && fieldShown(f, data);
 
 /**
  * Whom each intake step describes. The AI reads a whole family's folder, so it
@@ -606,7 +874,7 @@ export const STEP_ABOUT = {
 };
 
 /** Steps whose fields may only come from the applicant's OWN documents. */
-export const APPLICANT_ONLY_STEPS = new Set(['personal', 'passport', 'contact', 'education', 'language']);
+export const APPLICANT_ONLY_STEPS = new Set(['personal', 'passport', 'contact', 'education', 'language', 'background']);
 
 /**
  * Fields that name the same person in two sections, per step that makes them
@@ -630,7 +898,7 @@ export function everyField() {
 export function requiredMissing(data, type = 'study-permit') {
   const missing = [];
   for (const f of allFields(type)) {
-    if (f.required && !String(data?.[f.id] ?? '').trim()) missing.push(f);
+    if (isRequired(f, data) && typeof data?.[f.id] !== 'boolean' && !String(data?.[f.id] ?? '').trim()) missing.push(f);
   }
   return missing;
 }

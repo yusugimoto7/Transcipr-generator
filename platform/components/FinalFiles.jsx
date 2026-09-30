@@ -50,6 +50,21 @@ function Contents({ contents, kind }) {
  * The numbered files that go to the IRCC portal, one per upload slot, named as
  * the team names them ("05 - Client Information - Zahra.pdf"), built in one go.
  */
+/** The boxes a pre-filled IRCC form still needs, from its last pre-fill. */
+function FormChecks({ checks }) {
+  if (!checks.length) return null;
+  return (
+    <details className="form-checks">
+      <summary className="small">
+        <AlertTriangle size={13} aria-hidden="true" /> {checks.length} box{checks.length === 1 ? '' : 'es'} to complete or check on this form
+      </summary>
+      <ul className="small">
+        {checks.map((c, i) => <li key={i}>{c}</li>)}
+      </ul>
+    </details>
+  );
+}
+
 export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePlan, driveOn }) {
   const [data, setData] = useState(null); // { plan, built, job }
   const [job, setJob] = useState(null);
@@ -147,6 +162,8 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
   const builtByN = new Map((data?.built?.files || []).map((f) => [f.n, f]));
   const problemBySlot = new Map((data?.built?.problems || []).filter((p) => p.slot).map((p) => [p.slot, p.reason]));
   const genKeys = new Set((app.generated || []).map((g) => g.key));
+  // What the pre-filled form still needs: blanks and answers it could not take.
+  const formChecks = (e) => (e.source?.generated ? (app.generated || []).find((g) => g.key === e.source.generated)?.checks : null) || [];
   const progress = job
     ? {
         value: job.total ? (job.done + (job.inner?.total ? job.inner.done / job.inner.total : 0)) / job.total : null,
@@ -258,6 +275,7 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                   {e.note ? <span> · {e.note}</span> : null}
                 </div>
                 {e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />}
+                {e.kind === 'form' && <FormChecks checks={formChecks(e)} />}
               </div>
               <div className="act">
                 {current ? (

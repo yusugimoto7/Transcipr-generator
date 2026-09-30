@@ -41,6 +41,7 @@ export async function produceDocs(app, keys, { onProgress = () => {} } = {}) {
     onProgress(++i, keys.length, titles[key]);
     try {
       let bytes;
+      let checks = null; // an official form's blanks and rejected answers
       let text = null; // captured for text docs so they can also export as .docx
       const letter = letterSpec(app, key);
       if (letter) {
@@ -56,7 +57,7 @@ export async function produceDocs(app, keys, { onProgress = () => {} } = {}) {
         // The latest official (XFA) form, pre-filled. Needs python/pikepdf and
         // the form template from canada.ca; on failure the data sheet remains.
         try {
-          bytes = (await fillOfficialForm(key.replace(/-filled$/, ''), app)).bytes;
+          ({ bytes, checks } = await fillOfficialForm(key.replace(/-filled$/, ''), app));
         } catch (e) {
           errors.push({ key, message: `could not pre-fill the official form (${e.message}) — use the data sheet to fill it` });
           continue;
@@ -64,7 +65,8 @@ export async function produceDocs(app, keys, { onProgress = () => {} } = {}) {
       } else {
         bytes = await generateFormDataSheet(key, app);
       }
-      produced.push(await saveGenerated(app.id, { key, filename: `${titles[key] || key}.pdf`, bytes: Buffer.from(bytes), ...(text ? { text } : {}) }));
+      const meta = await saveGenerated(app.id, { key, filename: `${titles[key] || key}.pdf`, bytes: Buffer.from(bytes), ...(text ? { text } : {}) });
+      produced.push(checks ? { ...meta, checks } : meta);
     } catch (e) {
       errors.push({ key, message: e.message });
     }

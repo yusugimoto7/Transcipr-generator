@@ -133,7 +133,9 @@ export const IMM5257_MAP = [
     ['Status', (d) => d.residenceStatus],
     ['Marital status', (d) => d.maritalStatus],
     ['Native language', (d) => d.firstLanguage],
-    ['Able to communicate in English/French', (d) => d.languageTest && d.languageTest !== 'None yet' ? 'English' : ''],
+    ['Able to communicate in English/French', (d) => d.ableToCommunicate],
+    ['Most at ease in', (d) => d.mostAtEase],
+    ['Language test taken', (d) => d.languageTest],
   ]},
   { section: 'Passport', rows: [
     ['Passport number', (d) => d.passportNumber],

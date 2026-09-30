@@ -87,7 +87,17 @@ Rules:
 - Dates must be ISO format YYYY-MM-DD.
 - For fields with a fixed option list, answer with one option exactly as written.
 - Money fields are numbers only (no currency symbols or commas).
-- If a value is ambiguous or not present, omit that field entirely.`;
+- If a value is ambiguous or not present, omit that field entirely.
+- ENGLISH ONLY: every text value is written in English with Latin letters — the IRCC forms
+  reject any other script. The only exceptions are the native-language name fields
+  (nativeName, spouseNameNative, fatherNameNative, motherNameNative, and the native-name
+  column of children / siblings), which keep the name exactly as written in its own script.
+  - Names and places of birth: the spelling on the passport or its official English
+    translation (passport "Place of birth" TEHRAN → cityOfBirth "Tehran"), never a new transliteration.
+  - Occupations, employers, schools, fields of study and addresses: translate into English
+    (e.g. "بازنشسته آموزش و پرورش" → "Retired teacher (Ministry of Education)").
+  - Persian digits become 0-9; Persian (Jalali) dates become Gregorian YYYY-MM-DD.
+- uci: digits only (8 or 10 digits), no dashes.`;
 
   const guide = fieldGuide(type);
   const same = samePersonRules(type);

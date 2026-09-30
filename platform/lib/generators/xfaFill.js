@@ -4,10 +4,10 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import { getFormPdf } from '../forms/fetchForms';
-import { FIELD_MAPS } from '../forms/fieldmaps/imm1294';
-import { imm5645FieldMap, imm5645Data } from '../forms/fieldmaps/imm5645';
+import { imm5645FieldMap } from '../forms/fieldmaps/imm5645';
 import { imm5476FieldMap, imm5476Data } from '../forms/fieldmaps/imm5476';
-import { IMM5257B_FIELD_MAP } from '../forms/fieldmaps/imm5257b';
+import { imm5257bFieldMap } from '../forms/fieldmaps/imm5257b';
+import { irccData, irccFieldMap, IRCC_MAIN_FORMS } from '../forms/fieldmaps/ircc';
 import { autoFieldMap } from '../forms/fieldmaps/auto';
 import { getFirm } from '../firm';
 import { getAppType } from '../appTypes';
@@ -26,12 +26,16 @@ function transformDate(iso, part) {
 }
 
 /** Build filler instructions from a field map + application data.
- *  Field spec: { som, from?, const?, transform?, lov?, valueMap?, when? }
+ *  Field spec: { som, from?, const?, transform?, lov?, valueMap?, when?, native?, need?, label? }
  *   - transform: 'year'|'month'|'day' splits an ISO date
- *   - valueMap:  translate our option label to the form's expected value/LOV text
+ *   - valueMap:  translate our option label to the form's expected value/list text
  *   - when(data): optional predicate to include the field
+ *   - lov:       value list for a drop-down the form fills by script (string or fn(data))
+ *   - native:    the box may hold a name in its native script (IMM 5645 names)
+ *   - need:      what to ask for when the answer is missing — pushed to `blanks`
+ *  The filler converts each value to what its field stores (codes, Y/N, 1/0).
  */
-export function buildInstructions(fieldMap, data = {}) {
+export function buildInstructions(fieldMap, data = {}, blanks = []) {
   const out = [];
   for (const f of fieldMap) {
     if (f.when && !f.when(data)) continue;
@@ -39,13 +43,22 @@ export function buildInstructions(fieldMap, data = {}) {
     if (f.const !== undefined) value = f.const;
     else if (f.transform) value = transformDate(data[f.from], f.transform);
     else value = data[f.from];
-    if (value === undefined || value === null || String(value).trim() === '') continue;
-    value = String(value);
-    if (f.valueMap && f.valueMap[value] !== undefined) value = f.valueMap[value];
-    if (value === '') continue;
-    out.push({ som: f.som, value, ...(f.lov ? { lov: f.lov } : {}) });
+    if (value !== undefined && value !== null) value = String(value);
+    if (value && f.valueMap && f.valueMap[value] !== undefined) value = f.valueMap[value];
+    if (value === undefined || value === null || String(value).trim() === '') {
+      if (f.need) blanks.push(f.need);
+      continue;
+    }
+    const lov = typeof f.lov === 'function' ? f.lov(data) : f.lov;
+    const label = f.need || f.label;
+    out.push({ som: f.som, value, ...(lov ? { lov } : {}), ...(f.native ? { native: true } : {}), ...(label ? { label } : {}) });
   }
   return out;
+}
+
+/** "*City/Town" / "Question 2 A Have you…" → a short label for a warning. */
+function cleanLabel(s) {
+  return String(s || '').replace(/^\*\s*/, '').replace(/\s+/g, ' ').replace(/:\s*$/, '').slice(0, 90);
 }
 
 function runFiller(templatePath, outPath, instructions) {
@@ -87,20 +100,26 @@ function runFiller(templatePath, outPath, instructions) {
 export async function fillOfficialForm(formKey, app) {
   const { bytes: templateBytes, meta } = await getFormPdf(formKey);
 
-  // Hand-verified map when we have one; otherwise derive a best-effort map
-  // from the form's own field paths (IRCC reuses field names across forms).
-  let fieldMap = FIELD_MAPS[formKey];
+  // The main application forms share one map matched to the form's own
+  // fields; the family, representative and Schedule 1 forms have their own.
+  let fieldMap;
   let data = app.data || {};
-  if (formKey === 'imm5645') {
-    fieldMap = imm5645FieldMap(app.type);
-    data = imm5645Data(data);
+  let notes = [];
+  if (IRCC_MAIN_FORMS.has(formKey)) {
+    const schema = await dumpFormSchema(formKey);
+    if (!schema?.ok || !Array.isArray(schema.fields)) throw new Error(`cannot read fields of ${formKey}`);
+    data = irccData(data, app);
+    fieldMap = irccFieldMap(formKey, schema.fields);
+    if (String(app.data?.uci || '').trim() && !data._uci) notes.push('UCI: must be 8 or 10 digits — left blank (check the number in the intake)');
+  } else if (formKey === 'imm5645') {
+    ({ map: fieldMap, notes } = imm5645FieldMap(data, app));
   } else if (formKey === 'imm5476') {
     fieldMap = imm5476FieldMap();
     data = imm5476Data(data, getFirm(), getAppType(app.type).title);
   } else if (formKey === 'imm5257b') {
-    fieldMap = IMM5257B_FIELD_MAP;
-  }
-  if (!fieldMap) {
+    ({ map: fieldMap, notes } = imm5257bFieldMap(data, app));
+  } else {
+    // Any other IRCC form: a best-effort map from its field names.
     const schema = await dumpFormSchema(formKey);
     if (!schema?.ok || !Array.isArray(schema.paths)) throw new Error(`cannot read fields of ${formKey}`);
     fieldMap = autoFieldMap(schema.paths);
@@ -113,12 +132,20 @@ export async function fillOfficialForm(formKey, app) {
   await fs.writeFile(templatePath, templateBytes);
 
   try {
-    const instructions = buildInstructions(fieldMap, data);
+    const blanks = [];
+    const instructions = buildInstructions(fieldMap, data, blanks);
     if (!instructions.length) throw new Error('no fields to fill');
     const summary = await runFiller(templatePath, outPath, instructions);
     if (!summary.ok) throw new Error(summary.error || 'filler failed');
     const bytes = await fs.readFile(outPath);
-    return { bytes, summary, version: meta.version };
+    // What is left to do on this form: answers missing from the intake, and
+    // answers the form could not take (not in English, not in its list).
+    const checks = [
+      ...notes,
+      ...blanks.map((b) => `${b} — not answered in the intake`),
+      ...(summary.warnings || []).map((w) => `${cleanLabel(w.label)}: ${w.reason}`),
+    ];
+    return { bytes, summary, version: meta.version, checks: [...new Set(checks)] };
   } finally {
     fs.unlink(templatePath).catch(() => {});
     fs.unlink(outPath).catch(() => {});

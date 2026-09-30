@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Check, AlertCircle } from 'lucide-react';
 import { intakeStatus, isFilled } from '@/lib/progress';
+import { isRequired, fieldShown } from '@/lib/schema';
 
 function Field({ field, value, onChange, missing = false }) {
   const common = {
@@ -82,9 +83,9 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
   const last = stepIdx === schema.steps.length - 1;
   const next = schema.steps[stepIdx + 1];
   // Required answers still empty: in this section, and across the whole intake.
-  const missingHere = step.fields.filter((f) => f.required && !isFilled(app.data, f));
+  const missingHere = step.fields.filter((f) => isRequired(f, app.data) && !isFilled(app.data, f));
   const missingAll = schema.steps
-    .map((s, i) => ({ i, step: s, fields: s.fields.filter((f) => f.required && !isFilled(app.data, f)) }))
+    .map((s, i) => ({ i, step: s, fields: s.fields.filter((f) => isRequired(f, app.data) && !isFilled(app.data, f)) }))
     .filter((x) => x.fields.length);
   const missingCount = missingAll.reduce((n, x) => n + x.fields.length, 0);
   const focusField = (id) => setTimeout(() => {
@@ -181,9 +182,9 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
 
           <div className="ic-body">
             <div className="grid2">
-              {step.fields.map((f) => (
+              {step.fields.filter((f) => fieldShown(f, app.data)).map((f) => (
                 <div key={f.id} style={f.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-                  <Field field={f} value={app.data?.[f.id]} onChange={onFieldChange} missing={f.required && !isFilled(app.data, f)} />
+                  <Field field={f} value={app.data?.[f.id]} onChange={onFieldChange} missing={isRequired(f, app.data) && !isFilled(app.data, f)} />
                 </div>
               ))}
             </div>

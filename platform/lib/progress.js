@@ -1,5 +1,5 @@
 import { checklistStatus, missingItems } from './checklist';
-import { getSchema } from './schema';
+import { getSchema, isRequired, fieldShown } from './schema';
 
 /**
  * Where a client file stands — one place for the numbers the workspace header,
@@ -18,9 +18,9 @@ function filled(data, f) {
 /** Per intake section: done (all required answered), partial, or todo. */
 export function intakeStatus(app, schema = getSchema(app.type)) {
   return schema.steps.map((s) => {
-    const req = s.fields.filter((f) => f.required);
+    const req = s.fields.filter((f) => isRequired(f, app.data));
     const left = req.filter((f) => !filled(app.data, f)).length;
-    const any = s.fields.some((f) => filled(app.data, f));
+    const any = s.fields.some((f) => fieldShown(f, app.data) && filled(app.data, f));
     if (req.length ? left === 0 : any) return { id: s.id, title: s.title, state: 'done', left: 0, text: 'Complete' };
     if (any) return { id: s.id, title: s.title, state: 'partial', left, text: `${left} required left` };
     return { id: s.id, title: s.title, state: 'todo', left: req.length, text: req.length ? `${req.length} required` : 'Optional' };

@@ -6,7 +6,7 @@ import fs from 'fs';
 import { loadLib } from './_load.mjs';
 
 const { APP_TYPE_LIST, codeMapFor, lettersFor, primaryLetter } = await loadLib('appTypes.js');
-const { getSchema } = await loadLib('schema.js');
+const { getSchema, stepIds } = await loadLib('schema.js');
 const { QUESTION_SETS } = await loadLib('sopQuestions.js');
 const { CATEGORY_KEYS } = await loadLib('generators/classify.js');
 const { IRCC_FORMS } = await loadLib('forms/registry.js');
@@ -28,9 +28,16 @@ for (const t of APP_TYPE_LIST) {
     const leaked = STUDY_ONLY.filter((id) => ids.includes(id));
     if (leaked.length) fail(`${t.key}: study-only intake questions ${leaked.join(', ')}`);
   }
-  if (schema.steps.length !== t.steps.length) {
+  const wanted = stepIds(t);
+  if (schema.steps.length !== wanted.length) {
     const have = new Set(schema.steps.map((s) => s.id));
-    fail(`${t.key}: unknown intake step(s) ${t.steps.filter((s) => !have.has(s)).join(', ')}`);
+    fail(`${t.key}: unknown intake step(s) ${wanted.filter((s) => !have.has(s)).join(', ')}`);
+  }
+  // One question, one place: a field id asked in two steps would show twice.
+  const seen = new Map();
+  for (const st of schema.steps) for (const f of st.fields) {
+    if (seen.has(f.id)) fail(`${t.key}: field ${f.id} in both ${seen.get(f.id)} and ${st.id}`);
+    seen.set(f.id, st.id);
   }
   for (const item of t.checklist) if (!cats.has(item.key)) fail(`${t.key}: checklist ${item.code} uses unknown category '${item.key}'`);
   for (const p of t.packages) {

@@ -1,29 +1,60 @@
 /**
- * Field map: intake fields -> IMM 5645 (Family Information) XFA paths, form
- * version 01-01-2021, read from the blank template's datasets.
+ * Field map: intake fields -> IMM 5645 (Family Information), form version
+ * 01-01-2021, paths as resolved from the form (lib/forms/xfa_fields.py).
  *
- * Section A: the applicant, their spouse, mother and father. Section B: the
- * first child; Section C: the first brother or sister (the form has one row
- * each in its data; further rows are added by hand from the data sheet).
- * Checkboxes on this form take 1 (ticked) / 0. Marital-status drop-downs are
- * left for the applicant: the form's wording ("Married — physically present")
- * needs a judgement the intake does not hold.
+ * Section A: the applicant, their spouse, mother and father. Section B: up to
+ * four children; Section C: up to seven brothers and sisters.
+ *
+ * Names are written in English followed by the native-language spelling
+ * ("Sara Rahimi سارا رحیمی"), as the form asks. Every other box — country of
+ * birth, address, occupation, relationship — is English only (the filler
+ * leaves a box blank and reports it rather than write another script).
+ * "Will accompany you to Canada?" is ticked Yes or No for every person listed.
  */
 
-const has = (v) => String(v || '').trim().length > 0;
+const has = (v) => String(v ?? '').trim().length > 0;
 const P = 'IMM_5645/page1';
 
-/** Name, date of birth, country from one line of the intake's children / siblings list. */
-function person(text, n = 0) {
-  const line = String(text || '')
+/** Our marital statuses → the form's list. */
+const MARITAL = {
+  'Never Married / Single': 'Single',
+  Single: 'Single',
+  Married: 'Married-physically present',
+  'Common-Law': 'Common-law',
+  Divorced: 'Divorced',
+  Separated: 'Legally separated',
+  Widowed: 'Widowed',
+  'Annulled Marriage': 'Annulled marriage',
+};
+
+const yesNo = (v) => {
+  const s = String(v ?? '').trim().toLowerCase();
+  return v === true || /^(y|yes|true|accompany|accompanying)$/.test(s) ? true : v === false || /^(n|no|false)$/.test(s) ? false : undefined;
+};
+
+/** "English name native name" — either part may be missing. */
+const bilingual = (english, native) => [english, native].map((s) => String(s ?? '').trim()).filter(Boolean).join(' ');
+
+/**
+ * One person per line of the intake's children / siblings list:
+ *   English name | native name | date of birth | country of birth | relationship | marital status | address | occupation | accompanying
+ * Older entries "Name, 2015-04-02, Iran" are still read.
+ */
+export function people(text) {
+  return String(text ?? '')
     .split(/\r?\n/)
     .map((s) => s.trim())
-    .filter(Boolean)[n];
-  if (!line) return null;
-  const parts = line.split(/\s*[,;|–-]\s+|\s{2,}/).map((s) => s.trim()).filter(Boolean);
-  const dob = parts.find((p) => /^\d{4}-\d{2}-\d{2}$/.test(p)) || '';
-  const rest = parts.filter((p) => p !== dob);
-  return { name: rest[0] || '', dob, country: rest[1] || '' };
+    .filter(Boolean)
+    .map((line) => {
+      if (line.includes('|')) {
+        const [name, native, dob, country, relationship, marital, address, occupation, accompany] = line.split('|').map((s) => s.trim());
+        return { name, native, dob, country, relationship, marital, address, occupation, accompany: yesNo(accompany) };
+      }
+      const parts = line.split(/\s*[,;–]\s+|\s{2,}/).map((s) => s.trim()).filter(Boolean);
+      const dob = parts.find((p) => /^\d{4}-\d{2}-\d{2}$/.test(p)) || '';
+      const rest = parts.filter((p) => p !== dob);
+      return { name: rest[0] || '', native: '', dob, country: rest[1] || '', relationship: '', marital: '', address: '', occupation: '', accompany: undefined };
+    });
 }
 
 /** The applicant's address in one line, from the structured contact fields. */
@@ -34,61 +65,82 @@ function address(d) {
 
 const kind = (type) => (/study/.test(type) ? 'Student' : /owp|work|pgwp|imp-|sowp/.test(type) ? 'Worker' : 'Visitor');
 
-export function imm5645FieldMap(type = '') {
-  const which = kind(type);
-  return [
-    // What the form is for.
-    ...['Visitor', 'Worker', 'Student'].map((k) => ({ som: `${P}/Subform1/${k}`, const: k === which ? '1' : '0' })),
-
-    // --- Section A: applicant ---
-    { som: `${P}/SectionA/Applicant/AppName`, from: '_fullName' },
-    { som: `${P}/SectionA/Applicant/AppDOB`, from: 'dob' },
-    { som: `${P}/SectionA/Applicant/AppCOB`, from: '_placeOfBirth' },
-    { som: `${P}/SectionA/Applicant/AppAddress`, from: '_address' },
-    { som: `${P}/SectionA/Applicant/AppOccupation`, from: 'currentOccupation' },
-
-    // --- Spouse ---
-    { som: `${P}/SectionA/Spouse/SpouseName`, from: 'spouseName' },
-    { som: `${P}/SectionA/Spouse/SpouseDOB`, from: 'spouseDob' },
-    { som: `${P}/SectionA/Spouse/SpouseCOB`, from: 'spouseCitizenship' },
-    { som: `${P}/SectionA/Spouse/SpouseAddress`, from: '_spouseAddress' },
-    { som: `${P}/SectionA/Spouse/SpouseOccupation`, from: '_spouseOccupation' },
-    { som: `${P}/SectionA/Spouse/SpouseYes`, const: '1', when: (d) => has(d.spouseName) && d.spouseAccompanying === true },
-    { som: `${P}/SectionA/Spouse/SpouseNo`, const: '1', when: (d) => has(d.spouseName) && d.spouseAccompanying === false },
-
-    // --- Parents ---
-    { som: `${P}/SectionA/Mother/MotherName`, from: 'motherName' },
-    { som: `${P}/SectionA/Mother/MotherDOB`, from: 'motherDob' },
-    { som: `${P}/SectionA/Father/FatherName`, from: 'fatherName' },
-    { som: `${P}/SectionA/Father/FatherDOB`, from: 'fatherDob' },
-
-    // --- Section B: first child · Section C: first brother or sister ---
-    { som: `${P}/SectionB/Child/ChildName`, from: '_child1Name' },
-    { som: `${P}/SectionB/Child/ChildDOB`, from: '_child1Dob' },
-    { som: `${P}/SectionB/Child/ChildCOB`, from: '_child1Country' },
-    { som: `${P}/SectionC/Child/ChildName`, from: '_sibling1Name' },
-    { som: `${P}/SectionC/Child/ChildDOB`, from: '_sibling1Dob' },
-    { som: `${P}/SectionC/Child/ChildCOB`, from: '_sibling1Country' },
+/** Specs for one person's row: name, marital status, date / country of birth, address, occupation, accompany. */
+function personRow(base, names, p, who) {
+  const specs = [
+    { som: `${base}/${names.name}`, const: p.name, native: true, need: `${who}: name` },
+    { som: `${base}/${names.dob}`, const: p.dob, label: `${who}: date of birth` },
+    { som: `${base}/${names.cob}`, const: p.country, need: `${who}: country of birth` },
+    { som: `${base}/${names.address}`, const: p.address, need: `${who}: present address` },
+    { som: `${base}/${names.occupation}`, const: p.occupation, need: `${who}: present occupation` },
+    { som: `${base}/ChildMStatus`, const: MARITAL[p.marital] || p.marital, need: `${who}: marital status` },
   ];
+  if (names.relationship) specs.push({ som: `${base}/${names.relationship}`, const: p.relationship, label: `${who}: relationship` });
+  if (names.yes) {
+    specs.push({ som: `${base}/${names.yes}`, const: p.accompany === true ? '1' : p.accompany === false ? '0' : '', need: `${who}: will accompany you to Canada? (Yes/No)` });
+    specs.push({ som: `${base}/${names.no}`, const: p.accompany === false ? '1' : p.accompany === true ? '0' : '' });
+  }
+  return specs;
 }
 
-/** Intake data plus the composed values the map reads (keys starting with "_"). */
-export function imm5645Data(d = {}) {
-  const child = person(d.children, 0) || {};
-  const sib = person(d.siblings, 0) || {};
-  return {
-    ...d,
-    _fullName: [d.familyName, d.givenName].filter(Boolean).join(', '),
-    _placeOfBirth: [d.cityOfBirth, d.countryOfBirth].filter(Boolean).join(', '),
-    _address: address(d),
-    // A spouse in Canada (spouse-based applications) lives at the address on the intake's spouse step.
-    _spouseAddress: d.inviterAddress || '',
-    _spouseOccupation: d.inviterProgramOrJob || d.spouseOccupation || '',
-    _child1Name: child.name,
-    _child1Dob: child.dob,
-    _child1Country: child.country,
-    _sibling1Name: sib.name,
-    _sibling1Dob: sib.dob,
-    _sibling1Country: sib.country,
+const CHILD = { name: 'ChildName', dob: 'ChildDOB', cob: 'ChildCOB', address: 'ChildAddress', occupation: 'ChildOccupation', relationship: 'ChildRelationship', yes: 'ChildYes', no: 'ChildNo' };
+
+export function imm5645FieldMap(d = {}, app = {}) {
+  const type = app.type || '';
+  const which = kind(type);
+  const married = ['Married', 'Common-Law'].includes(d.maritalStatus);
+  // A spouse already in Canada (spouse-based applications) does not "accompany" the applicant.
+  const spouseInCanada = has(d.inviterName) || /owp|sowp/.test(type);
+  const spouseEnglish = has(d.spouseGivenName) || has(d.spouseFamilyName) ? `${d.spouseGivenName || ''} ${d.spouseFamilyName || ''}`.trim() : d.spouseName;
+  const parentAccompany = (v) => (v === undefined || v === '' ? false : v);
+
+  const applicant = {
+    name: bilingual(`${d.givenName || ''} ${d.familyName || ''}`.trim(), d.nativeName),
+    dob: d.dob,
+    country: d.countryOfBirth,
+    address: address(d),
+    occupation: d.currentOccupation,
+    marital: d.maritalStatus,
   };
+  const spouse = married
+    ? {
+        name: bilingual(spouseEnglish, d.spouseNameNative),
+        dob: d.spouseDob,
+        country: d.spouseCountryOfBirth,
+        address: d.inviterAddress || d.spouseAddress,
+        occupation: d.spouseOccupation || d.inviterProgramOrJob,
+        marital: d.maritalStatus,
+        accompany: d.spouseAccompanying === true ? true : d.spouseAccompanying === false || spouseInCanada ? false : undefined,
+      }
+    : null;
+  const parent = (who) => ({
+    name: bilingual(d[`${who}Name`], d[`${who}NameNative`]),
+    dob: d[`${who}Dob`],
+    country: d[`${who}BirthCountry`],
+    address: d[`${who}Address`],
+    occupation: d[`${who}Occupation`],
+    marital: d[`${who}MaritalStatus`],
+    accompany: parentAccompany(d[`${who}Accompanying`]),
+  });
+  const kids = people(d.children).map((p) => ({ ...p, name: bilingual(p.name, p.native) }));
+  const sibs = people(d.siblings).map((p) => ({ ...p, name: bilingual(p.name, p.native) }));
+
+  const map = [
+    ...['Visitor', 'Worker', 'Student', 'Other'].map((k) => ({ som: `${P}/Subform1/${k}`, const: k === which ? '1' : '0' })),
+    ...personRow(`${P}/SectionA/Applicant`, { name: 'AppName', dob: 'AppDOB', cob: 'AppCOB', address: 'AppAddress', occupation: 'AppOccupation' }, applicant, 'Applicant'),
+    ...(spouse
+      ? personRow(`${P}/SectionA/Spouse`, { name: 'SpouseName', dob: 'SpouseDOB', cob: 'SpouseCOB', address: 'SpouseAddress', occupation: 'SpouseOccupation', yes: 'SpouseYes', no: 'SpouseNo' }, spouse, 'Spouse')
+      : []),
+    ...personRow(`${P}/SectionA/Mother`, { name: 'MotherName', dob: 'MotherDOB', cob: 'MotherCOB', address: 'MotherAddress', occupation: 'MotherOccupation', yes: 'MotherYes', no: 'MotherNo' }, parent('mother'), 'Mother'),
+    ...personRow(`${P}/SectionA/Father`, { name: 'FatherName', dob: 'FatherDOB', cob: 'FatherCOB', address: 'FatherAddress', occupation: 'FatherOccupation', yes: 'FatherYes', no: 'FatherNo' }, parent('father'), 'Father'),
+    ...kids.slice(0, 4).flatMap((p, i) => personRow(`${P}/SectionB/Child${i ? `[${i}]` : ''}`, CHILD, p, `Child ${i + 1}`)),
+    ...sibs.slice(0, 7).flatMap((p, i) => personRow(`${P}/SectionC/Child${i ? `[${i}]` : ''}`, CHILD, p, `Brother/sister ${i + 1}`)),
+  ];
+
+  const notes = [];
+  if (kids.length > 4) notes.push(`IMM 5645 has 4 rows for children; ${kids.length - 4} more go on an extra page`);
+  if (sibs.length > 7) notes.push(`IMM 5645 has 7 rows for brothers and sisters; ${sibs.length - 7} more go on an extra page`);
+  if (!has(d.nativeName)) notes.push('Applicant name in the native language is missing (intake: Personal details)');
+  for (const who of ['mother', 'father']) if (!has(d[`${who}NameNative`])) notes.push(`${who === 'mother' ? 'Mother' : 'Father'}'s name in the native language is missing (intake: Family members)`);
+  return { map, notes };
 }
