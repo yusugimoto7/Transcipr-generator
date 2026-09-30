@@ -45,6 +45,10 @@ table.fee{border-collapse:collapse;margin:4px 0 8px 0;min-width:75%;}
 table.fee td{padding:3px 9px;border:1px solid #bbb;}
 table.fee td.n{text-align:right;white-space:nowrap;}
 .fa table.fee td.n{text-align:left;}
+/* Farsi labels are wider in Vazirmatn: give the Farsi fee table the full cell so
+   each label stays on one line like the English one. */
+.fa table.fee{width:100%;}
+.fa table.fee td.n{width:1%;}
 table.fee tr.tot td{font-weight:700;background:#f2f2f2;}
 .sig{margin-top:22px;page-break-inside:avoid;}
 .sig table{width:100%;border-collapse:collapse;table-layout:fixed;border:0 !important;}
