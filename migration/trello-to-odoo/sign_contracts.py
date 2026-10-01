@@ -825,6 +825,19 @@ else:
             rest = (lead.name or '')[len(head):].lstrip(' -') if _file_no(head) else (lead.name or '')
             lead.sudo().write({'name': '%s - %s' % (ref, rest.strip()) if rest.strip() else ref})
     file_no = order.client_order_ref.strip()
+    # One number, one client: refuse to send a number another card already
+    # uses (it happened when a number was typed into a card name by hand).
+    _Lead = env['crm.lead'].sudo().with_context(active_test=False)
+    _other = _Lead.search(['&', ('id', '!=', lead.id if lead else 0), '|', '|', ('name', '=like', file_no + ' %'),
+                           ('x_contract_no_sg', '=', file_no), ('x_contract_no_sb', '=', file_no)], limit=1)
+    if not _other:
+        _so = env['sale.order'].sudo().search([('id', '!=', order.id), ('state', '!=', 'cancel'),
+                                               ('opportunity_id', '!=', lead.id if lead else 0),
+                                               '|', ('client_order_ref', '=', file_no), ('x_sugimoto_no', '=', file_no)], limit=1)
+        _other = _so.opportunity_id if _so else False
+    if _other:
+        raise UserError("Contract number %s is already used by the card \"%s\". Give this client a new number with "
+                        "the \"Change contract no.\" button on the CRM card, then send again." % (file_no, _other.name))
     # A combined entrepreneur file is two separate agreements, one per company.
     # Each takes the next number of its own company's series, so the pair never
     # shares digits (client's request, 2026-09-20). The Sparkbridge number is
@@ -1053,6 +1066,7 @@ else:
         # A positive marker rather than an empty value: the sync job filters on
         # this, and Odoo does not match '' against an empty text column.
         'x_sheet_synced': 'pending',
+        'x_sheet_rename': False,
         # The rest of the row, so the sync job needs one read and one write and
         # never has to reassemble a client from four models.
         'x_sheet_company': 'SB' if any(k.startswith('SB-') for k in kinds) else 'SG',

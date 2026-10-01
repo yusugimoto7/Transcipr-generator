@@ -61,10 +61,12 @@ def file_no(v):
     head = v.rstrip('0123456789')
     digits = v[len(head):]
     return v if head in FILE_PREFIXES and 4 <= len(digits) <= 9 else ''
-def taken(number, order):
+def taken(number, order, lead=None):
     Lead, Order = env['crm.lead'].sudo().with_context(active_test=False), env['sale.order'].sudo()
-    return bool(Lead.search_count(['|', '|', ('name', '=like', number + ' %'), ('x_contract_no_sg', '=', number), ('x_contract_no_sb', '=', number)])
-                or Order.search_count([('id', '!=', order.id), '|', ('client_order_ref', '=', number), ('x_sugimoto_no', '=', number)]))
+    lid = lead.id if lead else 0
+    return bool(Lead.search_count([('id', '!=', lid), '|', '|', ('name', '=like', number + ' %'), ('x_contract_no_sg', '=', number), ('x_contract_no_sb', '=', number)])
+                or Order.search_count([('id', '!=', order.id), ('opportunity_id', '!=', lid), ('state', '!=', 'cancel'),
+                                       '|', ('client_order_ref', '=', number), ('x_sugimoto_no', '=', number)]))
 
 for order in records:
     lead = order.opportunity_id
@@ -72,6 +74,14 @@ for order in records:
     if lead and not file_no(order.client_order_ref):
         head = (lead.name or '').split(' - ')[0].split(' \u2013 ')[0].strip()
         number = file_no(head)
+        # A number typed into the card name by hand is used only if no other
+        # card or quotation has it; otherwise the card gets a fresh one.
+        if number and taken(number, order, lead):
+            lead.sudo().message_post(body='The number %s in the name of this card already belongs to another client; a new number was assigned.' % number,
+                                     message_type='comment', subtype_xmlid='mail.mt_note')
+            rest = (lead.name or '')[len(head):].lstrip(' -').strip()
+            lead.sudo().write({'name': rest or lead.name})
+            head, number = '', ''
         if not number:
             # an earlier quotation of the same card already has one
             for other in lead.order_ids.filtered(lambda o: o.id != order.id):
