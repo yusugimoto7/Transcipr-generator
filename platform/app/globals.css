@@ -866,3 +866,72 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .row-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
 .row-grid .field { margin: 0; }
 .rows-field > .btn-secondary { justify-self: start; }
+
+/* ---------- Client questionnaire (/q/<link>) ---------- */
+.cq { min-height: 100vh; background: var(--bg, #f4f6fa); color: var(--ink); font-family: var(--font); }
+.cq.rtl { font-family: 'Vazirmatn', var(--font); }
+.cq-top { position: sticky; top: 0; z-index: 5; background: var(--navy-900, #0f1729); color: #fff; }
+.cq-top-inner { max-width: 880px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cq-brand { font-weight: 700; letter-spacing: 0.02em; }
+.cq-langs { display: flex; gap: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 3px; }
+.cq-langs button { background: transparent; color: #fff; border: 0; min-height: 30px; padding: 4px 12px; border-radius: 6px; font: inherit; font-size: 13px; }
+.cq-langs button.on { background: #fff; color: var(--navy-900, #0f1729); font-weight: 600; }
+.cq-progress { height: 4px; background: rgba(255, 255, 255, 0.15); }
+.cq-progress > div { height: 100%; background: var(--brand, #d9472b); transition: width 0.4s; }
+.cq-main { max-width: 880px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 14px; }
+.cq-main h1 { font-size: 22px; margin: 4px 0 0; }
+.cq-who { margin: 0; font-weight: 600; color: var(--ink-soft); }
+.cq-intro, .cq-help, .cq-small { color: var(--ink-soft); font-size: 14px; line-height: 1.7; margin: 0; }
+.cq-small { font-size: 12.5px; }
+.cq-save { font-size: 12.5px; color: var(--ink-soft); }
+.cq-save.error { color: var(--danger); font-weight: 600; }
+.cq-card { background: var(--panel, #fff); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.cq-card h2 { font-size: 17px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.cq-num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--sunk); border: 1px solid var(--line); font-size: 13px; }
+.cq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.cq-field { display: grid; gap: 5px; align-content: start; min-width: 0; }
+.cq-field.wide { grid-column: 1 / -1; }
+.cq-field input:not([type='checkbox']), .cq-field select, .cq-field textarea { width: 100%; min-height: 42px; font: inherit; font-size: 15px; }
+.cq-field.bad input, .cq-field.bad select, .cq-field.bad textarea, .cq-field.bad .cq-seg { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.cq-label { font-size: 13.5px; font-weight: 600; line-height: 1.6; }
+.cq-req { color: var(--danger); }
+.cq-en { white-space: nowrap; font-weight: 500; font-size: 11px; color: var(--accent); background: var(--accent-soft); border-radius: 4px; padding: 0 5px; margin-inline-start: 6px; }
+.cq-err { color: var(--danger); font-size: 12.5px; }
+.cq-seg { display: inline-flex; gap: 6px; }
+.cq-seg button { min-width: 72px; min-height: 40px; background: var(--panel, #fff); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 8px; font: inherit; }
+.cq-seg button.on { background: var(--navy-900, #0f1729); color: #fff; border-color: var(--navy-900, #0f1729); }
+.cq-date { display: grid; gap: 4px; }
+.cq-shamsi { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); }
+.cq-shamsi input { max-width: 130px; min-height: 32px !important; font-size: 13px !important; }
+.cq-hint { font-size: 12px; color: var(--ink-soft); }
+.cq-rows { display: grid; gap: 10px; }
+.cq-row { position: relative; border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 0; min-width: 0; }
+.cq-row legend { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); padding: 0 6px; }
+.cq-remove { position: absolute; top: -12px; inset-inline-end: 10px; background: var(--panel, #fff); color: var(--danger); border: 1px solid var(--line); border-radius: 6px; font: inherit; font-size: 12px; min-height: 24px; padding: 0 8px; }
+.cq-add { justify-self: start; background: var(--panel, #fff); color: var(--ink); border: 1px dashed var(--line-strong); border-radius: 8px; min-height: 38px; padding: 0 14px; font: inherit; font-size: 14px; }
+.cq-banner { border-radius: 10px; padding: 12px 14px; display: grid; gap: 6px; }
+.cq-banner.ok { background: var(--ok-soft); color: var(--ok); }
+.cq-banner.warn { background: var(--warn-soft); color: var(--ink); }
+.cq-banner ul { margin: 0; padding-inline-start: 18px; display: grid; gap: 3px; }
+.cq-link { background: none; border: 0; padding: 0; min-height: 0; color: var(--ink); text-decoration: underline; font: inherit; font-size: 13px; text-align: start; }
+.cq-agree { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.7; }
+.cq-agree input { width: 20px; height: 20px; margin-top: 4px; flex: none; }
+.cq-submit { justify-self: start; min-height: 46px; padding: 0 28px; font: inherit; font-size: 16px; font-weight: 700; background: var(--brand, #d9472b); color: #fff; border: 0; border-radius: 10px; }
+.cq-submit:disabled { opacity: 0.45; }
+.cq-foot { text-align: center; font-size: 11.5px; color: var(--ink-faint); padding-top: 8px; }
+@media (max-width: 640px) { .cq-grid { grid-template-columns: minmax(0, 1fr); } .cq-main h1 { font-size: 19px; } }
+
+/* Client questionnaire box (team side, top of the intake) */
+.cf-box summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; flex-wrap: wrap; }
+.cf-box summary::-webkit-details-marker { display: none; }
+.cf-box .cf-caret { margin-left: auto; transition: transform 0.2s; }
+.cf-box[open] .cf-caret { transform: rotate(180deg); }
+.cf-link { display: flex; gap: 6px; flex-wrap: wrap; }
+.cf-link input { flex: 1 1 260px; min-width: 0; font-family: var(--mono, monospace); font-size: 12.5px; }
+.table-wrap { overflow-x: auto; }
+.cf-table td { vertical-align: top; padding: 8px 10px; }
+.cf-table td:first-child { width: 28px; }
+.cf-table tr.same td { opacity: 0.6; }
+.pre { white-space: pre-line; overflow-wrap: anywhere; font-size: 13px; }
+.cf-other { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 14px; margin: 0; }
+.cf-other dd { margin: 2px 0 0; }

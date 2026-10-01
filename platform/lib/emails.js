@@ -63,6 +63,6 @@ export function emailFactsText(app, max = 80) {
 /** What a viewer may see of a file: the emails, their analysis and the team's notes are for the team. */
 export function forViewer(app, staff) {
   if (staff || !app) return app;
-  const { emails, notes, ...rest } = app;
+  const { emails, notes, clientLink, ...rest } = app;
   return rest;
 }

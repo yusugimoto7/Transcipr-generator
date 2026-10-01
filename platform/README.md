@@ -368,6 +368,35 @@ pages with too little text fall back to the vision model — asked to pick the
 upright one of four pictures — and any page still undecided is left as scanned
 and listed after the build so staff can check it.
 
+## Client questionnaire (Form 124 / 128)
+
+Each person's file can send them a one-page questionnaire covering the Form 124
+(personal profile) and 128 (background) questions. It opens in Persian, right
+to left, and has an English switch. Staff open it from **Intake → Client
+questionnaire**.
+
+- **Make the client's link** gives a personal link (`/q/<file>.<secret>`) to
+  send them. No account or password is needed. They can open it again and
+  again to continue, and answers save as they type.
+- What the intake already knows (passport names, date of birth, jobs, refusals
+  …) is filled in for them to check.
+- Dates are Gregorian, and the client can type a Persian (Shamsi) date to have
+  it converted.
+- English-only answers refuse Persian letters, and "to" dates cannot be later
+  than today.
+- To submit, every required answer must be given. The client ticks the
+  declaration that everything is true and complete, and types their full name.
+  The time, IP address and browser are kept with it. After that the
+  questionnaire is read-only for them. **Reopen for the client** lets them
+  change it again.
+- Nothing reaches the intake by itself. The panel lists each answer next to
+  what the intake holds now; tick the ones to keep, or **Accept all**.
+  Answers with no intake question (relatives in Canada, bank accounts …) are
+  listed under them.
+- **New link** replaces the link (the old one stops working), and **Turn off
+  link** closes it. Links expire after `CLIENT_LINK_DAYS` days (default 120).
+  Set `PUBLIC_URL` so copied links use the public address.
+
 ## Application types
 
 Defined in `lib/appTypes.js`, one per service in the TR Visa team's checklists

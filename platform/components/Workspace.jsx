@@ -277,7 +277,7 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
             <EmailsPanel app={app} patchLocal={patchLocal} onFieldChange={onFieldChange} fieldLabel={(id) => fieldLabels.get(id)} />
           )}
           {tab === 'intake' && (
-            <IntakePanel app={app} schema={schema} sections={p.intake.sections} onFieldChange={onFieldChange} onFinish={() => go(showFinal ? 'review' : 'overview')} activeStepId={sub} onStepChange={setSub} saveState={saveState} />
+            <IntakePanel app={app} schema={schema} sections={p.intake.sections} onFieldChange={onFieldChange} onFinish={() => go(showFinal ? 'review' : 'overview')} activeStepId={sub} onStepChange={setSub} saveState={saveState} staff={staff} patchLocal={patchLocal} />
           )}
           {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
           {tab === 'review' && <ReviewPanel app={app} progress={p} patchLocal={patchLocal} go={go} />}

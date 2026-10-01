@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, Check, AlertCircle, Plus, Trash2, ArrowUp } from 'lucide-react';
 import { intakeStatus, isFilled } from '@/lib/progress';
 import { isRequired, fieldShown, valueProblem, rowProblems } from '@/lib/schema';
+import ClientFormBox from '@/components/ClientFormBox';
 
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -155,7 +156,7 @@ function Field({ field, value, onChange, missing = false, data = {} }) {
  * the left (a drop-down on small screens), the form, and Back / Next kept in
  * view at the bottom. Answers save as you type.
  */
-export default function IntakePanel({ app, schema, sections, onFieldChange, onFinish, activeStepId, onStepChange }) {
+export default function IntakePanel({ app, schema, sections, onFieldChange, onFinish, activeStepId, onStepChange, staff = false, patchLocal }) {
   const fromUrl = schema.steps.findIndex((s) => s.id === activeStepId);
   const [stepIdx, setStepIdxState] = useState(fromUrl >= 0 ? fromUrl : 0);
 
@@ -172,6 +173,7 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
   };
 
   const statuses = sections || intakeStatus(app, schema);
+  const fieldLabels = new Map(schema.steps.flatMap((s) => s.fields.map((f) => [f.id, f.label])));
   const doneCount = statuses.filter((x) => x.state === 'done').length;
   const step = schema.steps[stepIdx];
   const st = statuses[stepIdx];
@@ -235,6 +237,7 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
       </nav>
 
       <div className="stack">
+        {staff && <ClientFormBox app={app} patchLocal={patchLocal} fieldLabel={(id) => fieldLabels.get(id)} />}
         {missingCount > 0 && (
           <details className="missing-all">
             <summary>
