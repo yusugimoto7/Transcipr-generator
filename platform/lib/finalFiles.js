@@ -404,8 +404,8 @@ export function documentSuggestions(app, plan = planFinalFiles(app)) {
     const options = [];
     if (d.category) {
       for (const slot of inSet) if (slot !== w?.slot && SLOT[slot] && slotCategories(slot, pkgs).has(d.category)) options.push({ slot, name: SLOT[slot].name, action: 'move' });
-      for (const slot of Object.keys(SLOT)) {
-        if (inSet.includes(slot) || !(SLOT[slot].categories || []).includes(d.category)) continue;
+      const takes = Object.keys(SLOT).filter((slot) => !inSet.includes(slot) && (SLOT[slot].categories || []).includes(d.category));
+      for (const slot of oneOfEach(app, takes, new Set(inSet))) {
         const portal = portalSlot(slot, t, app);
         if (portal && !portal.name) continue; // no slot of its own in this portal flow
         options.push({ slot, name: SLOT[slot].name, action: 'add', ...(portal?.name ? { portal: portal.name } : {}) });
@@ -419,22 +419,86 @@ export function documentSuggestions(app, plan = planFinalFiles(app)) {
   return out;
 }
 
+// Files that are the same thing under different names (one portal slot, or the
+// same documents): only one of each group is offered, the first that fits.
+const SIMILAR = [
+  ['custody-consent', 'consent', 'custody'],
+  ['family-status', 'spouse-status'],
+  ['education', 'transcript', 'degrees'],
+  ['tuition', 'deposit'],
+  ['lmia', 'job-offer'],
+  ['loa', 'enrolment'],
+  ['inviter', 'invitation'],
+];
+
+// Files only a work or a study application has.
+const ONLY_FOR = {
+  lmia: /^Work/, 'job-offer': /^Work/, contract: /^Work/, 'job-requirements': /^Work/, degrees: /^Work/,
+  pal: /^Study/, gic: /^Study/, tuition: /^Study/, deposit: /^Study/,
+};
+
+/** Groups of interchangeable slots for this application, preferred member first. */
+function similarGroups(app) {
+  const t = getAppType(app.type);
+  const groups = SIMILAR.map((g) => (g[0] === 'family-status' && t.where !== 'inside' ? ['spouse-status', 'family-status'] : g));
+  // Files uploaded to the same portal slot in this flow are one file too.
+  const grouped = new Set(groups.flat());
+  const byPortal = new Map();
+  for (const k of Object.keys(SLOT)) {
+    if (grouped.has(k)) continue;
+    const name = portalSlot(k, t, app)?.name;
+    if (!name) continue;
+    if (!byPortal.has(name)) byPortal.set(name, []);
+    byPortal.get(name).push(k);
+  }
+  return [...groups, ...[...byPortal.values()].filter((g) => g.length > 1)];
+}
+
 /**
- * Files that can be added to the set: every portal file not in it, with its
- * portal slot in this application's portal flow, and how often the latest
- * applications of this type had it.
+ * Of the slots that could be offered, one per group of similar files — none
+ * when the set already holds one of the group.
+ */
+function oneOfEach(app, slots, inSet, learned = new Map()) {
+  const groups = similarGroups(app);
+  const groupOf = new Map();
+  groups.forEach((g, i) => g.forEach((k) => groupOf.set(k, i)));
+  const out = [];
+  const done = new Set();
+  for (const k of slots) {
+    const gi = groupOf.get(k);
+    if (gi === undefined) {
+      out.push(k);
+      continue;
+    }
+    if (done.has(gi)) continue;
+    done.add(gi);
+    const g = groups[gi];
+    if (g.some((m) => inSet.has(m))) continue;
+    const pick = [...g].filter((m) => slots.includes(m)).sort((a, b) => (learned.get(b)?.seen || 0) - (learned.get(a)?.seen || 0) || g.indexOf(a) - g.indexOf(b))[0];
+    if (pick) out.push(pick);
+  }
+  return out;
+}
+
+/**
+ * Files that can be added to the set: every portal file not in it (one of
+ * each group of similar files), with its portal slot in this application's
+ * portal flow, and how often the latest applications of this type had it.
  */
 export function catalogFor(app) {
   const t = getAppType(app.type);
   const pkgs = packagesFor(app.type);
   const inSet = new Set(setSlots(app).map((s) => s.slot));
   const learned = new Map((finalSetFor(t.key)?.slots || []).map((s) => [s.slot, s]));
-  return Object.entries(SLOT)
+  const offer = Object.entries(SLOT)
     .filter(([k, def]) => !inSet.has(k) && !(def.pkg && !pkgs[def.pkg] && !def.categories))
-    .map(([k, def]) => {
+    .filter(([k]) => !ONLY_FOR[k] || ONLY_FOR[k].test(t.group || '') || learned.has(k))
+    .map(([k]) => k);
+  return oneOfEach(app, offer, inSet, learned)
+    .map((k) => {
       const portal = portalSlot(k, t, app);
       const l = learned.get(k);
-      return { slot: k, name: def.name, ...(portal?.name ? { portal: portal.name } : {}), ...(l ? { seen: l.seen, of: l.of } : {}) };
+      return { slot: k, name: SLOT[k].name, ...(portal?.name ? { portal: portal.name } : {}), ...(l ? { seen: l.seen, of: l.of } : {}) };
     })
     .sort((a, b) => (b.seen || 0) - (a.seen || 0) || Boolean(b.portal) - Boolean(a.portal) || a.name.localeCompare(b.name));
 }

@@ -140,6 +140,7 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
   const [addSlot, setAddSlot] = useState('');
   const [customName, setCustomName] = useState('');
   const [openSlot, setOpenSlot] = useState(null); // the file whose contents were just edited stays open
+  const [pendingSlot, setPendingSlot] = useState(null); // a one-file rebuild was asked for, not started yet
   const timer = useRef(null);
 
   /** Change the set (lib/finalFiles.js applySetupChange) and show the new plan. */
@@ -224,6 +225,7 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
   async function buildAll(slot = null) {
     setMissingModal(null);
     setMsg(null);
+    setPendingSlot(slot);
     try {
       const res = await fetch(`/api/applications/${app.id}/final-files`, {
         method: 'POST',
@@ -242,6 +244,8 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
       poll(0);
     } catch (e) {
       setMsg({ type: 'err', text: e.message });
+    } finally {
+      setPendingSlot(null);
     }
   }
 
@@ -259,6 +263,19 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
           : `Building file ${Math.min(job.done + 1, job.total)} of ${job.total}: ${job.current || ''}${job.inner?.current ? ` — ${job.inner.current}` : ''}`,
       }
     : null;
+
+  /** Progress of the file being built in this row (a one-file rebuild, or the current file of a full build). */
+  const rowProgress = (e) => {
+    if (pendingSlot === e.slot) return { value: null };
+    if (!job) return null;
+    const inner = job.inner?.total ? job.inner.done / job.inner.total : null;
+    if (job.only === e.slot) {
+      // Preparing (letters, forms) is the first step, building the file the second.
+      return { value: job.total ? (job.done + (inner || 0)) / job.total : null, step: job.inner?.current || job.inner?.phase || job.current };
+    }
+    if (!job.only && job.current === e.filename) return { value: inner, step: job.inner?.current || job.inner?.phase };
+    return null;
+  };
 
   const slots = plan.filter((e) => e.n);
   // Files that can hold documents, and where each uploaded document is now.
@@ -446,10 +463,23 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                 {e.kind === 'form' && <FormChecks checks={formChecks(e)} />}
               </div>
               <div className="act">
-                {current && b.size > MAX_BYTES && (
+                {(() => {
+                  const rp = rowProgress(e);
+                  if (!rp) return null;
+                  const pct = rp.value == null ? null : Math.max(0, Math.min(100, Math.round(rp.value * 100)));
+                  return (
+                    <div className="row-progress" title={rp.step ? String(rp.step) : 'Building this file'}>
+                      <div className="progress" role="progressbar" aria-label={`Building ${e.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct ?? undefined}>
+                        <div className={pct == null ? 'progress-fill indeterminate' : 'progress-fill'} style={pct == null ? undefined : { width: `${pct}%` }} />
+                      </div>
+                      <span className="small faint">{pct == null ? 'Building…' : `${pct}%`}</span>
+                    </div>
+                  );
+                })()}
+                {rowProgress(e) ? null : current && b.size > MAX_BYTES && (
                   <span className="chip warn" title="IRCC's portal takes files up to 4 MB. Rebuild with blank pages removed, or split / compress this file.">Over 4 MB</span>
                 )}
-                {current ? (
+                {rowProgress(e) ? null : current ? (
                   <a href={`/api/applications/${app.id}/download/${b.key}`} className="btn btn-secondary btn-sm" title={b.filename}>
                     <Download size={14} aria-hidden="true" /> {size(b.size)}{b.pages ? ` · ${b.pages} p.` : ''}
                   </a>

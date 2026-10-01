@@ -79,6 +79,23 @@ let threw2 = '';
 try { applySetupChange(app, { op: 'assign', doc: 'pp', to: 'photo' }); } catch (e) { threw2 = e.message; }
 check(threw2.length > 0, 'documents cannot be put in the photo slot');
 
+// 4b. The add list offers one of each group of similar files.
+{
+  const cat = (a) => catalogFor(a).map((c) => c.slot);
+  const minor = { ...base(), type: 'trv-outside' };
+  const c1 = cat(minor);
+  check(c1.filter((k) => ['custody-consent', 'consent', 'custody'].includes(k)).length === 1, 'custody and consent are offered once');
+  check(c1.filter((k) => ['family-status', 'spouse-status'].includes(k)).length === 1, 'family proof of status is offered once');
+  check(c1.filter((k) => ['education', 'transcript', 'degrees'].includes(k)).length === 1, 'education is offered once');
+  check(c1.filter((k) => ['tuition', 'deposit'].includes(k)).length <= 1 && cat({ ...base(), type: 'study-permit-inside' }).filter((k) => ['tuition', 'deposit'].includes(k)).length === 1, 'tuition payment is offered once (study permits only)');
+  const portals = catalogFor(minor).map((c) => c.portal).filter(Boolean);
+  check(new Set(portals).size === portals.length, 'no two offered files go to the same portal slot');
+  check(!c1.includes('lmia') && !c1.includes('pal') && !c1.includes('gic'), 'a visitor visa is not offered work- or study-only files');
+  check(c1.filter((k) => ['inviter', 'invitation'].includes(k)).length === 1 && c1.filter((k) => ['loa', 'enrolment'].includes(k)).length === 1, 'invitation and enrolment files are offered once each');
+  const sp = { ...base(), type: 'study-permit' }; // tuition is in its set
+  check(!cat(sp).includes('deposit') && !cat(sp).includes('tuition'), 'nothing similar to a file already in the set is offered');
+}
+
 // 5. Reset.
 app = apply(app, { op: 'reset' });
 check(slots(app).join() === slots(base()).join(), 'reset brings back the standard set');
