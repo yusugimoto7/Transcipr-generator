@@ -606,7 +606,6 @@ const EXTRA_STEPS = [
         options: ['Open Work Permit', 'Exemption from Labour Market Impact Assessment', 'Labour Market Impact Assessment Stream', 'Start-up Business Class', 'Other'],
         required: true,
       },
-      { id: 'visaRequested', label: 'Visitor visa requested with the permit', type: 'select', options: ['Single', 'Multiple'], required: true, note: 'Needed when the applicant needs a visa to enter Canada (e.g. Iranian citizens).' },
       { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text' },
       { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text' },
       { id: 'intendedProvince', label: 'Province you will live / work in', type: 'select', options: PROVINCES, required: true },

@@ -361,7 +361,6 @@ const VISIT_PURPOSE = {
 /** Form-specific sections. */
 export const EXTRA_RULES = {
   imm1295: [
-    [/PersonalDetails\/VisaType\/VisaType$/, { from: 'visaRequested', need: 'Visa requested (Single / Multiple)' }],
     [/TypeofWork\/WorkPermitType$/, { from: '_workPermitType', need: 'Type of work permit' }],
     [/PurposeRow1\/EmployerName\/EmployerName$/, { from: 'intendedEmployer' }],
     [/PurposeRow1\/Address\/Address$/, { from: 'intendedEmployerAddress' }],
