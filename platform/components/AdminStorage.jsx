@@ -46,7 +46,7 @@ export default function AdminStorage() {
             <h2>Where files are kept</h2>
             <p className="muted small">
               Every document and every file the platform builds is saved in the client&apos;s Google Drive folder
-              (01 - Documents, 02 - Final Files, 03 - Working Files). The server keeps only a cache of recently used
+              (01 - Documents, 02 - Final Files, 91 - Generated Files — each new generated file numbered 001, 002…). The server keeps only a cache of recently used
               files and fetches anything else from Drive when it is opened.
             </p>
           </div>

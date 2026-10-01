@@ -1,4 +1,6 @@
 import fs from 'fs/promises';
+import crypto from 'crypto';
+import { createReadStream } from 'fs';
 import path from 'path';
 import { UPLOAD_DIR } from './paths';
 import { getApplication, updateApplication, listAllApplications } from './store';
@@ -11,6 +13,7 @@ import {
   getParents,
   createFolder,
   trashFile,
+  listChildren,
   downloadFile,
   uploadFromDisk,
   downloadToDisk,
@@ -22,9 +25,12 @@ import { normNumber, isDefaultTitle } from './cases';
  *
  *   Client folder  "S26901 - Sara Karimi" (found under DRIVE_CLIENTS_FOLDER, or
  *                  the folder the file was imported from; created if missing)
- *     01 - Documents      everything the client sends: imported, emailed, uploaded
- *     02 - Final Files    the numbered files for the IRCC portal
- *     03 - Working Files  letters, form data sheets, filled forms, next steps
+ *     01 - Documents        everything the client sends: imported, emailed, uploaded
+ *     02 - Final Files      the numbered files for the IRCC portal
+ *     91 - Generated Files  every file the platform makes — letters, form data
+ *                           sheets, filled forms, next steps — each new version a
+ *                           new file numbered after the last one in the folder:
+ *                           "Purpose of Travel - 001.pdf", "Submission Letter - 002.pdf"
  *
  * Documents imported from Drive already live there (their `driveId`). Uploads,
  * and everything the platform builds, are copied up in the background by
@@ -39,6 +45,8 @@ import { normNumber, isDefaultTitle } from './cases';
 
 export const DOCS_FOLDER = '01 - Documents';
 export const FINAL_FOLDER = '02 - Final Files';
+export const GEN_FOLDER = '91 - Generated Files';
+/** Where the platform kept generated files before (still read, never written). */
 export const WORK_FOLDER = '03 - Working Files';
 
 const MB = 1024 * 1024;
@@ -102,7 +110,7 @@ export async function ensureClientFolder(app) {
   if (!clientFolder && root) {
     const keys = [app.clientNumber, name].filter((k) => k && k.length >= 3);
     for (const key of keys) {
-      const found = (await searchFolders(key)).filter((f) => !/final files|documents|working files/i.test(f.name));
+      const found = (await searchFolders(key)).filter((f) => !/final files|documents|working files|generated files/i.test(f.name));
       for (const f of found) {
         if (await underClients(f.id, root)) {
           clientFolder = f;
@@ -216,7 +224,42 @@ export async function genFile(app, meta) {
 /* ------------------------------ saving to Drive ------------------------------ */
 
 const SYNCED_MIME = new Set(['application/pdf', 'image/jpeg']);
-const genFolder = (key) => (key.startsWith('final-') ? FINAL_FOLDER : WORK_FOLDER);
+const genFolder = (key) => (key.startsWith('final-') ? FINAL_FOLDER : GEN_FOLDER);
+
+/** "Purpose of Travel - Sara.pdf", 7 → "Purpose of Travel - Sara - 007.pdf" */
+export function numberedName(name, n) {
+  const m = String(name).match(/^(.*?)(\.[a-z0-9]{2,5})?$/i);
+  return `${m[1]} - ${String(n).padStart(3, '0')}${m[2] || ''}`;
+}
+const SEQ = /\s-\s(\d{3,})(\.[a-z0-9]{2,5})?$/i;
+
+const sha1 = (file) =>
+  new Promise((resolve, reject) => {
+    const h = crypto.createHash('sha1');
+    createReadStream(file).on('data', (c) => h.update(c)).on('end', () => resolve(h.digest('hex'))).on('error', reject);
+  });
+
+/** The number after the highest one in a "91 - Generated Files" folder. */
+async function nextNumber(folderId) {
+  const names = (await listChildren(folderId)).map((f) => f.name || '');
+  return names.reduce((max, n) => Math.max(max, Number(n.match(SEQ)?.[1] || 0)), 0) + 1;
+}
+
+// One numbering run per folder at a time (a family's files share one folder).
+const folderLocks = globalThis.__genFolderLocks || (globalThis.__genFolderLocks = new Map());
+async function withFolderLock(id, fn) {
+  const prev = folderLocks.get(id) || Promise.resolve();
+  let release;
+  const mine = new Promise((r) => (release = r));
+  folderLocks.set(id, prev.then(() => mine));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (folderLocks.get(id) === mine) folderLocks.delete(id);
+  }
+}
 const genSynced = (app, g) => {
   const rec = app.driveGenerated?.[g.key];
   return Boolean(rec?.id && String(rec.syncedAt || '') >= String(g.generatedAt || ''));
@@ -272,38 +315,78 @@ export async function syncApp(appId) {
   }
 
   const folderIds = {};
-  for (const g of gens) {
+  const folderOf = async (fname) => (folderIds[fname] ||= (await subfolder(folders.clientFolderId, fname)).id);
+  const saved = (g, rec) =>
+    updateApplication(appId, (a) => {
+      a.driveGenerated = { ...(a.driveGenerated || {}), [g.key]: { ...rec, syncedAt: g.generatedAt || new Date().toISOString() } };
+      return a;
+    }, { quiet: true });
+
+  // Final files: one file per portal slot, a rebuild replaces it in place.
+  for (const g of gens.filter((x) => genFolder(x.key) === FINAL_FOLDER)) {
     try {
       const file = genPath(appId, g);
       await fs.access(file);
       const name = g.filename || g.stored;
-      const fname = genFolder(g.key);
-      folderIds[fname] = folderIds[fname] || (await subfolder(folders.clientFolderId, fname)).id;
       const prev = app.driveGenerated?.[g.key];
       let up = null;
-      if (prev?.id) {
+      if (prev?.id && prev.folder === FINAL_FOLDER) {
         try {
           up = await uploadFromDisk({ id: prev.id, name, mime: g.mime || 'application/pdf', file });
         } catch {
           up = null; // deleted on Drive: upload it again
         }
       }
-      if (!up) up = await uploadFromDisk({ parentId: folderIds[fname], name, mime: g.mime || 'application/pdf', file });
-      await updateApplication(appId, (a) => {
-        a.driveGenerated = { ...(a.driveGenerated || {}), [g.key]: { id: up.id, name, folder: fname, syncedAt: g.generatedAt || new Date().toISOString() } };
-        return a;
-      }, { quiet: true });
+      if (!up) up = await uploadFromDisk({ parentId: await folderOf(FINAL_FOLDER), name, mime: g.mime || 'application/pdf', file });
+      await saved(g, { id: up.id, name, folder: FINAL_FOLDER });
       uploaded++;
     } catch (e) {
       if (e.code !== 'ENOENT') errors.push(`${g.filename || g.key}: ${e.message}`);
     }
   }
 
-  // Final files dropped by a rebuild: move their Drive copies to the bin (recoverable).
+  // Everything else the platform makes: every new version is a new file in
+  // "91 - Generated Files", numbered after the last one there (001, 002 …);
+  // earlier versions stay.
+  const others = gens.filter((x) => genFolder(x.key) === GEN_FOLDER);
+  if (others.length) {
+    try {
+      const genId = await folderOf(GEN_FOLDER);
+      await withFolderLock(genId, async () => {
+        let n = await nextNumber(genId);
+        for (const g of others) {
+          try {
+            const file = genPath(appId, g);
+            await fs.access(file);
+            // Made again with the same content (e.g. a data sheet refreshed by a
+            // build when nothing changed): no new number, the last copy stands.
+            const hash = await sha1(file);
+            const prev = app.driveGenerated?.[g.key];
+            if (prev?.id && prev.folder === GEN_FOLDER && prev.hash === hash) {
+              await saved(g, prev);
+              continue;
+            }
+            const name = numberedName(g.filename || g.stored, n);
+            const up = await uploadFromDisk({ parentId: genId, name, mime: g.mime || 'application/pdf', file });
+            await saved(g, { id: up.id, name, folder: GEN_FOLDER, number: n, hash });
+            n++;
+            uploaded++;
+          } catch (e) {
+            if (e.code !== 'ENOENT') errors.push(`${g.filename || g.key}: ${e.message}`);
+          }
+        }
+      });
+    } catch (e) {
+      errors.push(`${GEN_FOLDER}: ${e.message}`);
+    }
+  }
+
+  // Final files dropped by a rebuild: move their Drive copies to the bin
+  // (recoverable). Numbered generated files stay as the record of what was made.
   for (const key of gone) {
     const rec = app.driveGenerated[key];
     try {
-      if (rec?.id) await trashFile(rec.id);
+      if (rec?.id && (rec.folder || FINAL_FOLDER) === FINAL_FOLDER && key.startsWith('final-')) await trashFile(rec.id);
     } catch {
       /* already gone */
     }

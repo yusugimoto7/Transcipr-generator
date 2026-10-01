@@ -223,21 +223,24 @@ try {
   const bigBack = await call('GET', `/api/applications/${app.id}/upload?docId=${bigDoc.id}`, null, true);
   ok(bigBack.bytes.equals(big), 'and streamed back intact');
 
-  // 4. Built files go to 03 - Working Files; a new version replaces the old one in place.
+  // 4. Built files go to 91 - Generated Files, each new version a new file numbered after the last one.
   ok((await call('POST', `/api/applications/${app.id}/sop`, { answers: {}, editedText: 'Dear Officer, first draft.' })).status === 200, 'a letter is saved');
   const rec = await until(async () => (await getApp(app.id)).driveGenerated?.sop, 'the letter to reach Drive');
-  const work = Object.entries(tree).find(([, v]) => v.name === '03 - Working Files' && v.parents[0] === folder?.[0]);
-  ok(Boolean(work) && tree[rec.id].parents[0] === work[0], 'the letter is saved in 03 - Working Files');
+  const gen = Object.entries(tree).find(([, v]) => v.name === '91 - Generated Files' && v.parents[0] === folder?.[0]);
+  ok(Boolean(gen) && tree[rec.id].parents[0] === gen[0], 'the letter is saved in 91 - Generated Files');
+  ok(/ - 001\.pdf$/.test(tree[rec.id].name), `and numbered 001 (${tree[rec.id].name})`);
   await sleep(50);
   await call('POST', `/api/applications/${app.id}/sop`, { answers: {}, editedText: 'Dear Officer, second draft, longer than the first one.' });
-  await until(async () => log.updates.some((x) => x.id === rec.id), 'the new version to replace the old one');
-  ok(log.uploads.filter((x) => x.name === tree[rec.id].name).length === 1, 'the new version replaces the file on Drive instead of adding a copy');
+  const rec2 = await until(async () => { const r = (await getApp(app.id)).driveGenerated?.sop; return r && r.id !== rec.id ? r : null; }, 'the new version to reach Drive');
+  ok(/ - 002\.pdf$/.test(tree[rec2.id].name) && tree[rec2.id].parents[0] === gen[0], `the new version is a new file, numbered 002 (${tree[rec2.id].name})`);
+  ok(Boolean(tree[rec.id]) && !tree[rec.id].trashed, 'and the first version stays');
+  ok(!Object.values(tree).some((v) => v.name === '03 - Working Files'), 'nothing goes to 03 - Working Files any more');
 
   // 5. A built file that left the cache downloads from Drive.
   await until(async () => { const a = await getApp(app.id); return a.driveGenerated?.sop?.syncedAt >= (a.generated.find((g) => g.key === 'sop')?.generatedAt || ''); }, 'the second version to be recorded');
   await call('POST', '/api/admin/storage');
   const dl = await call('GET', `/api/applications/${app.id}/download/sop`, null, true);
-  ok(dl.status === 200 && dl.bytes.equals(tree[rec.id].bytes), 'downloading the letter serves the latest version from Drive');
+  ok(dl.status === 200 && dl.bytes.equals(tree[rec2.id].bytes), 'downloading the letter serves the latest version from Drive');
 } catch (e) {
   failures++;
   console.log('FAIL ', e.message);
