@@ -8,7 +8,7 @@ import { getFormPdf } from '../forms/fetchForms';
 import { imm5645FieldMap } from '../forms/fieldmaps/imm5645';
 import { imm5476FieldMap, imm5476Data } from '../forms/fieldmaps/imm5476';
 import { imm5257bFieldMap } from '../forms/fieldmaps/imm5257b';
-import { irccData, irccFieldMap, IRCC_MAIN_FORMS } from '../forms/fieldmaps/ircc';
+import { irccData, irccFieldMap, IRCC_MAIN_FORMS, sourceOf } from '../forms/fieldmaps/ircc';
 import { autoFieldMap } from '../forms/fieldmaps/auto';
 import { getFirm } from '../firm';
 import { getAppType } from '../appTypes';
@@ -111,9 +111,9 @@ export async function fillOfficialForm(formKey, app) {
     if (!schema?.ok || !Array.isArray(schema.fields)) throw new Error(`cannot read fields of ${formKey}`);
     data = irccData(data, app);
     fieldMap = irccFieldMap(formKey, schema.fields);
-    if (String(app.data?.uci || '').trim() && !data._uci) notes.push('UCI: must be 8 or 10 digits — left blank (check the number in the intake)');
+    if (String(app.data?.uci || '').trim() && !data._uci) notes.push({ text: 'UCI: must be 8 or 10 digits — left blank (check the number in the intake)', field: 'uci' });
     const jobs = filledRows(app.data?.jobs);
-    if (jobs.length > 3) notes.push(`Employment: the form has 3 rows — add the other ${jobs.length - 3} activit${jobs.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${jobs.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})`);
+    if (jobs.length > 3) notes.push({ field: 'jobs', text: `Employment: the form has 3 rows — add the other ${jobs.length - 3} activit${jobs.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${jobs.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})` });
   } else if (formKey === 'imm5645') {
     ({ map: fieldMap, notes } = imm5645FieldMap(data, app));
   } else if (formKey === 'imm5476') {
@@ -143,12 +143,17 @@ export async function fillOfficialForm(formKey, app) {
     const bytes = await fs.readFile(outPath);
     // What is left to do on this form: answers missing from the intake, and
     // answers the form could not take (not in English, not in its list).
+    // Each with the intake answer it comes from, so the team can go straight to it.
+    const fieldOf = (f) => f.field || sourceOf(f.from) || null;
+    const byNeed = new Map(fieldMap.filter((f) => f.need).map((f) => [f.need, fieldOf(f)]));
+    const bySom = new Map(fieldMap.map((f) => [f.som, fieldOf(f)]));
     const checks = [
-      ...notes,
-      ...blanks.map((b) => `${b} — not answered in the intake`),
-      ...(summary.warnings || []).map((w) => `${cleanLabel(w.label)}: ${w.reason}`),
+      ...notes.map((n) => (typeof n === 'string' ? { text: n, field: null } : n)),
+      ...blanks.map((b) => ({ text: `${b} — not answered in the intake`, field: byNeed.get(b) || null })),
+      ...(summary.warnings || []).map((w) => ({ text: `${cleanLabel(w.label)}: ${w.reason}`, field: bySom.get(w.path) || null })),
     ];
-    return { bytes, summary, version: meta.version, checks: [...new Set(checks)] };
+    const seen = new Set();
+    return { bytes, summary, version: meta.version, checks: checks.filter((c) => !seen.has(c.text) && seen.add(c.text)) };
   } finally {
     fs.unlink(templatePath).catch(() => {});
     fs.unlink(outPath).catch(() => {});

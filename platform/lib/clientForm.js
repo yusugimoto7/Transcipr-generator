@@ -538,8 +538,8 @@ export function prefill(d = {}) {
   if (kids.length) Object.assign(a, { hasChildren: true, children: kids });
   const sibs = personsFrom(d.siblings);
   if (sibs.length) Object.assign(a, { hasSiblings: true, siblings: sibs });
-  const mil = lines(d.militaryDetails)[0];
-  if (mil) Object.assign(a, { serviceFrom: mil[0], serviceTo: mil[1], serviceOrg: mil[2], serviceCity: mil[3] });
+  const mil = filledRows(d.militaryService)[0];
+  if (mil) Object.assign(a, { serviceFrom: mil.from, serviceTo: mil.to, serviceOrg: mil.location, serviceCity: mil.province });
   const jobs = filledRows(d.jobs);
   if (jobs.length) a.jobs = jobs.map((j) => ({ from: j.from, to: j.to, title: j.occupation, company: j.employer, city: j.city, country: j.country }));
   const trips = filledRows(d.trips);
@@ -605,7 +605,7 @@ export function toIntake(a = {}) {
     }
   }
   set('bgMilitary', 'served');
-  if (a.served === true && on('serviceFrom')) out.militaryDetails = pipe([a.serviceFrom, a.serviceTo, a.serviceOrg, a.serviceCity, 'Iran']);
+  if (a.served === true && on('serviceFrom')) out.militaryService = [{ from: a.serviceFrom || '', to: a.serviceTo || '', location: [a.serviceOrg, a.serviceCity].filter(Boolean).join(', '), province: '', country: 'Iran' }];
   set('travelledAbroad', 'travelled');
   if (on('trips')) out.trips = filledRows(a.trips).map((t) => ({ from: t.from || '', to: t.to || '', country: t.country || '', city: t.city || '', purpose: t.purpose || '' }));
   if (on('jobs')) out.jobs = filledRows(a.jobs).map((j) => ({ from: j.from || '', to: j.to || '', occupation: j.title || '', employer: j.company || '', city: j.city || '', country: j.country || '' }));

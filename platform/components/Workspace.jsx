@@ -41,6 +41,7 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
   const [tab, setTabState] = useState('overview');
   const [sub, setSubState] = useState(null);
   const [saveState, setSaveState] = useState('saved'); // saved | saving | error | conflict
+  const [focusRequest, setFocusRequest] = useState(null); // { id, at }: an intake question to open
   // Version of the intake answers this page last saw (see the PATCH route).
   const versionRef = useRef(initialApp.dataVersion || 0);
   const saveTimer = useRef(null);
@@ -141,6 +142,16 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
     [saveData]
   );
 
+  // Open the intake at one question (from a form's "boxes to complete").
+  const goField = useCallback(
+    (id) => {
+      const step = schema.steps.find((st) => st.fields.some((f) => f.id === id));
+      go('intake', step?.id || null);
+      if (step) setFocusRequest({ id, at: Date.now() });
+    },
+    [schema, go]
+  );
+  const fieldInIntake = useCallback((id) => schema.steps.some((st) => st.fields.some((f) => f.id === id && !f.derived)), [schema]);
   const attention = p.check.red + p.check.orange;
   // Open a document from a note: under its checklist item when it has one.
   const openDoc = (docId) => {
@@ -277,11 +288,11 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
             <EmailsPanel app={app} patchLocal={patchLocal} onFieldChange={onFieldChange} fieldLabel={(id) => fieldLabels.get(id)} />
           )}
           {tab === 'intake' && (
-            <IntakePanel app={app} schema={schema} sections={p.intake.sections} onFieldChange={onFieldChange} onFinish={() => go(showFinal ? 'review' : 'overview')} activeStepId={sub} onStepChange={setSub} saveState={saveState} staff={staff} patchLocal={patchLocal} />
+            <IntakePanel app={app} schema={schema} sections={p.intake.sections} onFieldChange={onFieldChange} onFinish={() => go(showFinal ? 'review' : 'overview')} activeStepId={sub} onStepChange={setSub} saveState={saveState} staff={staff} patchLocal={patchLocal} focusRequest={focusRequest} />
           )}
           {tab === 'sop' && <SopBuilderPanel app={app} patchLocal={patchLocal} />}
           {tab === 'review' && <ReviewPanel app={app} progress={p} patchLocal={patchLocal} go={go} />}
-          {tab === 'generate' && showFinal && <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => go('intake')} progress={p} driveOn={driveOn} />}
+          {tab === 'generate' && showFinal && <GeneratePanel app={app} patchLocal={patchLocal} onGoIntake={() => go('intake')} onGoField={goField} fieldInIntake={fieldInIntake} fieldLabel={(id) => fieldLabels.get(id)} progress={p} driveOn={driveOn} />}
           {staff && SECTION_NOTES[tab] && (
             <section className="card section-notes" aria-label={`Notes on ${SECTION_NOTES[tab]}`}>
               <NotesBox app={app} patchLocal={patchLocal} viewer={viewer} section={tab} title={`Team notes on ${SECTION_NOTES[tab]}`} placeholder="A note for the team — the review and the letters read it too." compact />

@@ -156,7 +156,7 @@ function Field({ field, value, onChange, missing = false, data = {} }) {
  * the left (a drop-down on small screens), the form, and Back / Next kept in
  * view at the bottom. Answers save as you type.
  */
-export default function IntakePanel({ app, schema, sections, onFieldChange, onFinish, activeStepId, onStepChange, staff = false, patchLocal }) {
+export default function IntakePanel({ app, schema, sections, onFieldChange, onFinish, activeStepId, onStepChange, staff = false, patchLocal, focusRequest }) {
   const fromUrl = schema.steps.findIndex((s) => s.id === activeStepId);
   const [stepIdx, setStepIdxState] = useState(fromUrl >= 0 ? fromUrl : 0);
 
@@ -199,6 +199,11 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
       box.classList.add('flash');
     }
   }, 150);
+  // Opened from elsewhere (a box left to do on a form) to answer one question.
+  useEffect(() => {
+    if (focusRequest?.id) focusField(focusRequest.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest]);
   const goToField = (i, id) => {
     if (i !== stepIdx) {
       setStepIdxState(i);

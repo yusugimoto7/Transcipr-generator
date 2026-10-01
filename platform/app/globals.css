@@ -935,3 +935,8 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .pre { white-space: pre-line; overflow-wrap: anywhere; font-size: 13px; }
 .cf-other { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 14px; margin: 0; }
 .cf-other dd { margin: 2px 0 0; }
+
+/* A box left to do on a pre-filled form: opens the intake at its question */
+.check-link { display: inline; background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-weight: 400; color: inherit; text-align: left; cursor: pointer; line-height: 1.5; }
+.check-link:hover:not(:disabled) { background: none; text-decoration: underline; }
+.check-link .check-go { color: var(--accent); font-weight: 600; white-space: nowrap; margin-left: 4px; }

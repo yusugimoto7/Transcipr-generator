@@ -198,6 +198,34 @@ export function irccData(d = {}, app = {}) {
   return out;
 }
 
+/**
+ * The intake answer a form value comes from, for linking a box left to do
+ * back to its question: the derived values above ("_bgDetails") name theirs.
+ */
+const SOURCE = {
+  _uci: 'uci', _aliasYN: 'otherNames', _pcrYN: 'livedElsewhere5y', _cwaYN: 'applyingFromResidence', _married: 'maritalStatus',
+  _spouseFamily: 'spouseFamilyName', _spouseGiven: 'spouseGivenName', _marriageDate: 'marriageDate', _spouseCanadianYN: 'inviterStatus',
+  _prevMarriedYN: 'previouslyMarried', _langTestYN: 'languageTest', _mostAtEase: 'mostAtEase', _natIdYN: 'nationalIdNumber',
+  _natIdNumber: 'nationalIdNumber', _natIdCountry: 'nationalIdNumber', _usYN: 'usPermanentResident', _mailingProv: 'mailingProvince',
+  _mailingDistrict: 'mailingProvince', _sameResYN: 'sameResidential', _resProv: 'resProvince', _resDistrict: 'resProvince',
+  _eduYN: 'highestEducation', _eduFieldLevel: 'lastFieldOfStudy', _eduFromY: 'lastEduFrom', _eduFromM: 'lastEduFrom', _eduToY: 'lastEduTo', _eduToM: 'lastEduTo',
+  _bgDetails: 'refusalDetails', _bgTb: 'bgTbContact', _bgMedical: 'bgMedicalCondition', _bgOverstay: 'bgOverstay', _bgRefused: 'previousRefusal',
+  _bgPrevApplied: 'previousCanadaApplication', _bgCriminal: 'bgCriminal', _bgMilitary: 'bgMilitary', _bgOrganization: 'bgOrganization',
+  _bgWitnessed: 'bgWitnessed', _consentYN: 'consentContact', _militaryText: 'militaryService', _workPermitType: 'workPermitType',
+  _intendedProv: 'intendedProvince', _workPermitTypeInside: 'workPermitTypeInside', _applyExtend: 'wpApplyingFor', _applyNew: 'wpApplyingFor',
+  _applyRestore: 'wpApplyingFor', _studyApplyExtend: 'studyInsideReason', _studyRestore: 'studyInsideReason', _firstEntryDate: 'firstEntryDate',
+  _firstEntryPlace: 'firstEntryPlace', _firstEntryPurpose: 'originalEntryPurpose', _schoolProv: 'schoolProvince',
+  currentOccupation: 'jobs', employer: 'jobs', currentJobFrom: 'jobs', currentJobCity: 'jobs', currentJobCountry: 'jobs', employmentHistory: 'jobs',
+  countriesVisited: 'trips', militaryDetails: 'militaryService', organizationDetails: 'organizations', govPositionDetails: 'govPositions', witnessedDetails: 'witnessedEvents',
+};
+export function sourceOf(from) {
+  if (!from) return null;
+  if (SOURCE[from]) return SOURCE[from];
+  if (/^_phone/.test(from)) return 'phoneNumber';
+  if (/^_job/.test(from)) return 'jobs';
+  return from.startsWith('_') ? null : from;
+}
+
 /** A date field shown on the form, plus its hidden year / month / day copies. */
 const date = (visible, hiddenBase, from, extra = {}) => [
   [visible, { from, ...extra }],

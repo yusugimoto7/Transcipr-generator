@@ -535,29 +535,83 @@ const EXTRA_STEPS = [
         note: 'Iranian men: military (conscription) service counts — answer Yes.',
       },
       {
-        id: 'militaryDetails',
-        label: 'Service (one per line: from YYYY-MM | to YYYY-MM | unit / place stationed | province | country)',
-        type: 'textarea',
-        required: true,
-        placeholder: '2008-02 | 2010-01 | Army, 23rd Division, Tehran | Tehran | Iran',
+        id: 'militaryService',
+        label: 'Military / police / security service',
+        type: 'rows',
+        requiredIf: { field: 'bgMilitary', equals: true },
         showIf: { field: 'bgMilitary', equals: true },
+        addLabel: 'Add a period of service',
+        rowLabel: 'Service',
+        note: 'IMM 5257 Schedule 1, question 4 (and the background section of the main form).',
+        columns: [
+          { id: 'from', label: 'From', type: 'month', required: true, notFuture: true },
+          { id: 'to', label: 'To', type: 'month', required: true, notFuture: true, after: 'from' },
+          { id: 'location', label: 'Unit / place stationed (in English)', type: 'text', required: true, english: true },
+          { id: 'province', label: 'Province / state', type: 'text', english: true },
+          { id: 'country', label: 'Country', type: 'country', required: true },
+        ],
       },
+      { id: 'militaryDetails', label: 'Service (text)', type: 'textarea', derived: true },
       { id: 'bgOrganization', label: 'Ever a member of or associated with a political party or group that used or advocated violence?', type: 'bool', required: true },
       {
-        id: 'organizationDetails',
-        label: 'Organizations (one per line: from YYYY-MM | to YYYY-MM | organization | activities / position | province | country)',
-        type: 'textarea',
+        id: 'organizations',
+        label: 'Organizations',
+        type: 'rows',
+        requiredIf: { field: 'bgOrganization', equals: true },
         showIf: { field: 'bgOrganization', equals: true },
+        addLabel: 'Add an organization',
+        rowLabel: 'Organization',
+        note: 'IMM 5257 Schedule 1, question 6. No abbreviations.',
+        columns: [
+          { id: 'from', label: 'From', type: 'month', required: true, notFuture: true },
+          { id: 'to', label: 'To', type: 'month', notFuture: true, after: 'from' },
+          { id: 'organization', label: 'Name of the organization (in English, in full)', type: 'text', required: true, english: true },
+          { id: 'activities', label: 'Activities / positions held', type: 'text', english: true },
+          { id: 'province', label: 'Province / state', type: 'text', english: true },
+          { id: 'country', label: 'Country', type: 'country', required: true },
+        ],
       },
+      { id: 'organizationDetails', label: 'Organizations (text)', type: 'textarea', derived: true },
       { id: 'bgGovPosition', label: 'Ever held a government position (civil servant, judge, police, mayor, military officer…)?', type: 'bool', required: true },
       {
-        id: 'govPositionDetails',
-        label: 'Positions (one per line: from YYYY-MM | to YYYY-MM | country | level of jurisdiction | department / branch | position)',
-        type: 'textarea',
+        id: 'govPositions',
+        label: 'Government positions',
+        type: 'rows',
+        requiredIf: { field: 'bgGovPosition', equals: true },
         showIf: { field: 'bgGovPosition', equals: true },
+        addLabel: 'Add a position',
+        rowLabel: 'Position',
+        note: 'IMM 5257 Schedule 1, question 7. No abbreviations.',
+        columns: [
+          { id: 'from', label: 'From', type: 'month', required: true, notFuture: true },
+          { id: 'to', label: 'To', type: 'month', notFuture: true, after: 'from' },
+          { id: 'country', label: 'Country', type: 'country', required: true },
+          { id: 'jurisdiction', label: 'Level (national, regional, municipal)', type: 'select', options: ['National', 'Regional', 'Municipal'], required: true },
+          { id: 'department', label: 'Department / branch (in English)', type: 'text', required: true, english: true },
+          { id: 'activities', label: 'Position / activities (in English)', type: 'text', required: true, english: true },
+        ],
       },
+      { id: 'govPositionDetails', label: 'Positions (text)', type: 'textarea', derived: true },
       { id: 'bgWitnessed', label: 'Ever witnessed or participated in the ill treatment of prisoners or civilians, looting or desecration of religious buildings?', type: 'bool', required: true },
-      { id: 'witnessedDetails', label: 'Details', type: 'textarea', showIf: { field: 'bgWitnessed', equals: true } },
+      {
+        id: 'witnessedEvents',
+        label: 'What was witnessed',
+        type: 'rows',
+        requiredIf: { field: 'bgWitnessed', equals: true },
+        showIf: { field: 'bgWitnessed', equals: true },
+        addLabel: 'Add an event',
+        rowLabel: 'Event',
+        note: 'IMM 5257 Schedule 1, question 5.',
+        columns: [
+          { id: 'from', label: 'From', type: 'month', required: true, notFuture: true },
+          { id: 'to', label: 'To', type: 'month', notFuture: true, after: 'from' },
+          { id: 'location', label: 'Location (in English)', type: 'text', required: true, english: true },
+          { id: 'province', label: 'Province / state', type: 'text', english: true },
+          { id: 'country', label: 'Country', type: 'country', required: true },
+          { id: 'details', label: 'Details (in English)', type: 'text', required: true, english: true },
+        ],
+      },
+      { id: 'witnessedDetails', label: 'Details (text)', type: 'textarea', derived: true },
       { id: 'consentContact', label: 'Consent to be contacted by IRCC in the future (client surveys)?', type: 'bool', required: true },
     ],
   },
@@ -1055,6 +1109,70 @@ const pipeRows = (text) =>
     .map((l) => l.split('|').map((c) => c.trim()))
     .filter((cells) => cells.some(Boolean));
 
+// Schedule 1 tables kept as rows, with their earlier "a | b | c" text answers.
+const BACKGROUND_LISTS = [
+  { rows: 'militaryService', text: 'militaryDetails', yes: 'bgMilitary', cols: ['from', 'to', 'location', 'province', 'country'] },
+  { rows: 'organizations', text: 'organizationDetails', yes: 'bgOrganization', cols: ['from', 'to', 'organization', 'activities', 'province', 'country'] },
+  { rows: 'govPositions', text: 'govPositionDetails', yes: 'bgGovPosition', cols: ['from', 'to', 'country', 'jurisdiction', 'department', 'activities'] },
+  { rows: 'witnessedEvents', text: 'witnessedDetails', yes: 'bgWitnessed', cols: ['from', 'to', 'location', 'province', 'country', 'details'] },
+];
+
+const MONTH_NAMES = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const PERSIAN_NUM = (t) => String(t).replace(/[۰-۹]/g, (c) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/[٠-٩]/g, (c) => '٠١٢٣٤٥٦٧٨٩'.indexOf(c));
+
+/**
+ * The dates in a free-text line ("Turkey 2023", "Dubai Mar 2022 - Apr 2022",
+ * "2019/06 to 2019/07 Armenia"): { from, to, rest } — months as YYYY-MM, or a
+ * bare year (YYYY) when the month is not given, and the words left over.
+ */
+export function looseDates(text) {
+  let t = PERSIAN_NUM(text);
+  const found = [];
+  const take = (re, fn) => {
+    t = t.replace(re, (...m) => {
+      found.push({ at: m[m.length - 2], v: fn(m) });
+      return ' ';
+    });
+  };
+  take(/\b((?:19|20)\d\d)[-/.](\d{1,2})\b/g, (m) => `${m[1]}-${m[2].padStart(2, '0')}`);
+  take(/\b(\d{1,2})[-/.]((?:19|20)\d\d)\b/g, (m) => `${m[2]}-${m[1].padStart(2, '0')}`);
+  take(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+((?:19|20)\d\d)\b/gi, (m) => `${m[2]}-${String(MONTH_NAMES[m[1].toLowerCase()]).padStart(2, '0')}`);
+  take(/\b((?:19|20)\d\d)\b/g, (m) => m[1]);
+  found.sort((a, b) => a.at - b.at);
+  const rest = t.replace(/\b(to|from|until|till|in|and)\b/gi, ' ').replace(/[–—,;:()]|\s-\s|^\s*-|-\s*$/g, ' ').replace(/\s+/g, ' ').trim();
+  return { from: found[0]?.v || '', to: found[1]?.v || found[0]?.v || '', rest };
+}
+
+const PURPOSES = [
+  [/touris|holiday|vacation|trip|سیاحت|تفریح/i, 'Tourism'],
+  [/business|conference|exhibition|work trip|کاری/i, 'Business'],
+  [/family|visit|relative|خانواده|دیدار/i, 'Family visit'],
+  [/stud|course|university|تحصیل/i, 'Study'],
+  [/medical|treatment|درمان/i, 'Medical'],
+  [/transit/i, 'Transit'],
+];
+
+// Places people write for a trip, in Persian or as a city: [pattern, country, city].
+const PLACES = [
+  [/^(ترکیه|turkiye|türkiye)$/i, 'Turkey'], [/^(استانبول|istanbul)$/i, 'Turkey', 'Istanbul'], [/^(آنتالیا|antalya)$/i, 'Turkey', 'Antalya'], [/^(وان|van)$/i, 'Turkey', 'Van'],
+  [/^(امارات|uae)$/i, 'United Arab Emirates'], [/^(دبی|dubai)$/i, 'United Arab Emirates', 'Dubai'], [/^(ابوظبی|abu dhabi)$/i, 'United Arab Emirates', 'Abu Dhabi'],
+  [/^(ارمنستان)$/, 'Armenia'], [/^(ایروان|yerevan)$/i, 'Armenia', 'Yerevan'], [/^(گرجستان)$/, 'Georgia'], [/^(تفلیس|tbilisi)$/i, 'Georgia', 'Tbilisi'],
+  [/^(عراق)$/, 'Iraq'], [/^(کربلا|karbala)$/i, 'Iraq', 'Karbala'], [/^(نجف|najaf)$/i, 'Iraq', 'Najaf'], [/^(عمان)$/, 'Oman'], [/^(قطر)$/, 'Qatar'],
+  [/^(آلمان)$/, 'Germany'], [/^(فرانسه)$/, 'France'], [/^(ایتالیا)$/, 'Italy'], [/^(اسپانیا)$/, 'Spain'], [/^(هلند)$/, 'Netherlands'],
+  [/^(انگلیس|انگلستان|بریتانیا|uk|england)$/i, 'United Kingdom'], [/^(آمریکا|امریکا|usa|us)$/i, 'United States of America'], [/^(کانادا)$/, 'Canada'],
+  [/^(مالزی)$/, 'Malaysia'], [/^(تایلند)$/, 'Thailand'], [/^(چین)$/, 'China'], [/^(هند)$/, 'India'], [/^(روسیه)$/, 'Russia'],
+  [/^(سوئیس)$/, 'Switzerland'], [/^(اتریش)$/, 'Austria'], [/^(سوئد)$/, 'Sweden'], [/^(عربستان|مکه|mecca)$/i, 'Saudi Arabia'], [/^(سوریه)$/, 'Syria'],
+];
+
+/** One trip from a free-text line: the country is what is left once dates and the purpose are taken out. */
+function looseTrip(text) {
+  const { from, to, rest } = looseDates(text);
+  const p = PURPOSES.find(([re]) => re.test(rest));
+  const place = (p ? rest.replace(p[0], ' ') : rest).replace(/\b(for|a|the)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+  const known = PLACES.find(([re]) => re.test(place));
+  return { from, to, country: known ? known[1] : place, city: known?.[2] || '', purpose: p ? p[1] : '' };
+}
+
 /**
  * The employment and travel histories are rows (jobs, trips). Files from
  * before they were rows are converted once; the earlier single answers
@@ -1083,12 +1201,29 @@ function deriveHistories(data) {
     });
   }
   if (!filledRows(data.trips).length && String(data.countriesVisited ?? '').trim()) {
-    data.trips = pipeRows(data.countriesVisited).map(([from, to, country, city, purpose]) => ({ from: toMonth(from), to: toMonth(to), country: country || '', city: city || '', purpose: purpose || '' }));
+    data.trips = pipeRows(data.countriesVisited).map((cells) =>
+      cells.length === 1 ? looseTrip(cells[0]) : (([from, to, country, city, purpose]) => ({ from: toMonth(from), to: toMonth(to), country: country || '', city: city || '', purpose: purpose || '' }))(cells)
+    );
   }
   const trips = filledRows(data.trips);
   if (trips.length) {
     data.countriesVisited = trips.map((t) => pipe([t.from, t.to, t.country, t.city, t.purpose])).join('\n');
     if (data.travelledAbroad !== false) data.travelledAbroad = true;
+  }
+  // The background tables of Schedule 1, the same way.
+  for (const { rows, text, cols, yes } of BACKGROUND_LISTS) {
+    if (!filledRows(data[rows]).length && String(data[text] ?? '').trim()) {
+      data[rows] = pipeRows(data[text]).map((cells) => {
+        // A free-text line (no "|"): keep it whole in the first text column.
+        if (cells.length === 1) return { ...looseDates(cells[0]), [cols[2]]: looseDates(cells[0]).rest || cells[0] };
+        return Object.fromEntries(cols.map((c, i) => [c, i < 2 ? toMonth(cells[i]) : cells[i] || '']));
+      }).map(({ rest, ...r }) => r);
+    }
+    const list = filledRows(data[rows]);
+    if (list.length) {
+      data[text] = list.map((r) => pipe(cols.map((c) => r[c]))).join('\n');
+      if (typeof data[yes] !== 'boolean') data[yes] = true;
+    }
   }
   // An application recorded as refused, or made to Canada, answers the background questions.
   const apps = filledRows(data.immigrationApps);

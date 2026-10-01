@@ -113,8 +113,11 @@ function AddDocument({ edit }) {
 /** The IRCC portal's upload limit per file (lib/finalFiles.js PORTAL_MAX_BYTES). */
 const MAX_BYTES = 4 * 1024 * 1024;
 
-/** The boxes a pre-filled IRCC form still needs, from its last pre-fill. */
-function FormChecks({ checks }) {
+/**
+ * The boxes a pre-filled IRCC form still needs, from its last pre-fill. Each
+ * one that comes from an intake answer opens the intake at that question.
+ */
+function FormChecks({ checks, onGoField, fieldInIntake, fieldLabel }) {
   if (!checks.length) return null;
   return (
     <details className="form-checks">
@@ -122,13 +125,27 @@ function FormChecks({ checks }) {
         <AlertTriangle size={13} aria-hidden="true" /> {checks.length} box{checks.length === 1 ? '' : 'es'} to complete or check on this form
       </summary>
       <ul className="small">
-        {checks.map((c, i) => <li key={i}>{c}</li>)}
+        {checks.map((c, i) => {
+          const { text, field } = typeof c === 'string' ? { text: c, field: null } : c;
+          const linked = field && onGoField && (!fieldInIntake || fieldInIntake(field));
+          return (
+            <li key={i}>
+              {linked ? (
+                <button type="button" className="check-link" onClick={() => onGoField(field)} title={`Open the intake at “${fieldLabel?.(field) || field}”`}>
+                  {text} <span className="check-go">Fix in intake →</span>
+                </button>
+              ) : (
+                text
+              )}
+            </li>
+          );
+        })}
       </ul>
     </details>
   );
 }
 
-export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePlan, driveOn }) {
+export default function FinalFiles({ app, patchLocal, onGoIntake, onGoField, fieldInIntake, fieldLabel, stale: stalePlan, driveOn }) {
   const [data, setData] = useState(null); // { plan, built, job }
   const [job, setJob] = useState(null);
   const [msg, setMsg] = useState(null);
@@ -460,7 +477,7 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                 ) : (
                   e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />
                 )}
-                {e.kind === 'form' && <FormChecks checks={formChecks(e)} />}
+                {e.kind === 'form' && <FormChecks checks={formChecks(e)} onGoField={onGoField} fieldInIntake={fieldInIntake} fieldLabel={fieldLabel} />}
               </div>
               <div className="act">
                 {(() => {

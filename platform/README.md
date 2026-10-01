@@ -351,13 +351,29 @@ Education and Certificates, Submission Letter.
 
 ### Official forms
 
-`lib/generators/xfaFill.js` pre-fills the IRCC XFA forms with pikepdf. Hand
-maps exist for IMM 1294, IMM 5645 (family information: applicant, spouse,
-parents, first child and sibling), IMM 5476 (the firm's RCIC and office as the
-representative — `lib/firm.js`, overridable with `RCIC_*` / `FIRM_*` env vars)
-and Schedule 1; other forms use the automatic map. Yes/No radio groups and
-signatures are left for the client. When a form cannot be pre-filled the
-reason is shown on its slot and the data sheet is there to fill it by hand.
+`lib/generators/xfaFill.js` pre-fills the IRCC XFA forms with pikepdf. The
+main forms (IMM 1294, 1295, 5257, 5708–5710) share one map matched to each
+form's own fields (`lib/forms/fieldmaps/ircc.js`). IMM 5645 (family
+information), IMM 5476 (the firm's RCIC and office as the representative —
+`lib/firm.js`, overridable with `RCIC_*` / `FIRM_*` env vars) and Schedule 1
+have their own maps, and any other form uses the automatic map.
+
+Yes/No questions are ticked from the intake answers. Answers the blank form
+marks as empty (`xsi:nil`, as on Schedule 1) are cleared so Adobe shows the
+tick. Signatures are left for the client.
+
+Schedule 1 takes the applicant's role (principal applicant, or an accompanying
+spouse or adult child) and questions 4–7 from the background answers. Its
+tables come from the intake's lists: military service, events witnessed,
+organizations, government positions, and the trips for question 8 (only those
+since age 18 or in the past five years). Older free-text answers ("Turkey
+2023") are read into rows.
+
+Each form's slot lists the boxes still to complete or check: unanswered
+questions, answers not in English, a trip without its month, or more rows than
+the form has. Each one links straight to its question in the intake. When a
+form cannot be pre-filled, the reason is shown on its slot and the data sheet
+is there to fill it by hand.
 
 ### Page orientation
 

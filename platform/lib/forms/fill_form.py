@@ -54,6 +54,7 @@ from xfa_fields import form_fields  # noqa: E402
 
 XFA_NS = "http://www.xfa.org/schema/xfa-data/1.0/"
 NS = {"xfa": XFA_NS}
+XSI_NIL = "{http://www.w3.org/2001/XMLSchema-instance}nil"
 
 YES = {"y", "yes", "true", "1", "on", "x"}
 NO = {"n", "no", "false", "0", "off"}
@@ -73,6 +74,8 @@ ALIASES = {
     "uae": "united arab emirates",
     "south korea": "korea, south",
     "north korea": "korea, north (dprk)",
+    "türkiye": "turkey",
+    "turkiye": "turkey",
 }
 
 PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
@@ -307,6 +310,9 @@ def main():
         # The data path is the first segment (the form's root data group) onwards.
         node = find_or_create(data, som)
         node.text = stored
+        # The blank form marks unanswered nodes xsi:nil="true"; Adobe keeps
+        # such a node empty (no tick, no text) whatever it holds.
+        node.attrib.pop(XSI_NIL, None)
         set_count += 1
         filled.add(canonical(som))
 

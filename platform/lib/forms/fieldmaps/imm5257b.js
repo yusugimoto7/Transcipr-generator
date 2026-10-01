@@ -5,101 +5,115 @@
  * This form binds its fields to data names of its own (the "Family name" box
  * is Schedule1/FamilyName, the rows of each table are …Details/…Detail[n]) and
  * its Yes/No questions store true / false. Paths below are the resolved data
- * paths (lib/forms/xfa_fields.py). Each table has four rows; more rows are
- * reported so they can be added by hand.
+ * paths (lib/forms/xfa_fields.py). Each table has four rows (question 5 has
+ * three); more rows are reported so they can be added by hand.
+ *
+ * The tables come from the intake's lists (militaryService, witnessedEvents,
+ * organizations, govPositions, trips — lib/schema.js), and every entry names
+ * the intake answer it comes from (`field`), so a box left to do links to it.
  */
 
-import { rows, ym, normalizeUci, yn } from './ircc';
+import { ym, normalizeUci } from './ircc';
+import { filledRows } from '../../schema';
 
 const P = 'Schedule1';
-const ROWS = 4;
+const tf = (v) => (v === true ? 'true' : v === false ? 'false' : '');
 const row = (base, i) => `${base}${i ? `[${i}]` : ''}`;
 
-/** The rows of one table: [{ from, to, ...columns }] from a "a | b | c" intake list. */
-function table(text, columns) {
-  return rows(text).map((cells) => {
-    const [from, to, ...rest] = cells;
-    const [fy, fm] = ym(from);
-    const [ty, tm] = ym(to);
-    const r = { fy, fm, ty, tm };
-    columns.forEach((c, i) => (r[c] = rest[i] || ''));
-    // A free-text line (no "|"): keep it whole in the first text column.
-    if (cells.length === 1 && !fy) r[columns[0]] = cells[0];
-    return r;
-  });
-}
-
-/** Rows plus the dates of each: { som, value } specs for one table. */
-function tableSpecs(base, list, columns) {
+/**
+ * One table: From / To and the other columns of each row, up to `max` rows.
+ * A row with a year but no month gets the year, and a note.
+ */
+function table(base, list, columns, field, what, notes, max = 4) {
   const out = [];
-  list.slice(0, ROWS).forEach((r, i) => {
+  list.slice(0, max).forEach((r, i) => {
     const b = row(base, i);
+    const [fy, fm] = ym(r.from);
+    const [ty, tm] = ym(r.to);
     out.push(
-      { som: `${b}/From/Year`, const: r.fy },
-      { som: `${b}/From/Month`, const: r.fm },
-      { som: `${b}/To/Year`, const: r.ty },
-      { som: `${b}/To/Month`, const: r.tm },
-      ...Object.entries(columns).map(([col, key]) => ({ som: `${b}/${col}`, const: r[key] }))
+      { som: `${b}/From/Year`, const: fy, field },
+      { som: `${b}/From/Month`, const: fm, field },
+      { som: `${b}/To/Year`, const: ty, field },
+      { som: `${b}/To/Month`, const: tm, field },
+      ...Object.entries(columns).map(([col, key]) => ({ som: `${b}/${col}`, const: r[key], field, label: `${what} ${i + 1}: ${col.replace(/Code$/, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()}` }))
     );
+    const name = r.country || r.organization || r.location || '';
+    if (!fy || !ty) notes.push({ text: `${what} ${i + 1}${name ? ` (${name})` : ''}: the ${!fy ? 'start' : 'end'} date is missing`, field });
+    else if (!fm || !tm) notes.push({ text: `${what} ${i + 1}${name ? ` (${name})` : ''}: the month is missing (only the year is known)`, field });
   });
+  if (list.length > max) notes.push({ text: `Schedule 1 has ${max} rows for ${what.toLowerCase()}s; ${list.length - max} more must be added in Adobe (the "+" button)`, field });
   return out;
 }
 
+/** Question 8 asks for trips since age 18 or in the past five years, whichever is more recent. */
+export function tripsToDeclare(d = {}, today = new Date()) {
+  const fiveYears = `${today.getFullYear() - 5}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const dob = String(d.dob || '').match(/^(\d{4})-(\d{2})/);
+  const adult = dob ? `${Number(dob[1]) + 18}-${dob[2]}` : '';
+  const since = adult > fiveYears ? adult : fiveYears;
+  return filledRows(d.trips).filter((t) => {
+    const end = String(t.to || t.from || '');
+    if (!end) return true;
+    // A bare year counts until the end of that year.
+    return (end.length === 4 ? `${end}-12` : end) >= since;
+  });
+}
+
 export function imm5257bFieldMap(d = {}, app = {}) {
-  const military = table(d.militaryDetails, ['location', 'province', 'country']);
-  const witnessed = table(d.witnessedDetails, ['details', 'province', 'country']);
-  const orgs = table(d.organizationDetails, ['organization', 'activities', 'province', 'country']);
-  const positions = table(d.govPositionDetails, ['country', 'jurisdiction', 'department', 'activities']);
-  const trips = table(d.countriesVisited, ['country', 'location', 'purpose']);
-  const travelled = d.travelledAbroad ?? (trips.length ? true : undefined);
+  const notes = [];
+  const trips = tripsToDeclare(d);
+  const travelled = typeof d.travelledAbroad === 'boolean' ? d.travelledAbroad && (trips.length > 0 || !filledRows(d.trips).length) : trips.length ? true : undefined;
+  const Q = (key, yes, list) => {
+    const answer = typeof d[yes] === 'boolean' ? d[yes] : filledRows(d[list]).length ? true : undefined;
+    return answer;
+  };
+  const military = Q('military', 'bgMilitary', 'militaryService');
+  const witnessed = Q('witnessed', 'bgWitnessed', 'witnessedEvents');
+  const member = Q('member', 'bgOrganization', 'organizations');
+  const position = Q('position', 'bgGovPosition', 'govPositions');
 
   const map = [
     // The applicant of this file answers as the principal applicant, except an
-    // accompanying spouse on the principal's application.
-    { som: `${P}/PrincipalApplicant`, const: app.type === 'trv-spouse' ? 'false' : 'true' },
-    { som: `${P}/FamilyName`, from: 'familyName', need: 'Family name' },
-    { som: `${P}/GivenName`, from: 'givenName' },
-    { som: `${P}/ApplicantBirthDate/Year`, from: 'dob', transform: 'year', need: 'Date of birth' },
-    { som: `${P}/ApplicantBirthDate/Month`, from: 'dob', transform: 'month' },
-    { som: `${P}/ApplicantBirthDate/Day`, from: 'dob', transform: 'day' },
-    { som: `${P}/UCI`, const: normalizeUci(d.uci) },
+    // accompanying spouse or adult child on the principal's application.
+    { som: `${P}/PrincipalApplicant`, const: ['trv-spouse', 'trv-child'].includes(app.type) ? 'false' : 'true' },
+    { som: `${P}/FamilyName`, from: 'familyName', need: 'Family name', field: 'familyName' },
+    { som: `${P}/GivenName`, from: 'givenName', field: 'givenName' },
+    { som: `${P}/ApplicantBirthDate/Year`, from: 'dob', transform: 'year', need: 'Date of birth', field: 'dob' },
+    { som: `${P}/ApplicantBirthDate/Month`, from: 'dob', transform: 'month', field: 'dob' },
+    { som: `${P}/ApplicantBirthDate/Day`, from: 'dob', transform: 'day', field: 'dob' },
+    { som: `${P}/UCI`, const: normalizeUci(d.uci), field: 'uci' },
 
-    { som: `${P}/MilitaryServiceInfo/ServedInMilitary`, const: yn(d.bgMilitary), need: 'Military service (Yes/No)' },
-    ...(d.bgMilitary === true
-      ? tableSpecs(`${P}/MilitaryServiceInfo/MilitaryServiceDetails/MilitaryServiceDetail`, military, { Location: 'location', Province: 'province', CountryCode: 'country' })
+    { som: `${P}/MilitaryServiceInfo/ServedInMilitary`, const: tf(military), need: 'Question 4 — military service (Yes/No)', field: 'bgMilitary' },
+    ...(military === true
+      ? table(`${P}/MilitaryServiceInfo/MilitaryServiceDetails/MilitaryServiceDetail`, filledRows(d.militaryService), { Location: 'location', Province: 'province', CountryCode: 'country' }, 'militaryService', 'Military service', notes)
       : []),
 
-    { som: `${P}/WarHumanityCrimesInfo/HaveWitnessedParticipated`, const: yn(d.bgWitnessed), need: 'Witnessed ill treatment (Yes/No)' },
-    ...(d.bgWitnessed === true
-      ? tableSpecs(`${P}/WarHumanityCrimesInfo/WarHumanityCrimesDetails/WarHumanityCrimesDetail`, witnessed, { Details: 'details', Province: 'province', CountryCode: 'country' })
+    { som: `${P}/WarHumanityCrimesInfo/HaveWitnessedParticipated`, const: tf(witnessed), need: 'Question 5 — ill treatment, looting or desecration (Yes/No)', field: 'bgWitnessed' },
+    ...(witnessed === true
+      ? table(`${P}/WarHumanityCrimesInfo/WarHumanityCrimesDetails/WarHumanityCrimesDetail`, filledRows(d.witnessedEvents), { Location: 'location', Province: 'province', CountryCode: 'country', Details: 'details' }, 'witnessedEvents', 'Event', notes, 3)
       : []),
 
-    { som: `${P}/MembershipAssociationInfo/BeenMemberAssociated`, const: yn(d.bgOrganization), need: 'Membership in organizations (Yes/No)' },
-    ...(d.bgOrganization === true
-      ? tableSpecs(`${P}/MembershipAssociationInfo/MembershipAssociationDetails/MembershipAssociationDetail`, orgs, { NameOfOrganization: 'organization', ActivitiesPositionHeld: 'activities', Province: 'province', CountryCode: 'country' })
+    { som: `${P}/MembershipAssociationInfo/BeenMemberAssociated`, const: tf(member), need: 'Question 6 — membership of organizations (Yes/No)', field: 'bgOrganization' },
+    ...(member === true
+      ? table(`${P}/MembershipAssociationInfo/MembershipAssociationDetails/MembershipAssociationDetail`, filledRows(d.organizations), { NameOfOrganization: 'organization', ActivitiesPositionHeld: 'activities', Province: 'province', CountryCode: 'country' }, 'organizations', 'Organization', notes)
       : []),
 
-    { som: `${P}/GovernmentPositionsInfo/HeldGovernmentPositions`, const: yn(d.bgGovPosition), need: 'Government positions (Yes/No)' },
-    ...(d.bgGovPosition === true
-      ? tableSpecs(`${P}/GovernmentPositionsInfo/GovernmentPositionsDetails/GovernmentPositionsDetail`, positions, { CountryCode: 'country', LevelOfJurisdiction: 'jurisdiction', DepartmentBranch: 'department', ActivitiesPositionHeld: 'activities' })
+    { som: `${P}/GovernmentPositionsInfo/HeldGovernmentPositions`, const: tf(position), need: 'Question 7 — government positions (Yes/No)', field: 'bgGovPosition' },
+    ...(position === true
+      ? table(`${P}/GovernmentPositionsInfo/GovernmentPositionsDetails/GovernmentPositionsDetail`, filledRows(d.govPositions), { CountryCode: 'country', LevelOfJurisdiction: 'jurisdiction', DepartmentBranch: 'department', ActivitiesPositionHeld: 'activities' }, 'govPositions', 'Position', notes)
       : []),
 
-    { som: `${P}/PreviousTravelInfo/TraveledOtherCountry`, const: yn(travelled), need: 'Previous travel (Yes/No)' },
+    { som: `${P}/PreviousTravelInfo/TraveledOtherCountry`, const: tf(travelled), need: 'Question 8 — previous travel (Yes/No)', field: 'travelledAbroad' },
     ...(travelled === true
-      ? tableSpecs(`${P}/PreviousTravelInfo/PreviousTravelDetails/PreviousTravelDetail`, trips, { CountryCode: 'country', Location: 'location', PurposeOfTravel: 'purpose' })
+      ? table(`${P}/PreviousTravelInfo/PreviousTravelDetails/PreviousTravelDetail`, trips, { CountryCode: 'country', Location: 'city', PurposeOfTravel: 'purpose' }, 'trips', 'Trip', notes)
       : []),
   ];
 
-  const more = [
-    ['military service', d.bgMilitary === true && military],
-    ['ill-treatment', d.bgWitnessed === true && witnessed],
-    ['organizations', d.bgOrganization === true && orgs],
-    ['government positions', d.bgGovPosition === true && positions],
-    ['trips', travelled === true && trips],
-  ]
-    .filter(([, list]) => list && list.length > ROWS)
-    .map(([what, list]) => `Schedule 1 has ${ROWS} rows for ${what}; ${list.length - ROWS} more must be added in Adobe ("+" button)`);
-  if (d.bgMilitary === true && !military.length) more.push('Military service is Yes but no service rows are in the intake');
-  if (travelled === true && !trips.length) more.push('Travel is Yes but no trips are listed in the intake');
-  return { map, notes: more };
+  if (military === true && !filledRows(d.militaryService).length) notes.push({ text: 'Military service is Yes but no period of service is in the intake', field: 'militaryService' });
+  if (witnessed === true && !filledRows(d.witnessedEvents).length) notes.push({ text: 'Question 5 is Yes but no details are in the intake', field: 'witnessedEvents' });
+  if (member === true && !filledRows(d.organizations).length) notes.push({ text: 'Question 6 is Yes but no organization is in the intake', field: 'organizations' });
+  if (position === true && !filledRows(d.govPositions).length) notes.push({ text: 'Question 7 is Yes but no position is in the intake', field: 'govPositions' });
+  if (travelled === true && !trips.length) notes.push({ text: 'Travel is Yes but no trips are listed in the intake', field: 'trips' });
+  if (d.travelledAbroad === true && filledRows(d.trips).length && !trips.length) notes.push({ text: 'The trips in the intake are all older than question 8 asks (since age 18 or the past 5 years) — answered No', field: 'trips' });
+  return { map, notes };
 }

@@ -16,7 +16,7 @@ const ok = (cond, msg) => {
 
 const { irccData, irccFieldMap, normalizeUci, ym, rows } = await loadLib('forms/fieldmaps/ircc.js');
 const { imm5645FieldMap, people } = await loadLib('forms/fieldmaps/imm5645.js');
-const { imm5257bFieldMap } = await loadLib('forms/fieldmaps/imm5257b.js');
+const { imm5257bFieldMap, tripsToDeclare } = await loadLib('forms/fieldmaps/imm5257b.js');
 const { buildInstructions } = await loadLib('generators/xfaFill.js');
 const { getSchema, fieldShown, isRequired, requiredMissing, deriveData } = await loadLib('schema.js');
 
@@ -113,18 +113,33 @@ ok(v5645('SpouseNo').const === '1', 'a spouse already in Canada: "Will accompany
 ok(v5645('MotherNo').const === '1', 'parents are ticked (No unless the intake says Yes)');
 ok(v5645('SectionB/Child/ChildYes').const === '1' && v5645('SectionB/Child/ChildName').const === 'Sara Karimi سارا کریمی', 'child row with both names and a Yes tick');
 ok(!m5645.some((s) => s.native && !/Name$/.test(s.som)), 'only name boxes may hold the native script');
-ok(notes.some((n) => /Father's name in the native language/.test(n)), 'a missing native name is reported');
+ok(notes.some((n) => /Father's name in the native language/.test(n.text) && n.field === 'fatherNameNative'), 'a missing native name is reported, linked to its question');
 ok(people('A, 2010-01-01, Iran')[0].dob === '2010-01-01', 'older "name, date, country" lines still read');
 
 // --- Schedule 1: real data names, true/false answers, table rows ---
-const { map: s1 } = imm5257bFieldMap(
-  { familyName: 'Rahimi', bgMilitary: true, militaryDetails: '2008-02 | 2010-01 | Army, Tehran | Tehran | Iran', bgWitnessed: false, bgOrganization: false, bgGovPosition: false, travelledAbroad: false },
-  { type: 'trv-outside' }
-);
+const s1data = deriveData({ familyName: 'Rahimi', dob: '1985-03-01', bgMilitary: true, militaryDetails: '2008-02 | 2010-01 | Army, Tehran | Tehran | Iran', bgWitnessed: false, bgOrganization: false, bgGovPosition: false, travelledAbroad: false });
+const { map: s1 } = imm5257bFieldMap(s1data, { type: 'trv-outside' });
 const vs1 = (p) => s1.find((s) => s.som === `Schedule1/${p}`)?.const;
-ok(vs1('MilitaryServiceInfo/ServedInMilitary') === 'Y' && vs1('MilitaryServiceInfo/MilitaryServiceDetails/MilitaryServiceDetail/From/Year') === '2008', 'Schedule 1 military answer and first row');
+ok(s1data.militaryService?.[0]?.location === 'Army, Tehran', 'older military text becomes a row');
+ok(vs1('MilitaryServiceInfo/ServedInMilitary') === 'true' && vs1('MilitaryServiceInfo/MilitaryServiceDetails/MilitaryServiceDetail/From/Year') === '2008', 'Schedule 1 military answer (true/false, as the form stores it) and first row');
 ok(vs1('MilitaryServiceInfo/MilitaryServiceDetails/MilitaryServiceDetail/CountryCode') === 'Iran', 'Schedule 1 country goes to its coded list');
-ok(vs1('PreviousTravelInfo/TraveledOtherCountry') === 'N' && vs1('PrincipalApplicant') === 'true', 'Schedule 1 travel No, principal applicant');
+ok(vs1('PreviousTravelInfo/TraveledOtherCountry') === 'false' && vs1('PrincipalApplicant') === 'true', 'Schedule 1 travel No, principal applicant');
+ok(['WarHumanityCrimesInfo/HaveWitnessedParticipated', 'MembershipAssociationInfo/BeenMemberAssociated', 'GovernmentPositionsInfo/HeldGovernmentPositions'].every((q) => vs1(q) === 'false'), 'Schedule 1 questions 5–7 answered No');
+const { map: s1b } = imm5257bFieldMap({ ...s1data }, { type: 'trv-spouse' });
+ok(s1b.find((s) => s.som === 'Schedule1/PrincipalApplicant').const === 'false', 'an accompanying spouse ticks the second box');
+// A trip written as free text ("Turkey 2023") still reaches question 8.
+const trip = deriveData({ dob: '1971-12-21', travelledAbroad: true, countriesVisited: 'Turkey 2023' });
+ok(trip.trips?.[0]?.country === 'Turkey' && trip.trips[0].from === '2023', 'a free-text trip is read: country and year');
+const { map: s1c, notes: n1c } = imm5257bFieldMap(trip, { type: 'owp-outside' });
+const vs1c = (p) => s1c.find((s) => s.som === `Schedule1/${p}`)?.const;
+ok(vs1c('PreviousTravelInfo/TraveledOtherCountry') === 'true' && vs1c('PreviousTravelInfo/PreviousTravelDetails/PreviousTravelDetail/CountryCode') === 'Turkey' && vs1c('PreviousTravelInfo/PreviousTravelDetails/PreviousTravelDetail/From/Year') === '2023', 'Schedule 1 question 8: Yes and the trip');
+ok(n1c.some((n) => /month is missing/.test(n.text) && n.field === 'trips'), 'a trip without its month is reported, linked to the trips');
+ok(deriveData({ countriesVisited: 'ترکیه ۲۰۲۲' }).trips[0].country === 'Turkey' && deriveData({ countriesVisited: 'Dubai Mar 2022 - Apr 2022 tourism' }).trips[0].purpose === 'Tourism', 'Persian place names and purposes are read');
+const old = deriveData({ dob: '1971-12-21', travelledAbroad: true, trips: [{ from: '2015-01', to: '2015-02', country: 'Turkey', city: 'Istanbul', purpose: 'Tourism' }, { from: '2024-05', to: '2024-05', country: 'Armenia', city: 'Yerevan', purpose: 'Tourism' }] });
+const { map: s1d } = imm5257bFieldMap(old, {});
+ok(s1d.filter((s) => /PreviousTravelDetail(\[\d\])?\/CountryCode$/.test(s.som)).map((s) => s.const).join() === 'Armenia', 'question 8 lists only trips of the past five years (or since age 18)');
+ok(tripsToDeclare({ dob: '2004-06-01', trips: [{ from: '2021-07', to: '2021-08', country: 'Turkey' }, { from: '2022-07', to: '2022-08', country: 'Oman' }] }).map((t) => t.country).join() === 'Oman', 'a young applicant: trips since 18');
+ok(s1.every((s) => !s.som.includes('Detail') || s.field), 'every table box names the intake list it comes from');
 ok(s1.some((s) => s.som === 'Schedule1/FamilyName'), 'Schedule 1 name is written where the form reads it');
 
 // --- intake: follow-up questions shown and required only when relevant ---
@@ -200,8 +215,39 @@ print(json.dumps(out, ensure_ascii=False))
   console.log('- python/lxml not available: resolver checks skipped');
 }
 
+// --- Every box left to do links to a real intake question.
+{
+  const { sourceOf, COMMON_RULES, EXTRA_RULES } = await loadLib('forms/fieldmaps/ircc.js');
+  const ids = new Set();
+  for (const t of ['owp-outside', 'study-permit', 'trv-outside', 'pgwp', 'sowp-inside', 'super-visa', 'imp-c11', 'visitor-record', 'study-permit-inside', 'trv-spouse'])
+    for (const st of getSchema(t).steps) for (const f of st.fields) ids.add(f.id);
+  const specs = [...COMMON_RULES, ...Object.values(EXTRA_RULES).flat()].map((r) => (Array.isArray(r) ? r[1] : r)).filter((x) => x && x.from);
+  const broken = [...new Set(specs.map((x) => sourceOf(x.from)).filter((id) => id && !ids.has(id)))];
+  ok(!broken.length, `main-form boxes link to intake questions${broken.length ? ` (unknown: ${broken.join(', ')})` : ''}`);
+  const s1fields = [...new Set([...s1, ...s1c].map((x) => x.field).filter(Boolean))];
+  ok(s1fields.every((id) => ids.has(id)), `Schedule 1 boxes link to intake questions (${s1fields.filter((id) => !ids.has(id)).join(', ')})`);
+}
+
+// --- The real Schedule 1: answers written, and none left marked "empty"
+// (its blank datasets mark the Yes/No nodes xsi:nil, which Adobe shows unticked).
+{
+  const fs = await import('fs');
+  const tpl = path.join(here, '..', 'uploads', 'forms-cache', 'imm5257b_01-09-2023.pdf');
+  if (fs.existsSync(tpl) && spawnSync(PY, ['-c', 'import lxml, pikepdf']).status === 0) {
+    const out = path.join((await import('os')).tmpdir(), `s1-${process.pid}.pdf`);
+    const full = { ...trip, familyName: 'Example', bgMilitary: false, bgWitnessed: false, bgOrganization: false, bgGovPosition: false };
+    const ins = buildInstructions(imm5257bFieldMap(full, { type: 'owp-outside' }).map, full, []);
+    const r = spawnSync(PY, [path.join(here, '..', 'lib', 'forms', 'fill_form.py'), tpl, out], { input: JSON.stringify({ instructions: ins }), encoding: 'utf8' });
+    const read = spawnSync(PY, ['-c', `import pikepdf,sys\npdf=pikepdf.open(sys.argv[1]);x=pdf.Root.AcroForm.XFA\nd={str(x[i]):x[i+1] for i in range(0,len(x),2)}['datasets'].read_bytes().decode()\ni=d.find('<xfa:data');print(d[i:])`, out], { encoding: 'utf8' });
+    const xml = read.stdout || '';
+    ok(JSON.parse(r.stdout || '{}').ok && !/nil="true"/.test(xml), 'the filled Schedule 1 has no box left marked empty');
+    ok(/<ServedInMilitary[^>]*>false</.test(xml) && /<TraveledOtherCountry[^>]*>true</.test(xml) && /<CountryCode>045</.test(xml), 'Schedule 1 answers and the trip country code are in the filled form');
+    fs.rmSync(out, { force: true });
+  } else console.log('- Schedule 1 template or python not available: real-form check skipped');
+}
 if (failed) {
   console.log(`\n${failed} check(s) failed`);
   process.exit(1);
 }
+
 console.log('\nforms: all checks passed');
