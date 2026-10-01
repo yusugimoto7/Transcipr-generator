@@ -90,8 +90,8 @@ function WorkingFiles({ app, patchLocal }) {
         const g = gen.get(l.key);
         return (
           <Row key={l.key} title={l.title} sub={g ? `Letter · drafted ${fmtDay(g.generatedAt)}` : 'Letter · drafted when you build'}>
-            {g && <a className="btn btn-secondary btn-sm" href={dl(l.key)}><FileDown size={14} aria-hidden="true" /> PDF</a>}
-            {g && l.word && <a className="btn btn-secondary btn-sm" href={dl(l.key, 'docx')}><FileText size={14} aria-hidden="true" /> Word</a>}
+            {g && <a className="btn btn-secondary btn-sm" href={dl(l.key)} target="_blank" rel="noopener noreferrer"><FileDown size={14} aria-hidden="true" /> PDF</a>}
+            {g && l.word && <a className="btn btn-secondary btn-sm" href={dl(l.key, 'docx')} target="_blank" rel="noopener noreferrer"><FileText size={14} aria-hidden="true" /> Word</a>}
             <button type="button" className="btn-ghost btn-sm" onClick={() => redraft(l.key, l.title)} disabled={Boolean(busyKey)}>
               {busyKey === l.key ? <span className="spinner dark" /> : <RefreshCw size={14} aria-hidden="true" />} {g ? 'Redraft' : 'Draft now'}
             </button>
@@ -102,12 +102,12 @@ function WorkingFiles({ app, patchLocal }) {
         const g = gen.get(f.key);
         return (
           <Row key={f.key} title={`${f.label} — data sheet`} sub={g ? 'Every form value, for checking the form' : 'Made when you build'}>
-            {g && <a className="btn btn-secondary btn-sm" href={dl(f.key)}><FileDown size={14} aria-hidden="true" /> PDF</a>}
+            {g && <a className="btn btn-secondary btn-sm" href={dl(f.key)} target="_blank" rel="noopener noreferrer"><FileDown size={14} aria-hidden="true" /> PDF</a>}
           </Row>
         );
       })}
       <Row title="Missing documents & next steps" sub="Refreshed on every build">
-        {gen.get('next-steps') && <a className="btn btn-secondary btn-sm" href={dl('next-steps')}><FileDown size={14} aria-hidden="true" /> PDF</a>}
+        {gen.get('next-steps') && <a className="btn btn-secondary btn-sm" href={dl('next-steps')} target="_blank" rel="noopener noreferrer"><FileDown size={14} aria-hidden="true" /> PDF</a>}
       </Row>
     </section>
   );

@@ -314,7 +314,7 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
         </div>
         <div className="btn-row">
           {data?.built?.files?.length > 0 && !job && (
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/final-files/zip`}><Download size={16} aria-hidden="true" /> Download all (.zip)</a>
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/final-files/zip`} target="_blank" rel="noopener noreferrer"><Download size={16} aria-hidden="true" /> Download all (.zip)</a>
           )}
           <button type="button" onClick={requestBuild} disabled={Boolean(job) || !plan.length}>
             {job ? <span className="spinner" /> : <Hammer size={16} aria-hidden="true" />}
@@ -480,7 +480,7 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                   <span className="chip warn" title="IRCC's portal takes files up to 4 MB. Rebuild with blank pages removed, or split / compress this file.">Over 4 MB</span>
                 )}
                 {rowProgress(e) ? null : current ? (
-                  <a href={`/api/applications/${app.id}/download/${b.key}`} className="btn btn-secondary btn-sm" title={b.filename}>
+                  <a href={`/api/applications/${app.id}/download/${b.key}`} className="btn btn-secondary btn-sm" title={b.filename} target="_blank" rel="noopener noreferrer">
                     <Download size={14} aria-hidden="true" /> {size(b.size)}{b.pages ? ` · ${b.pages} p.` : ''}
                   </a>
                 ) : e.n && problemBySlot.has(e.slot) ? (

@@ -70,7 +70,7 @@ export default function OfficialFormsPanel({ bare }) {
                   {f.source === 'fallback' && ' · using cached link'}
                 </div>
               </div>
-              <a className="btn btn-secondary btn-sm" href={`/api/forms/${f.key}/download`}>↓ Download blank</a>
+              <a className="btn btn-secondary btn-sm" href={`/api/forms/${f.key}/download`} target="_blank" rel="noopener noreferrer">↓ Download blank</a>
             </div>
           ))}
 
@@ -82,7 +82,7 @@ export default function OfficialFormsPanel({ bare }) {
                   Official document checklist{checklist.version ? ` · version ${checklist.version}` : ''}
                 </div>
               </div>
-              <a className="btn btn-secondary btn-sm" href={`/api/forms/${checklist.key}/download`}>↓ Download checklist</a>
+              <a className="btn btn-secondary btn-sm" href={`/api/forms/${checklist.key}/download`} target="_blank" rel="noopener noreferrer">↓ Download checklist</a>
             </div>
           )}
         </div>

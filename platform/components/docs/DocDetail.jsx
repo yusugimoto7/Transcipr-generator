@@ -177,7 +177,7 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
           <h3 style={{ margin: 0 }}>Preview</h3>
           <div className="btn-row">
             <a className="btn btn-secondary btn-sm" href={url} target="_blank" rel="noreferrer"><ExternalLink size={14} aria-hidden="true" /> Open</a>
-            <a className="btn btn-secondary btn-sm" href={`${url}&download=1`}><Download size={14} aria-hidden="true" /> Download</a>
+            <a className="btn btn-secondary btn-sm" href={`${url}&download=1`} target="_blank" rel="noopener noreferrer"><Download size={14} aria-hidden="true" /> Download</a>
           </div>
         </div>
         {isPdf ? (

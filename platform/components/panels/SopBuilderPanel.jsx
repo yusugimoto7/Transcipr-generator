@@ -106,8 +106,8 @@ export default function SopBuilderPanel({ app, patchLocal }) {
         </div>
         {text && (
           <div className="btn-row">
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`}><FileDown size={16} aria-hidden="true" /> PDF</a>
-            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop?format=docx`}><FileText size={16} aria-hidden="true" /> Word</a>
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop`} target="_blank" rel="noopener noreferrer"><FileDown size={16} aria-hidden="true" /> PDF</a>
+            <a className="btn btn-secondary" href={`/api/applications/${app.id}/download/sop?format=docx`} target="_blank" rel="noopener noreferrer"><FileText size={16} aria-hidden="true" /> Word</a>
           </div>
         )}
       </div>
