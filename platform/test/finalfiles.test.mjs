@@ -102,7 +102,20 @@ try {
   ok(names.includes('04 - imm5476e Signed - Zahra.pdf'), 'the uploaded signed IMM 5476 is used as the form');
   ok(names.indexOf('05 - Passport - Zahra.pdf') === 4 && names.indexOf('06 - Photo - Zahra.jpg') === 5 && names.indexOf('07 - Client Information - Zahra.pdf') === 6, 'then Passport, Photo, Client Information');
   ok(names.some((n) => /Marriage Certificate - Zahra\.pdf$/.test(n)), 'the marriage certificate has its own file');
-  ok(names.some((n) => /Family Proof of Status/.test(n)) && names.some((n) => /Education and Certificates/.test(n)) && !names.some((n) => /CV/.test(n)), `the spouse-abroad set: Family Proof of Status, Education and Certificates, no separate CV (${names.slice(6).join(', ')})`);
+  ok(names.some((n) => /Family Proof of Status/.test(n)) && names.some((n) => /Education and Certificates/.test(n)), `the spouse-abroad set: Family Proof of Status, Education and Certificates (${names.slice(6).join(', ')})`);
+  const cvSlot = plan.find((e) => e.slot === 'cv');
+  ok(cvSlot && cvSlot.fixed === false && cvSlot.seen === 1, 'a CV file (1 of the latest 5 applications) is in the set but can be taken out');
+  ok(plan.find((e) => e.slot === 'passport').fixed && plan.find((e) => e.slot === 'client-info').fixed, 'passport and Client Information are fixed');
+  // The team edits the set before building: take the CV file out, so the CV goes into Client Information.
+  let pr = await call('PATCH', `/api/applications/${appId}/final-files`, { op: 'remove', slot: 'passport' });
+  ok(pr.status === 400, 'a fixed file cannot be removed');
+  pr = await call('PATCH', `/api/applications/${appId}/final-files`, { op: 'remove', slot: 'cv' });
+  const ciFiles = (p) => p.find((e) => e.slot === 'client-info').contents.flatMap((s) => [...s.files, ...s.children.flatMap((c) => c.files)]);
+  ok(pr.status === 200 && !pr.data.plan.some((e) => e.slot === 'cv') && ciFiles(pr.data.plan).some((f) => /cv/i.test(f)), 'with the CV file taken out, the CV goes into Client Information');
+  ok(pr.data.catalog.some((c) => c.slot === 'cv' && c.portal), 'and the CV file is offered back, with its portal slot');
+  pr = await call('PATCH', `/api/applications/${appId}/final-files`, { op: 'add', slot: 'cv' });
+  ok(pr.data.plan.some((e) => e.slot === 'cv' && e.n), 'adding it back restores the CV file');
+  r = await call('GET', `/api/applications/${appId}/final-files`);
   const ci = plan.find((e) => e.slot === 'client-info');
   const secNames = (ci.contents || []).map((s) => s.name);
   ok(secNames.includes('Occupational Documents') && secNames.includes('Financial Documents') && !secNames.some((n) => /Marriage|Police|Birth/.test(n)), `the plan shows what Client Information will hold (${secNames.join(' · ')})`);

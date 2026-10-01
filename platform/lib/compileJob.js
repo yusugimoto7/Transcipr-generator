@@ -121,17 +121,18 @@ async function run(appId, pkg, { cleanPages, fixRotation }, job) {
  *   owned    categories a catch-all section may take (a package's own), or
  *   claimed  categories that belong to OTHER files — the catch-all takes every
  *            remaining document except these (used by the final-file set)
+ *   exclude / force  documents the team moved out of / into this file (lib/packagePlan.js)
  *   plain    no table of contents, dividers or page footers (a single document)
  *   job      progress object to update (phase, done, total, current)
  * @returns {{ app, meta, stats }}
  */
-export async function buildPackageFile(app, def, { cleanPages = true, fixRotation = true, job = {}, owned = null, claimed = null, plain = false, key, filename }) {
+export async function buildPackageFile(app, def, { cleanPages = true, fixRotation = true, job = {}, owned = null, claimed = null, exclude = null, force = null, plain = false, key, filename }) {
   // Plan first (lib/packagePlan.js), so progress has a total: which letters
   // need drafting, and which uploaded files each section takes.
   const walk = (nodes) => nodes.flatMap((n) => [n, ...(n.children || [])]);
   const neededGen = [...new Set(walk(def.sections).filter((s) => s.generatedKey).map((s) => s.generatedKey))];
   const missingGen = neededGen.filter((k) => !(app.generated || []).some((g) => g.key === k && g.stored) && letterSpec(app, k));
-  const plan = planPackage(app, def, { owned, claimed });
+  const plan = planPackage(app, def, { owned, claimed, exclude, force });
   const fileCount = plan.reduce((n, p) => n + p.docs.length + p.children.reduce((m, c) => m + c.docs.length, 0), 0);
 
   job.total = missingGen.length + fileCount + 1; // + assembling the PDF

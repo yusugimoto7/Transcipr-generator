@@ -9,6 +9,8 @@ import { buildPackageFile, ensureGenerated } from './compileJob';
 import { letterSpec } from './generators/letters';
 import { rasterizePdf } from './raster';
 import { NEVER, narrowPackage, planPackage, describePlan } from './packagePlan';
+import { finalSetFor, ALWAYS } from './finalSets';
+import { CATEGORY_LABELS } from './docLabels';
 
 /**
  * The files the firm uploads to the IRCC portal — one PDF per portal slot —
@@ -29,8 +31,8 @@ const SLOT = {
   photo: { name: 'Photo', photo: true },
   'client-info': { name: 'Client Information', pkg: 'client-info' },
   financial: { name: 'Financial Support', pkg: 'financial-proof', categories: ['proof-of-funds', 'supporter-bank', 'supporter-income', 'supporter-deeds', 'title-deeds', 'deposit', 'gic', 'affidavit-support', 'source-of-funds'] },
-  inviter: { name: "Inviter's Documents", pkg: 'inviter-docs' },
-  business: { name: 'Business Documents', pkg: 'business-docs' },
+  inviter: { name: "Inviter's Documents", pkg: 'inviter-docs', categories: ['invitation-letter', 'host-docs', 'supporter-id', 'inviter-docs', 'supporter-income', 'supporter-bank', 'supporter-deeds'] },
+  business: { name: 'Business Documents', pkg: 'business-docs', categories: ['business-docs', 'business-financials', 'business-contracts', 'business-employees', 'business-premises', 'business-plan'] },
   marriage: { name: 'Marriage Certificate', categories: ['marriage-cert'] },
   'birth-nid': { name: 'Birth Certificate & National ID Card', categories: ['national-id'] },
   police: { name: 'Police Clearance Certificate', categories: ['police-clearance'] },
@@ -191,8 +193,82 @@ function signedUpload(app, formKey) {
   return (app.documents || []).find((d) => d.category === 'rep-form' && re.test(d.filename) && d.mime === 'application/pdf') || null;
 }
 
+/* --------------------------- the team's choices --------------------------- */
+
+/**
+ * The team's changes to an application's set (app.finalSetup):
+ *   removed  optional files taken out of the type's standard set
+ *   added    files added from the catalog
+ *   custom   files made by hand: [{ id, name }] — slot "custom:<id>"
+ *   assign   { documentId: slot | 'none' } — a document moved into a file, or left out
+ */
+export function setupOf(app) {
+  const s = app.finalSetup || {};
+  return { removed: s.removed || [], added: s.added || [], custom: s.custom || [], assign: s.assign || {}, updatedAt: s.updatedAt || null };
+}
+
+const DEFAULT_LIST = ['forms', 'passport', 'photo', 'client-info', 'submission'];
+
+/**
+ * The slots of the set, in order, before anything is planned:
+ * [{ slot, fixed, seen?, of?, added?, custom? }]. The type's standard set
+ * (lib/finalSets.js — learned from the latest applications) or, for types with
+ * no history, the planner's own list; minus what the team took out, plus what
+ * it added (before the submission letter).
+ */
+export function setSlots(app) {
+  const t = getAppType(app.type);
+  const setup = setupOf(app);
+  const learned = finalSetFor(t.key);
+  let base = learned ? learned.slots.map((s) => ({ ...s })) : (LISTS[t.key] || DEFAULT_LIST).map((slot) => ({ slot, fixed: ALWAYS.has(slot) }));
+  base = base.filter((s) => s.fixed || !setup.removed.includes(s.slot));
+  const have = new Set(base.map((s) => s.slot));
+  const extra = [
+    ...setup.added.filter((k) => SLOT[k] && !have.has(k)).map((slot) => ({ slot, fixed: false, added: true })),
+    ...setup.custom.map((c) => ({ slot: `custom:${c.id}`, fixed: false, added: true, custom: c })),
+  ];
+  const at = base.findIndex((s) => s.slot === 'submission');
+  if (at < 0) return [...base, ...extra];
+  return [...base.slice(0, at), ...extra, ...base.slice(at)];
+}
+
+/** Definition of a slot, including files made by hand. */
+function slotDef(app, slot) {
+  if (slot.startsWith('custom:')) {
+    const c = setupOf(app).custom.find((x) => `custom:${x.id}` === slot);
+    return c ? { name: c.name, custom: true } : null;
+  }
+  return SLOT[slot] || null;
+}
+
+/** The categories a slot takes on its own (its package's sections included). */
+function slotCategories(slot, pkgs) {
+  const def = SLOT[slot];
+  const out = new Set(def?.categories || []);
+  const walk = (n) => {
+    (n.categories || []).forEach((c) => out.add(c));
+    (n.children || []).forEach(walk);
+  };
+  if (def?.pkg && pkgs[def.pkg]) pkgs[def.pkg].sections.forEach(walk);
+  return out;
+}
+
+/** Documents moved into `slot` (force) and those moved elsewhere or left out (exclude). */
+function moves(app, slot, inSet) {
+  const force = [];
+  const exclude = new Set();
+  for (const [id, to] of Object.entries(setupOf(app).assign)) {
+    if (to !== 'none' && !inSet.has(to)) continue; // its file was taken out: placed as usual
+    if (to === slot) force.push(id);
+    else exclude.add(id);
+  }
+  return { force, exclude };
+}
+
 /** The package definition a slot compiles, or a one-section one for a plain document slot. */
 function slotPackage(app, def, pkgs, claimed) {
+  // A file made by hand: just the documents put in it, one contents entry each.
+  if (def.custom) return { title: def.name, extraName: def.name, flat: true, sections: [] };
   if (def.pkg && pkgs[def.pkg]) return def.pkg === 'client-info' ? narrowPackage(pkgs[def.pkg], claimed) : pkgs[def.pkg];
   const sections = [];
   if (def.generatedKey && app.data?.palExempt && letterSpec(app, def.generatedKey)) sections.push({ name: def.generatedName || def.name, generatedKey: def.generatedKey });
@@ -210,7 +286,8 @@ function slotPackage(app, def, pkgs, claimed) {
  */
 export function planFinalFiles(app) {
   const t = getAppType(app.type);
-  const list = LISTS[t.key] || ['forms', 'passport', 'photo', 'client-info', 'submission'];
+  const list = setSlots(app);
+  const inSet = new Set(list.map((s) => s.slot));
   const pkgs = packagesFor(app.type);
   const docs = app.documents || [];
   const gen = new Map((app.generated || []).map((g) => [g.key, g]));
@@ -219,7 +296,9 @@ export function planFinalFiles(app) {
   const hasLetter = (key) => gen.has(key) || Boolean(letterSpec(app, key));
 
   const entries = [];
-  for (const slotKey of list) {
+  for (const item of list) {
+    const slotKey = item.slot;
+    const meta = { fixed: item.fixed, ...(item.seen ? { seen: item.seen, of: item.of } : {}), ...(item.added ? { added: true } : {}) };
     if (slotKey === 'forms') {
       for (const f of formsFor(app)) {
         // IRCC's own file names: imm1295e, imm5645e — Schedule 1 is imm5257_1e.
@@ -227,6 +306,8 @@ export function planFinalFiles(app) {
         const upload = signedUpload(app, f.key);
         const filled = gen.get(`${f.key}-filled`);
         entries.push({
+          ...meta,
+          fixed: true,
           slot: `form:${f.key}`,
           kind: 'form',
           formKey: f.key,
@@ -239,17 +320,18 @@ export function planFinalFiles(app) {
       }
       continue;
     }
-    const def = SLOT[slotKey];
+    const def = slotDef(app, slotKey);
     if (!def) continue;
     if (def.pkg && !pkgs[def.pkg] && !def.categories) continue; // the type has no such package
-    entries.push({ slot: slotKey, kind: def.photo ? 'photo' : def.pkg && pkgs[def.pkg] ? 'package' : def.generatedKey && !def.categories ? 'letter' : 'documents', name: def.name, ready: false, note: '', contents: null });
+    const kind = def.custom ? 'package' : def.photo ? 'photo' : def.pkg && pkgs[def.pkg] ? 'package' : def.generatedKey && !def.categories ? 'letter' : 'documents';
+    entries.push({ ...meta, slot: slotKey, kind, name: def.name, ...(def.custom ? { custom: true } : {}), ready: false, note: '', contents: null });
   }
 
   // What each slot takes. Client Information is planned last: it holds
   // whatever no other file claims.
   const claimed = claimedCategories(entries, app);
   for (const e of entries) {
-    const def = SLOT[e.slot];
+    const def = slotDef(app, e.slot);
     if (e.kind === 'form') continue;
     if (e.kind === 'photo') {
       const photo = docs.find((d) => d.category === 'photo');
@@ -262,10 +344,10 @@ export function planFinalFiles(app) {
       e.contents = e.ready ? [{ name: def.name, letter: true, files: [], children: [] }] : [];
     } else {
       const pkgDef = slotPackage(app, def, pkgs, claimed);
-      const plan = planPackage(app, pkgDef, e.slot === 'client-info' ? { claimed } : { owned: new Set() });
+      const plan = planPackage(app, pkgDef, { ...(e.slot === 'client-info' ? { claimed } : { owned: new Set() }), ...moves(app, e.slot, inSet) });
       e.contents = describePlan(plan, { hasLetter });
       e.ready = e.contents.length > 0;
-      if (!e.ready) e.note = e.kind === 'package' ? 'nothing to put in it yet' : 'no documents of this type yet';
+      if (!e.ready) e.note = e.custom ? 'add the documents it should hold' : e.kind === 'package' ? 'nothing to put in it yet' : 'no documents of this type yet';
     }
   }
 
@@ -289,8 +371,144 @@ export function planFinalFiles(app) {
  */
 export function unplacedDocuments(app, plan = planFinalFiles(app)) {
   const placed = new Set();
-  for (const e of plan) for (const s of e.contents || []) for (const f of [s, ...s.children]) f.files.forEach((name) => placed.add(name));
-  return (app.documents || []).filter((d) => !NEVER.has(d.category) && !placed.has(d.filename)).map((d) => ({ id: d.id, filename: d.filename, category: d.category || null }));
+  for (const e of plan) for (const s of e.contents || []) for (const f of [s, ...s.children]) (f.ids || []).forEach((id) => placed.add(id));
+  return (app.documents || []).filter((d) => !NEVER.has(d.category) && !placed.has(d.id)).map((d) => ({ id: d.id, filename: d.filename, category: d.category || null }));
+}
+
+const CATCH_ALL = /^(Other Supporting Documents|Additional Documents)$/;
+
+/**
+ * Where each loose document could go: documents left out of every file, and
+ * those that only landed in a catch-all section ("Other Supporting
+ * Documents"). For each, the files of the set whose type it is, then portal
+ * files not in the set yet that take it, then Client Information.
+ * @returns {Array<{ id, filename, category, label, where, options: [{ slot, name, action: 'move'|'add', portal? }] }>}
+ */
+export function documentSuggestions(app, plan = planFinalFiles(app)) {
+  const t = getAppType(app.type);
+  const pkgs = packagesFor(app.type);
+  const where = new Map(); // doc id -> { slot, section }
+  for (const e of plan) {
+    for (const s of e.contents || []) {
+      for (const id of s.ids || []) where.set(id, { slot: e.slot, section: s.name });
+      for (const c of s.children) for (const id of c.ids || []) where.set(id, { slot: e.slot, section: c.name, parent: s.name });
+    }
+  }
+  const inSet = plan.filter((e) => e.kind !== 'form').map((e) => e.slot);
+  const out = [];
+  for (const d of app.documents || []) {
+    if (NEVER.has(d.category)) continue;
+    const w = where.get(d.id);
+    const loose = !w || (w.slot === 'client-info' && (CATCH_ALL.test(w.section) || CATCH_ALL.test(w.parent || '')));
+    if (!loose) continue;
+    const options = [];
+    if (d.category) {
+      for (const slot of inSet) if (slot !== w?.slot && SLOT[slot] && slotCategories(slot, pkgs).has(d.category)) options.push({ slot, name: SLOT[slot].name, action: 'move' });
+      for (const slot of Object.keys(SLOT)) {
+        if (inSet.includes(slot) || !(SLOT[slot].categories || []).includes(d.category)) continue;
+        const portal = portalSlot(slot, t, app);
+        if (portal && !portal.name) continue; // no slot of its own in this portal flow
+        options.push({ slot, name: SLOT[slot].name, action: 'add', ...(portal?.name ? { portal: portal.name } : {}) });
+      }
+    }
+    // Files the team made by hand can take anything.
+    for (const e of plan) if (e.custom && e.slot !== w?.slot) options.push({ slot: e.slot, name: e.name, action: 'move' });
+    if (w?.slot !== 'client-info' && inSet.includes('client-info')) options.push({ slot: 'client-info', name: 'Client Information', action: 'move' });
+    out.push({ id: d.id, filename: d.filename, category: d.category || null, label: CATEGORY_LABELS[d.category] || null, where: w ? w.slot : null, options });
+  }
+  return out;
+}
+
+/**
+ * Files that can be added to the set: every portal file not in it, with its
+ * portal slot in this application's portal flow, and how often the latest
+ * applications of this type had it.
+ */
+export function catalogFor(app) {
+  const t = getAppType(app.type);
+  const pkgs = packagesFor(app.type);
+  const inSet = new Set(setSlots(app).map((s) => s.slot));
+  const learned = new Map((finalSetFor(t.key)?.slots || []).map((s) => [s.slot, s]));
+  return Object.entries(SLOT)
+    .filter(([k, def]) => !inSet.has(k) && !(def.pkg && !pkgs[def.pkg] && !def.categories))
+    .map(([k, def]) => {
+      const portal = portalSlot(k, t, app);
+      const l = learned.get(k);
+      return { slot: k, name: def.name, ...(portal?.name ? { portal: portal.name } : {}), ...(l ? { seen: l.seen, of: l.of } : {}) };
+    })
+    .sort((a, b) => (b.seen || 0) - (a.seen || 0) || Boolean(b.portal) - Boolean(a.portal) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Apply one change to the set and return the new app.finalSetup.
+ *   { op: 'remove', slot }        take an optional file out (fixed ones stay)
+ *   { op: 'add', slot }           add a file from the catalog
+ *   { op: 'custom', name }        add a file made by hand
+ *   { op: 'rename', slot, name }  rename a file made by hand
+ *   { op: 'assign', doc, to }     put a document in a file (`to` a slot), leave
+ *                                 it out ('none'), or back to automatic (null)
+ *   { op: 'reset' }               back to the type's standard set
+ * Throws with a message the team can read when the change is not allowed.
+ */
+export function applySetupChange(app, change) {
+  const setup = setupOf(app);
+  const list = setSlots(app);
+  const clean = (name) => String(name || '').replace(/[\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  switch (change?.op) {
+    case 'remove': {
+      const item = list.find((s) => s.slot === change.slot);
+      if (!item) throw new Error('That file is not in the set.');
+      if (item.fixed) throw new Error('This file is always part of the set for this application type.');
+      if (item.custom) {
+        setup.custom = setup.custom.filter((c) => c.id !== item.custom.id);
+      } else if (setup.added.includes(item.slot)) setup.added = setup.added.filter((k) => k !== item.slot);
+      else setup.removed = [...new Set([...setup.removed, item.slot])];
+      setup.assign = Object.fromEntries(Object.entries(setup.assign).filter(([, to]) => to !== item.slot));
+      break;
+    }
+    case 'add': {
+      if (!SLOT[change.slot]) throw new Error('Unknown file.');
+      if (list.some((s) => s.slot === change.slot)) throw new Error('That file is already in the set.');
+      if (setup.removed.includes(change.slot)) setup.removed = setup.removed.filter((k) => k !== change.slot);
+      else setup.added = [...setup.added, change.slot];
+      break;
+    }
+    case 'custom': {
+      const name = clean(change.name);
+      if (!name) throw new Error('Give the file a name.');
+      const id = Math.random().toString(36).slice(2, 8);
+      setup.custom = [...setup.custom, { id, name }];
+      break;
+    }
+    case 'rename': {
+      const name = clean(change.name);
+      const c = setup.custom.find((x) => `custom:${x.id}` === change.slot);
+      if (!c) throw new Error('Only files made by hand can be renamed.');
+      if (!name) throw new Error('Give the file a name.');
+      c.name = name;
+      break;
+    }
+    case 'assign': {
+      const doc = (app.documents || []).find((d) => d.id === change.doc);
+      if (!doc) throw new Error('No such document.');
+      if (NEVER.has(doc.category)) throw new Error('Forms, the photo and internal files are never compiled into a file.');
+      const to = change.to;
+      if (to == null) {
+        const { [doc.id]: _drop, ...rest } = setup.assign;
+        setup.assign = rest;
+      } else {
+        const target = list.find((s) => s.slot === to);
+        if (to !== 'none' && (!target || !slotDef(app, to) || SLOT[to]?.photo || (SLOT[to]?.generatedKey && !SLOT[to]?.categories))) throw new Error('Documents can only be put in a file of the set that holds documents.');
+        setup.assign = { ...setup.assign, [doc.id]: to };
+      }
+      break;
+    }
+    case 'reset':
+      return { removed: [], added: [], custom: [], assign: {}, updatedAt: new Date().toISOString() };
+    default:
+      throw new Error('Unknown change.');
+  }
+  return { ...setup, updatedAt: new Date().toISOString() };
 }
 
 /** The IRCC portal's upload limit per file. */
@@ -303,7 +521,7 @@ function claimedCategories(plan, app) {
   for (const e of plan) {
     if (e.slot === 'client-info' || e.kind === 'form') continue;
     const def = SLOT[e.slot];
-    if (!def) continue;
+    if (!def) continue; // forms, files made by hand
     (def.categories || []).forEach((c) => claimed.add(c));
     const walk = (s) => {
       (s.categories || []).forEach((c) => claimed.add(c));
@@ -402,6 +620,7 @@ async function build(appId, { cleanPages, fixRotation, only = null }, job) {
   // 2. The numbered files.
   const plan = planFinalFiles(app).filter(wanted);
   const claimed = claimedCategories(planFinalFiles(app).filter((e) => e.n), app);
+  const inSet = new Set(setSlots(app).map((s) => s.slot));
   const pkgs = packagesFor(app.type);
   job.total = plan.length + 1;
 
@@ -468,10 +687,10 @@ async function build(appId, { cleanPages, fixRotation, only = null }, job) {
         // A package with a table of contents (Client Information, Financial
         // Support, Inviter's Documents), or a plain file of one document type.
         // Client Information leaves out everything that has its own portal slot.
-        const def = SLOT[e.slot];
+        const def = slotDef(app, e.slot);
         const pkgDef = slotPackage(app, def, pkgs, claimed);
         const plain = e.kind !== 'package';
-        const opts = e.slot === 'client-info' ? { claimed } : { owned: new Set() };
+        const opts = { ...(e.slot === 'client-info' ? { claimed } : { owned: new Set() }), ...moves(app, e.slot, inSet) };
         const out = await buildPackageFile(app, pkgDef, { cleanPages, fixRotation, job: job.inner, plain, key, filename: e.filename, ...opts });
         app = out.app;
         addStats(out.stats);

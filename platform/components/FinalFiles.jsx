@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Download, Hammer, AlertTriangle, FileText, PenLine, RefreshCw } from 'lucide-react';
+import { Download, Hammer, AlertTriangle, FileText, PenLine, RefreshCw, X, Plus, Lock, Undo2, FolderPlus } from 'lucide-react';
 import ProgressBar from '@/components/ProgressBar';
 import { requiredMissing } from '@/lib/schema';
 
@@ -11,38 +11,98 @@ const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
 /**
  * What a final file will contain, as its contents page will show it: numbered
- * sections, a/b/c sub-sections, and the uploaded file(s) behind each.
+ * sections, a/b/c sub-sections, and the uploaded file(s) behind each. With
+ * `edit`, each document can be taken out of the file or moved to another one,
+ * and any other uploaded document can be put in it.
  */
-function Contents({ contents, kind }) {
+function Contents({ contents, kind, edit, open }) {
   const count = contents.reduce((n, s) => n + s.files.length + s.children.reduce((m, c) => m + c.files.length, 0), 0);
   const letters = contents.filter((s) => s.letter).length + contents.reduce((n, s) => n + s.children.filter((c) => c.letter).length, 0);
   const summary = [count ? `${count} file${count === 1 ? '' : 's'}` : '', letters ? `${letters} letter${letters === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ');
-  if (!summary) return null;
-  const Files = ({ files }) => files.map((f, i) => <span key={i} className="contents-file"><FileText size={11} aria-hidden="true" /> {f}</span>);
+  if (!summary && !edit) return null;
+  const Files = ({ files, ids = [] }) =>
+    files.map((f, i) => (
+      <span key={i} className="contents-file">
+        <FileText size={11} aria-hidden="true" /> <span className="cf-name">{f}</span>
+        {edit && ids[i] && <DocActions id={ids[i]} edit={edit} />}
+      </span>
+    ));
   return (
-    <details className="contents">
-      <summary>{summary}{kind === 'package' ? ` in ${contents.length} section${contents.length === 1 ? '' : 's'}` : ''}</summary>
-      <ol>
-        {contents.map((s, i) => (
-          <li key={i}>
-            {kind === 'package' && <span className="contents-name">{s.name}</span>}
-            {s.letter && <span className="contents-file"><PenLine size={11} aria-hidden="true" /> drafted letter</span>}
-            <Files files={s.files} />
-            {s.children.length > 0 && (
-              <ol className="sub">
-                {s.children.map((c, j) => (
-                  <li key={j}>
-                    <span className="contents-name">{s.children.length > 1 ? `${LETTERS[j] || j + 1}) ` : ''}{c.name}</span>
-                    {c.letter && <span className="contents-file"><PenLine size={11} aria-hidden="true" /> drafted letter</span>}
-                    <Files files={c.files} />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </li>
-        ))}
-      </ol>
+    <details className="contents" open={open || undefined}>
+      <summary>{summary ? `${summary}${kind === 'package' ? ` in ${contents.length} section${contents.length === 1 ? '' : 's'}` : ''}` : 'Empty — add documents'}</summary>
+      {contents.length > 0 && (
+        <ol>
+          {contents.map((s, i) => (
+            <li key={i}>
+              {kind === 'package' && <span className="contents-name">{s.name}</span>}
+              {s.letter && <span className="contents-file"><PenLine size={11} aria-hidden="true" /> drafted letter</span>}
+              <Files files={s.files} ids={s.ids} />
+              {s.children.length > 0 && (
+                <ol className="sub">
+                  {s.children.map((c, j) => (
+                    <li key={j}>
+                      <span className="contents-name">{s.children.length > 1 ? `${LETTERS[j] || j + 1}) ` : ''}{c.name}</span>
+                      {c.letter && <span className="contents-file"><PenLine size={11} aria-hidden="true" /> drafted letter</span>}
+                      <Files files={c.files} ids={c.ids} />
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      {edit && <AddDocument edit={edit} />}
     </details>
+  );
+}
+
+/** Take a document out of this file, move it to another, or undo a move. */
+function DocActions({ id, edit }) {
+  const moved = edit.assign[id] === edit.slot;
+  return (
+    <span className="doc-acts">
+      {moved && <span className="chip tiny" title="Put in this file by hand">moved here</span>}
+      <select
+        className="mini-select"
+        aria-label="Move to another file"
+        value=""
+        disabled={edit.busy}
+        onChange={(e) => e.target.value && edit.change({ op: 'assign', doc: id, to: e.target.value })}
+      >
+        <option value="">Move to…</option>
+        {edit.targets.filter((t) => t.slot !== edit.slot).map((t) => <option key={t.slot} value={t.slot}>{t.name}</option>)}
+      </select>
+      {moved ? (
+        <button type="button" className="icon-btn tiny" title="Undo: back to where it goes automatically" aria-label="Undo the move" disabled={edit.busy} onClick={() => edit.change({ op: 'assign', doc: id, to: null })}>
+          <Undo2 size={12} aria-hidden="true" />
+        </button>
+      ) : null}
+      <button type="button" className="icon-btn tiny" title="Leave this document out of this file" aria-label="Leave out of this file" disabled={edit.busy} onClick={() => edit.change({ op: 'assign', doc: id, to: 'none' })}>
+        <X size={12} aria-hidden="true" />
+      </button>
+    </span>
+  );
+}
+
+/** Put any other uploaded document in this file. */
+function AddDocument({ edit }) {
+  const options = edit.docs.filter((d) => !edit.here.has(d.id));
+  if (!options.length) return null;
+  return (
+    <div className="add-doc">
+      <Plus size={12} aria-hidden="true" />
+      <select
+        className="mini-select"
+        aria-label="Add a document to this file"
+        value=""
+        disabled={edit.busy}
+        onChange={(e) => e.target.value && edit.change({ op: 'assign', doc: e.target.value, to: edit.slot })}
+      >
+        <option value="">Add a document to this file…</option>
+        {options.map((d) => <option key={d.id} value={d.id}>{d.filename}{d.where ? ` — now in ${d.where}` : d.out ? ' — left out' : ''}</option>)}
+      </select>
+    </div>
   );
 }
 
@@ -76,7 +136,31 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
   const [fixRotation, setFixRotation] = useState(true);
   const [missingModal, setMissingModal] = useState(null); // labels of empty required intake fields
   const [note, setNote] = useState(null); // missing documents & next steps, from the last build
+  const [busy, setBusy] = useState(false); // a change to the set is being saved
+  const [addSlot, setAddSlot] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [openSlot, setOpenSlot] = useState(null); // the file whose contents were just edited stays open
   const timer = useRef(null);
+
+  /** Change the set (lib/finalFiles.js applySetupChange) and show the new plan. */
+  async function change(body, keepOpen = body.to && body.to !== 'none' ? body.to : null) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/applications/${app.id}/final-files`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const d = JSON.parse(await res.text());
+      if (!res.ok) throw new Error(d.error || 'Could not change the set.');
+      setData((prev) => ({ ...prev, ...d }));
+      patchLocal({ finalSetup: d.finalSetup });
+      if (keepOpen) setOpenSlot(keepOpen);
+      return true;
+    } catch (e) {
+      setMsg({ type: 'err', text: e.message });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/applications/${app.id}/final-files`);
@@ -177,6 +261,24 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
     : null;
 
   const slots = plan.filter((e) => e.n);
+  // Files that can hold documents, and where each uploaded document is now.
+  const holds = (e) => !['form', 'photo', 'letter'].includes(e.kind);
+  const targets = plan.filter(holds).map((e) => ({ slot: e.slot, name: e.name }));
+  const docWhere = new Map();
+  for (const e of plan) for (const sec of e.contents || []) for (const n of [sec, ...sec.children]) (n.ids || []).forEach((id) => docWhere.set(id, e.name));
+  const assign = data?.setup?.assign || app.finalSetup?.assign || {};
+  const movable = (app.documents || [])
+    .filter((d) => !['internal', 'questionnaire', 'rep-form', 'photo'].includes(d.category))
+    .map((d) => ({ id: d.id, filename: d.filename, where: docWhere.get(d.id) || null, out: assign[d.id] === 'none' }));
+  const editFor = (e) => {
+    const here = new Set();
+    for (const sec of e.contents || []) for (const n of [sec, ...sec.children]) (n.ids || []).forEach((id) => here.add(id));
+    return { slot: e.slot, change, busy: busy || Boolean(job), targets, docs: movable, here, assign };
+  };
+  const suggestions = (data?.suggestions || []).filter((d) => d.options.length);
+  const catalog = data?.catalog || [];
+  const basis = data?.basis;
+  const setupChanged = Boolean(data?.setup && ((data.setup.removed || []).length || (data.setup.added || []).length || (data.setup.custom || []).length || Object.keys(data.setup.assign || {}).length));
   const builtCount = slots.filter((e) => {
     const b = builtByN.get(e.n);
     return b && b.filename === e.filename && genKeys.has(b.key);
@@ -226,11 +328,42 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
           )}
         </div>
       )}
-      {data?.unplaced?.length > 0 && !job && (
-        <div className="alert warn" style={{ margin: 0, display: 'block' }}>
-          <AlertTriangle size={16} aria-hidden="true" style={{ verticalAlign: '-3px', marginRight: 6 }} />
-          <strong>Not in any final file:</strong> {data.unplaced.map((d) => d.filename).join(', ')}. Give each one its checklist code in the file name (e.g. &ldquo;113 - Employment Letter&rdquo;) or read &amp; check it so it gets a type; otherwise it stays out of the portal files.
-        </div>
+      {suggestions.length > 0 && !job && (
+        <details className="hint-box" open={suggestions.some((d) => !d.where)}>
+          <summary className="small strong" style={{ cursor: 'pointer' }}>
+            <AlertTriangle size={14} aria-hidden="true" style={{ verticalAlign: '-2px', marginRight: 6 }} />
+            {suggestions.filter((d) => !d.where).length > 0
+              ? `${suggestions.filter((d) => !d.where).length} document(s) are in no final file`
+              : `${suggestions.length} document(s) only landed in "Other Supporting Documents"`}{' '}
+            — choose where they go
+          </summary>
+          <ul className="suggest-list">
+            {suggestions.map((d) => (
+              <li key={d.id}>
+                <span className="contents-file"><FileText size={11} aria-hidden="true" /> {d.filename}</span>
+                <span className="small faint">{d.label ? `${d.label} · ` : ''}{d.where ? `now in ${plan.find((e) => e.slot === d.where)?.name || d.where}` : 'not in any file'}</span>
+                <span className="btn-row">
+                  {d.options.map((o) => (
+                    <button
+                      key={o.slot}
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      disabled={busy}
+                      title={o.portal ? `Portal slot: ${o.portal}` : undefined}
+                      onClick={async () => {
+                        if (o.action === 'add' && !(await change({ op: 'add', slot: o.slot }))) return;
+                        await change({ op: 'assign', doc: d.id, to: o.slot });
+                      }}
+                    >
+                      {o.action === 'add' ? <FolderPlus size={13} aria-hidden="true" /> : null}
+                      {o.action === 'add' ? `New file: ${o.name}` : `Put in ${o.name}`}
+                    </button>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
       {note && (note.missingDocuments?.length > 0 || note.missingFields?.length > 0) && (
         <details className="hint-box">
@@ -248,6 +381,21 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
         <div className="card-head" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line)', marginBottom: 0 }}>
           <div>
             <h2 id="slots-h">Portal files</h2>
+            {basis && (
+              <p className="muted small">
+                Standard set for this type, from the latest {basis.n} application{basis.n === 1 ? '' : 's'}
+                {basis.from ? ` (submitted ${basis.from.slice(0, 7)} – ${basis.to.slice(0, 7)})` : ''}.{' '}
+                <Lock size={11} aria-hidden="true" style={{ verticalAlign: '-1px' }} /> files are always included; the others can be taken out.
+                {setupChanged && (
+                  <>
+                    {' '}
+                    <button type="button" className="link-btn" disabled={busy || Boolean(job)} onClick={() => window.confirm('Go back to the standard set? Added files, files made by hand and documents you moved are reset.') && change({ op: 'reset' })}>
+                      Reset to the standard set
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
             <p className="muted small">
               {slots.length} slots · {builtCount} built
               {driveOn && builtCount > 0 && (
@@ -272,10 +420,16 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
             <div key={i} className={`slot${e.n ? '' : ' skip'}`}>
               <span className="n">{e.n ? String(e.n).padStart(2, '0') : '—'}</span>
               <div style={{ minWidth: 0 }}>
-                <div className="name">{e.kind === 'form' && e.label ? e.label : e.name}</div>
+                <div className="name">
+                  {e.kind === 'form' && e.label ? e.label : e.name}
+                  {e.fixed && e.kind !== 'form' && <Lock size={12} className="slot-lock" aria-label="always included" />}
+                  {e.custom && <span className="chip tiny">made by hand</span>}
+                  {e.added && !e.custom && <span className="chip tiny">added</span>}
+                </div>
                 <div className="sub">
-                  {e.kind === 'form' ? <span className="mono">{e.name}</span> : KIND[e.kind]}
+                  {e.kind === 'form' ? <span className="mono">{e.name}</span> : e.custom ? 'With clickable table of contents' : KIND[e.kind]}
                   {e.note ? <span> · {e.note}</span> : null}
+                  {e.seen && e.kind !== 'form' && !e.fixed ? <span> · in {e.seen} of the latest {e.of}</span> : null}
                 </div>
                 {e.n && e.portal && (
                   e.portal.name ? (
@@ -284,7 +438,11 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                     <div className="portal-slot warn"><AlertTriangle size={12} aria-hidden="true" /> {e.portal.hint}</div>
                   )
                 )}
-                {e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />}
+                {holds(e) ? (
+                  <Contents contents={e.contents || []} kind={e.kind} edit={editFor(e)} open={openSlot === e.slot || (e.custom && !e.ready)} />
+                ) : (
+                  e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />
+                )}
                 {e.kind === 'form' && <FormChecks checks={formChecks(e)} />}
               </div>
               <div className="act">
@@ -307,10 +465,50 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, stale: stalePl
                     <RefreshCw size={14} aria-hidden="true" />
                   </button>
                 )}
+                {!e.fixed && (
+                  <button type="button" className="icon-btn danger" onClick={() => change({ op: 'remove', slot: e.slot })} disabled={busy || Boolean(job)} title="Remove this file from the set" aria-label={`Remove ${e.name} from the set`}>
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
+        {data && (
+          <div className="add-file">
+            <div className="add-file-row">
+              <label className="small strong" htmlFor="add-slot">Add a file</label>
+              <select id="add-slot" value={addSlot} onChange={(e) => setAddSlot(e.target.value)} disabled={busy || Boolean(job)}>
+                <option value="">Choose a portal file…</option>
+                {catalog.map((c) => (
+                  <option key={c.slot} value={c.slot}>
+                    {c.name}{c.seen ? ` — in ${c.seen} of the latest ${c.of}` : ''}{c.portal ? ` · portal: ${c.portal}` : ' · no portal slot of its own'}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn-secondary btn-sm" disabled={!addSlot || busy || Boolean(job)} onClick={async () => (await change({ op: 'add', slot: addSlot })) && setAddSlot('')}>
+                <Plus size={14} aria-hidden="true" /> Add
+              </button>
+            </div>
+            <div className="add-file-row">
+              <label className="small strong" htmlFor="custom-name">New file</label>
+              <input
+                id="custom-name"
+                value={customName}
+                placeholder="e.g. Proof of Status / Invitation Letter"
+                onChange={(e) => setCustomName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && customName.trim() && change({ op: 'custom', name: customName }).then((ok) => ok && setCustomName(''))}
+                disabled={busy || Boolean(job)}
+              />
+              <button type="button" className="btn-secondary btn-sm" disabled={!customName.trim() || busy || Boolean(job)} onClick={async () => (await change({ op: 'custom', name: customName })) && setCustomName('')}>
+                <FolderPlus size={14} aria-hidden="true" /> Create
+              </button>
+            </div>
+            <p className="small faint" style={{ margin: 0 }}>
+              A new file starts empty: open it and add the documents it should hold. Documents moved into it leave the file they were in.
+            </p>
+          </div>
+        )}
       </section>
 
       {missingModal && (

@@ -117,10 +117,15 @@ export function narrowPackage(def, claimed) {
  * opts.owned    categories a catch-all may take (the package's own), or
  * opts.claimed  categories that belong to OTHER files — the catch-all then
  *               takes every remaining document except those (final-file set)
+ * opts.exclude  ids of documents the team moved to another file or left out
+ * opts.force    ids of documents the team put in this file: each goes to the
+ *               section of its type when there is one, else to the catch-all
+ *               (or a closing "Additional Documents" section), one entry each
  * @returns {Array<{ name, generatedKey?, docs, children: Array<{ name, generatedKey?, docs }> }>}
  */
-export function planPackage(app, def, { owned = null, claimed = null } = {}) {
-  const all = app.documents || [];
+export function planPackage(app, def, { owned = null, claimed = null, exclude = null, force = null } = {}) {
+  const forced = new Set(force || []);
+  const all = (app.documents || []).filter((d) => forced.has(d.id) || !exclude?.has(d.id));
   const used = new Set();
   const pick = (node) => {
     if (node.generatedKey) return [];
@@ -133,14 +138,29 @@ export function planPackage(app, def, { owned = null, claimed = null } = {}) {
       });
     } else if (node.categories?.length) {
       const wanted = new Set(node.categories);
-      docs = all.filter((d) => wanted.has(d.category) && !used.has(d.id));
+      docs = all.filter((d) => wanted.has(d.category) && !used.has(d.id) && (!claimed || !claimed.has(d.category) || forced.has(d.id)));
     }
     docs.forEach((d) => used.add(d.id));
     return docs;
   };
   const sponsor = String(app.data?.sponsorName || '').trim();
 
-  return def.sections.map((sec) => {
+  // Documents put here by hand whose type has no section of its own.
+  const sectionCats = new Set();
+  const walk = (n) => {
+    (n.categories || []).forEach((c) => sectionCats.add(c));
+    (n.children || []).forEach(walk);
+  };
+  def.sections.forEach(walk);
+  const extra = all.filter((d) => forced.has(d.id) && !sectionCats.has(d.category));
+  const catchAll = def.sections.find((s) => s.catchAll);
+  const sections = catchAll || !extra.length ? def.sections : [...def.sections, { name: def.extraName || 'Additional Documents', perDoc: true, forcedOnly: true }];
+
+  const planned = sections.map((sec) => {
+    if (sec.forcedOnly) {
+      extra.forEach((d) => used.add(d.id));
+      return { name: sec.name, generatedKey: null, docs: [], children: perDocEntries(sec, extra) };
+    }
     let own = pick(sec);
     let children = [];
     if (sec.perDoc) {
@@ -155,6 +175,19 @@ export function planPackage(app, def, { owned = null, claimed = null } = {}) {
     const name = sec.supporter && sponsor ? `${sec.name} (${sponsor})` : sec.name;
     return { name, generatedKey: sec.generatedKey || null, docs: own, children };
   });
+
+  // A file made by hand (def.flat): one contents entry per document.
+  if (def.flat) {
+    const i = sections.findIndex((x) => x.forcedOnly);
+    if (i >= 0) planned.splice(i, 1, ...planned[i].children.map((c) => ({ name: c.name, generatedKey: null, docs: c.docs, children: [] })));
+  }
+  // A catch-all section takes the hand-placed documents the sections above did not.
+  if (catchAll) {
+    const left = extra.filter((d) => !used.has(d.id));
+    const i = sections.indexOf(catchAll);
+    if (left.length && i >= 0) planned[i].docs = [...planned[i].docs, ...left];
+  }
+  return planned;
 }
 
 /** Ids of every document a plan places. */
@@ -175,7 +208,7 @@ export function describePlan(plan, { hasLetter = () => false } = {}) {
   const node = (n) => {
     const files = n.docs.map((d) => d.filename);
     const letter = n.generatedKey ? hasLetter(n.generatedKey) : false;
-    return { name: n.name, letter, files };
+    return { name: n.name, letter, files, ids: n.docs.map((d) => d.id) };
   };
   const out = [];
   for (const s of plan) {

@@ -52,7 +52,8 @@ export function fileProgress(app, schema) {
   const builtAt = app.finalFiles?.builtAt || null;
   const lastInput = latest(
     ...docs.map((d) => d.uploadedAt),
-    ...(app.generated || []).filter((g) => !/^final-/.test(g.key)).map((g) => g.generatedAt)
+    ...(app.generated || []).filter((g) => !/^final-/.test(g.key)).map((g) => g.generatedAt),
+    app.finalSetup?.updatedAt // the team changed which files the set holds, or what goes in them
   );
   const finalCount = app.finalFiles?.files?.length || 0;
 

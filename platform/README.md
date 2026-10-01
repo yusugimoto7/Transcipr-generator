@@ -290,6 +290,32 @@ Client Information holds everything else, with its table of contents, and never
 repeats a document that has its own slot. Official forms are passed through
 untouched. **Download all (.zip)** gives the whole set.
 
+### Editing the set before building
+
+The standard set of each type comes from the firm's **five most recent
+applications of that type** (by submission date in the TR-Files sheet, from the
+file names in each "02 - Final Files" folder): `lib/finalSets.js`. A file that
+(nearly) every one of them had — and always the forms, Passport, Photo, Client
+Information and Submission Letter — is fixed (🔒). The others start in the set
+with a remove (×) button; "in 2 of the latest 5" says how often they were used.
+Types with few or no applications of their own follow a close type, or the
+planner's own list.
+
+- **Add a file** — any other portal file, with its portal slot in this flow and
+  how often recent applications had it; a removed file goes back on this list.
+- **New file** — a file made by hand (e.g. "Proof of Status / Invitation
+  Letter"), compiled with a table of contents from the documents put in it.
+- **Contents** — open any file to move a document to another file, leave it out
+  (×), undo a move, or add any uploaded document to it. A document put in a file
+  by hand leaves the file it was in; Client Information takes what no file claims.
+- **Where to put loose documents** — documents in no file, or that only landed
+  in "Other Supporting Documents", are listed with where they could go: a file of
+  the set that takes their type, a portal file not in the set yet (added in one
+  click), a file made by hand, or Client Information.
+
+Changes are saved with the application (`finalSetup`), mark built files out of
+date, and **Reset to the standard set** undoes them all.
+
 The panel shows, before anything is built, what each file will contain — the
 sections of Client Information with the uploads behind each, and any uploaded
 document no file would take — and each file has its own rebuild button.
