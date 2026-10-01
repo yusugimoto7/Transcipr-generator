@@ -47,6 +47,10 @@ export const PROVINCES = [
 
 const RESIDENCE_STATUS = ['Citizen', 'Permanent resident', 'Visitor', 'Worker', 'Student', 'Other'];
 const ENGLISH = 'In English (Latin letters) — IRCC forms reject Persian or any other script.';
+/** Highest education is post-secondary: the forms then ask the dates and place of those studies. */
+const POST_SECONDARY_DONE = { field: 'highestEducation', notIn: ['', undefined, null, 'None', 'Primary / middle school', 'Secondary school (high school diploma)'] };
+/** The employer / location / job questions are asked unless the permit is an open one. */
+const NOT_OPEN = { all: [{ field: 'workPermitType', notIn: ['Open Work Permit', 'Open Work Permit for Vulnerable Workers'] }, { field: 'workPermitTypeInside', notIn: ['Open Work Permit', 'Open Work Permit for Vulnerable Workers'] }] };
 const MARRIED = { field: 'maritalStatus', in: ['Married', 'Common-Law'] };
 
 export const STUDY_PERMIT_SCHEMA = {
@@ -81,6 +85,7 @@ export const STUDY_PERMIT_SCHEMA = {
           label: 'City / town of birth (in English)',
           type: 'text',
           required: true,
+          english: true,
           note: 'Spelled exactly as the passport\'s "Place of birth" (or the birth certificate\'s English translation) — never in Persian script.',
         },
         { id: 'countryOfBirth', label: 'Country of birth', type: 'country', required: true },
@@ -130,7 +135,7 @@ export const STUDY_PERMIT_SCHEMA = {
         { id: 'residenceTo', label: 'Status valid to', type: 'date' },
         {
           id: 'applyingFromResidence',
-          label: 'Applying from the country of residence?',
+          label: 'Is the country you are applying from the same as your country of residence?',
           type: 'bool',
           required: true,
           note: 'IRCC question: "Is the country from where you are applying the same as your current country of residence?"',
@@ -271,12 +276,12 @@ export const STUDY_PERMIT_SCHEMA = {
           required: true,
           note: 'The highest diploma or degree actually completed — not a school currently attended.',
         },
-        { id: 'lastInstitution', label: 'Most recent institution (in English)', type: 'text', required: true },
-        { id: 'lastFieldOfStudy', label: 'Field of study (in English)', type: 'text' },
-        { id: 'lastEduFrom', label: 'From (YYYY-MM)', type: 'text', placeholder: '2015-09' },
-        { id: 'lastEduTo', label: 'To (YYYY-MM)', type: 'text', placeholder: '2019-06' },
-        { id: 'lastEduCity', label: 'City of study', type: 'text' },
-        { id: 'lastEduCountry', label: 'Country of study', type: 'country' },
+        { id: 'lastInstitution', label: 'Most recent institution (in English)', type: 'text', required: true, english: true },
+        { id: 'lastFieldOfStudy', label: 'Field of study (in English)', type: 'text', english: true },
+        { id: 'lastEduFrom', label: 'From (year and month)', type: 'month', requiredIf: POST_SECONDARY_DONE, placeholder: '2015-09' },
+        { id: 'lastEduTo', label: 'To (year and month)', type: 'month', requiredIf: POST_SECONDARY_DONE, notFuture: true, after: 'lastEduFrom', placeholder: '2019-06' },
+        { id: 'lastEduCity', label: 'City of study (in English)', type: 'text', requiredIf: POST_SECONDARY_DONE, english: true },
+        { id: 'lastEduCountry', label: 'Country of study', type: 'country', requiredIf: POST_SECONDARY_DONE },
         {
           id: 'gpa',
           label: 'GPA / final grade',
@@ -319,7 +324,8 @@ export const STUDY_PERMIT_SCHEMA = {
     },
     {
       id: 'history',
-      title: 'Travel & immigration history',
+      title: 'Travel history',
+      help: 'Trips to countries other than your country of citizenship or residence, past 5 years (or since age 18) — IMM 5257 Schedule 1, question 8.',
       fields: [
         {
           id: 'previousCanada',
@@ -331,34 +337,26 @@ export const STUDY_PERMIT_SCHEMA = {
           label: 'Travelled to any other country in the last 5 years (or since age 18)?',
           type: 'bool',
           required: true,
-          note: 'Countries other than the country of nationality or residence — IMM 5257 Schedule 1, question 8.',
         },
         {
-          id: 'countriesVisited',
-          label: 'Trips (one per line: from YYYY-MM | to YYYY-MM | country | city | purpose)',
-          type: 'textarea',
-          placeholder: '2022-03 | 2022-03 | Turkey | Istanbul | Tourism',
+          id: 'trips',
+          label: 'Trips',
+          type: 'rows',
+          requiredIf: { field: 'travelledAbroad', equals: true },
           showIf: { field: 'travelledAbroad', equals: true },
-          note: 'The four most recent go on Schedule 1; the platform lists the rest.',
+          addLabel: 'Add a trip',
+          rowLabel: 'Trip',
+          note: 'Most recent first. The four most recent go on Schedule 1; the platform lists the rest.',
+          columns: [
+            { id: 'from', label: 'From', type: 'month', required: true, notFuture: true },
+            { id: 'to', label: 'To', type: 'month', required: true, notFuture: true, after: 'from' },
+            { id: 'country', label: 'Country', type: 'country', required: true },
+            { id: 'city', label: 'City (in English)', type: 'text', required: true, english: true },
+            { id: 'purpose', label: 'Purpose', type: 'select', options: ['Tourism', 'Business', 'Family visit', 'Study', 'Work', 'Medical', 'Transit', 'Other'], required: true },
+          ],
         },
-        {
-          id: 'currentOccupation',
-          label: 'Current occupation / activity (in English)',
-          type: 'text',
-          required: true,
-          note: 'E.g. "Retired teacher", "Homemaker", "Software engineer". ' + ENGLISH,
-        },
-        { id: 'employer', label: 'Current employer / institution (in English)', type: 'text', note: 'Leave blank for a homemaker or retired person.' },
-        { id: 'currentJobFrom', label: 'Current occupation since (YYYY-MM)', type: 'text', required: true, placeholder: '2018-04' },
-        { id: 'currentJobCity', label: 'City of the current occupation (in English)', type: 'text', required: true },
-        { id: 'currentJobCountry', label: 'Country of the current occupation', type: 'country', required: true },
-        {
-          id: 'employmentHistory',
-          label: 'Previous occupations, past 10 years (one per line: from YYYY-MM | to YYYY-MM | occupation | employer | city | country)',
-          type: 'textarea',
-          placeholder: '2012-01 | 2018-03 | Accountant | Pars Trading Co. | Tehran | Iran',
-          note: 'Most recent first, in English, with no gaps — include study, unemployment and homemaking.',
-        },
+        // Earlier free-text answer; built from the trips (lib/schema.js deriveData).
+        { id: 'countriesVisited', label: 'Trips (text)', type: 'textarea', derived: true },
       ],
     },
     {
@@ -581,23 +579,24 @@ const EXTRA_STEPS = [
         type: 'select',
         options: ['Post Graduation Work Permit', 'Open Work Permit', 'Exemption from Labour Market Impact Assessment', 'Labour Market Impact Assessment Stream', 'Co-op Work Permit', 'Open Work Permit for Vulnerable Workers', 'Start-up Business Class', 'Other'],
         required: true,
+        note: 'Open work permit: the employer, location and job questions are left blank on the form — only the dates are given.',
       },
-      { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text' },
-      { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text' },
-      { id: 'intendedProvince', label: 'Province you will work in', type: 'select', options: PROVINCES, required: true },
-      { id: 'intendedCity', label: 'City / town', type: 'text', required: true },
-      { id: 'intendedAddress', label: 'Work address', type: 'text' },
-      { id: 'intendedJobTitle', label: 'Job title (if known)', type: 'text' },
-      { id: 'intendedDuties', label: 'Brief description of duties', type: 'text' },
+      { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedProvince', label: 'Province you will work in', type: 'select', options: PROVINCES, required: true, showIf: NOT_OPEN },
+      { id: 'intendedCity', label: 'City / town', type: 'text', required: true, showIf: NOT_OPEN },
+      { id: 'intendedAddress', label: 'Work address', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedJobTitle', label: 'Job title (if known)', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedDuties', label: 'Brief description of duties', type: 'text', showIf: NOT_OPEN },
       { id: 'intendedFrom', label: 'Work permit wanted from', type: 'date', required: true },
       { id: 'intendedTo', label: 'Work permit wanted until', type: 'date', required: true },
-      { id: 'lmiaNumber', label: 'LMIA number or offer of employment number (A1234567)', type: 'text' },
+      { id: 'lmiaNumber', label: 'LMIA number or offer of employment number (A1234567)', type: 'text', showIf: NOT_OPEN },
     ],
   },
   {
     id: 'workDetails',
     title: 'Intended work in Canada',
-    help: 'IMM 1295 "Details of intended work". For an open work permit there is no employer — give where you will live and the dates.',
+    help: 'IMM 1295 "Details of intended work". For an open work permit only the dates are given — the employer, location and job questions stay blank.',
     fields: [
       {
         id: 'workPermitType',
@@ -606,16 +605,16 @@ const EXTRA_STEPS = [
         options: ['Open Work Permit', 'Exemption from Labour Market Impact Assessment', 'Labour Market Impact Assessment Stream', 'Start-up Business Class', 'Other'],
         required: true,
       },
-      { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text' },
-      { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text' },
-      { id: 'intendedProvince', label: 'Province you will live / work in', type: 'select', options: PROVINCES, required: true },
-      { id: 'intendedCity', label: 'City / town', type: 'text', required: true },
-      { id: 'intendedAddress', label: 'Address in Canada', type: 'text' },
-      { id: 'intendedJobTitle', label: 'Job title (if known)', type: 'text' },
-      { id: 'intendedDuties', label: 'Brief description of duties', type: 'text' },
+      { id: 'intendedEmployer', label: 'Employer name (if any)', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedEmployerAddress', label: 'Employer full address', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedProvince', label: 'Province you will live / work in', type: 'select', options: PROVINCES, required: true, showIf: NOT_OPEN },
+      { id: 'intendedCity', label: 'City / town', type: 'text', required: true, showIf: NOT_OPEN },
+      { id: 'intendedAddress', label: 'Address in Canada', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedJobTitle', label: 'Job title (if known)', type: 'text', showIf: NOT_OPEN },
+      { id: 'intendedDuties', label: 'Brief description of duties', type: 'text', showIf: NOT_OPEN },
       { id: 'intendedFrom', label: 'Work permit wanted from', type: 'date', required: true },
       { id: 'intendedTo', label: 'Work permit wanted until', type: 'date', required: true, note: "For a spouse: usually the spouse's permit expiry date." },
-      { id: 'lmiaNumber', label: 'LMIA number or offer of employment number', type: 'text' },
+      { id: 'lmiaNumber', label: 'LMIA number or offer of employment number', type: 'text', showIf: NOT_OPEN },
     ],
   },
   {
@@ -838,6 +837,62 @@ const EXTRA_STEPS = [
     ],
   },
   {
+    id: 'employment',
+    title: 'Employment history',
+    help: 'IRCC forms: "Give details of your employment for the past 10 years" — with no gaps. Include study, unemployment, homemaking and retirement as activities. The documents team fills this from the work-history letters and Form 124; check it.',
+    fields: [
+      {
+        id: 'jobs',
+        label: 'Activities, most recent first',
+        type: 'rows',
+        required: true,
+        firstLabel: 'Current / most recent activity',
+        rowLabel: 'Previous activity',
+        addLabel: 'Add a previous activity',
+        note: 'Leave "To" empty for the current activity. In English. The first three go on the main IRCC form; the rest are listed for the team.',
+        columns: [
+          { id: 'from', label: 'From', type: 'month', required: true, notFuture: true },
+          { id: 'to', label: 'To', type: 'month', notFuture: true, after: 'from', requiredExceptFirst: true },
+          { id: 'occupation', label: 'Activity / occupation (in English)', type: 'text', required: true, english: true, placeholder: 'e.g. Accountant, Homemaker, Student, Retired' },
+          { id: 'employer', label: 'Company / employer / school (in English)', type: 'text', english: true },
+          { id: 'city', label: 'City (in English)', type: 'text', required: true, english: true },
+          { id: 'country', label: 'Country', type: 'country', required: true },
+        ],
+      },
+      // Earlier single answers; built from the activities (deriveData) so letters and forms keep working.
+      { id: 'currentOccupation', label: 'Current occupation / activity', type: 'text', derived: true },
+      { id: 'employer', label: 'Current employer / institution', type: 'text', derived: true },
+      { id: 'currentJobFrom', label: 'Current occupation since', type: 'text', derived: true },
+      { id: 'currentJobCity', label: 'City of the current occupation', type: 'text', derived: true },
+      { id: 'currentJobCountry', label: 'Country of the current occupation', type: 'text', derived: true },
+      { id: 'employmentHistory', label: 'Previous occupations (text)', type: 'textarea', derived: true },
+    ],
+  },
+  {
+    id: 'immigrationHistory',
+    title: 'Immigration history',
+    help: 'Every visa, permit or residence application to Canada or any other country — approved, refused or withdrawn. Refusals must be disclosed: they go in the background answers of every IRCC form.',
+    fields: [
+      {
+        id: 'immigrationApps',
+        label: 'Applications',
+        type: 'rows',
+        requiredIf: { any: [{ field: 'previousRefusal', equals: true }, { field: 'previousCanadaApplication', equals: true }] },
+        addLabel: 'Add an application',
+        rowLabel: 'Application',
+        note: 'Required when the background answers say a visa was refused or an application was made to Canada before.',
+        columns: [
+          { id: 'country', label: 'Country applied to', type: 'country', required: true },
+          { id: 'kind', label: 'Application', type: 'select', options: ['Visitor visa', 'Study permit', 'Work permit', 'Permanent residence', 'Visitor record / extension', 'Super visa', 'eTA', 'Other'], required: true },
+          { id: 'applied', label: 'Applied (year and month)', type: 'month', required: true, notFuture: true },
+          { id: 'result', label: 'Result', type: 'select', options: ['Approved', 'Refused', 'Withdrawn', 'Returned / incomplete', 'Pending'], required: true },
+          { id: 'decided', label: 'Decision (year and month)', type: 'month', notFuture: true, after: 'applied' },
+          { id: 'details', label: 'Details (office, file number, refusal reasons) — in English', type: 'text', english: true },
+        ],
+      },
+    ],
+  },
+  {
     id: 'refusal',
     title: 'The refusal',
     help: 'Copy the refusal reasons exactly as written; paste GCMS notes if you have them.',
@@ -875,6 +930,11 @@ export function stepIds(t) {
     else ids.splice(at, 0, id);
   };
   const main = [...forms].some((k) => MAIN_FORMS.has(k));
+  // Every application with a travel history also asks the employment and immigration history.
+  if (ids.includes('history')) {
+    insert('employment', ['history']);
+    insert('immigrationHistory', ['history']);
+  }
   if (forms.has('imm1295')) insert('workDetails', ['education', 'history', 'fundsStay']);
   if (forms.has('imm5710')) insert('workDetailsInside', ['education', 'history', 'fundsStay', 'tiesReturn']);
   if (main) insert('language', ['history', 'ties', 'tiesReturn', 'fundsStay']);
@@ -898,14 +958,79 @@ export function getSchema(type = 'study-permit') {
  */
 export function fieldShown(f, data = {}) {
   if (f.derived) return false;
-  const test = (c) => {
-    if (!c) return true;
-    if (c.any) return c.any.some(test);
-    const v = data?.[c.field];
-    if (c.in) return c.in.includes(v);
-    return v === c.equals;
-  };
-  return test(f.showIf);
+  return cond(f.showIf, data);
+}
+
+/** A condition on the answers: { field, equals } | { field, in } | { field, notIn } | { any } | { all }. */
+export function cond(c, data = {}) {
+  if (!c) return true;
+  if (c.any) return c.any.some((x) => cond(x, data));
+  if (c.all) return c.all.every((x) => cond(x, data));
+  const v = data?.[c.field];
+  if (c.in) return c.in.includes(v);
+  if (c.notIn) return !c.notIn.includes(v);
+  return v === c.equals;
+}
+
+/* ------------------------------ validation ------------------------------ */
+
+const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const thisMonth = () => new Date().toISOString().slice(0, 7);
+/** Letters that are not Latin script (Persian, Arabic, Cyrillic …): the IRCC forms refuse them. */
+export const nonLatin = (v) => /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u0400-\u04FF\u4E00-\u9FFF]/.test(String(v ?? ''));
+/** "2019-06", "2019/6", "2019-06-15" → "2019-06" (or the value as typed when it isn't a date). */
+export function toMonth(v) {
+  const m = String(v ?? '').trim().match(/^(\d{4})[-/.](\d{1,2})/);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}` : String(v ?? '').trim();
+}
+
+/**
+ * What is wrong with one answer, or null: a month that isn't YYYY-MM, an end
+ * date in the future or before its start, Persian script in an English-only
+ * answer. `row` is the record a column belongs to (for "after").
+ */
+export function valueProblem(f, value, row = {}) {
+  const v = typeof value === 'string' ? value.trim() : value;
+  if (v == null || v === '') return null;
+  if (f.type === 'month') {
+    if (!MONTH_RE.test(v)) return 'Use year and month: YYYY-MM';
+    if (f.notFuture && v > thisMonth()) return 'Cannot be later than this month';
+    const start = f.after ? toMonth(row[f.after]) : '';
+    if (start && MONTH_RE.test(start) && v < start) return 'Cannot be before the start date';
+  }
+  if (f.type === 'date' && f.notFuture && String(v) > new Date().toISOString().slice(0, 10)) return 'Cannot be later than today';
+  if ((f.english || f.type === 'country') && nonLatin(v)) return 'In English (Latin letters) — the IRCC forms refuse Persian script';
+  return null;
+}
+
+/** Problems of a rows answer: one entry per row with something missing or wrong. */
+export function rowProblems(f, rows) {
+  const out = [];
+  (Array.isArray(rows) ? rows : []).forEach((r, i) => {
+    if (rowEmpty(r)) return;
+    for (const c of f.columns) {
+      const val = r?.[c.id];
+      const need = c.required || (c.requiredExceptFirst && i > 0);
+      if (need && String(val ?? '').trim() === '') out.push({ row: i, col: c.id, text: `${c.label}: missing` });
+      else {
+        const p = valueProblem(c, val, r);
+        if (p) out.push({ row: i, col: c.id, text: `${c.label}: ${p}` });
+      }
+    }
+  });
+  return out;
+}
+const rowEmpty = (r) => !r || Object.values(r).every((x) => String(x ?? '').trim() === '');
+/** The rows that hold something. */
+export const filledRows = (v) => (Array.isArray(v) ? v.filter((r) => !rowEmpty(r)) : []);
+
+/** Is an answer given and valid? (rows: at least one row, and every row complete). */
+export function answered(f, data = {}) {
+  const v = data?.[f.id];
+  if (f.type === 'rows') return filledRows(v).length > 0 && rowProblems(f, v).length === 0;
+  if (typeof v === 'boolean') return true;
+  if (String(v ?? '').trim() === '') return false;
+  return !valueProblem(f, v, data);
 }
 
 /**
@@ -914,6 +1039,7 @@ export function fieldShown(f, data = {}) {
  * given name(s) + family name as on their passport.
  */
 export function deriveData(data = {}) {
+  deriveHistories(data);
   const given = String(data.spouseGivenName ?? '').trim();
   const family = String(data.spouseFamilyName ?? '').trim();
   if (given && family) data.spouseName = `${given} ${family}`;
@@ -922,8 +1048,57 @@ export function deriveData(data = {}) {
   return data;
 }
 
+const pipe = (cells) => cells.map((c) => String(c ?? '').replace(/\|/g, '/').trim()).join(' | ');
+const pipeRows = (text) =>
+  String(text || '')
+    .split(/\n+/)
+    .map((l) => l.split('|').map((c) => c.trim()))
+    .filter((cells) => cells.some(Boolean));
+
+/**
+ * The employment and travel histories are rows (jobs, trips). Files from
+ * before they were rows are converted once; the earlier single answers
+ * (currentOccupation, employmentHistory, countriesVisited …) are kept in step,
+ * built from the rows, for the letters and the forms that read them.
+ */
+function deriveHistories(data) {
+  if (!filledRows(data.jobs).length && (String(data.currentOccupation ?? '').trim() || String(data.employmentHistory ?? '').trim())) {
+    const jobs = [];
+    if (String(data.currentOccupation ?? '').trim()) {
+      jobs.push({ from: toMonth(data.currentJobFrom), to: '', occupation: data.currentOccupation, employer: data.employer || '', city: data.currentJobCity || '', country: data.currentJobCountry || '' });
+    }
+    for (const [from, to, occupation, employer, city, country] of pipeRows(data.employmentHistory)) jobs.push({ from: toMonth(from), to: toMonth(to), occupation: occupation || '', employer: employer || '', city: city || '', country: country || '' });
+    data.jobs = jobs;
+  }
+  const jobs = filledRows(data.jobs);
+  if (jobs.length) {
+    const [cur, ...prev] = jobs;
+    Object.assign(data, {
+      currentOccupation: cur.occupation || '',
+      employer: cur.employer || '',
+      currentJobFrom: cur.from || '',
+      currentJobCity: cur.city || '',
+      currentJobCountry: cur.country || '',
+      employmentHistory: prev.map((j) => pipe([j.from, j.to, j.occupation, j.employer, j.city, j.country])).join('\n'),
+    });
+  }
+  if (!filledRows(data.trips).length && String(data.countriesVisited ?? '').trim()) {
+    data.trips = pipeRows(data.countriesVisited).map(([from, to, country, city, purpose]) => ({ from: toMonth(from), to: toMonth(to), country: country || '', city: city || '', purpose: purpose || '' }));
+  }
+  const trips = filledRows(data.trips);
+  if (trips.length) {
+    data.countriesVisited = trips.map((t) => pipe([t.from, t.to, t.country, t.city, t.purpose])).join('\n');
+    if (data.travelledAbroad !== false) data.travelledAbroad = true;
+  }
+  // An application recorded as refused, or made to Canada, answers the background questions.
+  const apps = filledRows(data.immigrationApps);
+  if (apps.some((a) => a.result === 'Refused') && typeof data.previousRefusal !== 'boolean') data.previousRefusal = true;
+  if (apps.some((a) => /canada/i.test(a.country || '')) && typeof data.previousCanadaApplication !== 'boolean') data.previousCanadaApplication = true;
+  return data;
+}
+
 /** Required and asked (a hidden follow-up question is never missing). */
-export const isRequired = (f, data = {}) => !!f.required && fieldShown(f, data);
+export const isRequired = (f, data = {}) => (!!f.required || (f.requiredIf ? cond(f.requiredIf, data) : false)) && fieldShown(f, data);
 
 /**
  * Whom each intake step describes. The AI reads a whole family's folder, so it
@@ -967,7 +1142,7 @@ export function everyField() {
 export function requiredMissing(data, type = 'study-permit') {
   const missing = [];
   for (const f of allFields(type)) {
-    if (isRequired(f, data) && typeof data?.[f.id] !== 'boolean' && !String(data?.[f.id] ?? '').trim()) missing.push(f);
+    if (isRequired(f, data) && !answered(f, data)) missing.push(f);
   }
   return missing;
 }

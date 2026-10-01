@@ -17,6 +17,10 @@ export function fieldGuide(type) {
       const fields = step.fields
         .filter((f) => f.type !== 'bool' && !f.derived) // booleans are confirmed by the user; derived answers are built
         .map((f) => {
+          if (f.type === 'rows') {
+            const cols = f.columns.map((c) => `${c.id}${c.type === 'month' ? ' (YYYY-MM)' : ''}${c.options ? ` [one of: ${c.options.join(' | ')}]` : ''}`).join(', ');
+            return `- ${f.id} (list): ${f.label} — a JSON array of objects { ${cols} }${f.note ? ` — ${f.note}` : ''}`;
+          }
           let desc = `- ${f.id} (${f.type}): ${f.label}`;
           if (f.options) desc += ` [one of: ${f.options.join(' | ')}]`;
           if (f.note) desc += ` — ${f.note}`;
@@ -45,6 +49,19 @@ they (or a child) attend now. Iranian documents name levels in Persian:
 کارشناسی ارشد / فوق لیسانس = Master's degree; دکتری / دکترا (PhD) = Doctorate (PhD);
 دکترای حرفه‌ای (پزشکی، دندانپزشکی، داروسازی) = Professional degree (medicine, dentistry, pharmacy, law).
 Most recent institution / field / dates / GPA describe the applicant's most recent studies.`;
+
+const HISTORY_GUIDE = `Histories (lists) — read them from the applicant's work-history and employment
+letters, social-insurance (work) records, pay slips, Form 124 (the firm's personal profile
+form, often in Persian) and passport stamps / visas:
+- jobs: every activity of the past 10 years, most recent first, with no gaps — jobs,
+  study, military service, unemployment, homemaker, retired. "to" is empty for the current
+  one. Occupation, employer and city translated into English.
+- immigrationApps: every visa / permit / residence application to Canada or any other
+  country that a document shows (visa labels, refusal letters, Form 124 answers): country,
+  kind, applied and decided (YYYY-MM), result, short details in English.
+- trips: trips abroad of the past 5 years from passport stamps and visas or Form 124 —
+  country, city, from / to (YYYY-MM), purpose.
+Months are YYYY-MM (Gregorian). Never invent a month; leave a column out if unknown.`;
 
 const STUDY_GUIDE = `Letters of acceptance (LOA), PAL and enrolment letters — read them fully, every page
 (a scanned LOA often has an IRCC information table on a later page):
@@ -146,7 +163,7 @@ details), blank templates, sample files. Still extract any FIELD VALUES such for
 contain — classify the document itself as internal.)
 
 ${EDUCATION_GUIDE}
-${/levelOfStudy|programStart/.test(guide) ? `\n${STUDY_GUIDE}\n` : ''}${same ? `\nThe same person in two sections:\n${same}\n` : ''}
+${/jobs|trips|immigrationApps/.test(guide) ? `\n${HISTORY_GUIDE}\n` : ''}${/levelOfStudy|programStart/.test(guide) ? `\n${STUDY_GUIDE}\n` : ''}${same ? `\nThe same person in two sections:\n${same}\n` : ''}
 Fields, by section:
 ${guide}
 
@@ -159,7 +176,7 @@ ${JSON.stringify(existing)}`;
   const result = await completeJson({
     system,
     content,
-    maxTokens: 4000,
+    maxTokens: 6000,
     temperature: 0,
   });
 

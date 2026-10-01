@@ -78,7 +78,26 @@ ok(at('AddressRow1/StreetNum/StreetNum') === '12' && !ins.some((i) => i.som.incl
 ok(at('BackgroundInfo/Choice') === 'N' && at('BackgroundInfo/Choice[1]') === 'Y', 'the two background "Choice" questions are told apart');
 ok(blanks.some((b) => /military/i.test(b)), 'an unanswered Yes/No question is reported as a blank');
 ok(at('WorkPermitType') === 'Open Work Permit', 'a spouse gets an open work permit');
-ok(ins.find((i) => i.som.endsWith('CityTown/CityTown'))?.lov === 'CityList.BC', 'the intended city is looked up in its province list');
+ok(!ins.some((i) => /IntendedLocationInCanada/.test(i.som)) && !blanks.some((b) => /Intended (province|city)/.test(b)), 'an open work permit leaves the employer, location and job blank (not reported missing)');
+{
+  const lmia = { ...intake, workPermitType: 'Labour Market Impact Assessment Stream' };
+  const ins2 = buildInstructions(map, irccData(lmia, app), []);
+  ok(ins2.find((i) => i.som.endsWith('CityTown/CityTown'))?.lov === 'CityList.BC', 'an employer-specific permit: the intended city is looked up in its province list');
+}
+{
+  // Question 9: "No" with the same country as the residence is still the same country.
+  const same = irccData({ ...intake, applyingFromResidence: false, applyCountry: 'Iran', countryOfResidence: 'Iran' }, app);
+  const ins3 = buildInstructions(irccFieldMap('imm1295', [...P1295, 'form1/Page1/PersonalDetails/CountryWhereApplying/Row2/Country']), same, []);
+  ok(ins3.find((i) => i.som.endsWith('SameAsCORIndicator'))?.value === 'Y' && !ins3.some((i) => /CountryWhereApplying/.test(i.som)), 'country where applying = country of residence ticks Yes and leaves the row empty');
+  const other = irccData({ ...intake, applyingFromResidence: false, applyCountry: 'Turkey', countryOfResidence: 'Iran' }, app);
+  ok(other._cwaYN === 'N', 'another country ticks No');
+}
+{
+  // Background 2d: built from the immigration history when no details were written.
+  const { backgroundDetails } = await loadLib('forms/fieldmaps/ircc.js');
+  const txt = backgroundDetails({ immigrationApps: [{ country: 'Canada', kind: 'Visitor visa', applied: '2023-02', result: 'Refused', decided: '2023-05', details: 'Ankara' }] });
+  ok(/Canada Visitor visa — Refused/.test(txt) && /2023-05/.test(txt), `2d details from the immigration history (${txt})`);
+}
 
 // --- IMM 5645: English + native names, English elsewhere, accompany ticks ---
 const fam = {

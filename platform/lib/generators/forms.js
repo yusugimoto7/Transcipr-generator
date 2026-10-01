@@ -212,7 +212,15 @@ function yesNo(v) {
 function genericMap(app) {
   return getSchema(app.type).steps.map((s) => ({
     section: s.title,
-    rows: s.fields.map((f) => [f.label, (d) => (d[f.id] === true ? 'Yes' : d[f.id] === false ? 'No' : d[f.id])]),
+    rows: s.fields
+      .filter((f) => !f.derived)
+      .map((f) => [
+        f.label,
+        (d) =>
+          Array.isArray(d[f.id])
+            ? d[f.id].map((r) => f.columns?.map((c) => r[c.id]).filter(Boolean).join(' | ')).filter(Boolean).join('\n')
+            : d[f.id] === true ? 'Yes' : d[f.id] === false ? 'No' : d[f.id],
+      ]),
   }));
 }
 

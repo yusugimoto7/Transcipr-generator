@@ -51,7 +51,7 @@ export async function analyzeEmail(appId, emailId) {
   if (!email) throw new Error('Email not found on this file.');
   const text = cleanBody(email.body) || email.body || '';
   const t = getAppType(app.type);
-  const fields = new Map(allFields(app.type).filter((f) => f.type !== 'bool').map((f) => [f.id, f]));
+  const fields = new Map(allFields(app.type).filter((f) => f.type !== 'bool' && f.type !== 'rows' && !f.derived).map((f) => [f.id, f]));
 
   const system = `You work for a Canadian immigration consultancy. You read an email a client (or someone
 writing for them) sent to the firm, for this file: ${t.title}${t.service ? ` (service ${t.service})` : ''}, main person ${displayName(app)}.

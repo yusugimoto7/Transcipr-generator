@@ -15,6 +15,8 @@
  * is reported as a blank to complete — so the file shows what is left to do.
  */
 
+import { filledRows } from '../../schema';
+
 const has = (v) => String(v ?? '').trim().length > 0;
 const yn = (v) => (v === true ? 'Y' : v === false ? 'N' : '');
 const digits = (v) => String(v ?? '').replace(/[۰-۹]/g, (c) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/\D/g, '');
@@ -56,11 +58,47 @@ const POST_SECONDARY = /trade|college|bachelor|post-graduate|master|doctor|profe
 const NO_POST_SECONDARY = /^(none|primary|secondary)/i;
 const MARRIED = (d) => ['Married', 'Common-Law'].includes(d.maritalStatus);
 
+const OPEN_PERMITS = new Set(['Open Work Permit', 'Open Work Permit for Vulnerable Workers']);
+const normCountry = (c) => String(c || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
+
+/**
+ * Question 9 "Is the country from where you are applying the same as your
+ * current country of residence?": Yes when the intake says so — and also when
+ * the country given as "applying from" is the country of residence anyway.
+ */
+function sameCountryWhereApplying(d) {
+  if (d.applyingFromResidence === true) return 'Y';
+  if (d.applyingFromResidence === false) {
+    const from = normCountry(d.applyCountry);
+    return from && from === normCountry(d.countryOfResidence) ? 'Y' : 'N';
+  }
+  return '';
+}
+
+/**
+ * Background question 2d "If you answered yes to 2a, 2b or 2c, provide
+ * details": the details written in the intake, else built from the
+ * immigration history (refused applications and applications to Canada) and
+ * the refusal being challenged.
+ */
+export function backgroundDetails(d) {
+  if (String(d.refusalDetails || '').trim()) return d.refusalDetails.trim();
+  const parts = [];
+  for (const a of filledRows(d.immigrationApps)) {
+    if (a.result !== 'Refused' && !/canada/i.test(a.country || '')) continue;
+    const when = [a.applied && `applied ${a.applied}`, a.decided && `${(a.result || 'decided').toLowerCase()} ${a.decided}`].filter(Boolean).join(', ');
+    parts.push(`${a.country || ''} ${a.kind || 'application'} — ${a.result || ''}${when ? ` (${when})` : ''}${a.details ? `: ${a.details}` : ''}`.replace(/\s+/g, ' ').trim());
+  }
+  if (!parts.length && (d.refusalAppType || d.refusalDate)) parts.push(`${d.refusalAppType || 'Application'} refused${d.refusalDate ? ` on ${d.refusalDate}` : ''}`);
+  return parts.join('; ');
+}
+
 /** Intake data plus the composed values the rules read (keys starting with "_"). */
 export function irccData(d = {}, app = {}) {
   const [eduFromY, eduFromM] = ym(d.lastEduFrom);
   const [eduToY, eduToM] = ym(d.lastEduTo);
   const [jobFromY, jobFromM] = ym(d.currentJobFrom);
+  const [jobToY, jobToM] = ym(filledRows(d.jobs)[0]?.to);
   const cc = digits(d.phoneCountryCode);
   const phone = digits(d.phoneNumber);
   const na = cc === '1' && phone.length === 10;
@@ -78,7 +116,7 @@ export function irccData(d = {}, app = {}) {
     _uci: normalizeUci(d.uci),
     _aliasYN: has(d.otherNames) ? 'Y' : 'N',
     _pcrYN: yn(d.livedElsewhere5y),
-    _cwaYN: yn(d.applyingFromResidence),
+    _cwaYN: sameCountryWhereApplying(d),
     _married: MARRIED(d),
     _spouseFamily: MARRIED(d) ? spouseFamily : '',
     _spouseGiven: MARRIED(d) ? spouseGiven : '',
@@ -118,6 +156,9 @@ export function irccData(d = {}, app = {}) {
     _eduToM: eduToM,
     _jobFromY: jobFromY,
     _jobFromM: jobFromM,
+    _jobToY: jobToY,
+    _jobToM: jobToM,
+    _bgDetails: backgroundDetails(d),
     _bgTb: yn(d.bgTbContact),
     _bgMedical: yn(d.bgMedicalCondition),
     _bgOverstay: yn(d.bgOverstay),
@@ -144,6 +185,8 @@ export function irccData(d = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
   };
+  out._openOutside = OPEN_PERMITS.has(out._workPermitType); // IMM 1295
+  out._openInside = OPEN_PERMITS.has(out._workPermitTypeInside); // IMM 5710
   for (let i = 0; i < 2; i++) {
     const j = jobs[i] || {};
     Object.assign(out, {
@@ -199,10 +242,10 @@ export const COMMON_RULES = [
 
   // --- Country where applying (forms for applicants outside Canada) ---
   [/SameAsCORIndicator$/, { from: '_cwaYN', need: 'Applying from the country of residence? (Yes/No)' }],
-  [/CountryWhereApplying\/Row2\/Country$/, { from: 'applyCountry', when: (d) => d.applyingFromResidence === false, need: 'Country applying from' }],
-  [/CountryWhereApplying\/Row2\/Status$/, { from: 'applyStatus', when: (d) => d.applyingFromResidence === false }],
-  ...date(/CountryWhereApplying\/Row2\/FromDate$/, [/CWADates\/FromYr/, /CWADates\/FromMM/, /CWADates\/FromDD/], 'applyFrom', { when: (d) => d.applyingFromResidence === false }),
-  ...date(/CountryWhereApplying\/Row2\/ToDate$/, [/CWADates\/ToYr/, /CWADates\/ToMM/, /CWADates\/ToDD/], 'applyTo', { when: (d) => d.applyingFromResidence === false }),
+  [/CountryWhereApplying\/Row2\/Country$/, { from: 'applyCountry', when: (d) => d._cwaYN === 'N', need: 'Country applying from' }],
+  [/CountryWhereApplying\/Row2\/Status$/, { from: 'applyStatus', when: (d) => d._cwaYN === 'N' }],
+  ...date(/CountryWhereApplying\/Row2\/FromDate$/, [/CWADates\/FromYr/, /CWADates\/FromMM/, /CWADates\/FromDD/], 'applyFrom', { when: (d) => d._cwaYN === 'N' }),
+  ...date(/CountryWhereApplying\/Row2\/ToDate$/, [/CWADates\/ToYr/, /CWADates\/ToMM/, /CWADates\/ToDD/], 'applyTo', { when: (d) => d._cwaYN === 'N' }),
 
   // --- Marital status, spouse ---
   [/MaritalStatus\/(SectionA|Current)\/MaritalStatus$/, { from: 'maritalStatus', need: 'Marital status' }],
@@ -290,6 +333,8 @@ export const COMMON_RULES = [
   // --- Employment: current, then two previous ---
   [/(OccupationRow1\/FromYear|EmpRec1\/Line1\/From\/YYYY)$/, { from: '_jobFromY', need: 'Current occupation: since (YYYY-MM)' }],
   [/(OccupationRow1\/FromMonth|EmpRec1\/Line1\/From\/MM)$/, { from: '_jobFromM' }],
+  [/(OccupationRow1\/ToYear|EmpRec1\/Line2\/To\/YYYY)$/, { from: '_jobToY' }],
+  [/(OccupationRow1\/ToMonth|EmpRec1\/Line2\/To\/MM)$/, { from: '_jobToM' }],
   [/(OccupationRow1\/Occupation\/Occupation|EmpRec1\/Line1\/Occupation)$/, { from: 'currentOccupation', need: 'Current occupation (in English)' }],
   [/(OccupationRow1\/Employer|EmpRec1\/Line1\/Employer)$/, { from: 'employer' }],
   [/(OccupationRow1\/CityTown\/CityTown|EmpRec1\/Line2\/City)$/, { from: 'currentJobCity', need: 'Current occupation: city' }],
@@ -312,7 +357,7 @@ export const COMMON_RULES = [
   [/BackgroundInfo2\/VisaChoice1$/, { from: '_bgOverstay', need: 'Background 2a: overstayed / worked or studied without authorization (Yes/No)' }],
   [/BackgroundInfo2\/VisaChoice2$/, { from: '_bgRefused', need: 'Background 2b: refused a visa or permit (Yes/No)' }],
   [/BackgroundInfo2\/(Details\/)?VisaChoice3$/, { from: '_bgPrevApplied', need: 'Background 2c: previously applied to Canada (Yes/No)' }],
-  [/BackgroundInfo2\/Details\/refusedDetails$/, { from: 'refusalDetails' }],
+  [/BackgroundInfo2\/Details\/refusedDetails$/, { from: '_bgDetails', when: (d) => [d._bgOverstay, d._bgRefused, d._bgPrevApplied].includes('Y'), need: 'Background 2d: details of the refusal / previous application' }],
   [/BackgroundInfo3\/Choice$/, { from: '_bgCriminal', need: 'Background 3a: criminal offence (Yes/No)' }],
   [/BackgroundInfo3\/(Details|details|militaryServiceDetails)$/, { from: 'criminalDetails' }],
   [/Military\/Choice$/, { from: '_bgMilitary', need: 'Background 4a: military service (Yes/No)' }],
@@ -327,7 +372,7 @@ export const COMMON_RULES = [
   [/PrevApplied\/qANY$/, { from: '_bgOverstay', need: 'Background 2a: overstayed / worked or studied without authorization (Yes/No)' }],
   [/PrevApplied\/qBNY$/, { from: '_bgRefused', need: 'Background 2b: refused a visa or permit (Yes/No)' }],
   [/PrevApplied\/qCNY$/, { from: '_bgPrevApplied', need: 'Background 2c: previously applied to Canada (Yes/No)' }],
-  [/PrevApplied\/refusedDetails$/, { from: 'refusalDetails' }],
+  [/PrevApplied\/refusedDetails$/, { from: '_bgDetails', when: (d) => [d._bgOverstay, d._bgRefused, d._bgPrevApplied].includes('Y'), need: 'Background 2d: details of the refusal / previous application' }],
   [/Criminal\/qANY$/, { from: '_bgCriminal', need: 'Background 3a: criminal offence (Yes/No)' }],
   [/Criminal\/refusedDetails$/, { from: 'criminalDetails' }],
   [/Military\/qANY$/, { from: '_bgMilitary', need: 'Background 4a: military service (Yes/No)' }],
@@ -362,16 +407,16 @@ const VISIT_PURPOSE = {
 export const EXTRA_RULES = {
   imm1295: [
     [/TypeofWork\/WorkPermitType$/, { from: '_workPermitType', need: 'Type of work permit' }],
-    [/PurposeRow1\/EmployerName\/EmployerName$/, { from: 'intendedEmployer' }],
-    [/PurposeRow1\/Address\/Address$/, { from: 'intendedEmployerAddress' }],
-    [/intendedLocation\/ProvinceState\/ProvinceState$/, { from: '_intendedProv', need: 'Intended province in Canada' }],
-    [/intendedLocation\/CityTown\/CityTown$/, { from: 'intendedCity', lov: (d) => d._intendedProv && `CityList.${d._intendedProv}`, need: 'Intended city in Canada' }],
-    [/intendedLocation\/Address$/, { from: 'intendedAddress' }],
-    [/DetailsOfWorkCont\/details\/jobTitle$/, { from: 'intendedJobTitle' }],
-    [/DetailsOfWorkCont\/details\/posDesc$/, { from: 'intendedDuties' }],
+    [/PurposeRow1\/EmployerName\/EmployerName$/, { when: (d) => !d._openOutside, from: 'intendedEmployer' }],
+    [/PurposeRow1\/Address\/Address$/, { when: (d) => !d._openOutside, from: 'intendedEmployerAddress' }],
+    [/intendedLocation\/ProvinceState\/ProvinceState$/, { when: (d) => !d._openOutside, from: '_intendedProv', need: 'Intended province in Canada' }],
+    [/intendedLocation\/CityTown\/CityTown$/, { when: (d) => !d._openOutside, from: 'intendedCity', lov: (d) => d._intendedProv && `CityList.${d._intendedProv}`, need: 'Intended city in Canada' }],
+    [/intendedLocation\/Address$/, { when: (d) => !d._openOutside, from: 'intendedAddress' }],
+    [/DetailsOfWorkCont\/details\/jobTitle$/, { when: (d) => !d._openOutside, from: 'intendedJobTitle' }],
+    [/DetailsOfWorkCont\/details\/posDesc$/, { when: (d) => !d._openOutside, from: 'intendedDuties' }],
     [/DetailsOfWorkCont\/details\/HowLongStudy\/FromDate$/, { from: 'intendedFrom', need: 'Work permit from (date)' }],
     [/DetailsOfWorkCont\/details\/HowLongStudy\/ToDate$/, { from: 'intendedTo', need: 'Work permit until (date)' }],
-    [/DetailsOfWorkCont\/details\/LMO\/LMO$/, { from: 'lmiaNumber' }],
+    [/DetailsOfWorkCont\/details\/LMO\/LMO$/, { when: (d) => !d._openOutside, from: 'lmiaNumber' }],
   ],
   imm1294: [
     [/DetailsOfStudy\/PurposeRow1\/schoolName\/SchoolName$/, { from: 'schoolName', need: 'School name' }],
@@ -437,16 +482,16 @@ export const EXTRA_RULES = {
     [/ApplyingFor\/NewEmployer$/, { from: '_applyNew' }],
     [/ApplyingFor\/RestoreStat$/, { from: '_applyRestore' }],
     [/DetailsOfWork\/Purpose\/Type$/, { from: '_workPermitTypeInside', need: 'Type of work permit' }],
-    [/DetailsOfWork\/Employer\/Name$/, { from: 'intendedEmployer' }],
-    [/DetailsOfWork\/Employer\/Addr$/, { from: 'intendedEmployerAddress' }],
-    [/DetailsOfWork\/Location\/Prov$/, { from: '_intendedProv', need: 'Province of work' }],
-    [/DetailsOfWork\/Location\/City$/, { from: 'intendedCity', lov: (d) => d._intendedProv && `CityList.${d._intendedProv}`, need: 'City of work' }],
-    [/DetailsOfWork\/Location\/Addr$/, { from: 'intendedAddress' }],
-    [/DetailsOfWork\/Occupation\/Job$/, { from: 'intendedJobTitle' }],
-    [/DetailsOfWork\/Occupation\/Desc$/, { from: 'intendedDuties' }],
+    [/DetailsOfWork\/Employer\/Name$/, { when: (d) => !d._openInside, from: 'intendedEmployer' }],
+    [/DetailsOfWork\/Employer\/Addr$/, { when: (d) => !d._openInside, from: 'intendedEmployerAddress' }],
+    [/DetailsOfWork\/Location\/Prov$/, { when: (d) => !d._openInside, from: '_intendedProv', need: 'Province of work' }],
+    [/DetailsOfWork\/Location\/City$/, { when: (d) => !d._openInside, from: 'intendedCity', lov: (d) => d._intendedProv && `CityList.${d._intendedProv}`, need: 'City of work' }],
+    [/DetailsOfWork\/Location\/Addr$/, { when: (d) => !d._openInside, from: 'intendedAddress' }],
+    [/DetailsOfWork\/Occupation\/Job$/, { when: (d) => !d._openInside, from: 'intendedJobTitle' }],
+    [/DetailsOfWork\/Occupation\/Desc$/, { when: (d) => !d._openInside, from: 'intendedDuties' }],
     [/DetailsOfWork\/Duration\/FromDate$/, { from: 'intendedFrom', need: 'Work permit from (date)' }],
     [/DetailsOfWork\/Duration\/ToDate$/, { from: 'intendedTo', need: 'Work permit until (date)' }],
-    [/DetailsOfWork\/Duration\/LMO$/, { from: 'lmiaNumber' }],
+    [/DetailsOfWork\/Duration\/LMO$/, { when: (d) => !d._openInside, from: 'lmiaNumber' }],
   ],
 };
 for (const k of ['imm5708', 'imm5709', 'imm5710']) EXTRA_RULES[k].push(...EXTRA_RULES.inside);

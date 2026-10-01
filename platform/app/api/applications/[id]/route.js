@@ -63,6 +63,7 @@ export async function PATCH(req, { params }) {
         if (body.data.programStart && !a.data.entryDate && validIds.has('entryDate')) a.data.entryDate = body.data.programStart;
         deriveData(a.data);
         a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+        a.dataUpdatedAt = new Date().toISOString(); // the forms built before this are out of date
         // A file created without a name takes the name from the intake (as in the passport).
         if (isDefaultTitle(a.title) && intakeName(a)) a.title = intakeName(a);
       }

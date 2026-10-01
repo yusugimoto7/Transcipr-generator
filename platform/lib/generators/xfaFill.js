@@ -1,3 +1,4 @@
+import { filledRows } from '../schema';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
@@ -111,6 +112,8 @@ export async function fillOfficialForm(formKey, app) {
     data = irccData(data, app);
     fieldMap = irccFieldMap(formKey, schema.fields);
     if (String(app.data?.uci || '').trim() && !data._uci) notes.push('UCI: must be 8 or 10 digits — left blank (check the number in the intake)');
+    const jobs = filledRows(app.data?.jobs);
+    if (jobs.length > 3) notes.push(`Employment: the form has 3 rows — add the other ${jobs.length - 3} activit${jobs.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${jobs.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})`);
   } else if (formKey === 'imm5645') {
     ({ map: fieldMap, notes } = imm5645FieldMap(data, app));
   } else if (formKey === 'imm5476') {

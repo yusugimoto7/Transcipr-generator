@@ -5,7 +5,7 @@ import { codeCategory, firmCode } from './generators/classify';
 import { rasterizePdf } from './raster';
 import { buildChecklist } from './checklist';
 import { getAppType } from './appTypes';
-import { allFields, APPLICANT_ONLY_STEPS, SAME_PERSON_FIELDS, deriveData } from './schema';
+import { allFields, APPLICANT_ONLY_STEPS, SAME_PERSON_FIELDS, deriveData, filledRows, toMonth } from './schema';
 import { verifyDocument, crossCheck, needsCheck, verificationSummary } from './verify';
 
 /**
@@ -233,6 +233,26 @@ export function toOption(value, options) {
  * real YYYY-MM-DD.
  */
 export function cleanValue(def, v) {
+  if (def.type === 'rows') {
+    if (!Array.isArray(v)) return null;
+    const cols = new Map(def.columns.map((c) => [c.id, c]));
+    const rows = v
+      .filter((r) => r && typeof r === 'object')
+      .map((r) => {
+        const out = {};
+        for (const [k, val] of Object.entries(r)) {
+          const c = cols.get(k);
+          if (!c || val == null || String(val).trim() === '') continue;
+          let x = String(val).trim();
+          if (c.type === 'month') x = toMonth(x);
+          if (c.options) x = toOption(x, c.options);
+          out[k] = x;
+        }
+        return out;
+      })
+      .filter((r) => Object.keys(r).length);
+    return rows.length ? rows : null;
+  }
   if (def.type === 'number') {
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
     const m = String(v).replace(/[,\s]/g, '').match(/-?\d+(?:\.\d+)?/);
@@ -285,6 +305,14 @@ async function run(appId, app, batches, job) {
           if (def.options && typeof v === 'string') v = toOption(v, def.options);
           v = cleanValue(def, v);
           if (v == null) continue;
+          if (def.type === 'rows') {
+            // Lists from several batches add up (one employment letter per batch); duplicates drop.
+            const key = (r) => JSON.stringify([r.from || r.applied || '', (r.occupation || r.country || '').toLowerCase()]);
+            const seen = new Set((merged.fields[k] || []).map(key));
+            merged.fields[k] = [...(merged.fields[k] || []), ...v.filter((r) => !seen.has(key(r)))];
+            if (res.sources?.[k]) merged.sources[k] = [merged.sources[k], res.sources[k]].filter(Boolean).join(', ');
+            continue;
+          }
           const newRank = CONF_RANK[res.confidence?.[k]] || 0;
           const curRank = CONF_RANK[merged.confidence[k]] || 0;
           if (!(k in merged.fields) || newRank > curRank) {
@@ -351,6 +379,15 @@ async function run(appId, app, batches, job) {
     for (const [k, v] of Object.entries(merged.fields)) {
       if (!fieldDefs.has(k) || v == null || String(v).trim() === '') continue;
       const cur = a.data[k];
+      if (fieldDefs.get(k).type === 'rows') {
+        // Most recent first.
+        const sorted = [...v].sort((x, y) => String(y.from || y.applied || '').localeCompare(String(x.from || x.applied || '')));
+        if (!filledRows(cur).length) {
+          a.data[k] = sorted;
+          filled.push(k);
+        }
+        continue;
+      }
       if (cur == null || String(cur).trim() === '') {
         a.data[k] = v;
         filled.push(k);
@@ -359,6 +396,7 @@ async function run(appId, app, batches, job) {
     if (filled.length) {
       deriveData(a.data);
       a.dataVersion = (Number(a.dataVersion) || 0) + 1;
+      a.dataUpdatedAt = now;
     }
     a.lastReading = { at: now, fields: merged.fields, sources: merged.sources, confidence: merged.confidence, filled, notes: merged.notes.slice(0, 20) };
     for (const d of a.documents || []) {

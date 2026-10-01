@@ -14,6 +14,9 @@ import UploadBox from '@/components/docs/UploadBox';
 import { NotesBox, NotesFeed } from '@/components/Notes';
 
 const FIELD_LABELS = Object.fromEntries(everyField().map((f) => [f.id, f.label]));
+/** An answer as text: a list of records one per line ("2018-05 – Teacher – Tehran"). */
+const asText = (v) =>
+  Array.isArray(v) ? v.map((r) => Object.values(r || {}).filter((x) => String(x ?? '').trim()).join(' – ')).filter(Boolean).join('\n') : String(v ?? '');
 
 /** Parse a JSON response; a proxy or crash page gets a readable message instead of "Unexpected token '<'". */
 async function readJson(res) {
@@ -219,7 +222,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
     const rows = [];
     let applied = 0;
     for (const [k, v] of entries) {
-      const yours = String((filled.has(k) ? before[k] : (data.data || before)[k]) ?? '');
+      const yours = asText((filled.has(k) ? before[k] : (data.data || before)[k]) ?? '');
       let status;
       if (filled.has(k)) {
         applied++;
@@ -228,9 +231,9 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
         onExtracted(k, v); // older servers: fill it from the page
         applied++;
         status = 'added';
-      } else if (yours === String(v)) status = 'match';
+      } else if (yours === asText(v)) status = 'match';
       else status = 'differ';
-      rows.push({ id: k, label: FIELD_LABELS[k] || k, yours, doc: String(v), source: sources[k] || '', conf: conf[k] || '', status });
+      rows.push({ id: k, label: FIELD_LABELS[k] || k, yours, doc: asText(v), raw: v, source: sources[k] || '', conf: conf[k] || '', status });
     }
     setComparison({ rows, notes: data.notes || [] });
     const differ = rows.filter((r) => r.status === 'differ').length;
@@ -239,12 +242,12 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
   }
 
   function useDoc(row) {
-    onExtracted(row.id, row.doc);
+    onExtracted(row.id, row.raw ?? row.doc);
     setComparison((c) => ({ ...c, rows: c.rows.map((r) => (r.id === row.id ? { ...r, yours: row.doc, status: 'match' } : r)) }));
   }
   function useAllDiffering() {
     if (!comparison) return;
-    for (const r of comparison.rows) if (r.status === 'differ') onExtracted(r.id, r.doc);
+    for (const r of comparison.rows) if (r.status === 'differ') onExtracted(r.id, r.raw ?? r.doc);
     setComparison((c) => ({ ...c, rows: c.rows.map((r) => (r.status === 'differ' ? { ...r, yours: r.doc, status: 'match' } : r)) }));
   }
 
@@ -636,8 +639,8 @@ function Comparison({ comparison, onUse, onUseAll }) {
                 {comparison.rows.map((r) => (
                   <tr key={r.id} className={r.status === 'differ' ? 'row-differ' : ''}>
                     <td>{r.label}</td>
-                    <td className="muted">{r.yours || <span className="faint">empty</span>}</td>
-                    <td className="strong">
+                    <td className="muted" style={{ whiteSpace: 'pre-line' }}>{r.yours || <span className="faint">empty</span>}</td>
+                    <td className="strong" style={{ whiteSpace: 'pre-line' }}>
                       {r.doc}{' '}
                       {r.conf && r.conf !== 'high' && <span className={`chip ${r.conf === 'low' ? 'danger' : 'warn'}`}>{r.conf} confidence</span>}
                     </td>

@@ -1,5 +1,5 @@
 import { checklistStatus, missingItems } from './checklist';
-import { getSchema, isRequired, fieldShown } from './schema';
+import { getSchema, isRequired, fieldShown, answered, filledRows } from './schema';
 
 /**
  * Where a client file stands — one place for the numbers the workspace header,
@@ -11,7 +11,12 @@ const NOT_CHECKED = new Set(['internal', 'questionnaire', 'photo']);
 
 export const isFilled = (data, f) => filled(data, f);
 function filled(data, f) {
+  return answered(f, data);
+}
+/** Anything entered at all (a started but incomplete answer counts). */
+function touched(data, f) {
   const v = data?.[f.id];
+  if (Array.isArray(v)) return filledRows(v).length > 0;
   return typeof v === 'boolean' || String(v ?? '').trim() !== '';
 }
 
@@ -20,7 +25,7 @@ export function intakeStatus(app, schema = getSchema(app.type)) {
   return schema.steps.map((s) => {
     const req = s.fields.filter((f) => isRequired(f, app.data));
     const left = req.filter((f) => !filled(app.data, f)).length;
-    const any = s.fields.some((f) => fieldShown(f, app.data) && filled(app.data, f));
+    const any = s.fields.some((f) => fieldShown(f, app.data) && touched(app.data, f));
     if (req.length ? left === 0 : any) return { id: s.id, title: s.title, state: 'done', left: 0, text: 'Complete' };
     if (any) return { id: s.id, title: s.title, state: 'partial', left, text: `${left} required left` };
     return { id: s.id, title: s.title, state: 'todo', left: req.length, text: req.length ? `${req.length} required` : 'Optional' };
@@ -53,7 +58,8 @@ export function fileProgress(app, schema) {
   const lastInput = latest(
     ...docs.map((d) => d.uploadedAt),
     ...(app.generated || []).filter((g) => !/^final-/.test(g.key)).map((g) => g.generatedAt),
-    app.finalSetup?.updatedAt // the team changed which files the set holds, or what goes in them
+    app.finalSetup?.updatedAt, // the team changed which files the set holds, or what goes in them
+    app.dataUpdatedAt // intake answers changed: the IRCC forms are filled from them
   );
   const finalCount = app.finalFiles?.files?.length || 0;
 

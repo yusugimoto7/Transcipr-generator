@@ -856,3 +856,13 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .act-items .chip { font-weight: 500; overflow-wrap: anywhere; }
 .act-detail { overflow-wrap: anywhere; }
 .act-when { font-size: 12px; color: var(--ink-soft); }
+
+/* Intake: lists of records (jobs, trips, applications) */
+.rows-field { display: grid; gap: 10px; }
+.row-card { position: relative; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 12px; margin: 0; min-width: 0; background: var(--panel); }
+.row-card.has-problem { border-color: var(--warn); }
+.row-card legend { font-size: 12px; font-weight: 700; color: var(--ink-soft); padding: 0 4px; }
+.row-acts { position: absolute; top: -13px; right: 10px; display: flex; gap: 2px; background: var(--panel); padding: 0 2px; }
+.row-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px 12px; }
+.row-grid .field { margin: 0; }
+.rows-field > .btn-secondary { justify-self: start; }

@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import crypto from 'crypto';
+import { deriveData } from './schema';
 
 /**
  * File-based JSON data store.
@@ -233,7 +234,10 @@ export async function listAllApplications() {
 }
 
 export async function getApplication(id) {
-  return readJson(appFile(id), null);
+  const app = await readJson(appFile(id), null);
+  // Answers saved before the intake changed shape (e.g. jobs as rows) are read in the current shape.
+  if (app?.data) deriveData(app.data);
+  return app;
 }
 
 export async function createApplication({
