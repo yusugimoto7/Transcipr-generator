@@ -419,6 +419,7 @@ export const PROFILES = {
     team: {
       currentStatusCanada: 'Student (study permit)', permitNumber: 'S000000002', permitExpiry: '2027-06-30', firstEntryDate: '2025-01-05', firstEntryPlace: 'Montreal-Trudeau International Airport', originalEntryPurpose: 'Study', lastEntryDate: '2025-01-05', lastEntryPlace: 'Montreal-Trudeau International Airport', canadaEmployerOrSchool: 'McGill Demo University',
       visitPurpose: 'Other', visitFrom: '2026-12-15', visitTo: '2027-06-30', visitPlan: 'A visa to re-enter Canada after visiting family in Iran during the winter break.',
+      totalFunds: 35000, supportSource: 'Myself',
       canadaHistory: 'Study permit approved November 2024; entered Montreal 5 January 2025.',
     },
   }),

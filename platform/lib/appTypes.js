@@ -780,7 +780,7 @@ export const APP_TYPES = {
   'trv-inside': {
     key: 'trv-inside', service: '100-403', title: 'Visitor Visa (TRV) — for Work / Study Permit Holders', group: 'Visit — inside Canada', where: 'inside',
     description: 'A permit holder in Canada who needs a visa counterfoil to re-enter after travelling (IMM 5257). Decided by a visa office abroad; does NOT change status in Canada.',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'education', 'history', 'tiesReturn'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5257, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH,
       I(103, 'passport', 'Passport — every page with a stamp or visa, plus the Canadian visa label', { hint: 'A new passport is needed if it expires in less than 2 years.' }),
