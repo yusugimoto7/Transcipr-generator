@@ -314,6 +314,7 @@ export const PROFILES = {
     trips: [{ from: '2024-07', to: '2024-08', country: 'Germany', city: 'Berlin', purpose: 'Tourism' }],
     team: {
       visitPurpose: 'Accompanying a family member', visitFrom: '2027-06-01', visitTo: '2027-07-15', visitCities: 'Toronto', visitPayer: 'Myself', visitBudget: 8000,
+      hostName: 'Shadi Demo', hostRelationship: 'Sister-in-law', hostStatus: 'Citizen', hostAddress: '77 Demo Street, Toronto, ON M4B 0A1',
       totalFunds: 20000, supportSource: 'Combination', returnPlan: 'Return to his job at Alborz Demo Construction.',
     },
   }),

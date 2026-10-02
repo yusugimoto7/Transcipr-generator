@@ -174,6 +174,7 @@ export function irccData(d = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
     _programField: fieldOfStudy(d),
+    ...contactInCanada(d),
     // An LMIA number, or for an LMIA-exempt job the employer portal's offer number (A1234567).
     _lmiaOrOffer: d.lmiaNumber || d.c11OfferNumber || '',
     // Set by the form's own script when the date of birth is typed in Adobe — not when it is pre-filled.
@@ -196,6 +197,20 @@ export function irccData(d = {}, app = {}) {
     });
   });
   return out;
+}
+
+/**
+ * The visit form's contact in Canada: the host; else the Canadian business
+ * contact; else, for a child, the parent who is in Canada.
+ */
+function contactInCanada(d) {
+  if (d.hostName) return { _contactName: d.hostName, _contactRelationship: d.hostRelationship || '', _contactAddress: d.hostAddress || '' };
+  if (d.canadianCounterpart) return { _contactName: d.canadianCounterpart, _contactRelationship: 'Business contact', _contactAddress: d.canadianCounterpartAddress || '' };
+  if (d.parentAddress && d.accompanyingParent) {
+    const mother = /mother/i.test(d.accompanyingParent) || (d.motherName && d.accompanyingParent.includes(String(d.motherName).split(' ')[0]));
+    return { _contactName: d.accompanyingParent.replace(/\s*\(.*?\)\s*/g, ' ').trim(), _contactRelationship: mother ? 'Mother' : 'Father', _contactAddress: d.parentAddress };
+  }
+  return {};
 }
 
 /** Age in whole years today, from YYYY-MM-DD ('' when unknown). */
@@ -584,9 +599,9 @@ export const EXTRA_RULES = {
     ...date(/HowLongStay\/FromDate$/, [/StayDates\/FromYr/, /StayDates\/FromMM/, /StayDates\/FromDD/], 'visitFrom', { need: 'Visit from (date)' }),
     ...date(/HowLongStay\/ToDate$/, [/StayDates\/ToYr/, /StayDates\/ToMM/, /StayDates\/ToDD/], 'visitTo', { need: 'Visit to (date)' }),
     [/DetailsOfVisit\/PurposeRow1\/Funds\/Funds$/, { from: '_visitFunds', need: 'Funds available for the stay' }],
-    [/DetailsOfVisit\/Contacts_Row1\/Name\/Name$/, { from: 'hostName' }],
-    [/DetailsOfVisit\/Contacts_Row1\/RelationshipToMe\/RelationshipToMe$/, { from: 'hostRelationship' }],
-    [/DetailsOfVisit\/Contacts_Row1\/AddressInCanada\/AddressInCanada$/, { from: 'hostAddress' }],
+    [/DetailsOfVisit\/Contacts_Row1\/Name\/Name$/, { from: '_contactName' }],
+    [/DetailsOfVisit\/Contacts_Row1\/RelationshipToMe\/RelationshipToMe$/, { from: '_contactRelationship' }],
+    [/DetailsOfVisit\/Contacts_Row1\/AddressInCanada\/AddressInCanada$/, { from: '_contactAddress' }],
   ],
   // Inside Canada: how and when the applicant came in.
   inside: [

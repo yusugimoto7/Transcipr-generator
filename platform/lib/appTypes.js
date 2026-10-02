@@ -623,7 +623,7 @@ export const APP_TYPES = {
   'trv-spouse': {
     key: 'trv-spouse', service: '100-308', title: 'Visitor Visa — Accompanying Spouse', group: 'Visit — outside Canada', where: 'outside',
     description: "The spouse travelling with a visitor-visa applicant (IMM 5257). The inviter's documents sit in the principal's file.",
-    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'education', 'history', 'fundsStay', 'tiesReturn'],
+    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476, F.imm5713],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB, LANGUAGE_OPT, FINANCIAL, WORK_LETTER, INSURANCE,
       I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
@@ -637,7 +637,7 @@ export const APP_TYPES = {
   'trv-child': {
     key: 'trv-child', service: '100-309', title: 'Visitor Visa — Accompanying Child', group: 'Visit — outside Canada', where: 'outside',
     description: 'A dependent child travelling with a parent who is the principal visitor (IMM 5257).',
-    steps: ['personal', 'passport', 'contact', 'family', 'minor', 'visit', 'history'],
+    steps: ['personal', 'passport', 'contact', 'family', 'minor', 'visit', 'host', 'history'],
     forms: [F.imm5257, F.imm5476, F.imm5713],
     checklist: [FORM100, BIRTH, NID_OPT, passport(2, true), PHOTO, SCHOOL_ENROL,
       I(106, 'transcripts', 'Latest report card with transcripts', { tr: true, cond: 'if applicable' }),
