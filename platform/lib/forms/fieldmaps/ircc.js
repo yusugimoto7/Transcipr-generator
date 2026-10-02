@@ -58,7 +58,8 @@ const POST_SECONDARY = /trade|college|bachelor|post-graduate|master|doctor|profe
 const NO_POST_SECONDARY = /^(none|primary|secondary)/i;
 const MARRIED = (d) => ['Married', 'Common-Law'].includes(d.maritalStatus);
 
-const OPEN_PERMITS = new Set(['Open Work Permit', 'Open Work Permit for Vulnerable Workers']);
+// Permits with no employer or place of work: the employer and location boxes stay blank (a PGWP is open too).
+const OPEN_PERMITS = new Set(['Open Work Permit', 'Open Work Permit for Vulnerable Workers', 'Post Graduation Work Permit']);
 const normCountry = (c) => String(c || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z]/g, '');
 
 /**
@@ -288,7 +289,11 @@ export function activities(d = {}, today = new Date()) {
     list.push({ from: d.lastEduFrom, to: d.lastEduTo, occupation: `Student${d.lastFieldOfStudy ? ` (${d.lastFieldOfStudy})` : ''}`, employer: d.lastInstitution, city: d.lastEduCity, country: d.lastEduCountry });
   }
   const end = (a) => String(a.to || '9999-99');
+  // The same studies or job entered twice (as a job row and as the latest studies) count once.
+  const key = (a) => `${String(a.employer || '').toLowerCase().replace(/\W+/g, '')}|${String(a.from || '').slice(0, 7)}`;
+  const seen = new Set();
   return list
+    .filter((a) => (seen.has(key(a)) ? false : seen.add(key(a))))
     .filter((a) => end(a) >= since)
     .sort((a, b) => end(b).localeCompare(end(a)) || String(b.from || '').localeCompare(String(a.from || '')));
 }

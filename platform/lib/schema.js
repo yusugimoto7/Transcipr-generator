@@ -58,7 +58,7 @@ const ENGLISH = 'In English (Latin letters) — IRCC forms reject Persian or any
 /** Highest education is post-secondary: the forms then ask the dates and place of those studies. */
 const POST_SECONDARY_DONE = { field: 'highestEducation', notIn: ['', undefined, null, 'None', 'Primary / middle school', 'Secondary school (high school diploma)'] };
 /** The employer / location / job questions are asked unless the permit is an open one. */
-const NOT_OPEN = { all: [{ field: 'workPermitType', notIn: ['Open Work Permit', 'Open Work Permit for Vulnerable Workers'] }, { field: 'workPermitTypeInside', notIn: ['Open Work Permit', 'Open Work Permit for Vulnerable Workers'] }] };
+const NOT_OPEN = { all: [{ field: 'workPermitType', notIn: ['Open Work Permit', 'Open Work Permit for Vulnerable Workers'] }, { field: 'workPermitTypeInside', notIn: ['Open Work Permit', 'Open Work Permit for Vulnerable Workers', 'Post Graduation Work Permit'] }] };
 const MARRIED = { field: 'maritalStatus', in: ['Married', 'Common-Law'] };
 
 export const STUDY_PERMIT_SCHEMA = {
