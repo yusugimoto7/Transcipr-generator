@@ -338,6 +338,15 @@ async function runType(type) {
   }
   await fs.writeFile(path.join(mailDir, `${String(++mailSeq).padStart(3, '0')}-${type}.eml`), eml(`${P.file.title} <${P.email}>`, 'My documents', atts, 'Hello,\nPlease find my documents attached.\nThank you'));
   r = await call('POST', '/api/admin/mail', { action: 'check' });
+  // A family sharing one email address: the message matches several files
+  // and waits in the Email intake inbox — staff assign it, as the team does.
+  await sleep(4000);
+  const inbox = (await call('GET', '/api/admin/mail')).data?.messages || [];
+  const waiting = inbox.find((m) => m.status === 'unassigned' && m.from?.address === P.email);
+  if (waiting) {
+    const a = await call('POST', '/api/admin/mail', { action: 'assign', id: waiting.id, appId: id });
+    step('email: shared address — staff assign the message to this file', a.status === 200, a.data?.error || '');
+  }
   const mailed = await until(async () => {
     const a = (await call('GET', `/api/applications/${id}`)).data?.application;
     return (a?.documents || []).length >= P.emailed.length ? a : null;
