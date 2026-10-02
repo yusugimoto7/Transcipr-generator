@@ -15,7 +15,11 @@ const TARGETS = [
   { file: 'bc-entrepreneur-fa.html', program: 'bce', lang: 'fa', rows: 10, note: 'BC PNP Entrepreneur — Farsi' },
   { file: 'bc-entrepreneur-en.html', program: 'bce', lang: 'en', rows: 10, note: 'BC PNP Entrepreneur — English' },
   { file: 'manitoba-fa.html',        program: 'mb',  lang: 'fa', rows: 6,  note: 'Manitoba MPNP — Farsi' },
-  { file: 'manitoba-en.html',        program: 'mb',  lang: 'en', rows: 6,  note: 'Manitoba MPNP — English' }
+  { file: 'manitoba-en.html',        program: 'mb',  lang: 'en', rows: 6,  note: 'Manitoba MPNP — English' },
+  { file: 'alberta-fa.html',         program: 'ab',  lang: 'fa', rows: 10, note: 'Alberta AAIP — Farsi' },
+  { file: 'alberta-en.html',         program: 'ab',  lang: 'en', rows: 10, note: 'Alberta AAIP — English' },
+  { file: 'ontario-fa.html',         program: 'on',  lang: 'fa', rows: 10, note: 'Ontario OINP — Farsi' },
+  { file: 'ontario-en.html',         program: 'on',  lang: 'en', rows: 10, note: 'Ontario OINP — English' }
 ];
 
 for (const t of TARGETS) {

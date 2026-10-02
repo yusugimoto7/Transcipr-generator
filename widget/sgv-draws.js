@@ -38,8 +38,19 @@
            url: 'https://www.ontario.ca/page/2026-ontario-immigrant-nominee-program-updates' },
     mb:  { key: 'MB',  kind: 'pnp', accent: '#6d28d9', flag: 'Flag_of_Manitoba.svg' ,
            url: 'https://immigratemanitoba.com/draws/' },
-    ab:  { key: 'AB',  kind: 'pnp', accent: '#c2410c', flag: 'Flag_of_Alberta.svg' ,
-           url: 'https://www.alberta.ca/alberta-advantage-immigration-program-express-entry-stream' },
+    ab:  { key: 'AB',  kind: 'pnp', accent: '#c2410c', flag: 'Flag_of_Alberta.svg',
+           // The old express-entry-stream URL 404s; the draw table lives here.
+           url: 'https://www.alberta.ca/aaip-processing-information',
+           // Alberta's number is an AAIP Expression of Interest score, NOT a CRS
+           // cut-off, and Alberta says so on that page: "EOI score is not the
+           // only factor AAIP uses to select candidates for invitation... AAIP
+           // does not disclose recent draw parameters." Labelling it CRS would
+           // be exactly the confidently-wrong publication to avoid.
+           scoreHead: { fa: '\u062d\u062f\u0627\u0642\u0644 \u0627\u0645\u062a\u06cc\u0627\u0632 EOI', en: 'Minimum EOI score' },
+           note: {
+             fa: '\u0639\u062f\u062f \u0627\u06cc\u0646 \u0633\u062a\u0648\u0646 \u0627\u0645\u062a\u06cc\u0627\u0632 EOI \u0628\u0631\u0646\u0627\u0645\u0647 AAIP \u0622\u0644\u0628\u0631\u062a\u0627\u0633\u062a\u060c \u0646\u0647 \u062d\u062f\u0646\u0635\u0627\u0628 CRS \u0627\u06a9\u0633\u067e\u0631\u0633 \u0627\u0646\u062a\u0631\u06cc. \u0622\u0644\u0628\u0631\u062a\u0627 \u062d\u062f\u0646\u0635\u0627\u0628 CRS \u0645\u0646\u062a\u0634\u0631 \u0646\u0645\u06cc\u200c\u06a9\u0646\u062f \u0648 \u062f\u0631\u0627\u0648\u0647\u0627\u06cc AAIP \u0632\u0645\u0627\u0646\u200c\u0628\u0646\u062f\u06cc \u062b\u0627\u0628\u062a\u06cc \u0646\u062f\u0627\u0631\u0646\u062f.',
+             en: 'The score column is the AAIP Expression of Interest score, not an Express Entry CRS cut-off. Alberta publishes no CRS cut-off, and AAIP draws are not held on a fixed schedule.'
+           } },
     sk:  { key: 'SK',  kind: 'pnp', accent: '#15803d', flag: 'Flag_of_Saskatchewan.svg' ,
            url: 'https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program' }
   };
@@ -149,7 +160,11 @@
   // nothing, so prose is dropped.
   function usableStream(s) {
     var t = String(s == null ? '' : s).trim();
-    if (!t || t.length > 48) return false;
+    // 48 was tuned when Ontario's prose was the only risk. Alberta publishes
+    // names like "Alberta Express Entry Stream - Priority Sectors (Health Care)"
+    // at 60 characters, so the guard has to clear those; the prose tests below
+    // are what actually reject a sentence fragment.
+    if (!t || t.length > 80) return false;
     if (/^(the|to)\b/i.test(t)) return false;
     return !/invitation|candidate|who may qualify|stream and/i.test(t);
   }
@@ -255,10 +270,17 @@
     return draws.map(function (r) {
       var stream = usableStream(r.stream) ? esc(r.stream) : '—';
       var route = routeLabel(r.factors, lang);
-      // The wage route only earns a line when there is no score to show; where
-      // the province published a score, that IS the eligibility bar.
-      var routeHtml = (!String(r.score || '').trim() && route)
-        ? '<span class="sgv-dw__route">' + esc(route) + '</span>' : '';
+      // The qualifier line carries what separates otherwise identical rows.
+      // Ontario issued four Foreign Worker draws on 23 April 2026 — 318, 57,
+      // 194 and 128 — distinguished only by region, so hiding it makes real
+      // draws look like duplicated rows. The one value worth suppressing is
+      // BC's bare "Points", which only restates the score column beside it.
+      // dir="auto" picks the direction from the text's own first strong
+      // character. Without it a Latin qualifier sitting in a right-to-left
+      // table has its full stop thrown to the front: ".Targeted draw for
+      // Eastern Ontario". Farsi qualifiers still lay out right-to-left.
+      var routeHtml = (route && !/^points$/i.test(route))
+        ? '<span class="sgv-dw__route" dir="auto">' + esc(route) + '</span>' : '';
       return '<tr>' +
         '<td class="sgv-dw__num">' + esc(r.date || fmtISO(r.dateISO) || '—') + '</td>' +
         '<td class="sgv-dw__stream">' + stream + routeHtml + '</td>' +
@@ -313,8 +335,11 @@
     var newest = iso.length ? fmtISO(iso[iso.length - 1]) : '';
 
     var quiet = !isEE && src.stale !== false;
-    var head = isEE ? t.eeHead : t.pnpHead;
+    var head = (isEE ? t.eeHead : t.pnpHead).slice();
     var streamCol = isEE ? 2 : 1;
+    if (!isEE && prog.scoreHead && prog.scoreHead[lang]) head[3] = prog.scoreHead[lang];
+    var standing = (prog.note && prog.note[lang])
+      ? '<div class="sgv-dw__note">\u2139\uFE0F ' + esc(prog.note[lang]) + '</div>' : '';
     var title = box.getAttribute('data-title') || t.title[name] || t.title.ee;
 
     box.innerHTML =
@@ -332,7 +357,8 @@
         }).join('') + '</tr></thead>' +
         '<tbody>' + (isEE ? rowsEE(draws, t) : rowsPNP(draws, t, lang)) + '</tbody>' +
       '</table></div>' +
-      (quiet ? '<div class="sgv-dw__note">ℹ️ ' + esc(t.quietNote) + '</div>' : '') +
+      (quiet ? '<div class="sgv-dw__note">\u2139\uFE0F ' + esc(t.quietNote) + '</div>' : '') +
+      standing +
       '<div class="sgv-dw__foot">' +
         '<span>' + esc(t.auto) + (newest ? ' ' + esc(t.newest) + ' <span class="sgv-dw__num">' + esc(newest) + '</span>' : '') + '</span>' +
         (srcUrl ? '<a href="' + esc(srcUrl) + '" target="_blank" rel="nofollow noopener">' + esc(t.source) + ' ↗</a>' : '') +

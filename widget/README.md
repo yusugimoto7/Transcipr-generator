@@ -23,6 +23,12 @@ accepts `?only=`:
 | `?only=EE,BC` | both |
 | *(omitted)* | everything, exactly as before — what the n8n workflows still ask for |
 
+**Re-deploy after every change to that file.** It has changed again since the
+first deployment: Alberta's URL was corrected (the old one 404s, so Alberta had
+been silently empty) and gained a parser, and Ontario's parser was moved onto a
+different page. Without a fresh **New version**, Alberta stays empty and Ontario
+keeps serving summed invitation counts.
+
 **Until this is deployed the windows will not work reliably**: the old code
 ignores `only=`, scrapes all six sites, and can take longer than the widget's
 20-second timeout — so visitors would see the "could not load" state.
@@ -69,6 +75,10 @@ In `dist/`, ready to paste:
 | `bc-entrepreneur-en.html` | English BC PNP — Entrepreneur |
 | `manitoba-fa.html` | Farsi Manitoba MPNP |
 | `manitoba-en.html` | English Manitoba MPNP |
+| `alberta-fa.html` | Farsi Alberta AAIP |
+| `alberta-en.html` | English Alberta AAIP |
+| `ontario-fa.html` | Farsi Ontario OINP |
+| `ontario-en.html` | English Ontario OINP |
 
 In the WordPress editor, at the spot where the window should appear:
 **+ → Custom HTML**, paste the whole file, Update.
@@ -143,15 +153,60 @@ These are the traps that cost real published mistakes, and each is handled:
 | `bc` | BC PNP Skills Immigration | Parsed from the table. Solid. |
 | `bce` | BC PNP Entrepreneur | Parsed from the table. Solid. |
 | `mb` | Manitoba MPNP | One fetch per draw for the date. Solid. |
-| `on` | Ontario OINP | **Not shipped.** See below. |
-| `ab`, `sk` | Alberta, Saskatchewan | **No parser exists.** They return nothing and the window will say so. |
+| `ab` | Alberta AAIP | Parsed from Table 10. Solid — **but read the score warning below.** |
+| `on` | Ontario OINP | Parsed from the invitations tables. Correct, but Ontario has run no draw since 30 April 2026. |
+| `sk` | Saskatchewan SINP | **No parser, and none is safe.** See below. |
 
-Ontario is wired (`data-program="on"`) but deliberately not built as a paste
-block yet. Two problems: its newest draw in the feed is 30 April 2026, and the
-parser mangles any announcement carrying more than one draw — the 22 April row
-comes through as "the Masters Graduate stream and 244 invitations to apply to
-candidates who may qualify und", which loses a second draw's count entirely.
-Shipping that under an RCIC's name would publish wrong invitation figures.
+### Alberta — the score is NOT a CRS cut-off
+
+Alberta's "Minimum score of invited candidates" is the **AAIP Expression of
+Interest score**, on its own points grid. Alberta publishes no CRS cut-off at
+all, and says so on the same page: *"EOI score is not the only factor AAIP uses
+to select candidates for invitation... To protect program integrity AAIP does not
+disclose recent draw parameters."*
+
+The window therefore labels that column "Minimum EOI score" and carries a
+standing note saying it is not a CRS cut-off. Do not relabel it. Publishing a
+58 as an "Express Entry CRS cut-off" would be exactly the confidently-wrong
+figure this project exists to avoid.
+
+Alberta also states *"AAIP draws are not regularly scheduled"*, so a quiet
+stretch is normal there and is not evidence of a broken parser.
+
+### Ontario — the source had to be changed
+
+The old parser read the prose year-updates page, and **its invitation figure is
+a sum across the two or three streams one announcement names.** Ontario's prose
+reports 1063 invitations on 30 April 2026; the tables show that is 786 under
+Employer Job Offer: Foreign Worker plus 277 under International Student. The
+23 April Eastern Ontario figure of 539 is likewise 318 + 173 + 48.
+
+A number that belongs to no single stream cannot be attributed to one, so the
+parser now reads `https://www.ontario.ca/page/invitations-apply-oinp`, where the
+stream comes from the heading above each table and every count belongs to
+exactly one stream.
+
+Two things that follow from this:
+
+- **Rows are not unique on date + stream + count.** Ontario issued 173
+  invitations under International Student three separate times on 23 April, for
+  Eastern, Southwestern and Central Ontario. The shared dedupe would have
+  collapsed those into one, so Ontario dedupes on the whole row.
+- **The qualifier line is load-bearing.** Four Foreign Worker draws on 23 April
+  — 318, 57, 194 and 128 — are told apart only by region, so the window prints
+  Ontario's own Notes text under the stream name. Without it they read as
+  duplicated rows.
+
+Ontario's newest draw is 30 April 2026 and the window will show its "no recent
+draw" state until the province publishes again. That is accurate, not a fault.
+
+### Saskatchewan — deliberately not built
+
+There is no HTML page listing SINP draws. The only draw data is a PDF whose
+current version is *"ISW EOI Selection Results (September 12 2024).pdf"* — two
+years old — and the province's own page states *"There are no scheduled EOI
+draws at this time."* A parser that ran today and "succeeded" would publish a
+two-year-old cut-off as current. The honest output is a visible gap.
 
 ## Changing the design
 

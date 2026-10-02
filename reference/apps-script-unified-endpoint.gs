@@ -34,8 +34,16 @@
 var STALE_DAYS = 60;
 var EE_JSON_URL = 'https://www.canada.ca/content/dam/ircc/documents/json/ee_rounds_123_en.json';
 var BC_URL = 'https://www.welcomebc.ca/immigrate-to-b-c/about-the-bc-provincial-nominee-program/invitations-to-apply';
-var ON_URL = 'https://www.ontario.ca/page/2026-ontario-immigrant-nominee-program-updates';
-var AB_URL = 'https://www.alberta.ca/alberta-advantage-immigration-program-express-entry-stream';
+// The year-updates page is PROSE, and its invitation figure is a sum across the
+// two or three streams one announcement names: it reports 1063 for 30 Apr 2026,
+// which the tables below show is 786 (Foreign Worker) + 277 (International
+// Student). A number that belongs to no single stream cannot be attributed to
+// one, so that page is the wrong source for figures. These are the tables.
+var ON_URL = 'https://www.ontario.ca/page/invitations-apply-oinp';
+// The old /alberta-advantage-immigration-program-express-entry-stream URL now
+// returns 404, so every fetch threw and Alberta was quietly empty. The draw
+// table lives on the processing-information page, as 'Table 10. Draw information'.
+var AB_URL = 'https://www.alberta.ca/aaip-processing-information';
 
 // The page embeds on sugimotovisa.com call this from the VISITOR'S BROWSER, so a
 // request must never cost a full six-site scrape. `?only=` bounds the work to the
@@ -56,7 +64,7 @@ function pnpSources_() { return {
   ON:  ['Ontario (OINP)', ON_URL, getOINP_],
   BC:  ['British Columbia (BCPNP)', BC_URL, getBCSkills_],
   BCE: ['British Columbia \u2014 Entrepreneur', BC_URL, getBCEntrepreneur_],
-  AB:  ['Alberta (AAIP)', AB_URL, noParserYet_],
+  AB:  ['Alberta (AAIP)', AB_URL, getAAIP_],
   SK:  ['Saskatchewan (SINP)', 'https://www.saskatchewan.ca/residents/moving-to-saskatchewan/live-in-saskatchewan/by-immigrating/saskatchewan-immigrant-nominee-program', noParserYet_],
   MB:  ['Manitoba (MPNP)', MB_URL, getMPNP_],
   NS:  ['Nova Scotia (NSNP)', 'https://liveinnovascotia.com/nova-scotia-nominee-program', noParserYet_],
@@ -265,31 +273,90 @@ function getExpressEntryRounds_() {
 }
 
 // ============================== ONTARIO ==============================
-// "On <Month D, YYYY>, we issued <N> invitations to apply to candidates who
-// may qualify under the <stream>..."  Announcements without a number are not
-// draws and must not be counted as one.
+// Layout: <h2> "Invitations to apply issued in <year>" , then per stream an
+// <h3> naming it followed by a table:
+//   Date issued | Number of invitations issued | Date profiles created |
+//   Score range | Notes
+// The stream therefore comes from the heading, not from prose, so every count
+// belongs to exactly one stream and nothing has to be inferred.
+//
+// Rows are NOT unique on date+stream+count: 23 Apr 2026 issued 173 invitations
+// under International Student three separate times, for Eastern, Southwestern
+// and Central Ontario. The shared dedupe_ keys on date|stream|invitations and
+// would silently collapse those three real draws into one, so Ontario dedupes
+// on the whole row instead.
 function getOINP_() {
-  var text = stripTags_(fetchText_(ON_URL));
-  var out = [];
-  var re = /On\s+([A-Z][a-z]+ \d{1,2},\s*20\d{2}),\s*we issued\s*([\d,]+)\s*invitations? to apply\s*(?:to candidates who may qualify (?:under|for)\s+)?([^.]{0,90})/gi;
-  var m;
-  while ((m = re.exec(text)) !== null && out.length < 20) {
-    var date = m[1].trim();
-    out.push({
-      date: date,
-      dateISO: toISO_(date),
-      invitations: m[2].replace(/,/g, ''),
-      stream: stripTags_(m[3]).replace(/\s{2,}/g, ' ').trim().slice(0, 90),
-      score: scoreNear_(text, m.index)
-    });
+  var html = fetchText_(ON_URL);
+  var re = /<h2[^>]*>[\s\S]*?<\/h2>|<h3[^>]*>[\s\S]*?<\/h3>|<table[\s\S]*?<\/table>/gi;
+  var out = [], seen = {}, stream = '', inYear = false, m;
+
+  while ((m = re.exec(html)) !== null) {
+    var chunk = m[0];
+
+    if (/^<h2/i.test(chunk)) {
+      // Page furniture ("Overview", "Contact us") switches the year off again,
+      // so a stray table outside a year section is never read as draws.
+      inYear = /Invitations to apply issued in\s*20\d{2}/i.test(stripTags_(chunk));
+      stream = '';
+      continue;
+    }
+    if (/^<h3/i.test(chunk)) { stream = stripTags_(chunk); continue; }
+    if (!inYear || !stream) continue;
+
+    var rows = bcRows_(chunk);
+    if (!rows.length) continue;
+    var head = rows[0].join(' | ').toLowerCase();
+    if (head.indexOf('date issued') === -1) continue;
+    if (head.indexOf('number of invitations') === -1) continue;
+
+    for (var i = 1; i < rows.length; i++) {
+      var c = rows[i];
+      if (c.length < 4) continue;
+      var dm = String(c[0] || '').match(/^([A-Z][a-z]+ \d{1,2},\s*20\d{2})/);
+      if (!dm) continue;
+      var inv = String(c[1] || '').trim();
+      if (!/^[\d,]+$/.test(inv)) continue;
+
+      var row = {
+        date: dm[1],
+        dateISO: toISO_(dm[1]),
+        invitations: inv.replace(/,/g, ''),
+        stream: stream.slice(0, 60),
+        score: onScore_(c[3]),
+        factors: onNote_(c[4])
+      };
+      var k = [row.dateISO, row.stream, row.invitations, row.score, row.factors].join('|');
+      if (seen[k]) continue;
+      seen[k] = true;
+      out.push(row);
+    }
   }
-  return dedupe_(out);
+
+  out.sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); });
+  return out.slice(0, 40);
 }
 
-function scoreNear_(text, idx) {
-  var w = text.substr(idx, 240);
-  var m = w.match(/(?:score of|score|ranking)[^\d]{0,15}(\d{2,4})/i);
+// "57 and above" is the minimum score. "N/A" appears on 40 rows and means
+// Ontario published none, which is reported as no score rather than as a zero.
+function onScore_(v) {
+  var m = String(v == null ? '' : v).match(/(\d+)\s*and above/i);
   return m ? m[1] : '';
+}
+
+// The Notes cell carries the draw's own qualifier ("Targeted draw for Eastern
+// Ontario.") followed by boilerplate pointing at the updates page. Keep what
+// describes the draw, drop the pointer.
+function onNote_(v) {
+  return String(v == null ? '' : v)
+    .replace(/Please refer to the[\s\S]*$/i, '')
+    .replace(/\s+/g, ' ')
+    // Ontario wraps abbreviations as <abbr>GTA</abbr>; stripping tags to spaces
+    // leaves "Greater Toronto Area ( GTA )", so the brackets are closed up.
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .replace(/\s+([.,;])/g, '$1')
+    .trim()
+    .slice(0, 120);
 }
 
 // ========================== BRITISH COLUMBIA ==========================
@@ -395,6 +462,60 @@ function getBCEntrepreneur_() {
   return dedupe_(out);
 }
 
+// ============================== ALBERTA ==============================
+// Table 10, "Draw information":
+//   Draw date | Worker stream, pathway, initiative or other focus and selection
+//   parameters | Minimum score of invited candidates | Number of invitations
+// Server-rendered, no rowspan, newest first. Matched on header text so the ten
+// other tables on the page cannot be picked up by accident.
+//
+// WHAT THE SCORE IS, AND IS NOT. Alberta publishes an AAIP Worker Expression of
+// Interest score. It is NOT a CRS cut-off, and Alberta says so on this very page:
+// "EOI score is not the only factor AAIP uses to select candidates for
+// invitation... To protect program integrity AAIP does not disclose recent draw
+// parameters." Anything rendering this value must label it as an EOI score.
+//
+// Two traps:
+//  1. "Less than 10" is a suppression token, exactly like BC's "<5". It is
+//     normalised to "<10" so every consumer already handling "<5" handles it too
+//     — same meaning, same convention, no new case to get wrong.
+//  2. One row wraps its score as <td><span>51</span></td>. Matching on the cell's
+//     inner HTML would skip it; stripTags_ reads the text, so it survives.
+function getAAIP_() {
+  var html = fetchText_(AB_URL);
+  var rows = bcFindTable_(html, ['draw date', 'minimum score of invited']);
+  if (!rows) return [];
+  var out = [];
+  for (var i = 0; i < rows.length && out.length < 40; i++) {
+    var c = rows[i];
+    if (c.length < 4) continue;
+    var dm = String(c[0] || '').match(/^([A-Z][a-z]+ \d{1,2},\s*20\d{2})$/);
+    if (!dm) continue;
+
+    var inv = String(c[3] || '').trim();
+    var lt = inv.match(/^less than\s+(\d+)$/i);
+    if (lt) inv = '<' + lt[1];
+    else if (!/^[\d,]+$/.test(inv)) continue;  // unrecognised — skip, never guess
+
+    out.push({
+      date: dm[1],
+      dateISO: toISO_(dm[1]),
+      invitations: inv.replace(/,/g, ''),
+      stream: String(c[1] || '').slice(0, 80),
+      score: /^\d+$/.test(String(c[2] || '').trim()) ? String(c[2]).trim() : '',
+      factors: ''
+    });
+  }
+  return dedupe_(out);
+}
+
+// Check the newest row against alberta.ca Table 10 BEFORE deploying.
+function testAB() {
+  var rows = getAAIP_();
+  Logger.log('ALBERTA ' + rows.length + ' draws, newest ' + (rows[0] ? rows[0].date : 'NONE'));
+  Logger.log(JSON.stringify(rows.slice(0, 8), null, 2));
+}
+
 // ============================== TESTING ==============================
 // Run these from the editor and read Executions/Logs BEFORE deploying.
 function testEndpoint() {
@@ -415,7 +536,12 @@ function testBC() {
   Logger.log(JSON.stringify(e.slice(0, 4), null, 2));
 }
 
-function testON() { Logger.log(JSON.stringify(getOINP_().slice(0, 6), null, 2)); }
+// 30 Apr 2026 must come back as TWO rows, 786 and 277 — not one row of 1063.
+function testON() {
+  var rows = getOINP_();
+  Logger.log('ONTARIO ' + rows.length + ' draws, newest ' + (rows[0] ? rows[0].date : 'NONE'));
+  Logger.log(JSON.stringify(rows.slice(0, 8), null, 2));
+}
 
 // ============================== MANITOBA ==============================
 // Manitoba publishes nothing like a table. /draws/ is a WordPress archive of
