@@ -23,6 +23,8 @@ function touched(data, f) {
 /** Per intake section: done (all required answered), partial, or todo. */
 export function intakeStatus(app, schema = getSchema(app.type)) {
   return schema.steps.map((s) => {
+    // A step with nothing to ask for this applicant (e.g. "Applicant under 18" for an adult).
+    if (!s.fields.some((f) => fieldShown(f, app.data))) return { id: s.id, title: s.title, state: 'done', left: 0, text: 'Not needed' };
     const req = s.fields.filter((f) => isRequired(f, app.data));
     const left = req.filter((f) => !filled(app.data, f)).length;
     const any = s.fields.some((f) => fieldShown(f, app.data) && touched(app.data, f));

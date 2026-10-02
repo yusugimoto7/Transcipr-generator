@@ -11,7 +11,7 @@ export function buildChecklist(data = {}, type = 'study-permit') {
   const out = [];
   const seen = new Set();
   for (const item of getAppType(type).checklist) {
-    if (item.when && !item.when(data)) continue;
+    if (item.when && !item.when(data, type)) continue;
     const id = `${item.code}|${item.label}`;
     if (seen.has(id)) continue;
     seen.add(id);

@@ -187,10 +187,33 @@ signatures and dates, barcodes and the forms' own validation stamps.
 
 - **Employment gaps** in a client's own 10-year history, e.g. a visitor's time in Canada since arriving, or months between graduation and a first job. The team adds what the person did.
 - **Super visa — "funds available":** the son pays for everything; the team decides what to state.
-- **Study permit for a worker's child — IMM 5646 custodian:** the child lives with the parents and has no custodian. See the open question below.
 
-### Open question for the firm
+### IMM 5646 — the firm's answer
 
-IMM 5646 (custodianship declaration) is in the forms list of the *child of a
-worker* type, whose parent is in Canada, but not of the *minor studying alone
-with a custodian* type. That looks reversed. It was left as the firm set it.
+The firm's rule: IMM 5646 goes in **every file where the applicant is under
+18 and applies alone or with only one parent**. What changed:
+
+- **Which files get it:** the form, a "137 – Custodianship declaration
+  (IMM 5646)" checklist item and a Custody and Parental Consent final file
+  appear when the applicant is under 18 (by date of birth) and the intake
+  does not say "Accompanied by both parents". This covers all five child
+  types, and also the study and visit types whose applicant is usually an
+  adult: study permit (outside and inside), visitor visa (outside and
+  inside) and visitor record. On a file with both parents, or an adult, the
+  form, the checklist item and the final file are not added.
+- **Intake:** the custodian questions show for "with one parent" as well as
+  "without a parent". The types whose applicant is usually an adult have a
+  new step, "Applicant under 18", right after Family. It asks only when the
+  date of birth makes the applicant under 18, and shows "Not needed" for an
+  adult.
+- **The form, with one parent:** unless the intake says otherwise, the child
+  lives with that parent: "With another person" is ticked, the parent's name
+  is entered, and the parent's address in Canada is the student's address.
+
+Rerun:
+
+| Client | Case | Result |
+|---|---|---|
+| Sam Sadeghi (worker's child) | Now with one parent: his mother works in Calgary, his father stays in Iran, and a family friend (PR) is the custodian | IMM 5646: custodian, PR, "With another person: Mina Sadeghi (mother)", the mother's Calgary address — all passed |
+| Nima Ahmadi (new, 16, main study permit type) | Alone at a Vancouver high school, living with his aunt (citizen) as custodian | IMM 5646 on an adult-type file: custodian, citizen, with the custodian, school, address — all passed |
+| Other child clients | All "Accompanied by both parents" | No IMM 5646, as the rule says |

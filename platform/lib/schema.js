@@ -10,6 +10,7 @@
  */
 
 import { getAppType } from './appTypes';
+import { isMinor, ONE_PARENT, NO_PARENT } from './minor';
 
 // IRCC's field-of-study list (IMM 1294 / 5709, "FieldOfStudyList").
 export const FIELDS_OF_STUDY = [
@@ -419,6 +420,46 @@ export const STUDY_PERMIT_SCHEMA = {
 /* ------------------------------------------------------------------------ */
 
 const STATUS_OPTIONS = ['Student (study permit)', 'Worker (work permit)', 'Visitor', 'Permanent resident', 'Citizen', 'No status / other'];
+
+// The custodian questions (IMM 5646): a child travelling alone or with one parent.
+const CUSTODIAN = { any: [{ field: 'custodianRequired', equals: true }, { field: 'minorArrangement', in: [ONE_PARENT, NO_PARENT] }] };
+const CUSTODIAN_FIELDS = [
+  { id: 'custodianGivenName', label: "Custodian's given name(s)", type: 'text', english: true, requiredIf: CUSTODIAN, showIf: CUSTODIAN, note: 'IMM 5646 (custodianship declaration): a Canadian citizen or permanent resident in Canada, needed when the child does not travel with both parents.' },
+  { id: 'custodianFamilyName', label: "Custodian's family name", type: 'text', english: true, requiredIf: CUSTODIAN, showIf: CUSTODIAN },
+  { id: 'custodianDob', label: "Custodian's date of birth", type: 'date', requiredIf: CUSTODIAN, showIf: CUSTODIAN },
+  { id: 'custodianStatus', label: "Custodian's status in Canada", type: 'select', options: ['Canadian citizen', 'Permanent resident'], requiredIf: CUSTODIAN, showIf: CUSTODIAN },
+  { id: 'custodianRelationship', label: 'Custodian is the child’s…', type: 'text', placeholder: 'aunt, family friend…', showIf: CUSTODIAN },
+  { id: 'custodianAddress', label: "Custodian's home address in Canada", type: 'text', english: true, requiredIf: CUSTODIAN, showIf: CUSTODIAN },
+  { id: 'custodianPhone', label: "Custodian's telephone", type: 'tel', requiredIf: CUSTODIAN, showIf: CUSTODIAN },
+  { id: 'childResides', label: 'In Canada the child will live', type: 'select', options: ['With the custodian', 'In the school dormitory', 'With another person'], showIf: CUSTODIAN },
+  { id: 'childResidesWith', label: 'With whom (name and relationship)', type: 'text', showIf: { field: 'childResides', equals: 'With another person' } },
+];
+const MINOR = { minor: true };
+const ARRANGEMENT = {
+  id: 'minorArrangement',
+  label: 'How the child travels and lives in Canada (IRCC portal question)',
+  type: 'select',
+  options: ['Accompanied by both parents', ONE_PARENT, NO_PARENT],
+  required: true,
+  note: 'Decides which custody and consent documents the portal asks for. Not with both parents: IMM 5646 goes in the file.',
+};
+/**
+ * For types whose applicant is usually an adult: the same questions, asked
+ * only when the date of birth makes the applicant under 18.
+ */
+const CUSTODIAN_STEP = {
+  id: 'custodian',
+  title: 'Applicant under 18',
+  help: 'Only for an applicant under 18: who they travel with, and the custodian in Canada for IMM 5646. Nothing to answer for an adult.',
+  fields: [
+    { ...ARRANGEMENT, required: false, requiredIf: MINOR, showIf: MINOR },
+    { id: 'accompanyingParent', label: 'Parent the child will live with in Canada', type: 'text', requiredIf: { all: [MINOR, { field: 'minorArrangement', equals: ONE_PARENT }] }, showIf: { all: [MINOR, { field: 'minorArrangement', equals: ONE_PARENT }] } },
+    { id: 'parentAddress', label: "That parent's address in Canada", type: 'text', english: true, showIf: { all: [MINOR, { field: 'minorArrangement', equals: ONE_PARENT }] } },
+    { id: 'otherParentName', label: 'Other parent full name', type: 'text', showIf: { all: [MINOR, { field: 'minorArrangement', equals: ONE_PARENT }] } },
+    { id: 'otherParentConsent', label: 'Other parent consents (consent letter available)?', type: 'bool', showIf: { all: [MINOR, { field: 'minorArrangement', equals: ONE_PARENT }] } },
+    ...CUSTODIAN_FIELDS.map((f) => ({ ...f, showIf: { all: [MINOR, f.showIf] }, ...(f.requiredIf ? { requiredIf: { all: [MINOR, f.requiredIf] } } : {}) })),
+  ],
+};
 
 const EXTRA_STEPS = [
   // Funds and ties for everything that is not a study permit: the study
@@ -883,33 +924,12 @@ const EXTRA_STEPS = [
     id: 'minor',
     title: 'Minor applicant details',
     fields: [
-      {
-        id: 'minorArrangement',
-        label: 'How the child travels and lives in Canada (IRCC portal question)',
-        type: 'select',
-        options: [
-          'Accompanied by both parents',
-          'With one parent — custody documents and the other parent\'s consent',
-          'Without a parent — custodian in Canada (IMM 5646)',
-        ],
-        required: true,
-        note: 'Decides which custody and consent documents the portal asks for.',
-      },
+      ARRANGEMENT,
       { id: 'accompanyingParent', label: 'Parent the child will live with in Canada', type: 'text', required: true },
       { id: 'parentStatusCanada', label: "That parent's status in Canada", type: 'select', options: STATUS_OPTIONS, required: true },
       { id: 'otherParentName', label: 'Other parent full name', type: 'text' },
       { id: 'otherParentConsent', label: 'Other parent consents (consent letter available)?', type: 'bool' },
-      { id: 'custodianRequired', label: 'Custodian required (child not with a parent)?', type: 'bool' },
-      { id: 'custodianName', label: 'Custodian name & address', type: 'text' },
-      { id: 'custodianGivenName', label: "Custodian's given name(s)", type: 'text', english: true, requiredIf: { field: 'custodianRequired', equals: true }, showIf: { field: 'custodianRequired', equals: true }, note: 'IMM 5646 (custodianship declaration).' },
-      { id: 'custodianFamilyName', label: "Custodian's family name", type: 'text', english: true, requiredIf: { field: 'custodianRequired', equals: true }, showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'custodianDob', label: "Custodian's date of birth", type: 'date', requiredIf: { field: 'custodianRequired', equals: true }, showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'custodianStatus', label: "Custodian's status in Canada", type: 'select', options: ['Canadian citizen', 'Permanent resident'], requiredIf: { field: 'custodianRequired', equals: true }, showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'custodianRelationship', label: 'Custodian is the child’s…', type: 'text', placeholder: 'aunt, family friend…', showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'custodianAddress', label: "Custodian's home address in Canada", type: 'text', english: true, requiredIf: { field: 'custodianRequired', equals: true }, showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'custodianPhone', label: "Custodian's telephone", type: 'tel', requiredIf: { field: 'custodianRequired', equals: true }, showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'childResides', label: 'In Canada the child will live', type: 'select', options: ['With the custodian', 'In the school dormitory', 'With another person'], showIf: { field: 'custodianRequired', equals: true } },
-      { id: 'childResidesWith', label: 'With whom (name and relationship)', type: 'text', showIf: { field: 'childResides', equals: 'With another person' } },
+      ...CUSTODIAN_FIELDS,
       { id: 'parentPermitType', label: "That parent's permit", type: 'select', options: ['Work permit', 'Study permit', 'Visitor record', 'Permanent resident', 'Citizen'] },
       { id: 'parentPermitExpiry', label: "That parent's permit expiry", type: 'date' },
       { id: 'parentEmployerOrSchool', label: "That parent's employer or school in Canada", type: 'text' },
@@ -993,7 +1013,7 @@ const EXTRA_STEPS = [
 ];
 
 const STEP_BLOCKS = Object.fromEntries(
-  [...STUDY_PERMIT_SCHEMA.steps, ...EXTRA_STEPS].map((s) => [s.id, s])
+  [...STUDY_PERMIT_SCHEMA.steps, ...EXTRA_STEPS, CUSTODIAN_STEP].map((s) => [s.id, s])
 );
 
 /** IRCC application forms that ask languages, background and history questions. */
@@ -1018,6 +1038,12 @@ export function stepIds(t) {
   if (ids.includes('history')) {
     insert('employment', ['history']);
     insert('immigrationHistory', ['history']);
+  }
+  // IMM 5646 on a type whose applicant is usually an adult: ask about an applicant under 18 after the family.
+  if (forms.has('imm5646') && !ids.includes('minor')) {
+    const at = ids.indexOf('family');
+    if (at >= 0) ids.splice(at + 1, 0, 'custodian');
+    else ids.push('custodian');
   }
   if (forms.has('imm1295')) insert('workDetails', ['education', 'history', 'fundsStay']);
   if (forms.has('imm5710')) insert('workDetailsInside', ['education', 'history', 'fundsStay', 'tiesReturn']);
@@ -1045,11 +1071,12 @@ export function fieldShown(f, data = {}) {
   return cond(f.showIf, data);
 }
 
-/** A condition on the answers: { field, equals } | { field, in } | { field, notIn } | { any } | { all }. */
+/** A condition on the answers: { field, equals } | { field, in } | { field, notIn } | { minor } | { any } | { all }. */
 export function cond(c, data = {}) {
   if (!c) return true;
   if (c.any) return c.any.some((x) => cond(x, data));
   if (c.all) return c.all.every((x) => cond(x, data));
+  if (c.minor !== undefined) return isMinor(data) === c.minor;
   const v = data?.[c.field];
   if (c.in) return c.in.includes(v);
   if (c.notIn) return !c.notIn.includes(v);

@@ -4,6 +4,7 @@ import { getApplication, updateApplication } from './store';
 import { readUpload, generatedTarget, docFile, genFile } from './uploads';
 import { queueSync } from './driveStore';
 import { getAppType, formsFor, packagesFor, lettersFor } from './appTypes';
+import { needsCustodianship } from './minor';
 import { produceDocs, refreshNextSteps } from './generateDocs';
 import { buildPackageFile, ensureGenerated } from './compileJob';
 import { letterSpec } from './generators/letters';
@@ -228,7 +229,11 @@ export function setSlots(app) {
   let base = learned ? learned.slots.map((s) => ({ ...s })) : (LISTS[t.key] || DEFAULT_LIST).map((slot) => ({ slot, fixed: ALWAYS.has(slot) }));
   base = base.filter((s) => s.fixed || !setup.removed.includes(s.slot));
   const have = new Set(base.map((s) => s.slot));
+  // An applicant under 18 without both parents: the custody file (IMM 5646 and consent) on any type.
+  const custody = needsCustodianship(app.data, t.key) && !['custody', 'consent', 'custody-consent'].some((k) => have.has(k) || setup.removed.includes(k));
+  if (custody) have.add('custody-consent');
   const extra = [
+    ...(custody ? [{ slot: 'custody-consent', fixed: false }] : []),
     ...setup.added.filter((k) => SLOT[k] && !have.has(k)).map((slot) => ({ slot, fixed: false, added: true })),
     ...setup.custom.map((c) => ({ slot: `custom:${c.id}`, fixed: false, added: true, custom: c })),
   ];

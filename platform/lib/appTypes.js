@@ -21,10 +21,14 @@
  * Pure data (no server imports) so client components can read it.
  */
 
+import { needsCustodianship } from './minor';
+
 const married = (d) => /married|common/i.test(String(d.maritalStatus || ''));
 const notFemale = (d) => !String(d.sex || '').toLowerCase().startsWith('f');
 
 const I = (code, key, label, o = {}) => ({ code: String(code), key, label, ...o });
+// IMM 5646, for an applicant under 18 travelling alone or with one parent.
+const CUSTODY = I(137, 'custody-doc', 'Custodianship declaration (IMM 5646) — signed and notarized', { party: 'principal', when: needsCustodianship, hint: 'The firm pre-fills it. The custodian in Canada signs page 1 and both parents sign page 2, each in front of a notary.' });
 
 // ---- items shared (by meaning) across the team's checklists ----------------
 const FORM100 = I(100, 'internal', 'Form 100 — eligibility confirmation, signed and dated', { hint: 'Read it first, sign by hand, date it and send it with the documents.' });
@@ -468,7 +472,7 @@ const LETTER = {
 // are filled by the firm from forms 124 and 128.)
 const F = {
   imm5713: { key: 'imm5713', label: 'IMM 5713 — Use of a Family Member Representative' },
-  imm5646: { key: 'imm5646', label: 'IMM 5646 — Custodianship Declaration' },
+  imm5646: { key: 'imm5646', label: 'IMM 5646 — Custodianship Declaration', when: needsCustodianship },
   imm1294: { key: 'imm1294', label: 'IMM 1294 — Study Permit (outside Canada)' },
   imm1295: { key: 'imm1295', label: 'IMM 1295 — Work Permit (outside Canada)' },
   imm5257: { key: 'imm5257', label: 'IMM 5257 — Temporary Resident Visa' },
@@ -501,7 +505,7 @@ export const APP_TYPES = {
     key: 'study-permit', service: '100-301', title: 'Study Permit — Main Applicant', group: 'Study — outside Canada', where: 'outside',
     description: 'The student, applying from abroad with a Letter of Acceptance (IMM 1294).',
     steps: ['personal', 'passport', 'contact', 'family', 'study', 'finances', 'education', 'language', 'history', 'ties'],
-    forms: [F.imm1294, F.imm5257b, F.imm5645, F.imm5476],
+    forms: [F.imm1294, F.imm5257b, F.imm5645, F.imm5476, F.imm5646],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(107, 'loa', 'Letter of Acceptance (final LOA)', { hint: 'A Pre-Offer Letter is accepted while the final LOA is pending.' }),
       I('107-1', 'pal', 'Provincial / Territorial Attestation Letter (PAL / TAL)'),
@@ -512,7 +516,7 @@ export const APP_TYPES = {
       FLIGHT_FIRM, HOTEL_FIRM, SPONSOR, PROFILE,
       I(125, 'co-op-letter', 'Co-op letter', { cond: 'if the program has a co-op term' }),
       I(126, 'research-proposal', 'Research proposal', { cond: "PhD, postdoc and research master's only", hint: 'Topic, objectives, methods, relevance to your career, Canadian supervisor (name, title, university, email), previous supervisor, related papers.' }),
-      CV, BACKGROUND, MILITARY, PREVIOUS, REP],
+      CV, BACKGROUND, MILITARY, PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoStudy, PKG.financialProof],
     letters: [LETTER.sop, LETTER.finCover, LETTER.finSummary, LETTER.palExemption, LETTER.explanation, LETTER.submission],
     stages: STAGES_STUDY,
@@ -542,8 +546,8 @@ export const APP_TYPES = {
     key: 'trv-child-of-student', service: '100-303', title: 'Visitor Visa — Child of a Student', group: 'Visit — outside Canada', where: 'outside',
     description: "A child accompanying a student on a visitor visa (IMM 5257).",
     steps: ['personal', 'passport', 'contact', 'family', 'minor', 'visit', 'history'],
-    forms: [F.imm5257, F.imm5476, F.imm5713],
-    checklist: [FORM100, BIRTH, NID_OPT, passport(1, true), PHOTO, SCHOOL_ENROL, RESIDENCE_ABROAD, FLIGHT_FIRM, HOTEL_FIRM, BACKGROUND, PREVIOUS, REP, FAMILY_REP],
+    forms: [F.imm5257, F.imm5476, F.imm5713, F.imm5646],
+    checklist: [FORM100, BIRTH, NID_OPT, passport(1, true), PHOTO, SCHOOL_ENROL, RESIDENCE_ABROAD, FLIGHT_FIRM, HOTEL_FIRM, BACKGROUND, PREVIOUS, REP, FAMILY_REP, CUSTODY],
     packages: [PKG.clientInfoChildVisit],
     letters: [LETTER.pot, LETTER.submission],
     stages: STAGES_DEFAULT,
@@ -579,8 +583,8 @@ export const APP_TYPES = {
     key: 'study-permit-minor', service: '100-305', title: 'Study Permit — Child of a Student', group: 'Study — outside Canada', where: 'outside',
     description: 'A school-age child accompanying a student, applying from abroad (IMM 1294).',
     steps: ['personal', 'passport', 'contact', 'family', 'minor', 'study', 'finances', 'education', 'history'],
-    forms: [F.imm1294, F.imm5645, F.imm5476, F.imm5713],
-    checklist: [FORM100, BIRTH, NID_OPT, passport(2, true), PHOTO, SCHOOL_ENROL, REPORT_CARD, RESIDENCE_ABROAD, FLIGHT_FIRM, HOTEL_FIRM, BACKGROUND, PREVIOUS, REP, FAMILY_REP],
+    forms: [F.imm1294, F.imm5645, F.imm5476, F.imm5713, F.imm5646],
+    checklist: [FORM100, BIRTH, NID_OPT, passport(2, true), PHOTO, SCHOOL_ENROL, REPORT_CARD, RESIDENCE_ABROAD, FLIGHT_FIRM, HOTEL_FIRM, BACKGROUND, PREVIOUS, REP, FAMILY_REP, CUSTODY],
     packages: [PKG.clientInfoMinor, PKG.financialProof],
     letters: [LETTER.studyPlanMinor, LETTER.finCover, LETTER.finSummary, LETTER.palExemption, LETTER.submission],
     stages: STAGES_STUDY,
@@ -600,7 +604,7 @@ export const APP_TYPES = {
       I(138, 'consent-letter', 'Consent to travel — signed by the parent who is not accompanying the child'),
       P_PERMIT('Parent'), P_ID('Parent'), P_WORK('Parent'), P_FUNDS('Parent'),
       I(136, 'invitation-letter', 'Invitation letter from the parent in Canada', { party: 'principal', hint: 'From the firm sample. Notarization not required.' }),
-      I(137, 'custody-doc', 'Custodianship declaration (IMM 5646)', { party: 'principal', hint: 'Completed and signed by the parent in Canada — for a child travelling with one parent, relatives, or alone. Notarization recommended.' })],
+      CUSTODY],
     packages: [PKG.clientInfoMinor, PKG.parentDocs, PKG.financialProof],
     letters: [LETTER.studyPlanMinor, LETTER.parentInvitation, LETTER.finCover, LETTER.finSummary, LETTER.palExemption, LETTER.submission],
     stages: STAGES_STUDY,
@@ -609,13 +613,13 @@ export const APP_TYPES = {
     key: 'trv-outside', service: '100-307', title: 'Visitor Visa (TRV)', group: 'Visit — outside Canada', where: 'outside',
     description: 'A visit invited by a relative or friend in Canada (IMM 5257).',
     steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'education', 'history', 'fundsStay', 'tiesReturn'],
-    forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476],
+    forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476, F.imm5646],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB,
       I(107, 'host-docs', 'Invitation letter and the inviter\'s documents', { party: 'principal', hint: "Inviter's passport, Canadian status (PR card / study or work permit), birth certificate, employment letter, 6 months of bank statements, pay slips, property documents, NOA / T4 / T1, and anything explaining the reason for the trip." }),
       I(108, 'relationship-proof', 'Proof of relationship to the inviter', { tr: true, hint: 'Birth certificates showing the relationship, plus 4–5 family or friendship photos.' }),
       LANGUAGE_OPT, POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, MARRIAGE, RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM,
       I(122, 'accommodation', "Accommodation — the host's house deed or lease in Canada", { party: 'principal' }),
-      SPONSOR, PROFILE, BACKGROUND, MILITARY, PREVIOUS, REP],
+      SPONSOR, PROFILE, BACKGROUND, MILITARY, PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoVisit, PKG.inviterDocs, PKG.financialProof],
     letters: [LETTER.pot, LETTER.invitation, LETTER.finCover, LETTER.finSummary, LETTER.explanation, LETTER.submission],
     stages: STAGES_DEFAULT,
@@ -638,13 +642,13 @@ export const APP_TYPES = {
     key: 'trv-child', service: '100-309', title: 'Visitor Visa — Accompanying Child', group: 'Visit — outside Canada', where: 'outside',
     description: 'A dependent child travelling with a parent who is the principal visitor (IMM 5257).',
     steps: ['personal', 'passport', 'contact', 'family', 'minor', 'visit', 'host', 'history'],
-    forms: [F.imm5257, F.imm5476, F.imm5713],
+    forms: [F.imm5257, F.imm5476, F.imm5713, F.imm5646],
     checklist: [FORM100, BIRTH, NID_OPT, passport(2, true), PHOTO, SCHOOL_ENROL,
       I(106, 'transcripts', 'Latest report card with transcripts', { tr: true, cond: 'if applicable' }),
       I(113, 'employment-letter', 'Employment certificate and leave letter', { cond: 'if applicable' }),
       COURSES_OPT, RESIDENCE_ABROAD, FLIGHT_FIRM, HOTEL_FIRM, BACKGROUND,
       I(130, 'military', 'Military service card', { tr: true, cond: 'if applicable', when: notFemale }),
-      PREVIOUS, REP, FAMILY_REP],
+      PREVIOUS, REP, FAMILY_REP, CUSTODY],
     packages: [PKG.clientInfoChildVisit],
     letters: [LETTER.pot, LETTER.submission],
     stages: STAGES_DEFAULT,
@@ -781,7 +785,7 @@ export const APP_TYPES = {
     key: 'trv-inside', service: '100-403', title: 'Visitor Visa (TRV) — for Work / Study Permit Holders', group: 'Visit — inside Canada', where: 'inside',
     description: 'A permit holder in Canada who needs a visa counterfoil to re-enter after travelling (IMM 5257). Decided by a visa office abroad; does NOT change status in Canada.',
     steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'education', 'history', 'fundsStay', 'tiesReturn'],
-    forms: [F.imm5257, F.imm5645, F.imm5476],
+    forms: [F.imm5257, F.imm5645, F.imm5476, F.imm5646],
     checklist: [FORM100, BIRTH,
       I(103, 'passport', 'Passport — every page with a stamp or visa, plus the Canadian visa label', { hint: 'A new passport is needed if it expires in less than 2 years.' }),
       PHOTO,
@@ -789,7 +793,7 @@ export const APP_TYPES = {
       I(108, 'enrolment-letter', 'Enrolment letter and up-to-date transcripts', { cond: 'if you are a student', hint: 'Name, student number, program, start and end dates, and confirmation of current-term registration.' }),
       I(109, 'employment-letter', 'Employment letter (+ 3 recent pay slips if available)', { cond: 'if you are employed', hint: 'Position, start date, full- or part-time, weekly hours — on letterhead and signed.' }),
       I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: married }),
-      PROFILE, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP],
+      PROFILE, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoTrvInside],
     letters: [LETTER.pot, LETTER.explanation, LETTER.submission],
     stages: STAGES_DEFAULT,
@@ -798,12 +802,12 @@ export const APP_TYPES = {
     key: 'visitor-record', service: '100-404', title: 'Visitor Record — extend stay as a visitor', group: 'Visit — inside Canada', where: 'inside',
     description: 'Extend a stay or change conditions as a visitor while in Canada — often a family member of a permit holder (IMM 5708). Issues a status document, not a visa.',
     steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visitorRecord', 'education', 'history', 'fundsStay', 'tiesReturn'],
-    forms: [F.imm5708, F.imm5476],
+    forms: [F.imm5708, F.imm5476, F.imm5646],
     checklist: [FORM100, BIRTH, passport(1, true), PHOTO,
       I(105, 'accommodation', 'Residence details — lease, hotel, or the address and contact details of relatives/friends'),
       I(106, 'spouse-status', "Parent's permit in Canada (IRCC approval letter)", { party: 'principal', cond: 'if applicable' }),
       I(112, 'proof-of-funds', 'Proof of funds — bank balance + 6-month statement, pay slips, tax; support letter if sponsored'),
-      PROFILE, BACKGROUND, LAST_ENTRY(129), PREVIOUS, REP],
+      PROFILE, BACKGROUND, LAST_ENTRY(129), PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoVisitorRecord],
     letters: [LETTER.potVisitorRecord, LETTER.explanation, LETTER.submission],
     stages: STAGES_DEFAULT,
@@ -812,13 +816,13 @@ export const APP_TYPES = {
     key: 'study-permit-inside-child', service: '100-405', title: "Study Permit — Child, inside Canada (parent's permit)", group: 'Study — inside Canada', where: 'inside',
     description: "A school-age child in Canada studying on the strength of a parent's work permit — with or without an LOA (IMM 5709).",
     steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'minor', 'study', 'finances', 'education', 'history'],
-    forms: [F.imm5709, F.imm5476],
+    forms: [F.imm5709, F.imm5476, F.imm5646],
     checklist: [FORM100, BIRTH, NID_OPT, passport(1, true), PHOTO, SCHOOL_ENROL, REPORT_CARD,
       I(107, 'loa', 'Letter of Acceptance from the school', { cond: 'if available' }),
       SOP_Q, COURSES_OPT, RESIDENCE_ABROAD,
       I(122, 'accommodation', "Parent's residence in Canada, or lease"),
       SPONSOR, PROFILE, BACKGROUND, PREVIOUS, REP,
-      P_PERMIT('Parent'), P_ID('Parent'), P_WORK('Parent'), P_FUNDS('Parent')],
+      P_PERMIT('Parent'), P_ID('Parent'), P_WORK('Parent'), P_FUNDS('Parent'), CUSTODY],
     packages: [PKG.clientInfoMinor, PKG.parentDocs],
     letters: [LETTER.studyPlanMinor, LETTER.explanation, LETTER.submission],
     stages: STAGES_STUDY,
@@ -827,7 +831,7 @@ export const APP_TYPES = {
     key: 'study-permit-inside', service: '100-406', title: 'Study Permit — inside Canada (own LOA)', group: 'Study — inside Canada', where: 'inside',
     description: 'Someone already in Canada applying as a student with their own admission — or extending, changing school or level, or restoring status (IMM 5709).',
     steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'studyInside', 'study', 'finances', 'education', 'language', 'history', 'ties'],
-    forms: [F.imm5709, F.imm5476],
+    forms: [F.imm5709, F.imm5476, F.imm5646],
     checklist: [FORM100, BIRTH, passport(2), PHOTO,
       I(106, 'status-in-canada', 'Your study permit / work permit / visitor record (IRCC approval letter)', { cond: 'if applicable' }),
       I(107, 'loa', 'Letter of Acceptance (final; Pre-Offer accepted while pending)'),
@@ -840,7 +844,7 @@ export const APP_TYPES = {
       I(122, 'accommodation', 'Residence details — lease or deed, or relatives/friends with contact details'),
       SPONSOR, PROFILE,
       I(125, 'co-op-letter', 'Co-op letter', { cond: 'if the program has a co-op term' }),
-      CV, BACKGROUND, MILITARY, PREVIOUS, REP],
+      CV, BACKGROUND, MILITARY, PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoStudyInside, PKG.financialProof],
     letters: [LETTER.sopStudyInside, LETTER.finCover, LETTER.finSummary, LETTER.explanation, LETTER.submission],
     stages: STAGES_STUDY,
@@ -898,7 +902,8 @@ export function lettersFor(app) {
 export function formsFor(app) {
   const t = getAppType(app?.type);
   const rep = (app?.representation || 'self') === 'firm';
-  return t.forms.filter((f) => !f.rep || rep);
+  const d = app?.data || {};
+  return t.forms.filter((f) => (!f.rep || rep) && (!f.when || f.when(d, t.key)));
 }
 
 /** The narrative letter this type builds with the guided questions tab. */

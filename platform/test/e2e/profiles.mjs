@@ -283,12 +283,24 @@ export const PROFILES = {
     father: 'Reza', fatherFa: 'رضا', mother: 'Mina Sadeghi', motherFa: 'مینا صادقی', fatherJob: 'Mechanical Engineer', parentsAddress: '45 Demo Crescent SW, Calgary, AB T2P 0B1, Canada',
     noJob: 'Student (primary school)', noJobFrom: '2022-09', trips: false,
     team: {
-      minorArrangement: 'Accompanied by both parents', accompanyingParent: 'Mina Sadeghi (mother)', parentStatusCanada: 'Worker (work permit)', parentPermitType: 'Work permit', parentPermitExpiry: '2028-03-31',
+      // With one parent (his mother works in Calgary; his father stays in Iran): IMM 5646 with a custodian.
+      minorArrangement: "With one parent — custody documents and the other parent's consent", accompanyingParent: 'Mina Sadeghi (mother)', parentStatusCanada: 'Worker (work permit)', parentPermitType: 'Work permit', parentPermitExpiry: '2028-03-31',
+      otherParentName: 'Reza Sadeghi', otherParentConsent: true,
+      custodianGivenName: 'Bahram', custodianFamilyName: 'Demo', custodianDob: '1975-09-09', custodianStatus: 'Permanent resident', custodianRelationship: 'Family friend', custodianAddress: '88 Demo Road NW, Calgary, AB T3A 0B2', custodianPhone: '+1 403 555 0177',
       parentEmployerOrSchool: 'Demo Industries Ltd., Calgary', parentIncome: 98000, parentAddress: '45 Demo Crescent SW, Calgary, AB T2P 0B1', travelsWith: 'The other parent', gradeInCanada: 'Grade 5', schoolBoard: 'Calgary Demo School Board',
       schoolName: 'Bowness Demo Elementary School', dliNumber: 'O000000000003', programName: 'Grade 5 — elementary', levelOfStudy: 'Secondary / high school', schoolCity: 'Calgary', schoolProvince: 'Alberta',
       schoolAddress: '10 Demo Way NW, Calgary, AB T3B 0A1', programStart: '2027-02-01', programEnd: '2028-06-30', tuitionCost: 0, roomBoardCost: 0, entryDate: '2027-01-25',
       totalFunds: 25000, fundingSource: 'Parents / family', sponsorName: 'Reza Sadeghi (father)',
       highestEducation: 'Primary / middle school', lastInstitution: 'Hafez Demo Primary School', lastEduCity: 'Shiraz', lastEduCountry: 'Iran',
+    },
+    expect: {
+      imm5646: {
+        'Page1/subCustodian/FamilyName': 'Demo',
+        'Page1/subCustodian/subStatus/statusGroup': '2',
+        'Page1/subStudentInfo/studentAddress': '45 Demo Crescent SW.*',
+        'Page2/subDeclaration/childResideGroup': '3',
+        'Page2/subDeclaration/nameOther': 'Mina Sadeghi \\(mother\\)',
+      },
     },
   }),
   // --- Visit — outside Canada ------------------------------------------------
@@ -528,6 +540,40 @@ export const PROFILES = {
         'expensesPaid/expensesPaidBy': 'Parents',
         'Languages/languages/ableToCommunicate/ableToCommunicate': 'Both',
         'PageWrapper/BackgroundInfo2/VisaChoice2': 'Y|Yes',
+      },
+    },
+  },
+
+  // A third study permit: a 16-year-old on the main study permit type, coming
+  // alone to a high school and living with a custodian (IMM 5646 on an
+  // adult-type file).
+  'study-permit#3': {
+    ...person({
+      number: 'S27124', given: 'Nima', family: 'Ahmadi', native: 'نیما احمدی', sex: 'Male', dob: '2010-03-15', city: 'Tehran', homeCity: 'Tehran', email: 'ahmadi.family@example.test', minor: true,
+      father: 'Hossein', fatherFa: 'حسین', mother: 'Maryam Karimi', motherFa: 'مریم کریمی', fatherJob: 'Civil Engineer', parentsAddress: '12 Demo Alley, Tehran, Iran',
+      noJob: 'Student (school)', noJobFrom: '2016-09', trips: false, english: true,
+      team: {
+        minorArrangement: 'Without a parent — custodian in Canada (IMM 5646)',
+        custodianGivenName: 'Shahla', custodianFamilyName: 'Demo', custodianDob: '1978-02-14', custodianStatus: 'Canadian citizen', custodianRelationship: 'Aunt', custodianAddress: '501 Demo Street, Vancouver, BC V5K 0A1', custodianPhone: '+1 604 555 0142',
+        childResides: 'With the custodian',
+        schoolName: 'Pacific Demo Secondary School', dliNumber: 'O000000000007', programName: 'Grade 11 — secondary', levelOfStudy: 'Secondary / high school',
+        schoolCity: 'Vancouver', schoolProvince: 'British Columbia', schoolAddress: '300 Demo Avenue, Vancouver, BC V5K 0B2', programStart: '2027-09-03', programEnd: '2029-06-28',
+        tuitionCost: 19000, roomBoardCost: 0, otherCosts: 2000, entryDate: '2027-08-20',
+        totalFunds: 70000, tuitionPaid: 9500, fundingSource: 'Parents / family', sponsorName: 'Hossein Ahmadi (father)',
+        careerGoal: 'Engineering at university', whyProgram: 'Grades 11–12 in English before university.', whyCanada: 'His aunt lives in Vancouver and can be his custodian.',
+        highestEducation: 'Primary / middle school', lastInstitution: 'Alborz Demo High School', lastEduCity: 'Tehran', lastEduCountry: 'Iran',
+      },
+    }),
+    type: 'study-permit',
+    expect: {
+      imm5646: {
+        'Page1/subCustodian/FamilyName': 'Demo',
+        'Page1/subCustodian/GivenNames': 'Shahla',
+        'Page1/subCustodian/subStatus/statusGroup': '1',
+        'Page1/subStudentInfo/studentAddress': '501 Demo Street.*',
+        'Page1/subStudentInfo/schoolAddress': 'Pacific Demo Secondary School.*',
+        'Page2/subDeclaration/childResideGroup': '1',
+        'Page2/subDeclaration/nameCust': 'Shahla Demo',
       },
     },
   },

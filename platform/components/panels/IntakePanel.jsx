@@ -294,6 +294,9 @@ export default function IntakePanel({ app, schema, sections, onFieldChange, onFi
           </div>
 
           <div className="ic-body">
+            {!step.fields.some((f) => fieldShown(f, app.data)) && (
+              <p className="muted small" style={{ margin: '0 0 10px' }}>Nothing to answer here for this applicant.</p>
+            )}
             <div className="grid2">
               {step.fields.filter((f) => fieldShown(f, app.data)).map((f) => (
                 <div key={f.id} style={f.type === 'textarea' || f.type === 'rows' ? { gridColumn: '1 / -1' } : undefined}>

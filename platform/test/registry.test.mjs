@@ -5,7 +5,8 @@
 import fs from 'fs';
 import { loadLib } from './_load.mjs';
 
-const { APP_TYPE_LIST, codeMapFor, lettersFor, primaryLetter } = await loadLib('appTypes.js');
+const { APP_TYPE_LIST, codeMapFor, lettersFor, primaryLetter, formsFor } = await loadLib('appTypes.js');
+const { buildChecklist } = await loadLib('checklist.js');
 const { getSchema, stepIds } = await loadLib('schema.js');
 const { QUESTION_SETS } = await loadLib('sopQuestions.js');
 const { CATEGORY_KEYS } = await loadLib('generators/classify.js');
@@ -53,5 +54,28 @@ for (const t of APP_TYPE_LIST) {
   if (!QUESTION_SETS[primary.kind]) fail(`${t.key}: no guided question set for '${primary.kind}'`);
   if (t.service && !Object.keys(codeMapFor(t.key)).length) fail(`${t.key}: empty code map`);
 }
+// IMM 5646: every file of an applicant under 18 who does not travel with both parents.
+const ONE = "With one parent — custody documents and the other parent's consent";
+const NONE = 'Without a parent — custodian in Canada (IMM 5646)';
+const BOTH = 'Accompanied by both parents';
+const has5646 = (type, data) => formsFor({ type, representation: 'firm', data }).some((f) => f.key === 'imm5646');
+const CASES = [
+  ['study-permit', { dob: '1995-01-01' }, false],
+  ['study-permit', { dob: '2010-06-01', minorArrangement: NONE }, true],
+  ['trv-outside', { dob: '2012-06-01', minorArrangement: ONE }, true],
+  ['study-permit-minor', { dob: '2016-01-01', minorArrangement: BOTH }, false],
+  ['study-permit-minor', { dob: '2016-01-01', minorArrangement: ONE }, true],
+  ['trv-child', { dob: '2016-01-01', minorArrangement: NONE }, true],
+  ['study-permit-child-of-worker', { dob: '2016-01-01', minorArrangement: BOTH }, false],
+  ['study-permit-inside-child', { dob: '2016-01-01', minorArrangement: ONE }, true],
+  ['trv-child-of-student', { dob: '2016-01-01', minorArrangement: ONE }, true],
+];
+for (const [type, data, want] of CASES) {
+  if (has5646(type, data) !== want) fail(`${type} ${JSON.stringify(data)}: IMM 5646 ${want ? 'missing' : 'should not be in the file'}`);
+  if (buildChecklist(data, type).some((i) => i.key === 'custody-doc') !== want) fail(`${type} ${JSON.stringify(data)}: custodianship checklist item ${want ? 'missing' : 'should not be asked'}`);
+}
+const custodianStep = getSchema('study-permit').steps.find((s) => s.id === 'custodian');
+if (!custodianStep) fail('study-permit: no "Applicant under 18" step');
+
 console.log(bad ? `\n${bad} problem(s)` : `registry consistent: ${APP_TYPE_LIST.length} types`);
 process.exit(bad ? 1 : 0);

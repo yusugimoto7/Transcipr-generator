@@ -9,6 +9,8 @@
  * are left for the notary.
  */
 
+import { ONE_PARENT } from '../../minor';
+
 const P = 'IMM_5646';
 const SEX = { Female: '1', Male: '2', 'Another gender': '3' };
 const STATUS = { 'Canadian citizen': '1', 'Permanent resident': '2' };
@@ -29,8 +31,16 @@ export function imm5646FieldMap(d = {}) {
   const custodian = full(d.custodianGivenName, d.custodianFamilyName);
   const student = full(d.givenName, d.familyName);
   const school = [d.schoolName, d.schoolAddress].filter(Boolean).join(', ');
-  // Where the child lives: the dormitory, the custodian, or (no custodian) the parent in Canada.
-  const residence = d.childResides === 'In the school dormitory' ? d.schoolAddress : d.childResides === 'With another person' ? '' : d.custodianAddress || d.parentAddress;
+  // Travelling with one parent, the child lives with that parent unless the intake says otherwise.
+  const withParent = d.minorArrangement === ONE_PARENT;
+  const resides = d.childResides || (withParent ? 'With another person' : custodian ? 'With the custodian' : '');
+  const residesWith = d.childResidesWith || (withParent && !d.childResides ? d.accompanyingParent : '');
+  // Where the child lives: the dormitory, the custodian, or the parent in Canada.
+  const residence =
+    resides === 'In the school dormitory' ? d.schoolAddress
+    : resides === 'With the custodian' ? d.custodianAddress
+    : resides === 'With another person' ? (withParent ? d.parentAddress : '')
+    : d.custodianAddress || d.parentAddress;
   const map = [];
   for (const page of ['Page1', 'Page2']) {
     const b = `${P}/${page}`;
@@ -63,8 +73,8 @@ export function imm5646FieldMap(d = {}) {
   map.push(
     { som: `${P}/Page1/subDeclaration/nameCustodian`, const: custodian, field: 'custodianGivenName' },
     { som: `${P}/Page1/subDeclaration/nameStudent`, const: student },
-    { som: `${P}/Page2/subDeclaration/childResideGroup`, const: RESIDES[d.childResides] || (custodian ? '1' : ''), field: 'childResides' },
-    { som: `${P}/Page2/subDeclaration/nameOther`, from: 'childResidesWith', when: (x) => x.childResides === 'With another person', field: 'childResidesWith' },
+    { som: `${P}/Page2/subDeclaration/childResideGroup`, const: RESIDES[resides] || '', field: 'childResides' },
+    { som: `${P}/Page2/subDeclaration/nameOther`, const: resides === 'With another person' ? residesWith : '', field: 'childResidesWith' },
     { som: `${P}/Page2/subDeclaration/nameParent1`, const: full(fGiv, fFam) },
     { som: `${P}/Page2/subDeclaration/nameParent2`, const: full(mGiv, mFam) },
     { som: `${P}/Page2/subDeclaration/nameStudent`, const: student },
