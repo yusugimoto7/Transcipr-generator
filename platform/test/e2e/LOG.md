@@ -97,3 +97,45 @@ Checked and correct (no change needed):
 - **IMM 5645 for every type**, and **IMM 5476 for every type**.
 
 **To decide (left as the firm set it):** IMM 5646 (custodianship) is listed for the *child of a worker*, whose parent is in Canada, but not for the *minor studying alone with a custodian*.
+
+---
+
+## Loop 2 (all types, every loop 1 fix in place)
+
+Every type built its full set of final files. Problems found, and fixed:
+
+| Type | Problem | Fix |
+|---|---|---|
+| Employer-specific work permit (Omid Rahmani) | "142 - Proof you meet the job requirements" not recognised: only document codes 100–139 were read from file names | Codes 100–199 are read (the work permit checklists use 140–143) |
+| Study permit for a worker's child (Sam Sadeghi), minor study permit | **IMM 5646** (custodianship declaration) could not be pre-filled, and the intake had the custodian only as one line of text | New intake questions for the custodian: name, date of birth, citizen or PR, address, phone, relationship, and where the child will live. IMM 5646 both pages filled (student, school, both parents, custodian, ticks, declaration names) |
+| Child visitors | "Highest level of education — not answered" for a 12-year-old | A child under 18 answers "No" to post-secondary studies |
+| PGWP (Arash Mohammadi) | Province and city of work asked and flagged (a PGWP has no employer); his Canadian studies listed twice in the 10-year history | PGWP treated as an open permit; the same activity entered twice counts once |
+| Reconsideration | IMM 5744 firm address "501-3292, Production Way, …" | "501-3292 Production Way, Burnaby, BC V5A 4R4, Canada" |
+
+Confirmed in loop 2:
+- **Every loop 1 fix shows on the forms:** IMM 5713 for spouses and children, the adult/child switch, super visa and returning-student purposes, contacts in Canada, "paid by" on IMM 5708, and the PGWP education and photo.
+- **Previous applications** are described from the immigration-history rows.
+- **Shared family emails** are assigned by staff.
+- **Reconsideration** builds Request, IMM 5744, and Refusal Letter and GCMS Notes.
+
+## Study permit — loop 3 and final
+
+Loop 3 ran Arman again and added a second, deliberately different study
+permit client: **S27123 Sara Mohseni**. She is single, on a PAL-exempt
+master's, with parents paying. She spent two years as a student in Turkey,
+had a UK refusal, has an alias, and speaks English and French.
+
+| Problem | Fix |
+|---|---|
+| Her alias "Sarah Mohseni" went whole into the alias *family name* box | Split into family name "Mohseni" and given name "Sarah". A second alias is reported, since the form has room for one |
+
+Confirmed on her IMM 1294:
+- **Previous country of residence:** Turkey, as a student, with its dates and their hidden copies.
+- **Languages:** both English and French, most at ease in English.
+- **Study:** master's level, field "Biological/Biomed Sciences", parents paying.
+- **Refusal:** "Yes", with the UK refusal described.
+- **Activities:** her studies in Ankara.
+
+**Final study permit run: every step passed for both clients.**
+- **Arman:** IMM 1294 has 129 boxes filled and nothing to check.
+- **Sara:** two genuine employment gaps in her own history are flagged.
