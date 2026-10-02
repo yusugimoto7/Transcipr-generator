@@ -940,3 +940,15 @@ a.member.main { box-shadow: var(--shadow-sm), inset 0 3px 0 var(--brand); }
 .check-link { display: inline; background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-weight: 400; color: inherit; text-align: left; cursor: pointer; line-height: 1.5; }
 .check-link:hover:not(:disabled) { background: none; text-decoration: underline; }
 .check-link .check-go { color: var(--accent); font-weight: 600; white-space: nowrap; margin-left: 4px; }
+
+/* Client questionnaire: Save bar floating at the bottom of the page */
+.cq-main { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+.cq-savebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: 0 12px calc(12px + env(safe-area-inset-bottom)); pointer-events: none; }
+.cq-savebar-inner { pointer-events: auto; max-width: 856px; margin: 0 auto; display: flex; align-items: center; gap: 12px; background: var(--navy-900, #0f1729); color: #fff; border-radius: 14px; padding: 10px 10px 10px 16px; box-shadow: 0 8px 28px rgba(15, 23, 41, 0.28); }
+.rtl .cq-savebar-inner { padding: 10px 16px 10px 10px; }
+.cq-savebar-text { flex: 1; min-width: 0; display: grid; gap: 1px; font-size: 13px; line-height: 1.5; }
+.cq-savebar-text span { color: rgba(255, 255, 255, 0.7); font-size: 12px; }
+.cq-savebar-inner.dirty .cq-savebar-text strong { color: #ffd38a; }
+.cq-savebar-inner.error .cq-savebar-text strong { color: #ff9b8a; }
+.cq-savebtn { flex: none; min-height: 44px; min-width: 96px; padding: 0 22px; border: 0; border-radius: 10px; background: var(--brand, #d9472b); color: #fff; font: inherit; font-size: 15px; font-weight: 700; }
+.cq-savebtn:disabled { opacity: 0.6; }

@@ -7,12 +7,15 @@ import { toJalali, toGregorian, parseJalali, isoDate } from '@/lib/jalali';
 const T = {
   title: { fa: 'پرسشنامه اطلاعات متقاضی', en: 'Applicant questionnaire' },
   intro: {
-    fa: 'لطفاً همه بخش‌ها را با دقت تکمیل کنید. اطلاعاتی که از مدارک شما داشتیم از قبل وارد شده است — آن‌ها را بررسی و در صورت نیاز اصلاح کنید. پاسخ‌ها خودکار ذخیره می‌شوند و می‌توانید بعداً با همین لینک ادامه دهید. تاریخ‌ها میلادی هستند؛ می‌توانید تاریخ شمسی را هم وارد کنید تا خودکار تبدیل شود.',
-    en: 'Please complete every section carefully. What we already had from your documents is filled in — check it and correct it if needed. Answers save automatically, and you can come back with the same link to continue. Dates are Gregorian; you can also type a Persian (Shamsi) date and it is converted.',
+    fa: 'لطفاً همه بخش‌ها را با دقت تکمیل کنید. اطلاعاتی که از مدارک شما داشتیم از قبل وارد شده است — آن‌ها را بررسی و در صورت نیاز اصلاح کنید. پاسخ‌ها هر ۳۰ ثانیه خودکار ذخیره می‌شوند (یا با دکمه «ذخیره» پایین صفحه) و می‌توانید بعداً با همین لینک ادامه دهید. تاریخ‌ها میلادی هستند؛ می‌توانید تاریخ شمسی را هم وارد کنید تا خودکار تبدیل شود.',
+    en: 'Please complete every section carefully. What we already had from your documents is filled in — check it and correct it if needed. Answers are saved every 30 seconds (and with the Save button at the bottom), and you can come back with the same link to continue. Dates are Gregorian; you can also type a Persian (Shamsi) date and it is converted.',
   },
   saving: { fa: 'در حال ذخیره…', en: 'Saving…' },
   saved: { fa: 'ذخیره شد', en: 'Saved' },
   saveError: { fa: 'ذخیره نشد — اتصال اینترنت را بررسی کنید', en: 'Not saved — check your connection' },
+  unsaved: { fa: 'تغییرات ذخیره نشده — هر ۳۰ ثانیه خودکار ذخیره می‌شود', en: 'Unsaved changes — saved automatically every 30 seconds' },
+  savedAt: { fa: 'ذخیره شد، ساعت', en: 'Saved at' },
+  saveNow: { fa: 'ذخیره', en: 'Save' },
   done: { fa: 'تکمیل شده', en: 'complete' },
   yes: { fa: 'بله', en: 'Yes' },
   no: { fa: 'خیر', en: 'No' },
@@ -34,6 +37,7 @@ const T = {
 };
 
 const tr = (lang, x) => (x ? x[lang] ?? x.en : '');
+const AUTOSAVE_MS = 30000;
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const today = () => new Date().toISOString().slice(0, 10);
 const fa = (s) => String(s).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
@@ -156,12 +160,14 @@ export default function ClientQuestionnaire({ token, initial }) {
   const [answers, setAnswers] = useState(initial.answers || {});
   const [status, setStatus] = useState(initial.status);
   const [confirmation, setConfirmation] = useState(initial.confirmation);
-  const [save, setSave] = useState('saved');
+  const [save, setSave] = useState('saved'); // saved | dirty | saving | error
+  const [savedAt, setSavedAt] = useState(initial.updatedAt || null);
   const [agree, setAgree] = useState(false);
   const [name, setName] = useState('');
   const [showProblems, setShowProblems] = useState(false);
   const [msg, setMsg] = useState(null);
-  const timer = useRef(null);
+  const dirty = useRef(false);
+  const busy = useRef(false);
   const latest = useRef(answers);
   const locked = status === 'submitted';
   const rtl = lang === 'fa';
@@ -183,28 +189,61 @@ export default function ClientQuestionnaire({ token, initial }) {
     }
   };
 
+  // Answers are kept on this page and saved every 30 seconds, with the Save
+  // button, and when the page is closed or put in the background.
+  const url = `/api/q/${encodeURIComponent(token)}`;
   const persist = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    dirty.current = false;
     setSave('saving');
     try {
-      const res = await fetch(`/api/q/${encodeURIComponent(token)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: latest.current }) });
+      const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: latest.current }) });
       if (res.status === 409) {
         setStatus('submitted');
         setSave('saved');
         return;
       }
-      setSave(res.ok ? 'saved' : 'error');
+      if (!res.ok) throw new Error();
+      setSavedAt(new Date().toISOString());
+      setSave(dirty.current ? 'dirty' : 'saved');
     } catch {
+      dirty.current = true;
       setSave('error');
+    } finally {
+      busy.current = false;
     }
   };
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+  useEffect(() => {
+    if (locked) return undefined;
+    const every = setInterval(() => dirty.current && persistRef.current(), AUTOSAVE_MS);
+    const leaving = () => {
+      if (!dirty.current) return;
+      dirty.current = false;
+      try {
+        fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: latest.current }), keepalive: true });
+      } catch {
+        /* the page is going away */
+      }
+    };
+    const hidden = () => document.visibilityState === 'hidden' && leaving();
+    window.addEventListener('pagehide', leaving);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      clearInterval(every);
+      window.removeEventListener('pagehide', leaving);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, [locked, url]);
   const change = (id, v) => {
     if (locked) return;
     const next = { ...latest.current, [id]: v };
     latest.current = next;
     setAnswers(next);
-    setSave('saving');
-    clearTimeout(timer.current);
-    timer.current = setTimeout(persist, 700);
+    dirty.current = true;
+    if (save !== 'saving') setSave('dirty');
   };
 
   const problems = useMemo(() => clientProblems(answers), [answers]);
@@ -218,11 +257,11 @@ export default function ClientQuestionnaire({ token, initial }) {
       document.getElementById('cq-problems')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    clearTimeout(timer.current);
     try {
-      const res = await fetch(`/api/q/${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: latest.current, agree, name }) });
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: latest.current, agree, name }) });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error);
+      dirty.current = false;
       setStatus('submitted');
       setConfirmation(d.confirmation);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -230,6 +269,11 @@ export default function ClientQuestionnaire({ token, initial }) {
       setMsg(e.message || 'Error');
     }
   }
+
+  const time = (iso) => {
+    const t = new Date(iso).toLocaleTimeString(lang === 'fa' ? 'fa-IR' : 'en-CA', { hour: '2-digit', minute: '2-digit' });
+    return t;
+  };
 
   const goTo = (p) => {
     const id = p.row != null ? `${p.id}-${p.row}-${p.col}` : p.id;
@@ -273,12 +317,6 @@ export default function ClientQuestionnaire({ token, initial }) {
         ) : (
           <p className="cq-intro">{tr(lang, T.intro)}</p>
         )}
-        {!locked && (
-          <div className={`cq-save ${save}`} aria-live="polite">
-            {save === 'saving' ? tr(lang, T.saving) : save === 'error' ? tr(lang, T.saveError) : `${tr(lang, T.saved)} · ${lang === 'fa' ? fa(Math.round(progress * 100)) : Math.round(progress * 100)}% ${tr(lang, T.done)}`}
-          </div>
-        )}
-
         {CLIENT_SECTIONS.map((s, si) => (
           <section key={s.id} className="cq-card" aria-labelledby={`h-${s.id}`}>
             <h2 id={`h-${s.id}`}>
@@ -339,6 +377,17 @@ export default function ClientQuestionnaire({ token, initial }) {
         )}
         <footer className="cq-foot">Sugimoto Visa Inc. · 501 - 3292 Production Way, Burnaby, BC V5A 4R4 · +1 (604) 415-4792 · info@sugimotovisa.com</footer>
       </main>
+      {!locked && (
+        <div className="cq-savebar" role="region" aria-label={tr(lang, T.saveNow)}>
+          <div className={`cq-savebar-inner ${save}`}>
+            <div className="cq-savebar-text" aria-live="polite">
+              <strong>{save === 'saving' ? tr(lang, T.saving) : save === 'error' ? tr(lang, T.saveError) : save === 'dirty' ? tr(lang, T.unsaved) : savedAt ? `${tr(lang, T.savedAt)} ${time(savedAt)}` : tr(lang, T.saved)}</strong>
+              <span>{lang === 'fa' ? fa(Math.round(progress * 100)) : Math.round(progress * 100)}% {tr(lang, T.done)}</span>
+            </div>
+            <button type="button" className="cq-savebtn" onClick={persist} disabled={save === 'saving'}>{tr(lang, T.saveNow)}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
