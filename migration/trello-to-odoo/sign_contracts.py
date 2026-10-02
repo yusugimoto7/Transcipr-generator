@@ -1057,7 +1057,9 @@ else:
         'x_sheet_kinds': ', '.join(kinds),
         'x_sheet_accompanying': accompanying,
         'x_sheet_type': (codes[0] if codes else ''),
-        'x_sheet_rcic': rcic.name or '',
+        # The finance sheet's RCIC column is always the RCIC himself ("Yu"),
+        # whoever countersigns in Odoo Sign.
+        'x_sheet_rcic': env['ir.config_parameter'].sudo().get_param('phase2.sheet_rcic') or 'Yu',
         'x_sheet_spouse': (spouse_row.x_name_en or spouse_row.x_name_fa or '') if spouse_row else '',
         'x_sheet_child1': (kids[0].x_name_en or kids[0].x_name_fa or '') if len(kids) > 0 else '',
         'x_sheet_child2': (kids[1].x_name_en or kids[1].x_name_fa or '') if len(kids) > 1 else '',
@@ -1068,6 +1070,8 @@ else:
         'x_sheet_synced': 'pending',
         'x_sheet_rename': False,
         'x_sheet_status': 'Contract Sent',
+        'x_contract_state': 'sent',
+        'x_sheet_status_only': False,
         # The rest of the row, so the sync job needs one read and one write and
         # never has to reassemble a client from four models.
         'x_sheet_company': 'SB' if any(k.startswith('SB-') for k in kinds) else 'SG',
@@ -2205,6 +2209,27 @@ for lead in records:
                 vals['x_contract_status'] = 'paid'
         if vals:
             lead.write(vals)
+        # The quotations that went out show the card's contract status in
+        # their own "Contract" column (Sales list and form).
+        if (changed is None or 'x_contract_status' in changed or vals.get('x_contract_status')) and 'x_contract_state' in env['sale.order']._fields:
+            st = lead.x_contract_status
+            if st:
+                outs = env['sale.order'].sudo().search([('opportunity_id', '=', lead.id), ('state', '!=', 'cancel'),
+                                                        ('x_contract_state', 'not in', ('not_sent', False)),
+                                                        ('x_contract_state', '!=', st)])
+                if outs:
+                    outs.write({'x_contract_state': st})
+        if vals:
+            # Paid: the finance sheet's Status column follows ("Signed And Paid").
+            if vals.get('x_contract_status') == 'paid':
+                Order = env['sale.order'].sudo()
+                if 'x_sheet_status_only' in Order._fields and env['ir.config_parameter'].sudo().get_param('phase2.sheet_on_quotation') == '1':
+                    sent = Order.search([('opportunity_id', '=', lead.id), ('state', '!=', 'cancel'),
+                                         ('x_sheet_contract_no', '!=', False), ('x_sheet_synced', '!=', False)])
+                    for o in sent:
+                        if o.x_sheet_status != 'Signed And Paid':
+                            o.write({'x_sheet_status': 'Signed And Paid', 'x_sheet_synced': 'pending',
+                                     'x_sheet_status_only': o.x_sheet_synced != 'pending'})
 """.strip()
 
 
@@ -2232,7 +2257,7 @@ def install_card_rules(odoo):
     act_id = _server_action(odoo, "card_rules", {"name": "CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
                                                  "state": "code", "code": code, "binding_model_id": False})
     fields = odoo.search_read("ir.model.fields", [("model", "=", "crm.lead"),
-                                                  ("name", "in", ADDRESS_FIELDS + FEE_FIELDS + ["partner_id", "stage_id"])], ["id"])
+                                                  ("name", "in", ADDRESS_FIELDS + FEE_FIELDS + ["partner_id", "stage_id", "x_contract_status"])], ["id"])
     auto_vals = {"name": "Phase 2: CRM card rules", "model_id": _model_id(odoo, "crm.lead"),
                  "trigger": "on_create_or_write", "trigger_field_ids": [(6, 0, [f["id"] for f in fields])],
                  "filter_domain": "[]", "action_server_ids": [(6, 0, [act_id])], "active": True}
@@ -2540,7 +2565,8 @@ SHEET_FIELDS = [
     ("x_sheet_phone", "char", "Sheet: phone"), ("x_sheet_address", "char", "Sheet: address"),
     ("x_sheet_name_fa", "char", "Sheet: name (Farsi)"), ("x_sheet_address_fa", "char", "Sheet: address (Farsi)"),
     ("x_sheet_agent", "char", "Sheet: agent"), ("x_sheet_country", "char", "Sheet: country"),
-    ("x_sheet_status", "char", "Sheet: status (Quotation / Contract Sent)"),
+    ("x_sheet_status", "char", "Sheet: status (Quotation / Contract Sent / Signed And Paid)"),
+    ("x_sheet_status_only", "boolean", "Sheet: only the status changed"),
     ("x_sheet_passport", "char", "Sheet: passport/ID"), ("x_sheet_spouse_fa", "char", "Sheet: spouse (Farsi)"),
     ("x_sheet_child1_fa", "char", "Sheet: child 1 (Farsi)"), ("x_sheet_child2_fa", "char", "Sheet: child 2 (Farsi)"),
 ]
@@ -3140,6 +3166,8 @@ for req in [order.x_sign_request_id, order.x_sign_request2_id]:
     if req and req.state not in ('signed', 'canceled'):
         req.sudo().cancel()
 order.sudo().write({'x_signed_accepted_on': datetime.datetime.now(), 'x_signed_attachment_id': new_att.id})
+if 'x_contract_state' in order._fields and order.x_contract_state not in ('paid', 'signed_partial'):
+    order.sudo().write({'x_contract_state': 'signed'})
 # Confirming the quotation is what the rest of the system reads as "signed":
 # the card moves to 20- Contract Signed and its Contract block says Signed.
 if order.state in ('draft', 'sent'):

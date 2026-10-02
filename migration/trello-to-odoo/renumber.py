@@ -98,7 +98,8 @@ for o in lead.order_ids.filtered(lambda o: o.state != 'cancel'):
         if sug_hit and synced and old != new and not o.x_sug_old_no:
             ov['x_sug_old_no'] = old
         ov.update({'x_sheet_display': '%s - %s' % ((ov.get('client_order_ref') or o.client_order_ref), client),
-                   'x_sheet_name': first, 'x_sheet_family': family, 'x_sheet_rename': True})
+                   'x_sheet_name': first, 'x_sheet_family': family, 'x_sheet_rename': True,
+                   'x_sheet_status_only': False})
         if synced:
             ov['x_sheet_synced'] = 'pending'
     if ov:

@@ -122,6 +122,7 @@ for order in records:
                     'x_sheet_phone': lead.phone or order.partner_id.phone or '',
                     'x_sheet_agent': lead.user_id.name or order.user_id.name or '',
                     'x_sheet_status': 'Quotation',
+                    'x_sheet_status_only': False,
                     'x_sheet_synced': 'pending',
                 })
     if not tmpl or order.order_line:
