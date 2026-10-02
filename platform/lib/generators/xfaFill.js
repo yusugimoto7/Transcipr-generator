@@ -113,10 +113,10 @@ export async function fillOfficialForm(formKey, app) {
     fieldMap = irccFieldMap(formKey, schema.fields);
     if (String(app.data?.uci || '').trim() && !data._uci) notes.push({ text: 'UCI: must be 8 or 10 digits — left blank (check the number in the intake)', field: 'uci' });
     // The employment section: 3 rows for the past 10 years, with no gaps.
-    const acts = activities(app.data || {});
+    const acts = activities(data);
     if (acts.length > 3) notes.push({ field: 'jobs', text: `Employment: the form has 3 rows — add the other ${acts.length - 3} activit${acts.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${acts.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})` });
     const adultAt = /^\d{4}-\d{2}/.test(app.data?.dob || '') ? `${Number(app.data.dob.slice(0, 4)) + 18}${app.data.dob.slice(4, 7)}` : '';
-    for (const g of activityGaps(app.data || {})) {
+    for (const g of activityGaps(data)) {
       const school = adultAt && g.to < adultAt;
       notes.push({ field: 'jobs', text: `Employment: nothing is listed for ${g.from} to ${g.to} — IRCC asks for the past 10 years with no gaps (${school ? 'the applicant was under 18: add their school as "Student"' : 'add the job, studies, or "unemployed" / "homemaker"'})` });
     }

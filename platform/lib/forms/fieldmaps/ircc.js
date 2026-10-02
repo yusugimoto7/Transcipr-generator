@@ -97,7 +97,16 @@ export function backgroundDetails(d) {
 }
 
 /** Intake data plus the composed values the rules read (keys starting with "_"). */
-export function irccData(d = {}, app = {}) {
+export function irccData(d0 = {}, app = {}) {
+  // A PGWP applicant's latest studies are the Canadian program the permit rests on.
+  const d = !d0.lastInstitution && d0.pgwpInstitution
+    ? {
+        ...d0,
+        lastInstitution: d0.pgwpInstitution, lastFieldOfStudy: d0.pgwpProgram, lastEduFrom: String(d0.pgwpStart || '').slice(0, 7), lastEduTo: String(d0.pgwpCompletionDate || '').slice(0, 7),
+        lastEduCity: d0.lastEduCity || d0.mailingCity, lastEduCountry: d0.lastEduCountry || 'Canada',
+        highestEducation: d0.highestEducation || ({ Certificate: 'College diploma / associate degree', Diploma: 'College diploma / associate degree', 'Advanced diploma': 'College diploma / associate degree', "Bachelor's": "Bachelor's degree", 'Post-graduate certificate': 'Post-graduate diploma / certificate', "Master's": "Master's degree", Doctorate: 'Doctorate (PhD)' })[d0.pgwpLevel] || 'Post-graduate diploma / certificate',
+      }
+    : d0;
   const [eduFromY, eduFromM] = ym(d.lastEduFrom);
   const [eduToY, eduToM] = ym(d.lastEduTo);
   const cc = digits(d.phoneCountryCode);

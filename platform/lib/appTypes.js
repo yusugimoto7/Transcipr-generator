@@ -762,7 +762,7 @@ export const APP_TYPES = {
   pgwp: {
     key: 'pgwp', service: '100-402', title: 'Post-Graduation Work Permit (PGWP)', group: 'Work — inside Canada', where: 'inside',
     description: 'A graduate of a Canadian DLI applying from inside Canada (IMM 5710).',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'pgwp', 'history', 'tiesReturn'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'pgwp', 'education', 'history', 'tiesReturn'],
     forms: [F.imm5710, F.imm5476],
     checklist: [FORM100, BIRTH,
       I(102, 'status-in-canada', 'Study permit'),
