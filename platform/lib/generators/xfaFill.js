@@ -113,6 +113,8 @@ export async function fillOfficialForm(formKey, app) {
     data = irccData(data, app);
     fieldMap = irccFieldMap(formKey, schema.fields);
     if (String(app.data?.uci || '').trim() && !data._uci) notes.push({ text: 'UCI: must be 8 or 10 digits — left blank (check the number in the intake)', field: 'uci' });
+    const aliases = String(app.data?.otherNames || '').split(/[;\n]| and /).map((x) => x.trim()).filter(Boolean);
+    if (aliases.length > 1) notes.push({ field: 'otherNames', text: `Other names: the form has room for one — ${aliases.slice(1).join('; ')} must be added on a separate sheet` });
     // The employment section: 3 rows for the past 10 years, with no gaps.
     const acts = activities(data);
     if (acts.length > 3) notes.push({ field: 'jobs', text: `Employment: the form has 3 rows — add the other ${acts.length - 3} activit${acts.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${acts.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})` });

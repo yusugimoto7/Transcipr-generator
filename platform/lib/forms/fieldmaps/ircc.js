@@ -186,6 +186,7 @@ export function irccData(d0 = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
     _programField: fieldOfStudy(d),
+    ...aliasName(d.otherNames),
     // IMM 5708: who pays for the extended stay (Myself / Parents / Other + who).
     _extendPaidBy: { 'My own funds': 'Myself', 'My parents': 'Parents' }[d.extendSupport] || (d.extendSupport ? 'Other' : ''),
     _extendPaidOther:
@@ -241,6 +242,21 @@ function contactInCanada(d) {
     return { _contactName: d.accompanyingParent.replace(/\s*\(.*?\)\s*/g, ' ').trim(), _contactRelationship: mother ? 'Mother' : 'Father', _contactAddress: d.parentAddress };
   }
   return {};
+}
+
+/**
+ * The first other name, split the way the forms ask: "Sarah Mohseni" →
+ * family "Mohseni", given "Sarah"; "Mohseni, Sarah" → the same.
+ */
+function aliasName(text) {
+  const first = String(text || '').split(/[;\n]| and /)[0].trim();
+  if (!first) return {};
+  if (first.includes(',')) {
+    const [family, given] = first.split(',').map((x) => x.trim());
+    return { _aliasFamily: family, _aliasGiven: given || '' };
+  }
+  const parts = first.split(/\s+/);
+  return parts.length > 1 ? { _aliasFamily: parts[parts.length - 1], _aliasGiven: parts.slice(0, -1).join(' ') } : { _aliasFamily: parts[0], _aliasGiven: '' };
 }
 
 /** Age in whole years today, from YYYY-MM-DD ('' when unknown). */
@@ -402,7 +418,8 @@ export const COMMON_RULES = [
   [/PersonalDetails\/Name\/FamilyName$/, { from: 'familyName', need: 'Family name' }],
   [/PersonalDetails\/Name\/GivenName$/, { from: 'givenName' }],
   [/AliasName\/AliasNameIndicator\/AliasNameIndicator$/, { from: '_aliasYN' }],
-  [/AliasName\/AliasFamilyName$/, { from: 'otherNames' }],
+  [/AliasName\/AliasFamilyName$/, { from: '_aliasFamily' }],
+  [/AliasName\/AliasGivenName$/, { from: '_aliasGiven' }],
   [/[Ss]ex\/Sex$/, { from: 'sex', need: 'Sex' }],
   [/PersonalDetails\/(q3-4-5\/dob\/)?DOBYear$/, { from: 'dob', transform: 'year', need: 'Date of birth' }],
   [/PersonalDetails\/(q3-4-5\/dob\/)?DOBMonth$/, { from: 'dob', transform: 'month' }],
