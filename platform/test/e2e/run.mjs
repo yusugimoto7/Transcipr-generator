@@ -372,9 +372,11 @@ async function runType(key) {
   }
   if (P.fromChecklist) {
     const who = P.file.title.split(' ')[0];
-    const have = new Set([...uploads.map((u) => u.name.split(' - ')[0]), '101', '102', '103', '104', '105', '106']);
+    // The emailed documents (passport, birth certificate, national ID, degree) and the photo are already in.
+    const have = new Set(uploads.map((u) => u.name.split(' - ')[0]));
+    const EMAILED = new Set(['passport', 'national-id', 'photo', 'transcripts']);
     for (const it of buildChecklist({ ...P.team, sex: P.reads.PASSPORT?.fields?.sex }, type)) {
-      if (it.party === 'firm' || it.cond || ['internal', 'questionnaire', 'rep-form'].includes(it.key) || have.has(String(it.code))) continue;
+      if (it.party === 'firm' || it.cond || EMAILED.has(it.key) || ['internal', 'questionnaire', 'rep-form'].includes(it.key) || have.has(String(it.code))) continue;
       have.add(String(it.code));
       const label = it.label.split(/ — | \(/)[0].replace(/[\\/:*?"<>|]/g, '-');
       uploads.push({ name: `${it.code} - ${label} - ${who}.pdf`, tag: `CL${String(it.code).replace(/\W/g, '')}`, pages: 2 });
