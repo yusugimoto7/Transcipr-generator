@@ -102,6 +102,28 @@ for order in records:
                 lead.sudo().write({'name': '%s - %s' % (number, (lead.name or '').strip())})
                 lead.sudo().message_post(body='Contract number %s assigned with the first quotation (%s).' % (number, order.name),
                                          message_type='comment', subtype_xmlid='mail.mt_note')
+            # The number goes into the finance sheet right away (one row per
+            # client file, status "Quotation"); sending the contract later
+            # fills in the rest of the same row.
+            first_on_file = not lead.order_ids.filtered(lambda o: o.id != order.id and o.x_sheet_contract_no)
+            # Switched on with the setting phase2.sheet_on_quotation = 1 once the
+            # n8n finance-sheet job that understands it is published.
+            on = env['ir.config_parameter'].sudo().get_param('phase2.sheet_on_quotation') == '1'
+            if on and first_on_file and 'x_sheet_status' in order._fields:
+                client = (lead.name or '')[len(number):].lstrip(' -').strip() or (order.partner_id.name or '')
+                parts = client.rsplit(' ', 1)
+                order.sudo().write({
+                    'x_sheet_contract_no': number,
+                    'x_sheet_company': 'SB' if number.startswith('SB') else 'SG',
+                    'x_sheet_display': '%s - %s' % (number, client),
+                    'x_sheet_name': parts[0] if len(parts) > 1 else client,
+                    'x_sheet_family': parts[1] if len(parts) > 1 else '',
+                    'x_sheet_email': lead.email_from or order.partner_id.email or '',
+                    'x_sheet_phone': lead.phone or order.partner_id.phone or '',
+                    'x_sheet_agent': lead.user_id.name or order.user_id.name or '',
+                    'x_sheet_status': 'Quotation',
+                    'x_sheet_synced': 'pending',
+                })
     if not tmpl or order.order_line:
         continue
     # Pricelist by the service's currency: EUR-tagged products -> EUR list.

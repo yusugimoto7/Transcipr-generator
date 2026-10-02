@@ -1067,6 +1067,7 @@ else:
         # this, and Odoo does not match '' against an empty text column.
         'x_sheet_synced': 'pending',
         'x_sheet_rename': False,
+        'x_sheet_status': 'Contract Sent',
         # The rest of the row, so the sync job needs one read and one write and
         # never has to reassemble a client from four models.
         'x_sheet_company': 'SB' if any(k.startswith('SB-') for k in kinds) else 'SG',
@@ -2539,6 +2540,7 @@ SHEET_FIELDS = [
     ("x_sheet_phone", "char", "Sheet: phone"), ("x_sheet_address", "char", "Sheet: address"),
     ("x_sheet_name_fa", "char", "Sheet: name (Farsi)"), ("x_sheet_address_fa", "char", "Sheet: address (Farsi)"),
     ("x_sheet_agent", "char", "Sheet: agent"), ("x_sheet_country", "char", "Sheet: country"),
+    ("x_sheet_status", "char", "Sheet: status (Quotation / Contract Sent)"),
     ("x_sheet_passport", "char", "Sheet: passport/ID"), ("x_sheet_spouse_fa", "char", "Sheet: spouse (Farsi)"),
     ("x_sheet_child1_fa", "char", "Sheet: child 1 (Farsi)"), ("x_sheet_child2_fa", "char", "Sheet: child 2 (Farsi)"),
 ]
