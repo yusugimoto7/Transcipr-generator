@@ -68,6 +68,7 @@ export const STUDY_PERMIT_SCHEMA = {
           id: 'nativeName',
           label: 'Full name in the native language (e.g. Persian script)',
           type: 'text',
+          nativeScript: true,
           required: true,
           note: 'Given name then family name, as on the birth certificate or national ID. IMM 5645 writes every name in English and in the native language.',
         },
@@ -453,7 +454,7 @@ const EXTRA_STEPS = [
       { id: 'spouseFamilyName', label: 'Spouse family name (as on their passport)', type: 'text', required: true, showIf: MARRIED },
       // Built from the given and family names (deriveData) — never typed.
       { id: 'spouseName', label: 'Spouse / partner full name', type: 'text', derived: true },
-      { id: 'spouseNameNative', label: 'Spouse full name in the native language', type: 'text', showIf: MARRIED },
+      { id: 'spouseNameNative', label: 'Spouse full name in the native language', type: 'text', nativeScript: true, showIf: MARRIED },
       { id: 'marriageDate', label: 'Date of marriage / start of common-law', type: 'date', required: true, showIf: MARRIED },
       { id: 'spouseDob', label: 'Spouse date of birth', type: 'date', required: true, showIf: MARRIED },
       { id: 'spouseCountryOfBirth', label: 'Spouse country of birth', type: 'country', required: true, showIf: MARRIED },
@@ -474,7 +475,7 @@ const EXTRA_STEPS = [
       { id: 'prevRelationshipFrom', label: 'Relationship from', type: 'date', required: true, showIf: { field: 'previouslyMarried', equals: true } },
       { id: 'prevRelationshipTo', label: 'Relationship to', type: 'date', required: true, showIf: { field: 'previouslyMarried', equals: true } },
       { id: 'fatherName', label: "Father's full name (English)", type: 'text', required: true },
-      { id: 'fatherNameNative', label: "Father's full name in the native language", type: 'text' },
+      { id: 'fatherNameNative', label: "Father's full name in the native language", type: 'text', nativeScript: true },
       { id: 'fatherDob', label: "Father's date of birth", type: 'date' },
       { id: 'fatherBirthCountry', label: "Father's country of birth", type: 'country' },
       { id: 'fatherAddress', label: "Father's present address (English)", type: 'text', note: 'If deceased: "Deceased — city, country, YYYY-MM-DD".' },
@@ -482,7 +483,7 @@ const EXTRA_STEPS = [
       { id: 'fatherMaritalStatus', label: "Father's marital status", type: 'select', options: MARITAL_5645 },
       { id: 'fatherAccompanying', label: 'Will your father accompany you to Canada?', type: 'bool' },
       { id: 'motherName', label: "Mother's full name (English)", type: 'text', required: true },
-      { id: 'motherNameNative', label: "Mother's full name in the native language", type: 'text' },
+      { id: 'motherNameNative', label: "Mother's full name in the native language", type: 'text', nativeScript: true },
       { id: 'motherDob', label: "Mother's date of birth", type: 'date' },
       { id: 'motherBirthCountry', label: "Mother's country of birth", type: 'country' },
       { id: 'motherAddress', label: "Mother's present address (English)", type: 'text', note: 'If deceased: "Deceased — city, country, YYYY-MM-DD".' },
@@ -1054,6 +1055,7 @@ export function valueProblem(f, value, row = {}) {
   }
   if (f.type === 'date' && f.notFuture && String(v) > new Date().toISOString().slice(0, 10)) return 'Cannot be later than today';
   if ((f.english || f.type === 'country') && nonLatin(v)) return 'In English (Latin letters) — the IRCC forms refuse Persian script';
+  if (f.nativeScript && /[A-Za-z]/.test(String(v))) return 'In the native language (Persian script), not in English letters';
   return null;
 }
 

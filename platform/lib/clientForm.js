@@ -61,7 +61,8 @@ const VISA_KIND = [
 const LANG_TEST = [o('IELTS', 'آیلتس', 'IELTS'), o('TOEFL', 'تافل', 'TOEFL'), o('PTE', 'PTE'), o('CELPIP', 'CELPIP'), o('TEF/TCF (French)', 'آزمون فرانسه (TEF/TCF)', 'French (TEF/TCF)'), o('Duolingo', 'دولینگو', 'Duolingo')];
 
 /* Field helpers. `en: true` = answer in English (Latin letters) only. */
-const q = (id, fa, en, type = 'text', extra = {}) => ({ id, fa, en, type, ...extra });
+// A question whose id ends in "Fa" is answered in Persian (names, address in Persian).
+const q = (id, fa, en, type = 'text', extra = {}) => ({ id, fa, en, type, ...(/Fa$/.test(id) && ['text', 'textarea'].includes(type) ? { persian: true } : {}), ...extra });
 const nameEn = (id, fa = 'نام و نام خانوادگی به انگلیسی (مطابق پاسپورت)', en = 'Full name in English (as in the passport)') => q(id, fa, en, 'text', { latin: true });
 const nameFa = (id) => q(id, 'نام و نام خانوادگی به فارسی', 'Full name in Persian', 'text');
 
@@ -398,14 +399,17 @@ export const CONFIRM_TEXT = {
 const ALL = CLIENT_SECTIONS.flatMap((s) => s.fields.map((f) => ({ ...f, section: s.id })));
 const shown = (f, a) => (f.show ? f.show(a) : true);
 const empty = (v) => v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !filledRows(v).length);
-const LATIN_ONLY = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
+// Persian / Arabic letters (digits in either script are fine anywhere).
+const PERSIAN_LETTERS = /[\u0590-\u065F\u066A-\u06EF\u06FA-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
+const LATIN_LETTERS = /[A-Za-z]/;
 const thisMonth = () => new Date().toISOString().slice(0, 7);
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** What is wrong with one answer (bilingual), or null. */
 export function answerProblem(f, v) {
   if (empty(v)) return null;
-  if (f.latin && typeof v === 'string' && LATIN_ONLY.test(v)) return { fa: 'لطفاً با حروف انگلیسی بنویسید', en: 'Please write it in English letters' };
+  if (f.latin && typeof v === 'string' && PERSIAN_LETTERS.test(v)) return { fa: 'این بخش باید به انگلیسی نوشته شود', en: 'This must be written in English' };
+  if (f.persian && typeof v === 'string' && LATIN_LETTERS.test(v)) return { fa: 'این بخش باید به فارسی نوشته شود', en: 'This must be written in Persian' };
   if (f.type === 'month' && !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(v))) return { fa: 'ماه و سال را به صورت YYYY-MM وارد کنید', en: 'Use year and month: YYYY-MM' };
   if (f.type === 'month' && f.notFuture && String(v) > thisMonth()) return { fa: 'نمی‌تواند بعد از ماه جاری باشد', en: 'Cannot be later than this month' };
   if (f.type === 'date' && f.notFuture && String(v) > today()) return { fa: 'نمی‌تواند بعد از امروز باشد', en: 'Cannot be later than today' };

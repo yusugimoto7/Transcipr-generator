@@ -27,6 +27,12 @@ ok(pre.refused === true && pre.refusals?.[0]?.country === 'Germany', 'pre-fills 
 
 // --- checks
 ok(cf.answerProblem({ type: 'text', latin: true }, 'سارا') !== null, 'Persian letters refused in an English-only answer');
+ok(cf.answerProblem({ type: 'text', latin: true }, 'انگلیس') !== null, 'a country in Persian is refused where English is needed');
+ok(cf.answerProblem({ type: 'text', latin: true }, '۱۲۳۴۵') === null, 'Persian digits are fine in an English answer');
+ok(cf.answerProblem({ type: 'text', persian: true }, 'Sara Example') !== null, 'English letters are refused where Persian is needed');
+ok(cf.answerProblem({ type: 'text', persian: true }, 'سارا نمونه، پلاک 12') === null, 'Persian with digits is fine in a Persian answer');
+const faFields = cf.CLIENT_SECTIONS.flatMap((x) => x.fields.flatMap((f) => [f, ...(f.columns || [])])).filter((f) => /Fa$/.test(f.id));
+ok(faFields.length >= 6 && faFields.every((f) => f.persian), 'every "in Persian" question checks for Persian');
 ok(cf.answerProblem({ type: 'month', notFuture: true }, '2999-01') !== null, 'future month refused');
 ok(cf.answerProblem({ type: 'date', notFuture: true }, '2999-01-01') !== null, 'future date refused');
 ok(cf.answerProblem({ type: 'email' }, 'not-an-email') !== null, 'bad email refused');

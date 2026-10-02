@@ -24,6 +24,7 @@ const T = {
   shamsi: { fa: 'یا تاریخ شمسی:', en: 'or Persian date:' },
   shamsiPh: { fa: '۱۳۷۰/۰۵/۲۰', en: '1370/05/20' },
   englishOnly: { fa: 'به انگلیسی', en: 'in English' },
+  persianOnly: { fa: 'به فارسی', en: 'in Persian' },
   required: { fa: 'الزامی', en: 'required' },
   missingTitle: { fa: 'پیش از ارسال، این موارد را تکمیل یا اصلاح کنید:', en: 'Before submitting, complete or correct these:' },
   confirmTitle: { fa: 'تأیید و ارسال', en: 'Confirm and submit' },
@@ -115,6 +116,7 @@ function Label({ f, lang, htmlFor }) {
       {tr(lang, f)}
       {f.required && <span className="cq-req" title={tr(lang, T.required)}> *</span>}
       {f.latin && <span className="cq-en">{tr(lang, T.englishOnly)}</span>}
+      {f.persian && <span className="cq-en fa">{tr(lang, T.persianOnly)}</span>}
     </label>
   );
 }
@@ -134,10 +136,13 @@ function Rows({ f, value, onChange, lang, disabled, problems }) {
             {f.columns.map((c) => {
               const id = `${f.id}-${i}-${c.id}`;
               const p = problems.find((x) => x.row === i && x.col === c.id);
+              // Written in the wrong language (or a date in the future): shown as they type.
+              const live = answerProblem(c, r[c.id]);
               return (
-                <div key={c.id} className={`cq-field${c.wide ? ' wide' : ''}${p ? ' bad' : ''}`}>
+                <div key={c.id} className={`cq-field${c.wide ? ' wide' : ''}${p || live ? ' bad' : ''}`}>
                   <Label f={c} lang={lang} htmlFor={id} />
                   <Control f={c} id={id} value={r[c.id]} onChange={(v) => set(i, c.id, v)} lang={lang} disabled={disabled} />
+                  {live && <div className="cq-err">{tr(lang, live)}</div>}
                 </div>
               );
             })}
@@ -327,7 +332,7 @@ export default function ClientQuestionnaire({ token, initial }) {
               {s.fields.filter(shown).map((f) => {
                 const p = problems.find((x) => x.id === f.id && x.row == null);
                 const bad = showProblems && p;
-                const live = !p && answerProblem(f, answers[f.id]);
+                const live = answerProblem(f, answers[f.id]);
                 if (f.type === 'rows') {
                   return (
                     <div key={f.id} className="cq-field wide" id={f.id}>
@@ -338,7 +343,7 @@ export default function ClientQuestionnaire({ token, initial }) {
                   );
                 }
                 return (
-                  <div key={f.id} className={`cq-field${f.wide || f.type === 'textarea' ? ' wide' : ''}${bad ? ' bad' : ''}`}>
+                  <div key={f.id} className={`cq-field${f.wide || f.type === 'textarea' ? ' wide' : ''}${bad || live ? ' bad' : ''}`}>
                     <Label f={f} lang={lang} htmlFor={f.id} />
                     <Control f={f} id={f.id} value={answers[f.id]} onChange={(v) => change(f.id, v)} lang={lang} disabled={locked} />
                     {live ? <div className="cq-err">{tr(lang, live)}</div> : bad ? <div className="cq-err">{tr(lang, p)}</div> : null}
