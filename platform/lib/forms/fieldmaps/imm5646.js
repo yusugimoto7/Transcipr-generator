@@ -29,7 +29,8 @@ export function imm5646FieldMap(d = {}) {
   const custodian = full(d.custodianGivenName, d.custodianFamilyName);
   const student = full(d.givenName, d.familyName);
   const school = [d.schoolName, d.schoolAddress].filter(Boolean).join(', ');
-  const residence = d.childResides === 'In the school dormitory' ? d.schoolAddress : d.childResides === 'With another person' ? '' : d.custodianAddress;
+  // Where the child lives: the dormitory, the custodian, or (no custodian) the parent in Canada.
+  const residence = d.childResides === 'In the school dormitory' ? d.schoolAddress : d.childResides === 'With another person' ? '' : d.custodianAddress || d.parentAddress;
   const map = [];
   for (const page of ['Page1', 'Page2']) {
     const b = `${P}/${page}`;
