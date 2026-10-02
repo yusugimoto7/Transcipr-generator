@@ -153,7 +153,8 @@ export function irccData(d0 = {}, app = {}) {
     _phoneFirst3: na ? phone.slice(3, 6) : '',
     _phoneLast: na ? phone.slice(6) : '',
     _phoneActual: phone,
-    _eduYN: POST_SECONDARY.test(d.highestEducation || '') ? 'Y' : NO_POST_SECONDARY.test(d.highestEducation || '') ? 'N' : '',
+    // A child under 18 has no post-secondary studies to report.
+    _eduYN: POST_SECONDARY.test(d.highestEducation || '') ? 'Y' : NO_POST_SECONDARY.test(d.highestEducation || '') || (ageOn(d.dob) !== '' && Number(ageOn(d.dob)) < 18) ? 'N' : '',
     _eduFieldLevel: [d.lastFieldOfStudy, d.highestEducation].filter(has).join(', '),
     _eduFromY: eduFromY,
     _eduFromM: eduFromM,
