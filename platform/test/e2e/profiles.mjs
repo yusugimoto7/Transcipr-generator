@@ -270,7 +270,8 @@ export const PROFILES = {
     noJob: 'Student (secondary school)', noJobFrom: '2017-09', trips: false,
     team: {
       minorArrangement: "Without a parent — custodian in Canada (IMM 5646)", accompanyingParent: 'None — studies alone with a custodian', parentStatusCanada: 'No status / other', otherParentName: 'Nasrin Moradi', otherParentConsent: true,
-      custodianRequired: true, custodianName: 'Leyla Demo (aunt), 77 Demo Street, Toronto, ON M4B 0A1', travelsWith: 'A relative', gradeInCanada: 'Grade 10', schoolBoard: 'Demo District School Board',
+      custodianRequired: true, custodianName: 'Leyla Demo (aunt), 77 Demo Street, Toronto, ON M4B 0A1', travelsWith: 'A relative',
+      custodianGivenName: 'Leyla', custodianFamilyName: 'Demo', custodianDob: '1980-05-05', custodianStatus: 'Canadian citizen', custodianRelationship: 'Aunt', custodianAddress: '77 Demo Street, Toronto, ON M4B 0A1', custodianPhone: '+1 416 555 0101', childResides: 'With the custodian', gradeInCanada: 'Grade 10', schoolBoard: 'Demo District School Board',
       schoolName: 'Lakeview Demo Secondary School', dliNumber: 'O000000000002', programName: 'Grade 10 — Ontario Secondary School Diploma', levelOfStudy: 'Secondary / high school', schoolCity: 'Toronto', schoolProvince: 'Ontario',
       schoolAddress: '500 Demo Avenue, Toronto, ON M4B 0A2', programStart: '2027-02-01', programEnd: '2028-06-30', tuitionCost: 16000, roomBoardCost: 12000, entryDate: '2027-01-20',
       totalFunds: 60000, fundingSource: 'Parents / family', sponsorName: 'Kamran Moradi (father)',
