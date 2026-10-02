@@ -26,6 +26,7 @@ import { PROFILES } from './profiles.mjs';
 import { loadLib } from '../_load.mjs';
 
 const { buildChecklist } = await loadLib('checklist.js');
+const { getSchema } = await loadLib('schema.js');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..');
@@ -396,7 +397,9 @@ async function runType(type) {
   }, 'reading documents');
   step('read documents & fill intake', job.status === 'done', `${job.status}${job.error ? ` ${job.error}` : ''}`);
   let app = (await call('GET', `/api/applications/${id}`)).data.application;
-  const read = Object.entries(P.reads).flatMap(([, x]) => Object.keys(x.fields || {}));
+  // Only answers this type's intake asks (a reconsideration has no family or education section).
+  const asked = new Set(getSchema(type).steps.flatMap((st) => st.fields.map((f) => f.id)));
+  const read = Object.entries(P.reads).flatMap(([, x]) => Object.keys(x.fields || {})).filter((k) => asked.has(k));
   const missed = read.filter((k) => app.data[k] === undefined || app.data[k] === '' || (Array.isArray(app.data[k]) && !app.data[k].length));
   step('the intake holds what the documents say', !missed.length, missed.length ? `not filled: ${missed.join(', ')}` : `${read.length} answers`);
   const mis = (app.documents || []).filter((d) => !d.category || d.category === 'other');
