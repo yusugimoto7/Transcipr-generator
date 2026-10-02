@@ -1,4 +1,3 @@
-import { filledRows } from '../schema';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
@@ -8,7 +7,7 @@ import { getFormPdf } from '../forms/fetchForms';
 import { imm5645FieldMap } from '../forms/fieldmaps/imm5645';
 import { imm5476FieldMap, imm5476Data } from '../forms/fieldmaps/imm5476';
 import { imm5257bFieldMap } from '../forms/fieldmaps/imm5257b';
-import { irccData, irccFieldMap, IRCC_MAIN_FORMS, sourceOf } from '../forms/fieldmaps/ircc';
+import { irccData, irccFieldMap, IRCC_MAIN_FORMS, sourceOf, activities, activityGaps } from '../forms/fieldmaps/ircc';
 import { autoFieldMap } from '../forms/fieldmaps/auto';
 import { getFirm } from '../firm';
 import { getAppType } from '../appTypes';
@@ -112,8 +111,10 @@ export async function fillOfficialForm(formKey, app) {
     data = irccData(data, app);
     fieldMap = irccFieldMap(formKey, schema.fields);
     if (String(app.data?.uci || '').trim() && !data._uci) notes.push({ text: 'UCI: must be 8 or 10 digits — left blank (check the number in the intake)', field: 'uci' });
-    const jobs = filledRows(app.data?.jobs);
-    if (jobs.length > 3) notes.push({ field: 'jobs', text: `Employment: the form has 3 rows — add the other ${jobs.length - 3} activit${jobs.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${jobs.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})` });
+    // The employment section: 3 rows for the past 10 years, with no gaps.
+    const acts = activities(app.data || {});
+    if (acts.length > 3) notes.push({ field: 'jobs', text: `Employment: the form has 3 rows — add the other ${acts.length - 3} activit${acts.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${acts.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})` });
+    for (const g of activityGaps(app.data || {})) notes.push({ field: 'jobs', text: `Employment: nothing is listed for ${g.from} to ${g.to} — IRCC asks for the past 10 years with no gaps (add the job, studies, or "unemployed" / "homemaker")` });
   } else if (formKey === 'imm5645') {
     ({ map: fieldMap, notes } = imm5645FieldMap(data, app));
   } else if (formKey === 'imm5476') {
@@ -127,6 +128,20 @@ export async function fillOfficialForm(formKey, app) {
     if (!schema?.ok || !Array.isArray(schema.paths)) throw new Error(`cannot read fields of ${formKey}`);
     fieldMap = autoFieldMap(schema.paths);
     if (!fieldMap.length) throw new Error(`no recognizable fields on ${formKey}`);
+  }
+
+  // A hand-made map (IMM 5645, 5476, Schedule 1) written for one version of
+  // the form: a box this version does not have is reported, not written.
+  if (!IRCC_MAIN_FORMS.has(formKey) && ['imm5645', 'imm5476', 'imm5257b'].includes(formKey)) {
+    const schema = await dumpFormSchema(formKey).catch(() => null);
+    if (schema?.ok && Array.isArray(schema.paths)) {
+      const canon = (p) => p.split('/').filter(Boolean).map((x) => x.replace(/\[0\]$/, '')).join('/');
+      const strip = (p) => canon(p).replace(/\[\d+\]/g, '');
+      const have = new Set(schema.paths.map(strip));
+      const missing = fieldMap.filter((f) => !have.has(strip(f.som)) && (f.need || f.from || f.const));
+      if (missing.length) notes.push({ text: `This version of ${formKey.toUpperCase()} (${meta.version}) has no box for: ${[...new Set(missing.map((f) => f.need || f.label || f.som.split('/').pop()))].join(', ')} — check the form`, field: null });
+      fieldMap = fieldMap.filter((f) => have.has(strip(f.som)));
+    }
   }
 
   const tmp = path.join(os.tmpdir(), `xfa-${crypto.randomBytes(6).toString('hex')}`);

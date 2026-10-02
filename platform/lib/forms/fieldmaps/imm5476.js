@@ -1,29 +1,35 @@
 /**
  * Field map: IMM 5476 (Use of a Representative), form version 01-11-2025.
  *
- * Section A: the applicant. Section B: the representative — the firm's RCIC
- * (lib/firm.js), with the membership number and the office address, phone and
- * email. The Yes/No radio groups (appointing, paid / unpaid) and signatures are
- * left for the client to tick and sign; the text fields are the bulk of the form.
+ * Top: the client is appointing a representative. Section A: the applicant —
+ * name, date of birth, email, UCI and the type of application (the box
+ * "Application number" is left for IRCC's number). Section B: the
+ * representative — the firm's RCIC (lib/firm.js), paid, a member of the
+ * College of Immigration and Citizenship Consultants (CICC) with the
+ * membership number, and the office address, phone and email. Signatures and
+ * dates are left for the client and the RCIC.
  */
 
 const P = 'IMM_5476/Page1';
 
 export function imm5476FieldMap() {
   return [
+    { som: `${P}/RadioButtonList`, const: '1', label: 'Appointing a representative' },
+
     // --- Section A: applicant ---
-    { som: `${P}/SectionA/familyName/body/p/span`, from: 'familyName' },
-    { som: `${P}/SectionA/givenName`, from: 'givenName' },
-    { som: `${P}/SectionA/DOB`, from: 'dob' },
-    { som: `${P}/SectionA/UCI`, from: 'uci' },
-    { som: `${P}/SectionA/application`, from: '_applicationType' },
+    { som: `${P}/SectionA/familyName`, from: 'familyName', need: 'Applicant family name', field: 'familyName' },
+    { som: `${P}/SectionA/givenName`, from: 'givenName', field: 'givenName' },
+    { som: `${P}/SectionA/DOB`, from: 'dob', need: 'Applicant date of birth', field: 'dob' },
+    { som: `${P}/SectionA/office`, from: 'email', need: 'Applicant email address', field: 'email' },
+    { som: `${P}/SectionA/UCI`, from: 'uci', field: 'uci' },
+    { som: `${P}/SectionA/office[2]`, from: '_applicationType' },
 
     // --- Section B: representative ---
-    { som: `${P}/SectionB/familyName/body/p/span`, from: '_repFamilyName' },
+    { som: `${P}/SectionB/familyName`, from: '_repFamilyName' },
     { som: `${P}/SectionB/givenName`, from: '_repGivenName' },
+    { som: `${P}/SectionB/question6/questionII/compensated`, const: '1', label: 'Paid representative: member of the CICC' },
     { som: `${P}/SectionB/question6/questionII/ICCRCMember`, from: '_rcicNumber' },
     { som: `${P}/SectionB/question7/organization`, from: '_firmName' },
-    { som: `${P}/SectionB/question7/membershipID`, from: '_rcicNumber' },
     { som: `${P}/SectionB/question7/unit`, from: '_firmUnit' },
     { som: `${P}/SectionB/question7/streetNo`, from: '_firmStreetNo' },
     { som: `${P}/SectionB/question7/streetName`, from: '_firmStreet' },

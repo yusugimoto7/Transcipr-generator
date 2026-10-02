@@ -172,7 +172,7 @@ export function planPackage(app, def, { owned = null, claimed = null, exclude = 
       if (c.perDoc) children.push(...perDocEntries(c, docs));
       else children.push({ name: c.name, generatedKey: c.generatedKey || null, docs });
     }
-    const name = sec.supporter && sponsor ? `${sec.name} (${sponsor})` : sec.name;
+    const name = sec.supporter && sponsor ? (/[()]/.test(sponsor) ? `${sec.name} — ${sponsor}` : `${sec.name} (${sponsor})`) : sec.name;
     return { name, generatedKey: sec.generatedKey || null, docs: own, children };
   });
 

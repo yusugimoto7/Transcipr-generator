@@ -11,6 +11,14 @@
 
 import { getAppType } from './appTypes';
 
+// IRCC's field-of-study list (IMM 1294 / 5709, "FieldOfStudyList").
+export const FIELDS_OF_STUDY = [
+  'Agric/Agric Ops/Rel Sciences', 'Architecture and Rel Services', 'Arts/Humanities/Social Science', 'Arts, Fine/Visual/Performing',
+  'Biological/Biomed Sciences', 'Business/Commerce', 'Business/Mgmt/Marketing', 'Computing/IT', 'ESL/FSL', 'Flight Training',
+  'Hospitality/Tourism', 'Law', 'Medicine', 'Science, Applied', 'Sciences, General', 'Sciences, Health', 'Theology/Religious Studies',
+  'Trades/Vocational', 'Other',
+];
+
 export const COUNTRIES_HINT =
   'Use the full country name in English (e.g. "Iran", "India", "Nigeria").';
 
@@ -203,9 +211,17 @@ export const STUDY_PERMIT_SCHEMA = {
         { id: 'schoolName', label: 'School / DLI name', type: 'text', required: true },
         { id: 'dliNumber', label: 'DLI number (O-number)', type: 'text', required: true },
         { id: 'palNumber', label: 'PAL / TAL number (if you have one)', type: 'text', note: 'From your Provincial Attestation Letter.' },
+        { id: 'palExpiry', label: 'PAL / TAL expiry date', type: 'date', note: 'From the PAL — IMM 1294 asks for it.' },
         { id: 'palExempt', label: 'PAL-exempt?', type: 'bool', note: 'Yes for graduate degrees, minors in K-12, extensions at the same school, etc. The platform drafts the exemption letter.' },
         { id: 'palExemptReason', label: 'Reason for PAL exemption', type: 'text', placeholder: "e.g. Master's degree program; minor child in primary school" },
         { id: 'programName', label: 'Program / field of study', type: 'text', required: true },
+        {
+          id: 'programField',
+          label: 'Field of study (IRCC list)',
+          type: 'select',
+          options: FIELDS_OF_STUDY,
+          note: 'The field the IMM form asks for. Left blank, it is taken from the program name.',
+        },
         {
           id: 'levelOfStudy',
           label: 'Level of study',
@@ -223,9 +239,13 @@ export const STUDY_PERMIT_SCHEMA = {
         },
         { id: 'schoolCity', label: 'School city', type: 'text', required: true },
         { id: 'schoolProvince', label: 'School province', type: 'text', required: true },
+        { id: 'schoolAddress', label: 'School address (campus, in English)', type: 'text', required: true, english: true, note: 'From the Letter of Acceptance — the study permit form asks for it.' },
+        { id: 'studentId', label: 'Student ID number (if the school gave one)', type: 'text' },
         { id: 'programStart', label: 'Program start date', type: 'date', required: true },
         { id: 'programEnd', label: 'Program end date', type: 'date', required: true },
         { id: 'tuitionCost', label: 'Tuition cost (CAD / year)', type: 'number', required: true },
+        { id: 'roomBoardCost', label: 'Room and board (CAD / year)', type: 'number', note: 'Rent and food for one year — IMM 1294 "Cost of studies".' },
+        { id: 'otherCosts', label: 'Other study costs (CAD / year)', type: 'number', note: 'Books, insurance, transport…' },
         {
           id: 'entryDate',
           label: 'Intended date of entry to Canada',

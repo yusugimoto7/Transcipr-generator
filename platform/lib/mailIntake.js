@@ -283,7 +283,7 @@ export async function attachToApplication(msg, app) {
 /* ------------------------------ naming ------------------------------ */
 
 const SHORT = {
-  passport: 'Passport', 'national-id': 'Birth Certificate and National ID', photo: 'Photo', transcripts: 'Transcripts', certificates: 'Certificate',
+  passport: 'Passport', 'national-id': 'Birth Certificate and National ID', photo: 'Photo', transcripts: 'Degree and Transcripts', certificates: 'Certificate',
   loa: 'LOA', pal: 'PAL', deposit: 'Tuition Payment', language: 'Language Test', 'proof-of-funds': 'Bank Statement', 'source-of-funds': 'Source of Funds',
   'title-deeds': 'Title Deed', 'employment-letter': 'Employment', 'job-offer': 'Job Offer', 'leave-of-absence': 'Leave of Absence', cv: 'CV',
   'ties-docs': 'Ties', 'police-clearance': 'Police Clearance', military: 'Military Service', 'marriage-cert': 'Marriage Certificate', insurance: 'Insurance',
@@ -297,16 +297,36 @@ const SHORT = {
 };
 const safe = (s) => String(s).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
 
+// Two checklist items can share a category (birth certificate / national ID
+// card, degree / transcripts): the client's own file name tells which.
+const ITEM_HINTS = [
+  { code: '101', re: /birth|shenas|شناسنامه/i, label: 'Birth Certificate' },
+  { code: '102', re: /melli|national|\bid\b|id card|kart|کارت ملی|ملی/i, label: 'National ID Card' },
+  { code: '105', re: /degree|diploma|daneshname|دانشنامه|madrak|مدرک|graduat/i, label: 'Degree Certificate' },
+  { code: '106', re: /transcript|grades|karname|ریز ?نمرات|کارنامه/i, label: 'Transcripts' },
+];
+
 /** "103 - Passport - Zahra.pdf" for a document, from its category and the file's checklist. */
 export function teamFilename(app, doc) {
   const ext = path.extname(doc.originalFilename || doc.filename) || '.pdf';
   const who = String(app.data?.givenName || '').trim().split(/\s+/)[0] || String(app.title || '').replace(/^\s*[A-Z]?\d{3,}\s*[-–_]\s*/i, '').split(/\s+/)[0] || '';
   const suffix = who ? ` - ${safe(who)}` : '';
-  if (!doc.category) return `000 - Unidentified - ${safe(path.basename(doc.originalFilename || doc.filename, ext))}${ext}`;
-  const item = buildChecklist(app.data || {}, app.type).find((i) => i.key === doc.category);
+  if (!doc.category) return unique(app, doc, `000 - Unidentified - ${safe(path.basename(doc.originalFilename || doc.filename, ext))}`, ext);
+  const items = buildChecklist(app.data || {}, app.type).filter((i) => i.key === doc.category);
+  const original = doc.originalFilename || doc.filename || '';
+  const hint = items.length > 1 ? ITEM_HINTS.find((h) => h.re.test(original) && items.some((i) => String(i.code) === h.code)) : null;
+  const item = hint ? items.find((i) => String(i.code) === hint.code) : items[0];
   const code = item ? String(item.code).replace(/^imm/i, 'IMM') : '000';
-  const label = SHORT[doc.category] || (item ? item.label.split(/ — | \(/)[0] : doc.category);
-  return `${code} - ${safe(label)}${suffix}${ext}`;
+  const label = hint?.label || SHORT[doc.category] || (item ? item.label.split(/ — | \(/)[0] : doc.category);
+  return unique(app, doc, `${code} - ${safe(label)}${suffix}`, ext);
+}
+
+/** The name, or "… (2)", "… (3)" when another document of the file already has it. */
+function unique(app, doc, base, ext) {
+  const taken = new Set((app.documents || []).filter((d) => d.id !== doc.id).map((d) => String(d.filename || '').toLowerCase()));
+  let name = `${base}${ext}`;
+  for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})${ext}`;
+  return name;
 }
 
 /* ------------------------------ Drive filing ------------------------------ */

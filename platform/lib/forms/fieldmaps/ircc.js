@@ -97,16 +97,9 @@ export function backgroundDetails(d) {
 export function irccData(d = {}, app = {}) {
   const [eduFromY, eduFromM] = ym(d.lastEduFrom);
   const [eduToY, eduToM] = ym(d.lastEduTo);
-  const [jobFromY, jobFromM] = ym(d.currentJobFrom);
-  const [jobToY, jobToM] = ym(filledRows(d.jobs)[0]?.to);
   const cc = digits(d.phoneCountryCode);
   const phone = digits(d.phoneNumber);
   const na = cc === '1' && phone.length === 10;
-  const jobs = rows(d.employmentHistory).map(([from, to, occupation, employer, city, country]) => {
-    const [fy, fm] = ym(from);
-    const [ty, tm] = ym(to);
-    return { fy, fm, ty, tm, occupation, employer, city, country };
-  });
   let spouseFamily = d.spouseFamilyName || '';
   let spouseGiven = d.spouseGivenName || '';
   if (!spouseFamily && /,/.test(d.spouseName || '')) [spouseFamily, spouseGiven] = d.spouseName.split(',').map((s) => s.trim());
@@ -154,10 +147,6 @@ export function irccData(d = {}, app = {}) {
     _eduFromM: eduFromM,
     _eduToY: eduToY,
     _eduToM: eduToM,
-    _jobFromY: jobFromY,
-    _jobFromM: jobFromM,
-    _jobToY: jobToY,
-    _jobToM: jobToM,
     _bgDetails: backgroundDetails(d),
     _bgTb: yn(d.bgTbContact),
     _bgMedical: yn(d.bgMedicalCondition),
@@ -184,18 +173,119 @@ export function irccData(d = {}, app = {}) {
     _firstEntryPlace: d.firstEntryPlace || d.lastEntryPlace,
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
+    _programField: fieldOfStudy(d),
+    _expensesOther: expensesOther(d),
   };
   out._openOutside = OPEN_PERMITS.has(out._workPermitType); // IMM 1295
   out._openInside = OPEN_PERMITS.has(out._workPermitTypeInside); // IMM 5710
-  for (let i = 0; i < 2; i++) {
-    const j = jobs[i] || {};
+  // The employment section: row 1 is the current (most recent) activity, rows 2–3 the previous ones.
+  activities(d).slice(0, 3).forEach((a, i) => {
+    const [fy, fm] = ym(a.from);
+    const [ty, tm] = ym(a.to);
     Object.assign(out, {
-      [`_job${i + 2}FromY`]: j.fy, [`_job${i + 2}FromM`]: j.fm, [`_job${i + 2}ToY`]: j.ty, [`_job${i + 2}ToM`]: j.tm,
-      [`_job${i + 2}Occupation`]: j.occupation, [`_job${i + 2}Employer`]: j.employer,
-      [`_job${i + 2}City`]: j.city, [`_job${i + 2}Country`]: j.country,
+      [`_act${i + 1}FromY`]: fy, [`_act${i + 1}FromM`]: fm, [`_act${i + 1}ToY`]: ty, [`_act${i + 1}ToM`]: tm,
+      [`_act${i + 1}Occupation`]: a.occupation, [`_act${i + 1}Employer`]: a.employer,
+      [`_act${i + 1}City`]: a.city, [`_act${i + 1}Country`]: a.country,
     });
-  }
+  });
   return out;
+}
+
+/**
+ * What the applicant did over the past 10 years, most recent first, for the
+ * forms' employment section ("current activity" then previous ones): jobs,
+ * military service and post-secondary studies ("Student"). IRCC asks for no
+ * gaps, so the studies and the service count as activities.
+ */
+export function activities(d = {}, today = new Date()) {
+  const since = `${today.getFullYear() - 10}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const list = [
+    ...filledRows(d.jobs).map((j) => ({ from: j.from, to: j.to, occupation: j.occupation, employer: j.employer, city: j.city, country: j.country })),
+    ...filledRows(d.militaryService).map((m) => ({
+      from: m.from, to: m.to, occupation: /iran/i.test(m.country || '') ? 'Military service (conscription)' : 'Military service',
+      employer: m.location, city: m.province, country: m.country,
+    })),
+  ];
+  if (d.lastInstitution && d.lastEduFrom && POST_SECONDARY.test(d.highestEducation || '')) {
+    list.push({ from: d.lastEduFrom, to: d.lastEduTo, occupation: `Student${d.lastFieldOfStudy ? ` (${d.lastFieldOfStudy})` : ''}`, employer: d.lastInstitution, city: d.lastEduCity, country: d.lastEduCountry });
+  }
+  const end = (a) => String(a.to || '9999-99');
+  return list
+    .filter((a) => end(a) >= since)
+    .sort((a, b) => end(b).localeCompare(end(a)) || String(b.from || '').localeCompare(String(a.from || '')));
+}
+
+/** Months in the past 10 years that no activity covers: [{ from, to }] (gaps of 2 months or more). */
+export function activityGaps(d = {}, today = new Date()) {
+  const acts = activities(d, today);
+  if (!acts.length) return [];
+  const m = (v) => {
+    const x = String(v || '').match(/^(\d{4})-(\d{2})/);
+    return x ? Number(x[1]) * 12 + Number(x[2]) - 1 : null;
+  };
+  const now = today.getFullYear() * 12 + today.getMonth();
+  const since = now - 120;
+  const covered = new Set();
+  for (const a of acts) {
+    const from = m(a.from);
+    const to = a.to ? m(a.to) : now;
+    if (from == null || to == null) continue;
+    for (let k = Math.max(from, since); k <= Math.min(to, now); k++) covered.add(k);
+  }
+  const gaps = [];
+  let start = null;
+  for (let k = since; k <= now; k++) {
+    if (!covered.has(k) && start == null) start = k;
+    if ((covered.has(k) || k === now) && start != null) {
+      const stop = covered.has(k) ? k - 1 : k;
+      if (stop - start + 1 >= 2) gaps.push({ from: start, to: stop });
+      start = null;
+    }
+  }
+  const fmt = (k) => `${Math.floor(k / 12)}-${String((k % 12) + 1).padStart(2, '0')}`;
+  return gaps.map((g) => ({ from: fmt(g.from), to: fmt(g.to) }));
+}
+
+// The IRCC field of study a program name falls under (FieldOfStudyList).
+const FIELD_HINTS = [
+  [/\b(esl|fsl|english as a second|english language|french as a second|language program|academic english)\b/i, 'ESL/FSL'],
+  [/data|analytic|computer|comput|software|\bit\b|information tech|cyber|web|network|program+ing|artificial intelligence|\bai\b|machine learning|cloud|database/i, 'Computing/IT'],
+  [/hospitality|tourism|culinary|hotel|restaurant|food service|event management/i, 'Hospitality/Tourism'],
+  [/business|management|marketing|\bmba\b|accounting|finance|commerce|supply chain|logistics|human resources|project management|administration|economics/i, 'Business/Mgmt/Marketing'],
+  [/nurs|health|pharma|medical lab|dental|physiotherap|kinesiology|public health|paramedic|caregiv|personal support/i, 'Sciences, Health'],
+  [/medicine|\bmd\b|medical doctor/i, 'Medicine'],
+  [/\blaw\b|legal|paralegal/i, 'Law'],
+  [/architect/i, 'Architecture and Rel Services'],
+  [/agricult|agri|horticult|forestry/i, 'Agric/Agric Ops/Rel Sciences'],
+  [/biolog|biomed|biotech/i, 'Biological/Biomed Sciences'],
+  [/engineer|technolog|mechanic|electr|civil|construction management|robot/i, 'Science, Applied'],
+  [/weld|plumb|carpent|electrician|automotive|hvac|trade|apprentice|culinary arts|hairstyl|esthetic/i, 'Trades/Vocational'],
+  [/fine art|visual art|performing|music|film|animation|graphic design|design|photograph|theatre|dance/i, 'Arts, Fine/Visual/Performing'],
+  [/flight|aviation|pilot/i, 'Flight Training'],
+  [/theolog|religio|divinity/i, 'Theology/Religious Studies'],
+  [/psycholog|sociolog|social work|education|teaching|early childhood|history|philosoph|humanit|political|communication|journalism|linguist|arts\b/i, 'Arts/Humanities/Social Science'],
+  [/physic|chemist|mathemat|statistic|science/i, 'Sciences, General'],
+];
+export function fieldOfStudy(d = {}) {
+  if (d.programField) return d.programField;
+  const name = String(d.programName || '');
+  if (!name.trim()) return '';
+  return FIELD_HINTS.find(([re]) => re.test(name))?.[1] || 'Other';
+}
+
+/** "Other" on "Expenses paid by": who, in words. */
+function expensesOther(d) {
+  const who = String(d.sponsorName || '').trim();
+  switch (d.fundingSource) {
+    case 'Combination':
+      return who ? `Myself and ${who}` : 'Myself and my family';
+    case 'Sponsor':
+      return who || 'Sponsor';
+    case 'Scholarship':
+      return who ? `Scholarship — ${who}` : 'Scholarship';
+    default:
+      return '';
+  }
 }
 
 /**
@@ -222,7 +312,7 @@ export function sourceOf(from) {
   if (!from) return null;
   if (SOURCE[from]) return SOURCE[from];
   if (/^_phone/.test(from)) return 'phoneNumber';
-  if (/^_job/.test(from)) return 'jobs';
+  if (/^_(job|act)/.test(from)) return 'jobs';
   return from.startsWith('_') ? null : from;
 }
 
@@ -359,23 +449,23 @@ export const COMMON_RULES = [
   [/(Edu_Row1\/Country\/Country|EduLine2\/Country)$/, { from: 'lastEduCountry', when: (d) => d._eduYN === 'Y' }],
 
   // --- Employment: current, then two previous ---
-  [/(OccupationRow1\/FromYear|EmpRec1\/Line1\/From\/YYYY)$/, { from: '_jobFromY', need: 'Current occupation: since (YYYY-MM)' }],
-  [/(OccupationRow1\/FromMonth|EmpRec1\/Line1\/From\/MM)$/, { from: '_jobFromM' }],
-  [/(OccupationRow1\/ToYear|EmpRec1\/Line2\/To\/YYYY)$/, { from: '_jobToY' }],
-  [/(OccupationRow1\/ToMonth|EmpRec1\/Line2\/To\/MM)$/, { from: '_jobToM' }],
-  [/(OccupationRow1\/Occupation\/Occupation|EmpRec1\/Line1\/Occupation)$/, { from: 'currentOccupation', need: 'Current occupation (in English)' }],
-  [/(OccupationRow1\/Employer|EmpRec1\/Line1\/Employer)$/, { from: 'employer' }],
-  [/(OccupationRow1\/CityTown\/CityTown|EmpRec1\/Line2\/City)$/, { from: 'currentJobCity', need: 'Current occupation: city' }],
-  [/(OccupationRow1\/Country\/Country|EmpRec1\/Line2\/Country)$/, { from: 'currentJobCountry', need: 'Current occupation: country' }],
+  [/(OccupationRow1\/FromYear|EmpRec1\/Line1\/From\/YYYY)$/, { from: '_act1FromY', need: 'Current activity / occupation: since (YYYY-MM)' }],
+  [/(OccupationRow1\/FromMonth|EmpRec1\/Line1\/From\/MM)$/, { from: '_act1FromM' }],
+  [/(OccupationRow1\/ToYear|EmpRec1\/Line2\/To\/YYYY)$/, { from: '_act1ToY' }],
+  [/(OccupationRow1\/ToMonth|EmpRec1\/Line2\/To\/MM)$/, { from: '_act1ToM' }],
+  [/(OccupationRow1\/Occupation\/Occupation|EmpRec1\/Line1\/Occupation)$/, { from: '_act1Occupation', need: 'Current activity / occupation (in English)' }],
+  [/(OccupationRow1\/Employer|EmpRec1\/Line1\/Employer)$/, { from: '_act1Employer' }],
+  [/(OccupationRow1\/CityTown\/CityTown|EmpRec1\/Line2\/City)$/, { from: '_act1City', need: 'Current activity / occupation: city' }],
+  [/(OccupationRow1\/Country\/Country|EmpRec1\/Line2\/Country)$/, { from: '_act1Country', need: 'Current activity / occupation: country' }],
   ...[2, 3].flatMap((n) => [
-    [new RegExp(`(OccupationRow${n}\\/FromYear|EmpRec${n}\\/Line1\\/From\\/YYYY)$`), { from: `_job${n}FromY` }],
-    [new RegExp(`(OccupationRow${n}\\/FromMonth|EmpRec${n}\\/Line1\\/From\\/MM)$`), { from: `_job${n}FromM` }],
-    [new RegExp(`(OccupationRow${n}\\/ToYear|EmpRec${n}\\/Line2\\/To\\/YYYY)$`), { from: `_job${n}ToY` }],
-    [new RegExp(`(OccupationRow${n}\\/ToMonth|EmpRec${n}\\/Line2\\/To\\/MM)$`), { from: `_job${n}ToM` }],
-    [new RegExp(`(OccupationRow${n}\\/Occupation\\/Occupation|EmpRec${n}\\/Line1\\/Occupation)$`), { from: `_job${n}Occupation` }],
-    [new RegExp(`(OccupationRow${n}\\/Employer|EmpRec${n}\\/Line1\\/Employer)$`), { from: `_job${n}Employer` }],
-    [new RegExp(`(OccupationRow${n}\\/CityTown\\/CityTown|EmpRec${n}\\/Line2\\/City)$`), { from: `_job${n}City` }],
-    [new RegExp(`(OccupationRow${n}\\/Country\\/Country|EmpRec${n}\\/Line2\\/Country)$`), { from: `_job${n}Country` }],
+    [new RegExp(`(OccupationRow${n}\\/FromYear|EmpRec${n}\\/Line1\\/From\\/YYYY)$`), { from: `_act${n}FromY` }],
+    [new RegExp(`(OccupationRow${n}\\/FromMonth|EmpRec${n}\\/Line1\\/From\\/MM)$`), { from: `_act${n}FromM` }],
+    [new RegExp(`(OccupationRow${n}\\/ToYear|EmpRec${n}\\/Line2\\/To\\/YYYY)$`), { from: `_act${n}ToY` }],
+    [new RegExp(`(OccupationRow${n}\\/ToMonth|EmpRec${n}\\/Line2\\/To\\/MM)$`), { from: `_act${n}ToM` }],
+    [new RegExp(`(OccupationRow${n}\\/Occupation\\/Occupation|EmpRec${n}\\/Line1\\/Occupation)$`), { from: `_act${n}Occupation` }],
+    [new RegExp(`(OccupationRow${n}\\/Employer|EmpRec${n}\\/Line1\\/Employer)$`), { from: `_act${n}Employer` }],
+    [new RegExp(`(OccupationRow${n}\\/CityTown\\/CityTown|EmpRec${n}\\/Line2\\/City)$`), { from: `_act${n}City` }],
+    [new RegExp(`(OccupationRow${n}\\/Country\\/Country|EmpRec${n}\\/Line2\\/Country)$`), { from: `_act${n}Country` }],
   ]),
 
   // --- Background questions: forms for applicants outside Canada (1294, 1295, 5257) ---
@@ -454,10 +544,17 @@ export const EXTRA_RULES = {
     [/DetailsOfStudy\/PurposeRow1\/DLI$/, { from: 'dliNumber', need: 'DLI number' }],
     [/DetailsOfStudy\/PurposeRow1\/HowLongStudy\/FromDate$/, { from: 'programStart', need: 'Program start date' }],
     [/DetailsOfStudy\/PurposeRow1\/HowLongStudy\/ToDate$/, { from: 'programEnd', need: 'Program end date' }],
+    [/DetailsOfStudy\/PurposeRow1\/schoolName\/Program$/, { from: '_programField', need: 'Field of study' }],
+    [/DetailsOfStudy\/PurposeRow1\/Address\/Address$/, { from: 'schoolAddress', need: 'School address' }],
+    [/DetailsOfStudy\/PurposeRow1\/StudentNo$/, { from: 'studentId' }],
     [/Contacts_Row1\/PAL\/DocNum$/, { from: 'palNumber' }],
+    [/Contacts_Row1\/PAL\/DocExpiry$/, { from: 'palExpiry', when: (d) => !!d.palNumber }],
     [/Contacts_Row1\/tuition\/amount$/, { from: 'tuitionCost', need: 'Tuition cost' }],
+    [/Contacts_Row1\/roomBoard\/amount$/, { from: 'roomBoardCost', need: 'Room and board (cost of studies)' }],
+    [/Contacts_Row1\/other\/amount$/, { from: 'otherCosts' }],
     [/Contacts_Row1\/expensesPaid\/Funds\/Funds$/, { from: 'totalFunds', need: 'Funds available' }],
-    [/Contacts_Row1\/expensesPaid\/expensesPaidBy$/, { from: 'fundingSource', valueMap: EXPENSES_PAID_BY }],
+    [/Contacts_Row1\/expensesPaid\/expensesPaidBy$/, { from: 'fundingSource', valueMap: EXPENSES_PAID_BY, need: 'Expenses paid by' }],
+    [/Contacts_Row1\/expensesPaid\/Other$/, { from: '_expensesOther', when: (d) => EXPENSES_PAID_BY[d.fundingSource] === 'Other' }],
   ],
   imm5257: [
     [/PersonalDetails\/VisaType\/VisaType$/, { const: 'Visitor Visa' }],
