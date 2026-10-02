@@ -258,6 +258,7 @@ await new Promise((r) => ai.listen(STUB, r));
 
 /* ------------------------------ mailbox ------------------------------ */
 const mailDir = await fs.mkdtemp(path.join(os.tmpdir(), 'e2e-mail-'));
+let mailSeq = 0; // the mailbox reads messages in name order, like UIDs
 const eml = (from, subject, atts, text) => {
   const bd = 'E2EB0UNDARY';
   let s = `From: ${from}\r\nTo: visa@sugimotovisa.com\r\nSubject: ${subject}\r\nDate: ${new Date().toUTCString()}\r\nMessage-ID: <${crypto.randomBytes(6).toString('hex')}@e2e>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="${bd}"\r\n\r\n--${bd}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${text}\r\n`;
@@ -335,7 +336,7 @@ async function runType(type) {
     const buf = d.image ? await photo() : await docPdf(d.tag, d.name, d.pages || 1);
     atts.push({ name: d.name, mime: d.image ? 'image/jpeg' : 'application/pdf', buf });
   }
-  await fs.writeFile(path.join(mailDir, `${type}-1.eml`), eml(`${P.file.title} <${P.email}>`, 'My documents', atts, 'Hello,\nPlease find my documents attached.\nThank you'));
+  await fs.writeFile(path.join(mailDir, `${String(++mailSeq).padStart(3, '0')}-${type}.eml`), eml(`${P.file.title} <${P.email}>`, 'My documents', atts, 'Hello,\nPlease find my documents attached.\nThank you'));
   r = await call('POST', '/api/admin/mail', { action: 'check' });
   const mailed = await until(async () => {
     const a = (await call('GET', `/api/applications/${id}`)).data?.application;
