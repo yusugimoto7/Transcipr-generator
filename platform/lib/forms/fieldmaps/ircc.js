@@ -174,6 +174,16 @@ export function irccData(d = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
     _programField: fieldOfStudy(d),
+    // IMM 5257's purpose: the super visa and returning students / workers have entries of their own.
+    _visitPurpose:
+      type === 'super-visa'
+        ? 'Super Visa: For Parents or Grandparents'
+        : type === 'trv-inside' && /^Student/.test(d.currentStatusCanada || '')
+          ? 'Returning Student'
+          : type === 'trv-inside' && /^Worker/.test(d.currentStatusCanada || '')
+            ? 'Returning Worker'
+            : VISIT_PURPOSE[d.visitPurpose] || '',
+    _visitPurposeOther: d.visitPurpose === 'Other' ? d.visitPlan || 'Other' : d.visitPurpose || '',
     ...contactInCanada(d),
     // An LMIA number, or for an LMIA-exempt job the employer portal's offer number (A1234567).
     _lmiaOrOffer: d.lmiaNumber || d.c11OfferNumber || '',
@@ -594,8 +604,8 @@ export const EXTRA_RULES = {
   ],
   imm5257: [
     [/PersonalDetails\/VisaType\/VisaType$/, { const: 'Visitor Visa' }],
-    [/PurposeOfVisit\/PurposeOfVisit$/, { from: 'visitPurpose', valueMap: VISIT_PURPOSE, need: 'Purpose of visit' }],
-    [/DetailsOfVisit\/PurposeRow1\/Other\/Other$/, { from: 'visitPurpose', when: (d) => VISIT_PURPOSE[d.visitPurpose] === 'Other' }],
+    [/PurposeOfVisit\/PurposeOfVisit$/, { from: '_visitPurpose', need: 'Purpose of visit' }],
+    [/DetailsOfVisit\/PurposeRow1\/Other\/Other$/, { from: '_visitPurposeOther', when: (d) => d._visitPurpose === 'Other' }],
     ...date(/HowLongStay\/FromDate$/, [/StayDates\/FromYr/, /StayDates\/FromMM/, /StayDates\/FromDD/], 'visitFrom', { need: 'Visit from (date)' }),
     ...date(/HowLongStay\/ToDate$/, [/StayDates\/ToYr/, /StayDates\/ToMM/, /StayDates\/ToDD/], 'visitTo', { need: 'Visit to (date)' }),
     [/DetailsOfVisit\/PurposeRow1\/Funds\/Funds$/, { from: '_visitFunds', need: 'Funds available for the stay' }],
