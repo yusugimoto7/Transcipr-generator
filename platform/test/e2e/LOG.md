@@ -139,3 +139,58 @@ Confirmed on her IMM 1294:
 **Final study permit run: every step passed for both clients.**
 - **Arman:** IMM 1294 has 129 boxes filled and nothing to check.
 - **Sara:** two genuine employment gaps in her own history are flagged.
+
+---
+
+## Loop 3 (the other 21 types)
+
+**Every step passed for all 21 types.** Every client:
+- opens a file
+- emails documents, with shared family addresses assigned by staff
+- uploads the rest of the checklist
+- has every document recognised and named
+- gets a Drive folder with "01 - Documents", "02 - Final Files" and "91 - Generated Files", and no duplicate names
+- gets every final file built, downloaded and zipped
+
+The applicant's core facts are on every main form. No answered box is left marked empty.
+
+Last fixes:
+
+| Type | Problem | Fix |
+|---|---|---|
+| Study permit for a child inside Canada (Nika Zand) | IMM 5709 "Applying for" not ticked: a visitor child applying for a first study permit has no extend / restore reason | "First time or extend" is ticked for an applicant who is not already a student |
+| Study permit for a worker's child (Sam Sadeghi) | IMM 5646 student's address in Canada empty (no custodian) | The parent's address in Canada |
+
+Boxes filled per form in the last run:
+
+| Type | Forms (boxes filled) |
+|---|---|
+| Study permit (Arman / Sara) | IMM 1294 129 / 123 · Schedule 1 32 / 18 · IMM 5645 63 / 50 · IMM 5476 21 |
+| OWP spouse of student (outside) | IMM 1295 108 · Sch. 1 18 · 5645 56 · 5476 21 · 5713 6 (all its boxes but signatures) |
+| OWP spouse of worker | 1295 100 · Sch. 1 18 · 5645 63 · 5476 21 |
+| Work permit, employer (LMIA) | 1295 103 · Sch. 1 25 · 5645 50 · 5476 21 |
+| C11 entrepreneur | 1295 109 · Sch. 1 25 · 5645 56 · 5476 21 |
+| Minor study permit / child of worker | 1294 91 · 5645 50 · 5476 21 · 5713 6 / 5646 38 |
+| Visitor visa / spouse / business | 5257 107 / 108 / 108 · Sch. 1 25 · 5645 56–63 · 5476 21 |
+| Child visitors | 5257 92 · 5476 21 · 5713 6 |
+| Super visa | 5257 91 · Sch. 1 18 · 5645 50 · 5476 21 |
+| Work permit extension / Iranian OWP / PGWP / SOWP inside | 5710 122 / 106 / 116 / 113 · 5476 21 |
+| Visitor visa inside / visitor record | 5257 128 / 5708 107 · 5476 21 |
+| Study permit inside / child inside | 5709 123 / 103 · 5476 21 |
+| Reconsideration | IMM 5744 8 (all but the signature lines) |
+
+The boxes still empty are questions that don't apply to that client (no
+previous marriage, no second contact, no other country of residence…),
+signatures and dates, barcodes and the forms' own validation stamps.
+
+### What each form still flags for the team (correct, not errors)
+
+- **Employment gaps** in a client's own 10-year history, e.g. a visitor's time in Canada since arriving, or months between graduation and a first job. The team adds what the person did.
+- **Super visa — "funds available":** the son pays for everything; the team decides what to state.
+- **Study permit for a worker's child — IMM 5646 custodian:** the child lives with the parents and has no custodian. See the open question below.
+
+### Open question for the firm
+
+IMM 5646 (custodianship declaration) is in the forms list of the *child of a
+worker* type, whose parent is in Canada, but not of the *minor studying alone
+with a custodian* type. That looks reversed. It was left as the firm set it.

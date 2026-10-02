@@ -181,8 +181,9 @@ export function irccData(d0 = {}, app = {}) {
     _applyExtend: /^Extend/.test(d.wpApplyingFor || '') ? '1' : d.wpApplyingFor ? '0' : '',
     _applyNew: /^Get a permit/.test(d.wpApplyingFor || '') ? '1' : d.wpApplyingFor ? '0' : '',
     _applyRestore: /^Restore/.test(d.wpApplyingFor || '') ? '1' : d.wpApplyingFor ? '0' : '',
-    _studyApplyExtend: d.studyInsideReason ? (/^Restore/.test(d.studyInsideReason) ? '0' : '1') : '',
-    _studyRestore: d.studyInsideReason ? (/^Restore/.test(d.studyInsideReason) ? '1' : '0') : '',
+    // IMM 5709: "first time or extend" vs "restore"; a child here as a visitor applies for the first time.
+    _studyApplyExtend: d.studyInsideReason ? (/^Restore/.test(d.studyInsideReason) ? '0' : '1') : d.currentStatusCanada && !/^Student/.test(d.currentStatusCanada) ? '1' : '',
+    _studyRestore: d.studyInsideReason ? (/^Restore/.test(d.studyInsideReason) ? '1' : '0') : d.currentStatusCanada && !/^Student/.test(d.currentStatusCanada) ? '0' : '',
     _firstEntryDate: d.firstEntryDate || d.lastEntryDate,
     _firstEntryPlace: d.firstEntryPlace || d.lastEntryPlace,
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
