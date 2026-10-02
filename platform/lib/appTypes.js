@@ -688,7 +688,7 @@ export const APP_TYPES = {
   'super-visa': {
     key: 'super-visa', service: '100-312', title: 'Super Visa (Parents & Grandparents)', group: 'Visit — outside Canada', where: 'outside',
     description: 'A parent or grandparent of a Canadian citizen or permanent resident — long stays, with Canadian medical insurance and a minimum income for the host (IMM 5257).',
-    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'superVisa', 'history', 'tiesReturn'],
+    steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'superVisa', 'education', 'history', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100,
       I(101, 'invitation-letter', 'Invitation letter from your child or grandchild (citizen / PR)', { party: 'principal', hint: 'Must promise financial support for the whole visit and list the people in their household.' }),
@@ -780,7 +780,7 @@ export const APP_TYPES = {
   'trv-inside': {
     key: 'trv-inside', service: '100-403', title: 'Visitor Visa (TRV) — for Work / Study Permit Holders', group: 'Visit — inside Canada', where: 'inside',
     description: 'A permit holder in Canada who needs a visa counterfoil to re-enter after travelling (IMM 5257). Decided by a visa office abroad; does NOT change status in Canada.',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'history', 'tiesReturn'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visit', 'education', 'history', 'tiesReturn'],
     forms: [F.imm5257, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH,
       I(103, 'passport', 'Passport — every page with a stamp or visa, plus the Canadian visa label', { hint: 'A new passport is needed if it expires in less than 2 years.' }),
@@ -797,7 +797,7 @@ export const APP_TYPES = {
   'visitor-record': {
     key: 'visitor-record', service: '100-404', title: 'Visitor Record — extend stay as a visitor', group: 'Visit — inside Canada', where: 'inside',
     description: 'Extend a stay or change conditions as a visitor while in Canada — often a family member of a permit holder (IMM 5708). Issues a status document, not a visa.',
-    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visitorRecord', 'history', 'fundsStay', 'tiesReturn'],
+    steps: ['personal', 'passport', 'contact', 'family', 'statusInCanada', 'visitorRecord', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5708, F.imm5476],
     checklist: [FORM100, BIRTH, passport(1, true), PHOTO,
       I(105, 'accommodation', 'Residence details — lease, hotel, or the address and contact details of relatives/friends'),

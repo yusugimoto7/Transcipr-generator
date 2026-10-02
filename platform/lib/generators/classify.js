@@ -149,6 +149,9 @@ export function classifyByFilename(filename, type) {
   const internal = RULES[0][1].test(name);
   if (!internal && /imm ?5621/i.test(name)) return 'refusal-letter';
   if (!internal && /\bimm ?\d{4}/i.test(name)) return 'rep-form';
+  // A photo is a photo whatever number it carries (104 is the photo on most
+  // services, but the completion letter on a PGWP file).
+  if (/(^|[\s_\-–(])(photo|photograph|عکس)(?=[\s_\-–).]|$)/i.test(name) && /\.(jpe?g|png|webp|heic)$/i.test(name)) return 'photo';
   if (code && type && !internal) {
     const own = codeMapFor(type);
     if (own[code]) return own[code];

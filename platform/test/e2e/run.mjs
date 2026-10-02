@@ -355,7 +355,18 @@ async function runType(type) {
 
   // 3. The team uploads the rest: the tagged documents, and one document for
   // every other item of the type's checklist the client provides.
-  const uploads = [...P.uploaded];
+  let uploads = [...P.uploaded];
+  if (P.fromChecklist) {
+    // Name each tagged document with this type's own code for its category (codes differ per service).
+    const items = buildChecklist({ ...P.team, sex: P.reads.PASSPORT?.fields?.sex }, type);
+    uploads = uploads.map((u) => {
+      const cat = P.reads[u.tag]?.category;
+      const it = items.find((i) => i.key === cat);
+      const rest = u.name.replace(/^[\dA-Za-z-]+ - /, '');
+      return { ...u, name: it ? `${it.code} - ${rest}` : rest };
+    });
+    current.docNames = Object.fromEntries(uploads.map((u) => [u.tag, [u.name]]).concat(Object.entries(current.docNames)));
+  }
   if (P.fromChecklist) {
     const who = P.file.title.split(' ')[0];
     const have = new Set([...uploads.map((u) => u.name.split(' - ')[0]), '101', '102', '103', '104', '105', '106']);
