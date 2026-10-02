@@ -201,7 +201,7 @@ try {
   const z = byFrom['client@mail.test'];
   ok(z.status === 'processed' && z.appId === zahra && /sender client@mail.test/.test(z.how), 'the intake email address matches the message to the file');
   const names = z.files.map((f) => f.filename).sort();
-  ok(names.join(' | ') === '101 - Birth Certificate and National ID - Zahra.pdf | 103 - Passport - Zahra.pdf', `documents are named the team's way after reading (${names.join(' | ')})`);
+  ok(names.join(' | ') === '101 - Birth Certificate - Zahra.pdf | 103 - Passport - Zahra.pdf', `documents are named the team's way after reading (${names.join(' | ')})`);
   ok(z.files.every((f) => f.driveId) && z.drive.uploaded === 2 && z.drive.folderCreated === true, 'both documents were filed on Drive in a folder created for the client');
   const created = Object.entries(tree).find(([, t]) => t.name === 'S26160 - Zahra Mousavi' && t.parents[0] === 'yearFolder001');
   ok(Boolean(created), "the new client folder is 'S26160 - Zahra Mousavi' under this year's FILES folder (not the same-named folder elsewhere)");
