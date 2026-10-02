@@ -174,6 +174,8 @@ export function irccData(d = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
     _programField: fieldOfStudy(d),
+    // A visit form's funds: the funds step, or the visit's budget when the type has no funds step.
+    _visitFunds: d.totalFunds || d.visitBudget || '',
     _expensesOther: expensesOther(d),
   };
   out._openOutside = OPEN_PERMITS.has(out._workPermitType); // IMM 1295
@@ -562,7 +564,7 @@ export const EXTRA_RULES = {
     [/DetailsOfVisit\/PurposeRow1\/Other\/Other$/, { from: 'visitPurpose', when: (d) => VISIT_PURPOSE[d.visitPurpose] === 'Other' }],
     [/HowLongStay\/FromDate$/, { from: 'visitFrom', need: 'Visit from (date)' }],
     [/HowLongStay\/ToDate$/, { from: 'visitTo', need: 'Visit to (date)' }],
-    [/DetailsOfVisit\/PurposeRow1\/Funds\/Funds$/, { from: 'totalFunds', need: 'Funds available for the stay' }],
+    [/DetailsOfVisit\/PurposeRow1\/Funds\/Funds$/, { from: '_visitFunds', need: 'Funds available for the stay' }],
     [/DetailsOfVisit\/Contacts_Row1\/Name\/Name$/, { from: 'hostName' }],
     [/DetailsOfVisit\/Contacts_Row1\/RelationshipToMe\/RelationshipToMe$/, { from: 'hostRelationship' }],
     [/DetailsOfVisit\/Contacts_Row1\/AddressInCanada\/AddressInCanada$/, { from: 'hostAddress' }],
@@ -599,8 +601,15 @@ export const EXTRA_RULES = {
     [/SchoolDetails\/StudyTerm\/ToDate$/, { from: 'programEnd', need: 'Program end date' }],
     [/SchoolDetails\/EduCosts\/Tuition$/, { from: 'tuitionCost', need: 'Tuition cost' }],
     [/SchoolDetails\/Funds\/FundsAvail$/, { from: 'totalFunds', need: 'Funds available' }],
-    [/SchoolDetails\/Funds\/ExpPaidBy$/, { from: 'fundingSource', valueMap: EXPENSES_PAID_BY }],
+    [/SchoolDetails\/Funds\/ExpPaidBy$/, { from: 'fundingSource', valueMap: EXPENSES_PAID_BY, need: 'Expenses paid by' }],
+    [/SchoolDetails\/Funds\/Other$/, { from: '_expensesOther', when: (d) => EXPENSES_PAID_BY[d.fundingSource] === 'Other' }],
+    [/SchoolDetails\/StudyMajor\/Program$/, { from: '_programField', need: 'Field of study' }],
+    [/SchoolDetails\/Address$/, { from: 'schoolAddress', need: 'School address' }],
+    [/SchoolDetails\/StudentNo$/, { from: 'studentId' }],
+    [/SchoolDetails\/EduCosts\/Room$/, { from: 'roomBoardCost' }],
+    [/SchoolDetails\/EduCosts\/OtherCosts$/, { from: 'otherCosts' }],
     [/PAL\/PALDocNum$/, { from: 'palNumber' }],
+    [/PAL\/DocExpiry$/, { from: 'palExpiry', when: (d) => !!d.palNumber }],
   ],
   imm5710: [
     [/ApplyingFor\/Extend$/, { from: '_applyExtend', need: 'Applying to extend / new employer / restore' }],

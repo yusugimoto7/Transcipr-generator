@@ -23,6 +23,9 @@ import JSZip from 'jszip';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { jwtVerify, importSPKI } from 'jose';
 import { PROFILES } from './profiles.mjs';
+import { loadLib } from '../_load.mjs';
+
+const { buildChecklist } = await loadLib('checklist.js');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..');
@@ -340,15 +343,28 @@ async function runType(type) {
   }, 'emailed documents on the file');
   step('email: the documents arrive on the file', mailed.documents.length >= P.emailed.length, `${mailed.documents.length} documents`);
 
-  // 3. The team uploads the rest.
+  // 3. The team uploads the rest: the tagged documents, and one document for
+  // every other item of the type's checklist the client provides.
+  const uploads = [...P.uploaded];
+  if (P.fromChecklist) {
+    const who = P.file.title.split(' ')[0];
+    const have = new Set([...uploads.map((u) => u.name.split(' - ')[0]), '101', '102', '103', '104', '105', '106']);
+    for (const it of buildChecklist({ ...P.team, sex: P.reads.PASSPORT?.fields?.sex }, type)) {
+      if (it.party || it.cond || ['internal', 'questionnaire', 'rep-form'].includes(it.key) || have.has(String(it.code))) continue;
+      have.add(String(it.code));
+      const label = it.label.split(/ — | \(/)[0].replace(/[\\/:*?"<>|]/g, '-');
+      uploads.push({ name: `${it.code} - ${label} - ${who}.pdf`, tag: `CL${String(it.code).replace(/\W/g, '')}`, pages: 2 });
+    }
+  }
+  report.uploads = uploads.map((u) => u.name);
   const fd = new FormData();
-  for (const d of P.uploaded) {
+  for (const d of uploads) {
     const buf = d.image ? await photo() : await docPdf(d.tag, d.name, d.pages || 1);
     current.docNames[d.tag] = [d.name];
     fd.append('files', new Blob([buf], { type: d.image ? 'image/jpeg' : 'application/pdf' }), d.name);
   }
   r = await call('POST', `/api/applications/${id}/upload`, null, fd);
-  step('upload the other documents', r.status === 201, `${r.data?.documents?.length ?? r.data?.error} documents`);
+  step('upload the other documents', r.status === 201, `${uploads.length} uploaded, ${r.data?.documents?.length ?? r.data?.error} on the file`);
 
   // 4. Read documents & fill intake (the emailed ones were read on arrival).
   await until(async () => (await call('GET', `/api/applications/${id}/extract`)).data?.job?.status !== 'running', 'first read');
@@ -460,6 +476,16 @@ async function runType(type) {
       step(`${formKey}: ${end}`, !!okv, `${f ? `"${f.value}"` : 'no such box'} (want ${want})`);
     }
     step(`${formKey}: no answered box left marked empty`, !nil.length, nil.map((f) => f.path).join(', '));
+    // The applicant's core facts must be on every main form.
+    if (/^imm(1294|1295|5257|5708|5709|5710)$/.test(formKey)) {
+      const values = new Set(audit.fields.map((f) => String(f.value || '').trim().toLowerCase()));
+      const all = audit.fields.map((f) => String(f.value || '')).join(' | ').toLowerCase();
+      const d = app.data || {};
+      const core = ['familyName', 'givenName', 'passportNumber', 'cityOfBirth', 'email', 'nationalIdNumber', 'mailingStreet', 'mailingCity'].filter((k) => d[k]);
+      const lost = core.filter((k) => !values.has(String(d[k]).trim().toLowerCase()) && !all.includes(String(d[k]).trim().toLowerCase()));
+      if (d.dob && !values.has(d.dob.slice(0, 4))) lost.push('dob');
+      step(`${formKey}: the applicant's core facts are on the form`, !lost.length, lost.length ? `missing: ${lost.join(', ')}` : core.join(', '));
+    }
     console.log(`      ${formKey}: ${filled.length} boxes filled, ${empty.length} empty, ${(g.checks || []).length} to check`);
   }
 
