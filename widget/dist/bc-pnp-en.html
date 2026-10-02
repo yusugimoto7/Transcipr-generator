@@ -115,9 +115,15 @@
   // than five: the opposite of what BC published. So Farsi gets words.
   function countLabel(raw, t) {
     var s = String(raw == null ? '' : raw).trim();
-    if (!s) return '—';
+    if (!s) return '\u2014';
     var m = s.match(/^<\s*(\d+)$/);
-    return m ? t.lessThan(m[1]) : s;
+    if (m) return t.lessThan(m[1]);
+    // Grouping is presentation only, and only for a value that is ALL digits.
+    // Manitoba's parser strips the commas it finds, so its totals arrive as
+    // "2146" where BC sends "1,204". Anything that is not a plain integer —
+    // "<5", "N/A", an already-grouped number — is passed through untouched.
+    if (/^\d+$/.test(s)) return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return s;
   }
 
   // How a draw was selected, taken from what the province itself published.

@@ -11,7 +11,11 @@ const TARGETS = [
   { file: 'express-entry-fa.html', program: 'ee', lang: 'fa', rows: 10, note: 'Express Entry — Farsi (sugimotovisa.com)' },
   { file: 'express-entry-en.html', program: 'ee', lang: 'en', rows: 10, note: 'Express Entry — English' },
   { file: 'bc-pnp-fa.html',       program: 'bc', lang: 'fa', rows: 10, note: 'BC PNP Skills Immigration — Farsi' },
-  { file: 'bc-pnp-en.html',       program: 'bc', lang: 'en', rows: 10, note: 'BC PNP Skills Immigration — English' }
+  { file: 'bc-pnp-en.html',       program: 'bc', lang: 'en', rows: 10, note: 'BC PNP Skills Immigration — English' },
+  { file: 'bc-entrepreneur-fa.html', program: 'bce', lang: 'fa', rows: 10, note: 'BC PNP Entrepreneur — Farsi' },
+  { file: 'bc-entrepreneur-en.html', program: 'bce', lang: 'en', rows: 10, note: 'BC PNP Entrepreneur — English' },
+  { file: 'manitoba-fa.html',        program: 'mb',  lang: 'fa', rows: 6,  note: 'Manitoba MPNP — Farsi' },
+  { file: 'manitoba-en.html',        program: 'mb',  lang: 'en', rows: 6,  note: 'Manitoba MPNP — English' }
 ];
 
 for (const t of TARGETS) {
