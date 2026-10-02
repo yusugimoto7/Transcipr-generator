@@ -63,8 +63,12 @@ In `dist/`, ready to paste:
 |---|---|
 | `express-entry-fa.html` | Farsi Express Entry page |
 | `express-entry-en.html` | English Express Entry page |
-| `bc-pnp-fa.html` | Farsi BC PNP page |
-| `bc-pnp-en.html` | English BC PNP page |
+| `bc-pnp-fa.html` | Farsi BC PNP — Skills Immigration |
+| `bc-pnp-en.html` | English BC PNP — Skills Immigration |
+| `bc-entrepreneur-fa.html` | Farsi BC PNP — Entrepreneur |
+| `bc-entrepreneur-en.html` | English BC PNP — Entrepreneur |
+| `manitoba-fa.html` | Farsi Manitoba MPNP |
+| `manitoba-en.html` | English Manitoba MPNP |
 
 In the WordPress editor, at the spot where the window should appear:
 **+ → Custom HTML**, paste the whole file, Update.
@@ -122,6 +126,32 @@ These are the traps that cost real published mistakes, and each is handled:
   broken or looking current.
 - **Failure is graceful**: a message, the official link, and a retry button —
   never a blank or broken box.
+- **Plain integers are grouped for reading only.** Manitoba's parser strips the
+  commas it finds, so its totals arrive as "2146" where BC sends "1,204". The
+  separator is added only to a value that is all digits; "<5", "N/A" and an
+  already-grouped number are untouched.
+- **A blank Manitoba score is deliberate.** A draw that publishes several
+  lowest-ranked scores, one per sub-selection, has no single honest number, so
+  it publishes none. Draw #277 is the live example: 15+12+13+9+4 = 53 invitations
+  in a strategic-recruitment-only draw that states no ranking score at all.
+
+## Which programmes are shippable
+
+| Code | Window | State |
+|---|---|---|
+| `ee` | Express Entry | Official IRCC JSON. Solid. |
+| `bc` | BC PNP Skills Immigration | Parsed from the table. Solid. |
+| `bce` | BC PNP Entrepreneur | Parsed from the table. Solid. |
+| `mb` | Manitoba MPNP | One fetch per draw for the date. Solid. |
+| `on` | Ontario OINP | **Not shipped.** See below. |
+| `ab`, `sk` | Alberta, Saskatchewan | **No parser exists.** They return nothing and the window will say so. |
+
+Ontario is wired (`data-program="on"`) but deliberately not built as a paste
+block yet. Two problems: its newest draw in the feed is 30 April 2026, and the
+parser mangles any announcement carrying more than one draw — the 22 April row
+comes through as "the Masters Graduate stream and 244 invitations to apply to
+candidates who may qualify und", which loses a second draw's count entirely.
+Shipping that under an RCIC's name would publish wrong invitation figures.
 
 ## Changing the design
 
