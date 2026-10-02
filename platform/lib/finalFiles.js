@@ -66,6 +66,9 @@ const SLOT = {
   degrees: { name: 'Education', categories: ['transcripts'] },
   invitation: { name: 'Invitation Letter', categories: ['invitation-letter'] },
   submission: { name: 'Submission Letter', generatedKey: 'submission-letter' },
+  // A reconsideration goes through the IRCC webform: the request letter, the consent (IMM 5744) and the decision.
+  reconsideration: { name: 'Reconsideration Request', generatedKey: 'reconsideration-letter' },
+  refusal: { name: 'Refusal Letter and GCMS Notes', categories: ['refusal-letter'] },
 };
 
 /**
@@ -115,6 +118,8 @@ const PORTAL = {
   'custody-consent': ALL('Custody Documents, including a Parental Consent Letter'),
   invitation: { trv: null, '*': 'Invitation Letter' },
   submission: ALL("Representative's Submission Letter"),
+  reconsideration: ALL('IRCC webform — request for reconsideration (attach)'),
+  refusal: ALL('IRCC webform — the refusal letter and officer notes (attach)'),
   lmia: { 'wp-out': 'Labour Market Impact Assessment (LMIA) from ESDC — or IMM5802 Offer of Employment (LMIA-exempt)', '*': 'Labour Market Impact Assessments (LMIA) from ESDC or Proof of Submission — or IMM5802 Offer of Employment' },
   'job-offer': ALL('Offer of Employment'),
   contract: ALL('Employment Contract'),
@@ -179,7 +184,7 @@ const LISTS = {
   'trv-inside': ['forms', 'client-info', 'passport', 'photo', 'marriage', 'submission'],
   'super-visa': ['forms', 'passport', 'photo', 'employment', 'police', 'insurance', 'birth-nid', 'marriage', 'client-info', 'financial', 'relationship', 'inviter', 'submission', 'medical'],
   'visitor-record': ['forms', 'client-info', 'passport', 'photo', 'marriage', 'financial', 'relationship', 'invitation', 'submission'],
-  reconsideration: ['forms', 'submission'],
+  reconsideration: ['reconsideration', 'forms', 'refusal'],
 };
 
 const firstName = (app) => String(app.data?.givenName || '').trim().split(/\s+/)[0] || '';

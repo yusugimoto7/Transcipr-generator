@@ -64,5 +64,6 @@ export function imm5476Data(d = {}, firm = {}, applicationTitle = '') {
     _firmPhoneCountry: m ? m[1] : '',
     _firmPhone: m ? m[2] : phone,
     _firmEmail: firm.officeEmail || firm.email || '',
+    _firmAddress: [[firm.unit, firm.streetNo].filter(Boolean).join('-'), firm.street, firm.city, firm.province, firm.postal, firm.country].filter(Boolean).join(', ').replace(/^(\S+) /, '$1 '),
   };
 }

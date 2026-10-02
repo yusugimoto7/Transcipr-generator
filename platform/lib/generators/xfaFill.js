@@ -8,6 +8,7 @@ import { imm5645FieldMap } from '../forms/fieldmaps/imm5645';
 import { imm5476FieldMap, imm5476Data } from '../forms/fieldmaps/imm5476';
 import { imm5257bFieldMap } from '../forms/fieldmaps/imm5257b';
 import { imm5713FieldMap } from '../forms/fieldmaps/imm5713';
+import { imm5744FieldMap } from '../forms/fieldmaps/imm5744';
 import { irccData, irccFieldMap, IRCC_MAIN_FORMS, sourceOf, activities, activityGaps } from '../forms/fieldmaps/ircc';
 import { autoFieldMap } from '../forms/fieldmaps/auto';
 import { getFirm } from '../firm';
@@ -127,6 +128,9 @@ export async function fillOfficialForm(formKey, app) {
     data = imm5476Data(data, getFirm(), getAppType(app.type).title);
   } else if (formKey === 'imm5257b') {
     ({ map: fieldMap, notes } = imm5257bFieldMap(data, app));
+  } else if (formKey === 'imm5744') {
+    fieldMap = imm5744FieldMap();
+    data = imm5476Data(data, getFirm(), getAppType(app.type).title);
   } else if (formKey === 'imm5713') {
     ({ map: fieldMap, notes } = imm5713FieldMap(data, app));
   } else {
@@ -139,7 +143,7 @@ export async function fillOfficialForm(formKey, app) {
 
   // A hand-made map (IMM 5645, 5476, Schedule 1) written for one version of
   // the form: a box this version does not have is reported, not written.
-  if (!IRCC_MAIN_FORMS.has(formKey) && ['imm5645', 'imm5476', 'imm5257b', 'imm5713'].includes(formKey)) {
+  if (!IRCC_MAIN_FORMS.has(formKey) && ['imm5645', 'imm5476', 'imm5257b', 'imm5713', 'imm5744'].includes(formKey)) {
     const schema = await dumpFormSchema(formKey).catch(() => null);
     if (schema?.ok && Array.isArray(schema.paths)) {
       const canon = (p) => p.split('/').filter(Boolean).map((x) => x.replace(/\[0\]$/, '')).join('/');
