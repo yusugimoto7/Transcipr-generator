@@ -186,6 +186,14 @@ export function irccData(d0 = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
     _programField: fieldOfStudy(d),
+    // IMM 5708: who pays for the extended stay (Myself / Parents / Other + who).
+    _extendPaidBy: { 'My own funds': 'Myself', 'My parents': 'Parents' }[d.extendSupport] || (d.extendSupport ? 'Other' : ''),
+    _extendPaidOther:
+      d.extendSupport === 'My host / family in Canada'
+        ? [d.hostName, d.hostRelationship && `(${String(d.hostRelationship).toLowerCase()})`].filter(Boolean).join(' ') || 'My family in Canada'
+        : d.extendSupport === 'My spouse'
+          ? [d.spouseGivenName, d.spouseFamilyName].filter(Boolean).join(' ') ? `${[d.spouseGivenName, d.spouseFamilyName].filter(Boolean).join(' ')} (spouse)` : 'My spouse'
+          : d.extendSupport || '',
     // IMM 5257's purpose: the super visa and returning students / workers have entries of their own.
     _visitPurpose:
       type === 'super-visa'
@@ -259,7 +267,7 @@ export function activities(d = {}, today = new Date()) {
       employer: m.location, city: m.province, country: m.country,
     })),
   ];
-  if (d.lastInstitution && d.lastEduFrom && POST_SECONDARY.test(d.highestEducation || '')) {
+  if (d.lastInstitution && d.lastEduFrom) {
     list.push({ from: d.lastEduFrom, to: d.lastEduTo, occupation: `Student${d.lastFieldOfStudy ? ` (${d.lastFieldOfStudy})` : ''}`, employer: d.lastInstitution, city: d.lastEduCity, country: d.lastEduCountry });
   }
   const end = (a) => String(a.to || '9999-99');
@@ -641,6 +649,8 @@ export const EXTRA_RULES = {
     [/DetailsOfVisit\/Purpose\/Stay\/FromDate$/, { from: 'permitExpiry' }],
     [/DetailsOfVisit\/Purpose\/Stay\/ToDate$/, { from: 'extendUntil', need: 'Stay until (date)' }],
     [/DetailsOfVisit\/Funds\/FundsAvail$/, { from: 'extendFunds', need: 'Funds for the extended stay' }],
+    [/DetailsOfVisit\/Funds\/ExpPaidBy$/, { from: '_extendPaidBy', need: 'Expenses paid by' }],
+    [/DetailsOfVisit\/Funds\/Other$/, { from: '_extendPaidOther', when: (d) => d._extendPaidBy === 'Other' }],
     [/DetailsOfVisit\/WillVisit\/VisitList\/Rec1\/Name$/, { from: 'hostName' }],
     [/DetailsOfVisit\/WillVisit\/VisitList\/Rec1\/Relationship$/, { from: 'hostRelationship' }],
     [/DetailsOfVisit\/WillVisit\/VisitList\/Rec1\/Addr$/, { from: 'hostAddress' }],
