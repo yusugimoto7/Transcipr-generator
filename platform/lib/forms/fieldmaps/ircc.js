@@ -174,6 +174,11 @@ export function irccData(d = {}, app = {}) {
     _firstEntryPurpose: d.originalEntryPurpose || ({ 'study-permit-inside': 'Study', 'study-permit-inside-child': 'Study', pgwp: 'Study' })[type] || '',
     _schoolProv: provinceAbbr(d.schoolProvince),
     _programField: fieldOfStudy(d),
+    // An LMIA number, or for an LMIA-exempt job the employer portal's offer number (A1234567).
+    _lmiaOrOffer: d.lmiaNumber || d.c11OfferNumber || '',
+    // Set by the form's own script when the date of birth is typed in Adobe — not when it is pre-filled.
+    _age: ageOn(d.dob),
+    _adultFlag: ageOn(d.dob) === '' ? '' : Number(ageOn(d.dob)) >= 18 ? 'adult' : 'child',
     // A visit form's funds: the funds step, or the visit's budget when the type has no funds step.
     _visitFunds: d.totalFunds || d.visitBudget || '',
     _expensesOther: expensesOther(d),
@@ -191,6 +196,15 @@ export function irccData(d = {}, app = {}) {
     });
   });
   return out;
+}
+
+/** Age in whole years today, from YYYY-MM-DD ('' when unknown). */
+function ageOn(dob, today = new Date()) {
+  const m = String(dob || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  let age = today.getFullYear() - Number(m[1]);
+  if (today.getMonth() + 1 < Number(m[2]) || (today.getMonth() + 1 === Number(m[2]) && today.getDate() < Number(m[3]))) age--;
+  return String(age);
 }
 
 /**
@@ -226,7 +240,9 @@ export function activityGaps(d = {}, today = new Date()) {
     return x ? Number(x[1]) * 12 + Number(x[2]) - 1 : null;
   };
   const now = today.getFullYear() * 12 + today.getMonth();
-  const since = now - 120;
+  // The past 10 years, but nothing before school age (6).
+  const born = String(d.dob || '').match(/^(\d{4})-(\d{2})/);
+  const since = Math.max(now - 120, born ? (Number(born[1]) + 6) * 12 + Number(born[2]) - 1 : 0);
   const covered = new Set();
   for (const a of acts) {
     const from = m(a.from);
@@ -332,6 +348,9 @@ const date = (visible, hiddenBase, from, extra = {}) => [
 
 /** The sections every IRCC main form shares: [path ending, spec]. */
 export const COMMON_RULES = [
+  // The form's hidden adult / child switch and age (its scripts read them to validate the background section).
+  [/(ButtonsHeader\/|Page1\/)AdultFlag$/, { from: '_adultFlag' }],
+  [/Page1\/Age$/, { from: '_age' }],
   // --- Personal details ---
   [/PersonalDetails\/(ServiceIn\/)?UCIClientID$/, { from: '_uci', label: 'UCI (8 or 10 digits)' }],
   [/PersonalDetails\/ServiceIn\/ServiceIn$/, { const: 'English' }],
@@ -536,7 +555,7 @@ export const EXTRA_RULES = {
     [/DetailsOfWorkCont\/details\/posDesc$/, { when: (d) => !d._openOutside, from: 'intendedDuties' }],
     [/DetailsOfWorkCont\/details\/HowLongStudy\/FromDate$/, { from: 'intendedFrom', need: 'Work permit from (date)' }],
     [/DetailsOfWorkCont\/details\/HowLongStudy\/ToDate$/, { from: 'intendedTo', need: 'Work permit until (date)' }],
-    [/DetailsOfWorkCont\/details\/LMO\/LMO$/, { when: (d) => !d._openOutside, from: 'lmiaNumber' }],
+    [/DetailsOfWorkCont\/details\/LMO\/LMO$/, { when: (d) => !d._openOutside, from: '_lmiaOrOffer', need: 'LMIA number or offer of employment number' }],
   ],
   imm1294: [
     [/DetailsOfStudy\/PurposeRow1\/schoolName\/SchoolName$/, { from: 'schoolName', need: 'School name' }],
@@ -625,7 +644,7 @@ export const EXTRA_RULES = {
     [/DetailsOfWork\/Occupation\/Desc$/, { when: (d) => !d._openInside, from: 'intendedDuties' }],
     [/DetailsOfWork\/Duration\/FromDate$/, { from: 'intendedFrom', need: 'Work permit from (date)' }],
     [/DetailsOfWork\/Duration\/ToDate$/, { from: 'intendedTo', need: 'Work permit until (date)' }],
-    [/DetailsOfWork\/Duration\/LMO$/, { when: (d) => !d._openInside, from: 'lmiaNumber' }],
+    [/DetailsOfWork\/Duration\/LMO$/, { when: (d) => !d._openInside && !/Post Graduation/.test(d._workPermitTypeInside || ''), from: '_lmiaOrOffer', need: 'LMIA number or offer of employment number' }],
   ],
 };
 for (const k of ['imm5708', 'imm5709', 'imm5710']) EXTRA_RULES[k].push(...EXTRA_RULES.inside);

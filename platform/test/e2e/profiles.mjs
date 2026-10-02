@@ -25,7 +25,7 @@ function person(o) {
   serial++;
   const first = o.given;
   const minor = !!o.minor;
-  const married = /married/i.test(o.marital || '');
+  const married = ['Married', 'Common-Law'].includes(o.marital);
   const reads = {
     PASSPORT: { category: 'passport', fields: { familyName: o.family, givenName: o.given, sex: o.sex, dob: o.dob, cityOfBirth: o.city || 'Tehran', countryOfBirth: 'Iran', citizenship: 'Iran', passportNumber: `Z${String(10000000 + serial * 7919).slice(0, 8)}`, passportCountry: 'Iran', passportIssue: '2024-03-02', passportExpiry: '2029-03-01' } },
     BIRTH: { category: 'national-id', fields: { nativeName: o.native, fatherName: `${o.father || 'Mahmoud'} ${o.family}`, fatherNameNative: o.fatherFa || 'محمود', motherName: o.mother || 'Fatemeh Rahimi', motherNameNative: o.motherFa || 'فاطمه رحیمی' } },

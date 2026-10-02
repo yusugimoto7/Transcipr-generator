@@ -7,6 +7,7 @@ import { getFormPdf } from '../forms/fetchForms';
 import { imm5645FieldMap } from '../forms/fieldmaps/imm5645';
 import { imm5476FieldMap, imm5476Data } from '../forms/fieldmaps/imm5476';
 import { imm5257bFieldMap } from '../forms/fieldmaps/imm5257b';
+import { imm5713FieldMap } from '../forms/fieldmaps/imm5713';
 import { irccData, irccFieldMap, IRCC_MAIN_FORMS, sourceOf, activities, activityGaps } from '../forms/fieldmaps/ircc';
 import { autoFieldMap } from '../forms/fieldmaps/auto';
 import { getFirm } from '../firm';
@@ -114,7 +115,11 @@ export async function fillOfficialForm(formKey, app) {
     // The employment section: 3 rows for the past 10 years, with no gaps.
     const acts = activities(app.data || {});
     if (acts.length > 3) notes.push({ field: 'jobs', text: `Employment: the form has 3 rows — add the other ${acts.length - 3} activit${acts.length - 3 === 1 ? 'y' : 'ies'} on a separate sheet (${acts.slice(3).map((j) => `${j.from || ''}–${j.to || ''} ${j.occupation || ''}`.trim()).join('; ')})` });
-    for (const g of activityGaps(app.data || {})) notes.push({ field: 'jobs', text: `Employment: nothing is listed for ${g.from} to ${g.to} — IRCC asks for the past 10 years with no gaps (add the job, studies, or "unemployed" / "homemaker")` });
+    const adultAt = /^\d{4}-\d{2}/.test(app.data?.dob || '') ? `${Number(app.data.dob.slice(0, 4)) + 18}${app.data.dob.slice(4, 7)}` : '';
+    for (const g of activityGaps(app.data || {})) {
+      const school = adultAt && g.to < adultAt;
+      notes.push({ field: 'jobs', text: `Employment: nothing is listed for ${g.from} to ${g.to} — IRCC asks for the past 10 years with no gaps (${school ? 'the applicant was under 18: add their school as "Student"' : 'add the job, studies, or "unemployed" / "homemaker"'})` });
+    }
   } else if (formKey === 'imm5645') {
     ({ map: fieldMap, notes } = imm5645FieldMap(data, app));
   } else if (formKey === 'imm5476') {
@@ -122,6 +127,8 @@ export async function fillOfficialForm(formKey, app) {
     data = imm5476Data(data, getFirm(), getAppType(app.type).title);
   } else if (formKey === 'imm5257b') {
     ({ map: fieldMap, notes } = imm5257bFieldMap(data, app));
+  } else if (formKey === 'imm5713') {
+    ({ map: fieldMap, notes } = imm5713FieldMap(data, app));
   } else {
     // Any other IRCC form: a best-effort map from its field names.
     const schema = await dumpFormSchema(formKey);
@@ -132,7 +139,7 @@ export async function fillOfficialForm(formKey, app) {
 
   // A hand-made map (IMM 5645, 5476, Schedule 1) written for one version of
   // the form: a box this version does not have is reported, not written.
-  if (!IRCC_MAIN_FORMS.has(formKey) && ['imm5645', 'imm5476', 'imm5257b'].includes(formKey)) {
+  if (!IRCC_MAIN_FORMS.has(formKey) && ['imm5645', 'imm5476', 'imm5257b', 'imm5713'].includes(formKey)) {
     const schema = await dumpFormSchema(formKey).catch(() => null);
     if (schema?.ok && Array.isArray(schema.paths)) {
       const canon = (p) => p.split('/').filter(Boolean).map((x) => x.replace(/\[0\]$/, '')).join('/');

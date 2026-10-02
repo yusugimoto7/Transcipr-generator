@@ -351,7 +351,7 @@ async function runType(type) {
     const who = P.file.title.split(' ')[0];
     const have = new Set([...uploads.map((u) => u.name.split(' - ')[0]), '101', '102', '103', '104', '105', '106']);
     for (const it of buildChecklist({ ...P.team, sex: P.reads.PASSPORT?.fields?.sex }, type)) {
-      if (it.party || it.cond || ['internal', 'questionnaire', 'rep-form'].includes(it.key) || have.has(String(it.code))) continue;
+      if (it.party === 'firm' || it.cond || ['internal', 'questionnaire', 'rep-form'].includes(it.key) || have.has(String(it.code))) continue;
       have.add(String(it.code));
       const label = it.label.split(/ — | \(/)[0].replace(/[\\/:*?"<>|]/g, '-');
       uploads.push({ name: `${it.code} - ${label} - ${who}.pdf`, tag: `CL${String(it.code).replace(/\W/g, '')}`, pages: 2 });
@@ -411,10 +411,17 @@ async function runType(type) {
     return fin || null;
   }, 'final files on Drive', 60000).catch(() => null);
   await sleep(2000);
-  report.drive = driveTree('clientsRoot01');
-  const finals = report.drive.filter((l) => /^\s{6}\d\d - /.test(l));
+  const clientFolder = Object.keys(tree).find((k) => tree[k].mimeType === FOLDER && tree[k].name.startsWith(`${P.file.clientNumber} - `));
+  report.drive = clientFolder ? [`📁 ${tree[clientFolder].name}`, ...driveTree(clientFolder, 1)] : driveTree('clientsRoot01');
+  const finals = report.drive.filter((l) => /^\s{4}\d\d - /.test(l));
   step('Drive: the client folder holds the documents and the final files', report.drive.some((l) => /01 - Documents/.test(l)) && finals.length > 0, `${finals.length} final files on Drive`);
-  const dupes = report.drive.filter((l, i, a) => !/📁/.test(l) && a.indexOf(l) !== i);
+  // Duplicate names inside one folder of this client (other clients' folders may reuse names).
+  const mine = Object.keys(tree).find((k) => tree[k].mimeType === FOLDER && tree[k].name.startsWith(`${P.file.clientNumber} - `));
+  const dupes = [];
+  for (const f of Object.keys(tree).filter((k) => tree[k].mimeType === FOLDER && (k === mine || tree[k].parents.includes(mine)))) {
+    const names = Object.keys(tree).filter((k) => !tree[k].trashed && tree[k].parents.includes(f) && tree[k].mimeType !== FOLDER).map((k) => tree[k].name);
+    dupes.push(...names.filter((n, i) => names.indexOf(n) !== i).map((n) => `${tree[f].name}/${n}`));
+  }
   step('Drive: no two documents share a name', !dupes.length, dupes.join(', '));
 
   // 8. Download every built file and the zip; audit them.
@@ -459,7 +466,7 @@ async function runType(type) {
     }
     const audit = JSON.parse(a.stdout);
     // Every box the applicant or the team fills (not the form's own bookkeeping, barcodes or signatures).
-    const META = /(FormVersion|FormName|ReaderInfo|ApplicationValidat\w*|FormValidated|Validated\w*|ValidationDate\/\w+|CRCNum|TextField1(\[\d\])?|num|totPage|FormNumber|signat\w*|Signature\w*|dateSigned|date\w*Signed|C1CertificateIssueDate|TextField2)$/i;
+    const META = /(^|\/)(FormVersion|FormName|ReaderInfo|ApplicationValidat\w*|FormValidated|Validated\w*|CRCNum|Page\d\/TextField1(\[\d\])?|num(\[\d\])?|totPage(\[\d\])?|FormNumber(\[\d\])?|signat\w*(\[\d\])?|Signature\w*|dateSigned(\[\d\])?|date\w*Signed|C1CertificateIssueDate|Page\d\/TextField2|Barcode\w*)$/i;
     const real = audit.fields.filter((f) => !META.test(f.path) && !/ValidationDate\//.test(f.path));
     const filled = real.filter((f) => f.value);
     const empty = real.filter((f) => !f.value);
