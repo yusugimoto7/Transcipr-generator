@@ -116,7 +116,7 @@ const FIRM_CODES = {
  * digits (file numbers like S231124, imm1294e) never match.
  */
 export function firmCode(filename) {
-  const m = String(filename || '').match(/(?:^|[^\d])(1[0-3]\d)(?:-(\d{1,2})(?=\s*[-–_ ]))?(?:\.\d+)?\s*[-–_ ]/);
+  const m = String(filename || '').match(/(?:^|[^\d])(1[0-9]\d)(?:-(\d{1,2})(?=\s*[-–_ ]))?(?:\.\d+)?\s*[-–_ ]/);
   if (!m) return null;
   return m[2] ? `${m[1]}-${m[2]}` : m[1];
 }
