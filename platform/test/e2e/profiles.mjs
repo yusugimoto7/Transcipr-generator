@@ -489,4 +489,45 @@ export const PROFILES = {
       reconsiderationError: 'The officer did not consider the clinic ownership documents submitted.', newEvidence: 'None — the request points to the evidence already on file.',
     },
   }),
+
+  // A second study permit, different on purpose: single, a PAL-exempt master's,
+  // parents paying, two years as a student in Turkey, a UK refusal, an alias,
+  // English and French.
+  'study-permit#2': {
+    ...person({
+      number: 'S27123', given: 'Sara', family: 'Mohseni', native: 'سارا محسنی', sex: 'Female', dob: '2000-02-29', city: 'Tabriz', homeCity: 'Tabriz', email: 'sara.mohseni@example.test',
+      marital: 'Never Married / Single', degreeLevel: "Bachelor's degree", school: 'Middle East Demo Technical University', field: 'Biology', eduFrom: '2019-09', eduTo: '2023-06', eduCity: 'Ankara',
+      job: job('Research Assistant', 'Tabriz Demo Biotech Institute', '2023-09', 'Tabriz'),
+      ielts: 'Overall 7.5',
+      trips: [{ from: '2025-08', to: '2025-08', country: 'Armenia', city: 'Yerevan', purpose: 'Tourism' }],
+      immigrationApps: [{ country: 'United Kingdom', kind: 'Study permit', applied: '2023-01', result: 'Refused', decided: '2023-03', details: 'UK student visa refused (funds not shown for 28 days)' }],
+      team: {
+        lastEduCountry: 'Turkey',
+        otherNames: 'Sarah Mohseni',
+        livedElsewhere5y: true, prevResidenceCountry: 'Turkey', prevResidenceStatus: 'Student', prevResidenceFrom: '2019-09-01', prevResidenceTo: '2023-06-30',
+        ableToCommunicate: 'Both', mostAtEase: 'English',
+        previousRefusal: true, refusalDetails: 'UK student visa refused in March 2023 because the funds were not held for 28 days.',
+        schoolName: 'Lakeshore Demo University', dliNumber: 'O000000000006', programName: 'Master of Science in Biomedical Engineering', levelOfStudy: 'Master’s degree',
+        palExempt: true, palExemptReason: "Master's degree program",
+        schoolCity: 'Toronto', schoolProvince: 'Ontario', schoolAddress: '27 Demo College Street, Toronto, ON M5S 0A1', studentId: 'LDU-7731', programStart: '2027-09-08', programEnd: '2029-08-31',
+        tuitionCost: 32000, roomBoardCost: 18000, otherCosts: 3000, entryDate: '2027-08-25',
+        totalFunds: 95000, gicAmount: 22895, tuitionPaid: 16000, fundingSource: 'Parents / family', sponsorName: 'Ali Mohseni (father)',
+        careerGoal: 'Biomedical device research in Iran', whyProgram: 'Builds on her biology degree and lab work.', whyCanada: 'Research facilities and co-op terms.',
+      },
+    }),
+    type: 'study-permit',
+    expect: {
+      imm1294: {
+        'AliasName/AliasNameIndicator/AliasNameIndicator': 'Y|Yes',
+        'AliasName/AliasFamilyName': 'Mohseni',
+        'PreviousCOR/Row2/Country': '.+',
+        'PreviousCOR/Row2/FromDate': '2019-09-01',
+        'schoolName/Level': '05',
+        'schoolName/Program': '18',
+        'expensesPaid/expensesPaidBy': 'Parents',
+        'Languages/languages/ableToCommunicate/ableToCommunicate': 'Both',
+        'PageWrapper/BackgroundInfo2/VisaChoice2': 'Y|Yes',
+      },
+    },
+  },
 };

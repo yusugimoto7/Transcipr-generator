@@ -33,9 +33,9 @@ const ROOT = path.join(here, '..', '..');
 const PY = process.env.PYTHON_BIN || 'python3';
 const FORMS_CACHE = process.env.E2E_FORMS_CACHE || path.join(ROOT, 'uploads', 'forms-cache');
 const types = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PROFILES);
-const PORT = 3460;
-const STUB = 3461;
-const GOOGLE = 3462;
+const PORT = Number(process.env.E2E_PORT || 3460);
+const STUB = PORT + 1;
+const GOOGLE = PORT + 2;
 const BASE = `http://127.0.0.1:${PORT}`;
 const SA_EMAIL = 'e2e-importer@firm-project.iam.gserviceaccount.com';
 
@@ -311,11 +311,13 @@ const until = async (fn, what, ms = 180000) => {
 };
 
 /* ------------------------------ one client ------------------------------ */
-async function runType(type) {
-  const P = PROFILES[type];
-  if (!P) throw new Error(`no fictional client for ${type}`);
+async function runType(key) {
+  const P = PROFILES[key];
+  if (!P) throw new Error(`no fictional client for ${key}`);
+  // "study-permit#2": a second client of the same type.
+  const type = P.type || key;
   current = { ...P, docNames: {} };
-  const out = path.join(here, 'out', type);
+  const out = path.join(here, 'out', key.replace('#', '-'));
   await fs.rm(out, { recursive: true, force: true });
   await fs.mkdir(out, { recursive: true });
   const report = { type, steps: [], forms: {}, files: [], problems: [], drive: [] };
