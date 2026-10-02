@@ -64,3 +64,36 @@ After the fixes, the study permit run was clean:
 - **IMM 5476:** client, RCIC, firm address, CICC ticked.
 - **Final files:** the 16 files are in the team's order, on Drive under
   "02 - Final Files", with the generated files in "91 - Generated Files".
+
+### The other 21 types (loop 1)
+
+Each client below went through the same steps. Problems found, and fixed:
+
+| Type (fictional client) | Problem | Fix |
+|---|---|---|
+| Spouse OWP — outside (Neda Karimi), child visitors, minor study permit, accompanying spouse | **IMM 5713** (family member representative) could not be pre-filled at all. Its boxes have no names the automatic map recognises | Its own map: the representative (spouse, or the parent for a child) and each family member with relationship and date of birth |
+| Every main form (IMM 1294, 1295, 5257, 5708–5710) | The form's hidden "adult / child" switch and age stayed at their blank values. The forms set them only when someone types the date of birth in Adobe, and their validation reads them for the background section | Set from the date of birth |
+| C11 entrepreneur (Farhad Tehrani) | IMM 1295 "LMIA or offer of employment number" empty, although the intake has the employer portal offer number | Filled from the LMIA number, else the offer number. For LMIA-stream permits an empty box is flagged |
+| Visitor visa (Parisa Jafari) | IMM 5257 hidden copies of the visit dates (year / month / day) empty | Filled, as for the date of birth |
+| Accompanying spouse / child visitors | IMM 5257 "contact in Canada" empty: these types never asked about the host | They now ask. The form falls back to the Canadian business contact (business visit) or, for a child joining a parent in Canada, that parent |
+| Super visa (Mahin Hosseini) | Purpose of visit "Family Visit" | "Super Visa: For Parents or Grandparents", IRCC's own entry |
+| Visitor visa from inside Canada (Hamid Zand) | Purpose "Other / Other"; education and funds empty (the type never asked) | "Returning Student" (or "Returning Worker"); the type now asks about education and funds |
+| Super visa, visitor record, visitor visa from inside | IMM 5257 / 5708 education section empty (no education step) | Education step added |
+| PGWP (Arash Mohammadi) | IMM 5710 education empty, and his Canadian program missing from his activities (no education step) | Education step added. The education section and the activities fall back to the PGWP program |
+| PGWP | "104 - Photo - Arash.jpg" was filed as the **completion letter**, because on PGWP files code 104 means the completion letter | A JPG / PNG named "Photo" is always the photo |
+| Visitor record (Shirin Akbari) | IMM 5708 "My expenses will be paid by" (a required box) empty | Mapped: Myself / Parents / Other, with who ("Maryam Akbari (daughter)") |
+| Study permit from inside (Pouya Rad), every form | Employment gaps reported for years at high school (only post-secondary studies counted) | The latest studies count at any level. No gaps before age 6. A gap before 18 suggests adding the school |
+| Work permit extension (Sina Kazemi), every inside-Canada form | "Details of previous applications" used only the team's free text and ignored the immigration-history rows | Every Canadian application or refusal from the rows, then the team's own words |
+| IMM 5709 (study inside) | Field of study, school address, student ID, room and board, other costs, PAL expiry, "Other" payer empty (same gaps as IMM 1294) | Filled like IMM 1294 |
+| Reconsideration (Kaveh Amini) | IMM 5744 (ATIP consent) could not be pre-filled; the final set built **no files** | IMM 5744 map (the RCIC as requester, the client consenting). Final set: Reconsideration Request, IMM 5744, Refusal Letter and GCMS Notes |
+| Families sharing one email (Sam, Tara, Kian, Nika) | The email matches two files and waits in the Email intake inbox | Correct behaviour: staff assign it, and the runner now does the same |
+
+Checked and correct (no change needed):
+- **IMM 1295 work sections:** LMIA job (employer, address, location, job, duties, LMIA no.), C11 business, open permits with boxes 2–4 left blank.
+- **IMM 5710:** extension ticked, LMIA stream, employer, location and first entry.
+- **IMM 5710 for the Iranian OWP and the spouse OWP inside:** "new permit" ticked, the spouse's Canadian status answered "No", and the gap since arriving as a visitor flagged.
+- **IMM 5257 business visit:** purpose, dates, funds, job.
+- **Schedule 1 for the accompanying spouse:** "spouse" ticked.
+- **IMM 5645 for every type**, and **IMM 5476 for every type**.
+
+**To decide (left as the firm set it):** IMM 5646 (custodianship) is listed for the *child of a worker*, whose parent is in Canada, but not for the *minor studying alone with a custodian*.
