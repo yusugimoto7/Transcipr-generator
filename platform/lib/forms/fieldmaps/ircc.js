@@ -82,7 +82,8 @@ function sameCountryWhereApplying(d) {
  * the refusal being challenged.
  */
 export function backgroundDetails(d) {
-  if (String(d.refusalDetails || '').trim()) return d.refusalDetails.trim();
+  // Every refusal and every Canadian application from the immigration history,
+  // then the team's own words when they add something the rows don't say.
   const parts = [];
   for (const a of filledRows(d.immigrationApps)) {
     if (a.result !== 'Refused' && !/canada/i.test(a.country || '')) continue;
@@ -90,6 +91,8 @@ export function backgroundDetails(d) {
     parts.push(`${a.country || ''} ${a.kind || 'application'} — ${a.result || ''}${when ? ` (${when})` : ''}${a.details ? `: ${a.details}` : ''}`.replace(/\s+/g, ' ').trim());
   }
   if (!parts.length && (d.refusalAppType || d.refusalDate)) parts.push(`${d.refusalAppType || 'Application'} refused${d.refusalDate ? ` on ${d.refusalDate}` : ''}`);
+  const own = String(d.refusalDetails || '').trim();
+  if (own && !parts.some((p) => p.includes(own))) parts.push(own);
   return parts.join('; ');
 }
 

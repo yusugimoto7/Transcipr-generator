@@ -79,7 +79,7 @@ function person(o) {
     bgTbContact: false, bgMedicalCondition: false, bgOverstay: false, previousRefusal: false, previousCanadaApplication: !!inside, bgCriminal: false,
     ...(o.military ? {} : { bgMilitary: false }),
     bgOrganization: false, bgGovPosition: false, bgWitnessed: false, consentContact: true,
-    ...(inside ? { refusalDetails: o.canadaHistory || 'Previous Canadian applications: see the immigration history.' } : {}),
+    ...(inside && o.team?.canadaHistory ? { refusalDetails: o.team.canadaHistory } : {}),
     firstLanguage: 'Persian', ableToCommunicate: o.english === false ? 'Neither' : 'English',
     languageTest: o.ielts ? 'IELTS' : 'None yet',
     ...(o.ielts ? { languageScore: o.ielts, languageTestDate: '2026-05-20' } : {}),
