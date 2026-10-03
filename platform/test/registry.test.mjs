@@ -77,5 +77,16 @@ for (const [type, data, want] of CASES) {
 const custodianStep = getSchema('study-permit').steps.find((s) => s.id === 'custodian');
 if (!custodianStep) fail('study-permit: no "Applicant under 18" step');
 
+// A common-law partner is asked for IMM 5409 and proof of living together, not a marriage certificate.
+for (const t of APP_TYPE_LIST) {
+  const items = (status) => buildChecklist({ maritalStatus: status }, t.key).filter((i) => i.code === '116').map((i) => i.label);
+  const married = items('Married');
+  const cl = items('Common-Law');
+  if (!married.length) continue;
+  if (cl.some((l) => /^Marriage certificate$/.test(l))) fail(`${t.key}: a common-law applicant is asked for a marriage certificate`);
+  if (!cl.some((l) => /IMM 5409/.test(l))) fail(`${t.key}: a common-law applicant is not asked for IMM 5409`);
+  if (married.some((l) => /IMM 5409/.test(l))) fail(`${t.key}: a married applicant is asked for IMM 5409`);
+}
+
 console.log(bad ? `\n${bad} problem(s)` : `registry consistent: ${APP_TYPE_LIST.length} types`);
 process.exit(bad ? 1 : 0);

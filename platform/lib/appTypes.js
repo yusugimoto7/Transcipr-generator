@@ -24,6 +24,9 @@
 import { needsCustodianship } from './minor';
 
 const married = (d) => /married|common/i.test(String(d.maritalStatus || ''));
+const commonLaw = (d) => /common/i.test(String(d.maritalStatus || ''));
+const notCommonLaw = (d) => !commonLaw(d);
+const marriedNotCommonLaw = (d) => married(d) && !commonLaw(d);
 const notFemale = (d) => !String(d.sex || '').toLowerCase().startsWith('f');
 
 const I = (code, key, label, o = {}) => ({ code: String(code), key, label, ...o });
@@ -57,7 +60,12 @@ const WORK_LETTER_OFFER = I(113, 'employment-letter', 'Employment certificate, l
 });
 const INSURANCE = I(114, 'insurance', 'Social insurance (work history) record', { tr: true });
 const POLICE_SEALED = I(115, 'police-clearance', 'Police clearance certificate', { tr: true, hint: 'Ministry of Foreign Affairs and Judiciary stamps are REQUIRED on this one.' });
-const MARRIAGE = I(116, 'marriage-cert', 'Marriage certificate', { tr: true, cond: 'if married', when: married });
+const MARRIAGE = I(116, 'marriage-cert', 'Marriage certificate', { tr: true, cond: 'if married', when: marriedNotCommonLaw });
+// A common-law partner has no marriage certificate: IRCC asks for IMM 5409 and proof of living together instead.
+const COMMON_LAW = I(116, 'marriage-cert', 'Common-law union — Statutory Declaration (IMM 5409) and proof of living together for 12 months', {
+  tr: true, when: commonLaw,
+  hint: 'Both partners sign IMM 5409. Proof of living together: a shared lease or deed, joint bills or bank accounts, IDs or mail at the same address.',
+});
 const COURSES = I(117, 'certificates', 'Certificates of academic or professional courses', { tr: true, hint: 'No translation needed if bilingual.' });
 const COURSES_OPT = I(117, 'certificates', 'Certificates of academic or professional courses', { tr: true, cond: 'if available' });
 const RESIDENCE_ABROAD = I(118, 'residence-abroad', 'Residence certificate for another country', { cond: 'if you live or have lived outside your home country' });
@@ -512,7 +520,7 @@ export const APP_TYPES = {
       I(108, 'scholarship', 'Funding or scholarship letter', { cond: 'if the school awarded funding' }),
       I(109, 'deposit', 'Official tuition payment receipt from the school', { hint: "Issued by the school. The IRCC portal says the first year of tuition must already be paid. Your own bank receipt isn't accepted." }),
       I(110, 'language', 'Language test result (IELTS / TOEFL / Duolingo)', { hint: 'Valid for 2 years.' }),
-      SOP_Q, FINANCIAL, WORK_LETTER_OFFER, INSURANCE, POLICE_SEALED, MARRIAGE, COURSES, RESIDENCE_ABROAD, BUSINESS, TIES,
+      SOP_Q, FINANCIAL, WORK_LETTER_OFFER, INSURANCE, POLICE_SEALED, MARRIAGE, COMMON_LAW, COURSES, RESIDENCE_ABROAD, BUSINESS, TIES,
       FLIGHT_FIRM, HOTEL_FIRM, SPONSOR, PROFILE,
       I(125, 'co-op-letter', 'Co-op letter', { cond: 'if the program has a co-op term' }),
       I(126, 'research-proposal', 'Research proposal', { cond: "PhD, postdoc and research master's only", hint: 'Topic, objectives, methods, relevance to your career, Canadian supervisor (name, title, university, email), previous supervisor, related papers.' }),
@@ -529,7 +537,7 @@ export const APP_TYPES = {
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result', { cond: 'not required for the spouse — better to provide if available' }),
       FINANCIAL, SOURCE_OF_FUNDS, WORK_LETTER, INSURANCE, POLICE_SEALED,
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: notCommonLaw }), COMMON_LAW,
       COURSES, RESIDENCE_ABROAD, BUSINESS, TIES_DEEDS, FLIGHT_FIRM, PROFILE, CV_OPT, BACKGROUND,
       I(129, 'sop', 'Purpose of Travel', { party: 'firm', hint: 'Tailored to the applicant — the 129 sample is for ideas only.' }),
       MILITARY, PREVIOUS, REP, FAMILY_REP,
@@ -563,7 +571,7 @@ export const APP_TYPES = {
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result', { cond: 'not required for the spouse — better to provide if available' }),
       POT_Q, FINANCIAL, SOURCE_OF_FUNDS, WORK_LETTER, INSURANCE, POLICE_SEALED,
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: notCommonLaw }), COMMON_LAW,
       I(117, 'certificates', 'Certificates — courses, licences, awards', { tr: true, cond: 'if available' }),
       RESIDENCE_ABROAD, BUSINESS, TIES_DEEDS, FLIGHT_FIRM, PROFILE, CV_OPT, BACKGROUND,
       I(129, 'sop', 'Purpose of Travel', { party: 'firm' }),
@@ -617,7 +625,7 @@ export const APP_TYPES = {
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB,
       I(107, 'host-docs', 'Invitation letter and the inviter\'s documents', { party: 'principal', hint: "Inviter's passport, Canadian status (PR card / study or work permit), birth certificate, employment letter, 6 months of bank statements, pay slips, property documents, NOA / T4 / T1, and anything explaining the reason for the trip." }),
       I(108, 'relationship-proof', 'Proof of relationship to the inviter', { tr: true, hint: 'Birth certificates showing the relationship, plus 4–5 family or friendship photos.' }),
-      LANGUAGE_OPT, POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, MARRIAGE, RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM,
+      LANGUAGE_OPT, POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, MARRIAGE, COMMON_LAW, RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM,
       I(122, 'accommodation', "Accommodation — the host's house deed or lease in Canada", { party: 'principal' }),
       SPONSOR, PROFILE, BACKGROUND, MILITARY, PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoVisit, PKG.inviterDocs, PKG.financialProof],
@@ -630,7 +638,7 @@ export const APP_TYPES = {
     steps: ['personal', 'passport', 'contact', 'family', 'visit', 'host', 'education', 'history', 'fundsStay', 'tiesReturn'],
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476, F.imm5713],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB, LANGUAGE_OPT, FINANCIAL, WORK_LETTER, INSURANCE,
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: notCommonLaw }), COMMON_LAW,
       RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM,
       I(122, 'accommodation', "Accommodation — the host's house deed or lease in Canada", { party: 'principal' }),
       PROFILE, BACKGROUND, MILITARY, PREVIOUS, REP, FAMILY_REP],
@@ -660,7 +668,7 @@ export const APP_TYPES = {
     forms: [F.imm5257, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH, NID, passport(1), PHOTO, DEGREE_IF_JOB, TRANSCRIPT_IF_JOB,
       I(107, 'invitation-letter', 'Business invitation letter', { party: 'firm', hint: "Written by the firm to match the applicant's CV and work background." }),
-      LANGUAGE_OPT, POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, MARRIAGE, RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM, HOTEL_FIRM,
+      LANGUAGE_OPT, POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, MARRIAGE, COMMON_LAW, RESIDENCE_ABROAD, BUSINESS, TIES, FLIGHT_FIRM, HOTEL_FIRM,
       SPONSOR, PROFILE, CV, BACKGROUND, MILITARY, PREVIOUS, REP],
     packages: [PKG.clientInfoBusinessVisit, PKG.financialProof],
     letters: [LETTER.potBusiness, LETTER.businessInvitation, LETTER.finCover, LETTER.finSummary, LETTER.explanation, LETTER.submission],
@@ -674,7 +682,7 @@ export const APP_TYPES = {
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result (IELTS / TOEFL / Duolingo)', { cond: 'not required but better to provide' }),
       POT_Q, FINANCIAL, WORK_LETTER, INSURANCE, POLICE_SEALED,
-      I(116, 'marriage-cert', 'Marriage certificate and children\'s birth documents', { tr: true, cond: 'if married / if you have children' }),
+      I(116, 'marriage-cert', 'Marriage certificate and children\'s birth documents', { tr: true, cond: 'if married / if you have children' }), COMMON_LAW,
       COURSES, RESIDENCE_ABROAD,
       I('119-1', 'business-docs', 'Existing business — registration, Gazette, licence, articles', { hint: 'Company Registration Certificate, establishment and changes notices, Articles of Incorporation.' }),
       I('119-1', 'business-financials', 'Existing business — financial statements and tax returns (last 3 years)', { hint: 'Balance sheet, profit and loss, company tax returns, company bank accounts.' }),
@@ -716,7 +724,7 @@ export const APP_TYPES = {
     forms: [F.imm1295, F.imm5257b, F.imm5645, F.imm5476],
     checklist: [FORM100, BIRTH, NID, passport(2), PHOTO, DEGREE, TRANSCRIPT,
       I(110, 'language', 'Language test result (IELTS General / CELPIP / TEF)', { hint: 'The portal requires proof of language proficiency unless the job is LMIA-exempt.' }),
-      FINANCIAL, WORK_LETTER, INSURANCE, POLICE_SEALED, MARRIAGE, COURSES_OPT, PROFILE, CV, BACKGROUND, MILITARY, PREVIOUS, REP,
+      FINANCIAL, WORK_LETTER, INSURANCE, POLICE_SEALED, MARRIAGE, COMMON_LAW, COURSES_OPT, PROFILE, CV, BACKGROUND, MILITARY, PREVIOUS, REP,
       I(139, 'lmia', 'LMIA decision letter from ESDC — or, if LMIA-exempt, the offer of employment number (IMM 5802) and the employer compliance fee receipt', { party: 'principal' }),
       I(140, 'job-offer', 'Job offer letter from the Canadian employer', { party: 'principal', hint: 'Position, NOC / TEER, duties, wage, hours, start date and location — matching the LMIA or IMM 5802.' }),
       I(141, 'employment-contract', 'Signed employment contract', { party: 'principal' }),
@@ -737,7 +745,7 @@ export const APP_TYPES = {
       I(107, 'status-in-canada', 'Your current work permit'),
       I(110, 'language', 'Language test result (IELTS General / CELPIP / TEF)', { hint: 'The portal requires proof of language proficiency unless the job is LMIA-exempt.' }),
       I(113, 'employment-letter', 'Current employment letter + last 3 pay slips', { hint: 'Position, start date, wage and hours, on letterhead and signed.' }),
-      MARRIAGE, PROFILE, CV, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP,
+      MARRIAGE, COMMON_LAW, PROFILE, CV, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP,
       I(139, 'lmia', 'New LMIA decision letter from ESDC (or proof of submission) — or, if LMIA-exempt, the offer of employment number (IMM 5802) and the employer compliance fee receipt', { party: 'principal' }),
       I(140, 'job-offer', 'Job offer letter from the employer', { party: 'principal' }),
       I(141, 'employment-contract', 'Signed employment contract', { party: 'principal' }),
@@ -757,7 +765,7 @@ export const APP_TYPES = {
       I(108, 'employment-letter', 'Employment documents — employment letter, last 3 pay slips'),
       POT_Q,
       I(112, 'proof-of-funds', 'Proof of funds — bank balance + 6-month statement, pay slips, tax; support letter if sponsored'),
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: married }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: marriedNotCommonLaw }), COMMON_LAW,
       PROFILE, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP],
     packages: [PKG.clientInfoOwpInside],
     letters: [LETTER.sopIranianOwp, LETTER.finSummary, LETTER.explanation, LETTER.submission],
@@ -792,7 +800,7 @@ export const APP_TYPES = {
       I(107, 'status-in-canada', 'Your study permit / work permit / visitor record (IRCC approval letter)', { cond: 'if applicable' }),
       I(108, 'enrolment-letter', 'Enrolment letter and up-to-date transcripts', { cond: 'if you are a student', hint: 'Name, student number, program, start and end dates, and confirmation of current-term registration.' }),
       I(109, 'employment-letter', 'Employment letter (+ 3 recent pay slips if available)', { cond: 'if you are employed', hint: 'Position, start date, full- or part-time, weekly hours — on letterhead and signed.' }),
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: married }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: marriedNotCommonLaw }), COMMON_LAW,
       PROFILE, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP, CUSTODY],
     packages: [PKG.clientInfoTrvInside],
     letters: [LETTER.pot, LETTER.explanation, LETTER.submission],
@@ -839,7 +847,7 @@ export const APP_TYPES = {
       I(109, 'deposit', 'Official tuition deposit receipt from the school'),
       I(110, 'transcripts', 'Education — enrolment letter, last degree, transcripts of the two most recent levels'),
       SOP_Q, FINANCIAL,
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: married }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: marriedNotCommonLaw }), COMMON_LAW,
       COURSES, RESIDENCE_ABROAD, TIES, LAST_ENTRY(121),
       I(122, 'accommodation', 'Residence details — lease or deed, or relatives/friends with contact details'),
       SPONSOR, PROFILE,
@@ -858,7 +866,7 @@ export const APP_TYPES = {
     forms: [F.imm5710, F.imm5476],
     checklist: [FORM100, BIRTH, passport(2), PHOTO,
       I(107, 'status-in-canada', 'Your current permit in Canada'),
-      I(116, 'marriage-cert', 'Marriage certificate', { tr: true }),
+      I(116, 'marriage-cert', 'Marriage certificate', { tr: true, when: notCommonLaw }), COMMON_LAW,
       I(113, 'medical', 'Medical exam', { cond: 'if applicable' }),
       PROFILE, BACKGROUND, LAST_ENTRY(129), MILITARY, PREVIOUS, REP,
       I(132, 'spouse-status', "Spouse's study or work permit", { party: 'principal' }),

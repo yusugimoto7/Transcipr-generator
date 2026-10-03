@@ -577,4 +577,41 @@ export const PROFILES = {
       },
     },
   },
+
+  // A second spouse-of-student OWP: a common-law partner (no marriage
+  // certificate: IMM 5409 instead), divorced from a first husband.
+  'owp-outside#2': {
+    ...person({
+      number: 'S27125', given: 'Parisa', family: 'Nouri', native: 'پریسا نوری', sex: 'Female', dob: '1993-06-21', city: 'Mashhad', homeCity: 'Mashhad', email: 'parisa.nouri@example.test',
+      marital: 'Common-Law', spouseGiven: 'Kian', spouseFamily: 'Daneshvar', spouseFa: 'کیان دانشور', spouseDob: '1991-01-30', marriageDate: '2022-03-01', spouseJob: 'Student (Master of Data Science, Prairie Demo University)', spouseAddress: '77 Demo Lane, Saskatoon, SK S7N 0A1, Canada',
+      degreeLevel: "Bachelor's degree", school: 'Ferdowsi University of Mashhad', field: 'Nursing', eduFrom: '2011-09', eduTo: '2015-07', eduCity: 'Mashhad',
+      job: job('Nurse', 'Mashhad Demo Hospital', '2015-10', 'Mashhad'),
+      team: {
+        previouslyMarried: true, prevSpouseFamilyName: 'Demo', prevSpouseGivenName: 'Behrouz', prevSpouseDob: '1989-09-09', prevRelationshipType: 'Married', prevRelationshipFrom: '2016-05-05', prevRelationshipTo: '2019-11-20',
+        inviterStatus: 'Study permit holder', inviterPermitExpiry: '2028-12-31', inviterInstitution: 'Prairie Demo University', inviterProgramOrJob: 'Master of Data Science', inviterAddress: '77 Demo Lane, Saskatoon, SK S7N 0A1',
+        relationshipHistory: 'Living together in Mashhad since March 2022 (common-law); not married.',
+        workPermitType: 'Open Work Permit', intendedFrom: '2027-01-10', intendedTo: '2028-12-31',
+        totalFunds: 28000, supportSource: 'Combination', sponsorName: 'Kian Daneshvar (common-law partner)',
+        returnPlan: 'Return to Mashhad Demo Hospital after the partner’s studies.',
+      },
+    }),
+    type: 'owp-outside',
+    expect: {
+      imm1295: {
+        'MaritalStatus/SectionA/MaritalStatus': '03',
+        'MaritalStatus/SectionA/DateOfMarriage': '2022-03-01',
+        'MaritalStatus/SectionA/FamilyName': 'Daneshvar',
+        'MaritalStatus/SectionA/PrevMarriedIndicator': 'Y|Yes',
+        'MaritalStatus/SectionA/PMFamilyName': 'Demo',
+        'MaritalStatus/SectionA/GivenName/PMGivenName': 'Behrouz',
+        'MaritalStatus/SectionA/PrevSpouseDOB/DOBYear': '1989',
+        'MaritalStatus/SectionA/TypeOfRelationship': '01|Married',
+        'MaritalStatus/SectionA/FromDate': '2016-05-05',
+        'MaritalStatus/SectionA/ToDate/ToDate': '2019-11-20',
+      },
+    },
+  },
 };
+
+// Parisa sends her common-law declaration where a married client sends the marriage certificate.
+PROFILES['owp-outside#2'].uploaded = PROFILES['owp-outside#2'].uploaded.map((u) => (u.tag === 'MARRIAGE' ? { ...u, name: '116 - Common-law Declaration - Parisa.pdf' } : u));
