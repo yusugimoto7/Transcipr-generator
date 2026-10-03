@@ -6,6 +6,7 @@ import { UPLOAD_DIR } from './paths';
 import { getApplication, updateApplication, listAllApplications } from './store';
 import {
   driveStatus,
+  driveReadOnly,
   parseDriveLink,
   getItem,
   findChildren,
@@ -54,7 +55,8 @@ const CACHE_MAX = () => Number(process.env.CACHE_MAX_MB || 600) * MB;
 const IDLE_MS = Number(process.env.CACHE_IDLE_MINUTES ?? 30) * 60 * 1000; // a file used this recently stays cached
 const SWEEP_MS = Number(process.env.DRIVE_SYNC_MINUTES || 10) * 60 * 1000;
 
-export const driveOn = () => driveStatus().mode === 'service-account';
+// Read-only Drive (DRIVE_READ_ONLY): files stay on the server disk, nothing is copied up.
+export const driveOn = () => driveStatus().mode === 'service-account' && !driveReadOnly();
 export const clientsRoot = () => parseDriveLink(process.env.DRIVE_CLIENTS_FOLDER || '')?.id || null;
 
 /* ------------------------------ client folder ------------------------------ */

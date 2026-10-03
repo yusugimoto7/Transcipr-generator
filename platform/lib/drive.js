@@ -28,6 +28,14 @@ const TOKEN_URL = process.env.GOOGLE_OAUTH_TOKEN_URL || 'https://oauth2.googleap
 // (lib/mailIntake.js). Writes only succeed in folders shared with the service
 // account as Editor; folders shared as Viewer stay read-only.
 const SCOPE = 'https://www.googleapis.com/auth/drive';
+// DRIVE_READ_ONLY=1 (the nightly replay of past clients, test/replay): a
+// read-only token, and every write refused before it is sent, so the firm's
+// client folders can't be changed.
+export const driveReadOnly = () => /^(1|true|yes)$/i.test(process.env.DRIVE_READ_ONLY || '');
+const scope = () => (driveReadOnly() ? 'https://www.googleapis.com/auth/drive.readonly' : SCOPE);
+function refuseWrite(what) {
+  if (driveReadOnly()) throw new DriveError(`Google Drive is read-only here (DRIVE_READ_ONLY): not allowed to ${what}.`, 403);
+}
 const UPLOAD_API = API.replace('/drive/v3', '/upload/drive/v3');
 const ALL_DRIVES = 'supportsAllDrives=true&includeItemsFromAllDrives=true';
 const FIELDS = 'id,name,mimeType,size,modifiedTime,shortcutDetails(targetId,targetMimeType)';
@@ -86,9 +94,10 @@ let cached = { token: null, exp: 0 };
 async function accessToken() {
   const sa = serviceAccount();
   if (!sa) return null;
-  if (cached.token && Date.now() < cached.exp - 60_000) return cached.token;
+  // One token per access level: a read-only token is never reused for a write, or the other way round.
+  if (cached.token && cached.scope === scope() && Date.now() < cached.exp - 60_000) return cached.token;
   const key = await importPKCS8(sa.private_key, 'RS256');
-  const assertion = await new SignJWT({ scope: SCOPE })
+  const assertion = await new SignJWT({ scope: scope() })
     .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
     .setIssuer(sa.client_email)
     .setAudience(TOKEN_URL)
@@ -104,7 +113,7 @@ async function accessToken() {
   if (!res.ok || !data.access_token) {
     throw new DriveError(`Google sign-in failed: ${data.error_description || data.error || res.status}`, 502);
   }
-  cached = { token: data.access_token, exp: Date.now() + (Number(data.expires_in) || 3600) * 1000 };
+  cached = { token: data.access_token, scope: scope(), exp: Date.now() + (Number(data.expires_in) || 3600) * 1000 };
   return cached.token;
 }
 
@@ -198,12 +207,20 @@ export async function searchFolders(text) {
   return data.files || [];
 }
 
+/** Files of any kind anywhere the service account can see whose name contains `text` (e.g. the TR-Files sheet). */
+export async function searchFiles(text) {
+  const q = ['trashed = false', `name contains '${String(text).replace(/'/g, "\\'")}'`];
+  const data = await call(`/files?q=${encodeURIComponent(q.join(' and '))}&fields=${encodeURIComponent(`files(${FIELDS},parents)`)}&pageSize=50&${ALL_DRIVES}`);
+  return data.files || [];
+}
+
 export async function getParents(id) {
   const data = await call(`/files/${encodeURIComponent(id)}?fields=id,name,parents&supportsAllDrives=true`);
   return data.parents || [];
 }
 
 export async function createFolder(parentId, name) {
+  refuseWrite('create a folder');
   return call(`/files?supportsAllDrives=true&fields=${encodeURIComponent(FIELDS)}`, {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -213,6 +230,7 @@ export async function createFolder(parentId, name) {
 
 /** Upload a file into a folder (multipart, one request). Returns its metadata. */
 export async function uploadFile(parentId, name, mime, buffer) {
+  refuseWrite('upload a file');
   const boundary = `sugimoto-${Date.now().toString(36)}`;
   const meta = Buffer.from(JSON.stringify({ name, parents: [parentId] }));
   const body = Buffer.concat([
@@ -232,6 +250,7 @@ export async function uploadFile(parentId, name, mime, buffer) {
 
 /** Replace a file's content (and name) in place — same file id, Drive keeps the old version. */
 export async function updateFile(id, name, mime, buffer) {
+  refuseWrite('replace a file');
   const boundary = `sugimoto-${Date.now().toString(36)}`;
   const meta = Buffer.from(JSON.stringify({ name }));
   const body = Buffer.concat([
@@ -251,6 +270,7 @@ export async function updateFile(id, name, mime, buffer) {
 
 /** Rename a Drive file (metadata only). */
 export async function renameFile(id, name) {
+  refuseWrite('rename a file');
   return call(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,name`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -260,6 +280,7 @@ export async function renameFile(id, name) {
 
 /** Move a file to Drive's bin (recoverable for 30 days). */
 export async function trashFile(id) {
+  refuseWrite('move a file to the bin');
   return call(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id`, {
     method: 'PATCH',
     headers: JSON_HEADERS,
@@ -313,6 +334,7 @@ async function putFile(url, headers, file) {
  * new file is created in `parentId`.
  */
 export async function uploadFromDisk({ parentId, id, name, mime, file }) {
+  refuseWrite('upload a file');
   const size = (await fs.promises.stat(file)).size;
   const init = await authorized(
     `${UPLOAD_API}/files${id ? `/${encodeURIComponent(id)}` : ''}?uploadType=resumable&supportsAllDrives=true&fields=${encodeURIComponent(FIELDS)}`,
