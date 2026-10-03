@@ -1,0 +1,239 @@
+{
+ "harvested_at": "2026-10-03T19:13:52.500Z",
+ "feeds": [
+  {
+   "name": "CIC News",
+   "url": "https://www.cicnews.com/feed",
+   "ok": false,
+   "error": "timeout"
+  },
+  {
+   "name": "Immigration News Canada",
+   "url": "https://immigrationnewscanada.ca/feed/",
+   "ok": false,
+   "error": "Unable to parse XML."
+  },
+  {
+   "name": "IRCC",
+   "url": "https://api.io.canada.ca/io-server/gc/news/en/v2?dept=departmentofcitizenshipandimmigration&sort=publishedDate&orderBy=desc&pick=25&format=atom",
+   "ok": true,
+   "count": 25
+  },
+  {
+   "name": "Canadim",
+   "url": "https://www.canadim.com/feed/",
+   "ok": true,
+   "count": 10
+  },
+  {
+   "name": "Canadian Immigrant",
+   "url": "https://canadianimmigrant.ca/feed",
+   "ok": true,
+   "count": 10
+  },
+  {
+   "name": "Immigration.ca",
+   "url": "https://www.immigration.ca/feed/",
+   "ok": true,
+   "count": 9
+  },
+  {
+   "name": "CI News",
+   "url": "https://www.cimmigrationnews.com/feed/",
+   "ok": false,
+   "error": "HTTP 521"
+  },
+  {
+   "name": "SchengenVisaInfo",
+   "url": "https://www.schengenvisainfo.com/news/feed/",
+   "ok": false,
+   "error": "HTTP 403"
+  },
+  {
+   "name": "IMI Daily",
+   "url": "https://www.imi-daily.com/feed/",
+   "ok": false,
+   "error": "fetch failed"
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=%22canada%20immigration%22%20policy%20OR%20rules%20OR%20changes%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 91
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=IRCC%20announcement%20OR%20update%20OR%20memo%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 25
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=%22study%20permit%22%20OR%20PGWP%20OR%20%22international%20students%22%20canada%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 79
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=%22work%20permit%22%20OR%20LMIA%20OR%20%22temporary%20foreign%20worker%22%20canada%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 96
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=%22provincial%20nominee%22%20OR%20PNP%20OR%20%22BC%20PNP%22%20OR%20OINP%20canada%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 67
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=canada%20immigration%20processing%20times%20OR%20backlog%20OR%20fees%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 64
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=canada%20immigration%20%22federal%20court%22%20OR%20ruling%20OR%20lawsuit%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 63
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=canada%20sponsorship%20OR%20spousal%20OR%20parents%20grandparents%20immigration%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 35
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=citizenship%20canada%20rules%20OR%20test%20OR%20oath%20changes%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 70
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=germany%20opportunity%20card%20OR%20skilled%20worker%20visa%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 70
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=europe%20OR%20portugal%20OR%20netherlands%20OR%20spain%20residence%20permit%20visa%20changes%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 70
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=schengen%20visa%20rules%20OR%20EU%20blue%20card%20changes%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 13
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=iranian%20OR%20iran%20visa%20OR%20immigration%20canada%20OR%20europe%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 61
+  },
+  {
+   "name": "Canada Gazette Part I",
+   "url": "https://gazette.gc.ca/rss/p1-eng.xml",
+   "ok": true,
+   "count": 437
+  },
+  {
+   "name": "Canada Gazette Part II",
+   "url": "https://gazette.gc.ca/rss/p2-eng.xml",
+   "ok": true,
+   "count": 233
+  },
+  {
+   "name": "CanLII — Federal Court",
+   "url": "https://www.canlii.org/en/ca/fct/rss_new.xml",
+   "ok": true,
+   "count": 20
+  },
+  {
+   "name": "Manitoba PNP",
+   "url": "https://immigratemanitoba.com/news/feed/",
+   "ok": true,
+   "count": 10
+  },
+  {
+   "name": "Nova Scotia PNP",
+   "url": "https://liveinnovascotia.com/taxonomy/term/3/feed",
+   "ok": true,
+   "count": 10
+  },
+  {
+   "name": "r/ImmigrationCanada",
+   "url": "https://www.reddit.com/r/ImmigrationCanada/top/.rss?t=week",
+   "ok": true,
+   "count": 25
+  },
+  {
+   "name": "Study in Finland",
+   "url": "https://www.studyinfinland.fi/rss.xml",
+   "ok": true,
+   "count": 0
+  },
+  {
+   "name": "BAMF Germany (DE)",
+   "url": "https://www.bamf.de/SiteGlobals/Functions/RSS/DE/Feed/RSSNewsfeed_Meldungen.xml?nn=282672",
+   "ok": true,
+   "count": 20
+  },
+  {
+   "name": "Sugimoto Visa",
+   "url": "https://sugimotovisa.com/feed/",
+   "ok": true,
+   "count": 10
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=netherlands%20startup%20visa%20OR%20dutch%20residence%20permit%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 7
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=finland%20study%20permit%20OR%20scholarship%20international%20students%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 33
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=spain%20student%20visa%20OR%20residence%20permit%20iranians%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 0
+  },
+  {
+   "name": "Google News",
+   "url": "https://news.google.com/rss/search?q=france%20campus%20visa%20OR%20study%20permit%20changes%20when%3A30d&hl=en-CA&gl=CA&ceid=CA:en",
+   "ok": true,
+   "count": 10
+  },
+  {
+   "name": "YouTube",
+   "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCdC39maXW05z-mF4D2MkSIw",
+   "ok": true,
+   "count": 15
+  },
+  {
+   "name": "YouTube",
+   "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCjVEMcO-RXifDcOGbg1Uv9w",
+   "ok": true,
+   "count": 15
+  },
+  {
+   "name": "YouTube",
+   "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSbhOu71D-tv1z9M-xspCSQ",
+   "ok": true,
+   "count": 15
+  },
+  {
+   "name": "YouTube",
+   "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCpndoeFUfOCSZN5Cw1sCiGA",
+   "ok": true,
+   "count": 15
+  }
+ ]
+}
