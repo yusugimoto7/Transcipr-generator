@@ -73,8 +73,6 @@ export async function renderClientFormPdf(app) {
   doc.registerFontkit(fontkit);
   const regular = await doc.embedFont(await fs.readFile(path.join(FONT_DIR, 'Vazirmatn-Regular.ttf')), { subset: true });
   const bold = await doc.embedFont(await fs.readFile(path.join(FONT_DIR, 'Vazirmatn-Bold.ttf')), { subset: true });
-  const f = app.clientForm || {};
-  const a = f.answers || {};
   const who = [app.data?.givenName, app.data?.familyName].filter(Boolean).join(' ') || app.title || '';
   doc.setTitle(`Client Questionnaire - ${who}`);
   doc.setProducer('Canada Visa Platform');
@@ -131,36 +129,19 @@ export async function renderClientFormPdf(app) {
   };
 
   newPage();
+  const content = questionnaireContent(app);
   // Header: the title in both languages, then who, which file, when.
-  line('Client Questionnaire', { font: bold, size: 18 });
-  line('پرسشنامه موکل', { font: bold, size: 18, align: 'right' });
+  line(content.title.en, { font: bold, size: 18 });
+  line(content.title.fa, { font: bold, size: 18, align: 'right' });
   y -= 30;
-  const type = getAppType(app.type)?.title || app.type || '';
-  for (const [k, v] of [
-    ['Client', who],
-    ['File', [app.clientNumber, type].filter(Boolean).join(' · ')],
-    ['Submitted', f.submittedAt ? new Date(f.submittedAt).toLocaleString('en-CA', { timeZone: 'America/Vancouver', dateStyle: 'medium', timeStyle: 'short' }) + ' (Vancouver)' : 'Not submitted yet'],
-  ]) {
+  for (const [k, v] of content.header) {
     line(`${k}:`, { font: bold, size: 10, color: MUTED });
     line(String(v || '—'), { size: 10, x0: PAGE.margin + 70, w: maxW - 70 });
     y -= 16;
   }
   y -= 6;
 
-  const optLabel = (field, v) => {
-    if (typeof v === 'boolean') return v ? 'Yes — بله' : 'No — خیر';
-    const o = (field.options || []).find((x) => x.v === v);
-    return o ? (o.en && o.fa && o.en !== o.fa ? `${o.en} — ${o.fa}` : o.en || o.fa) : String(v ?? '');
-  };
-  const value = (field, v) => {
-    if (v == null || v === '' || (Array.isArray(v) && !filledRows(v).length)) return '';
-    if (field.type === 'yesno' || field.options || typeof v === 'boolean') return optLabel(field, v);
-    return String(v);
-  };
-
-  for (const s of CLIENT_SECTIONS) {
-    const fields = s.fields.filter((x) => !x.show || x.show(a));
-    if (!fields.length) continue;
+  for (const s of content.sections) {
     room(48);
     y -= 8;
     line(s.en, { font: bold, size: 13 });
@@ -168,35 +149,28 @@ export async function renderClientFormPdf(app) {
     y -= 8;
     rule();
     y -= 14;
-    for (const field of fields) {
-      const v = a[field.id];
+    for (const item of s.items) {
       room(34);
       // The question in English (left) and Persian (right), then the answer.
       const half = maxW / 2 - 6;
-      const enLines = wrap(field.en, regular, 8.5, half);
-      const faLines = wrap(field.fa, regular, 8.5, half);
+      const enLines = wrap(item.en, regular, 8.5, half);
+      const faLines = wrap(item.fa, regular, 8.5, half);
       for (let i = 0; i < Math.max(enLines.length, faLines.length); i++) {
         room(12);
         if (enLines[i]) line(enLines[i], { size: 8.5, color: MUTED, w: half });
         if (faLines[i]) line(faLines[i], { size: 8.5, color: MUTED, align: 'right', x0: PAGE.margin + maxW / 2 + 6, w: half });
         y -= 12;
       }
-      if (field.type === 'rows') {
-        const rows = filledRows(v);
-        if (!rows.length) para('—', { size: 10.5, align: 'left' });
-        rows.forEach((r, i) => {
-          const parts = field.columns.map((c) => [c.en, value(c, r[c.id])]).filter(([, x]) => x);
-          para(`${i + 1}. ${parts.map(([k, x]) => `${k}: ${x}`).join('  ·  ')}`, { size: 10, align: 'left' });
-        });
-      } else {
-        para(value(field, v) || '—', { size: 10.5, font: bold });
-      }
+      if (item.rows) {
+        if (!item.rows.length) para('—', { size: 10.5, align: 'left' });
+        for (const r of item.rows) para(r, { size: 10, align: 'left' });
+      } else para(item.answer || '—', { size: 10.5, font: bold });
       y -= 6;
     }
   }
 
   // The client's confirmation, as they signed it.
-  const c = f.confirmation;
+  const c = content.confirmation;
   room(120);
   y -= 8;
   line('Confirmation', { font: bold, size: 13 });
@@ -204,15 +178,13 @@ export async function renderClientFormPdf(app) {
   y -= 8;
   rule();
   y -= 14;
-  para(c?.text?.en || CONFIRM_TEXT.en, { size: 9.5, align: 'left' });
-  para(c?.text?.fa || CONFIRM_TEXT.fa, { size: 9.5, align: 'right' });
+  para(c.en, { size: 9.5, align: 'left' });
+  para(c.fa, { size: 9.5, align: 'right' });
   y -= 4;
-  if (c) {
-    para(`Signed (typed name): ${c.name}`, { size: 10, font: bold, align: 'left' });
-    para(`Date: ${new Date(c.at).toLocaleString('en-CA', { timeZone: 'America/Vancouver', dateStyle: 'medium', timeStyle: 'short' })} (Vancouver)${c.ip ? ` · IP ${c.ip}` : ''}`, { size: 9, color: MUTED, align: 'left' });
-  } else {
-    para('Not yet confirmed by the client.', { size: 10, color: MUTED, align: 'left' });
-  }
+  if (c.signed) {
+    para(c.signed, { size: 10, font: bold, align: 'left' });
+    para(c.date, { size: 9, color: MUTED, align: 'left' });
+  } else para('Not yet confirmed by the client.', { size: 10, color: MUTED, align: 'left' });
 
   const pages = doc.getPages();
   pages.forEach((p, i) => {
@@ -223,11 +195,67 @@ export async function renderClientFormPdf(app) {
   return doc.save();
 }
 
-/** File name of the stored PDF: "Client Questionnaire - Arman Rezaei.pdf". */
-export function clientFormFilename(app) {
-  const who = [app.data?.givenName, app.data?.familyName].filter(Boolean).join(' ') || app.title || 'Client';
-  return `Client Questionnaire - ${who.replace(/[\\/:*?"<>|]/g, '-')}.pdf`;
+const vancouver = (iso) => `${new Date(iso).toLocaleString('en-CA', { timeZone: 'America/Vancouver', dateStyle: 'medium', timeStyle: 'short' })} (Vancouver)`;
+
+/**
+ * What the PDF and the Word file show, in order: the header, each section with
+ * every question the client was asked (English, Persian, the answer; a list as
+ * one line per row) and the signed confirmation.
+ */
+export function questionnaireContent(app) {
+  const f = app.clientForm || {};
+  const a = f.answers || {};
+  const who = [app.data?.givenName, app.data?.familyName].filter(Boolean).join(' ') || app.title || '';
+  const optLabel = (field, v) => {
+    if (typeof v === 'boolean') return v ? 'Yes — بله' : 'No — خیر';
+    const o = (field.options || []).find((x) => x.v === v);
+    return o ? (o.en && o.fa && o.en !== o.fa ? `${o.en} — ${o.fa}` : o.en || o.fa) : String(v ?? '');
+  };
+  const value = (field, v) => {
+    if (v == null || v === '' || (Array.isArray(v) && !filledRows(v).length)) return '';
+    if (field.type === 'yesno' || field.options || typeof v === 'boolean') return optLabel(field, v);
+    return String(v);
+  };
+  const sections = CLIENT_SECTIONS.map((s) => ({
+    en: s.en,
+    fa: s.fa,
+    items: s.fields
+      .filter((x) => !x.show || x.show(a))
+      .map((field) =>
+        field.type === 'rows'
+          ? {
+              en: field.en,
+              fa: field.fa,
+              rows: filledRows(a[field.id]).map((r, i) => `${i + 1}. ${field.columns.map((c) => [c.en, value(c, r[c.id])]).filter(([, x]) => x).map(([k, x]) => `${k}: ${x}`).join('  ·  ')}`),
+            }
+          : { en: field.en, fa: field.fa, answer: value(field, a[field.id]) }
+      ),
+  })).filter((s) => s.items.length);
+  const c = f.confirmation;
+  return {
+    who,
+    title: { en: 'Client Questionnaire', fa: 'پرسشنامه موکل' },
+    header: [
+      ['Client', who],
+      ['File', [app.clientNumber, getAppType(app.type)?.title || app.type].filter(Boolean).join(' · ')],
+      ['Submitted', f.submittedAt ? vancouver(f.submittedAt) : 'Not submitted yet'],
+    ],
+    sections,
+    confirmation: {
+      en: c?.text?.en || CONFIRM_TEXT.en,
+      fa: c?.text?.fa || CONFIRM_TEXT.fa,
+      signed: c ? `Signed (typed name): ${c.name}` : '',
+      date: c ? `Date: ${vancouver(c.at)}${c.ip ? ` · IP ${c.ip}` : ''}` : '',
+    },
+  };
 }
 
-/** The key of the stored PDF among the file's generated files. */
+/** File name of the stored copy: "Client Questionnaire - Arman Rezaei.pdf" (or .docx). */
+export function clientFormFilename(app, ext = 'pdf') {
+  const who = [app.data?.givenName, app.data?.familyName].filter(Boolean).join(' ') || app.title || 'Client';
+  return `Client Questionnaire - ${who.replace(/[\\/:*?"<>|]/g, '-')}.${ext}`;
+}
+
+/** The keys of the stored PDF and Word copies among the file's generated files. */
 export const CLIENT_FORM_KEY = 'client-questionnaire';
+export const CLIENT_FORM_DOCX_KEY = 'client-questionnaire-docx';

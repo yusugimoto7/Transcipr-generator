@@ -35,6 +35,9 @@ function view(app, req) {
     pdf: (app.generated || []).some((g) => g.key === 'client-questionnaire')
       ? { url: `/api/applications/${app.id}/download/client-questionnaire`, onDrive: Boolean(app.driveGenerated?.['client-questionnaire']?.id) }
       : null,
+    docx: (app.generated || []).some((g) => g.key === 'client-questionnaire-docx')
+      ? { url: `/api/applications/${app.id}/download/client-questionnaire-docx`, onDrive: Boolean(app.driveGenerated?.['client-questionnaire-docx']?.id) }
+      : null,
     review: f?.answers ? reviewRows(app) : [],
     other: f?.answers ? otherAnswers(f.answers) : [],
   };

@@ -464,8 +464,10 @@ async function runType(key) {
   const finals = report.drive.filter((l) => /^\s{4}\d\d - /.test(l));
   step('Drive: the client folder holds the documents and the final files', report.drive.some((l) => /01 - Documents/.test(l)) && finals.length > 0, `${finals.length} final files on Drive`);
   // The signed questionnaire sits in the client's main folder, not in a subfolder.
-  const cq = clientFolder && Object.keys(tree).find((k) => !tree[k].trashed && tree[k].parents.includes(clientFolder) && /^Client Questionnaire - /.test(tree[k].name));
-  step('Drive: the signed questionnaire is in the client\'s main folder', !!cq && tree[cq].bytes?.subarray(0, 5).toString() === '%PDF-', cq ? tree[cq].name : 'not there');
+  const cqs = clientFolder ? Object.keys(tree).filter((k) => !tree[k].trashed && tree[k].parents.includes(clientFolder) && /^Client Questionnaire - /.test(tree[k].name)) : [];
+  const cqPdf = cqs.find((k) => tree[k].name.endsWith('.pdf') && tree[k].bytes?.subarray(0, 5).toString() === '%PDF-');
+  const cqDoc = cqs.find((k) => tree[k].name.endsWith('.docx') && tree[k].bytes?.subarray(0, 2).toString() === 'PK');
+  step('Drive: the signed questionnaire (PDF and Word) is in the client\'s main folder', !!cqPdf && !!cqDoc, cqs.map((k) => tree[k].name).join(', ') || 'not there');
   // Duplicate names inside one folder of this client (other clients' folders may reuse names).
   const mine = Object.keys(tree).find((k) => tree[k].mimeType === FOLDER && tree[k].name.startsWith(`${P.file.clientNumber} - `));
   const dupes = [];

@@ -68,7 +68,7 @@ export default function ClientFormBox({ app, fieldLabel, patchLocal }) {
   };
 
   if (!v) return null;
-  const { link, form, review, other, pdf } = v;
+  const { link, form, review, other, pdf, docx } = v;
   const live = link && !link.revokedAt && !(link.expiresAt && link.expiresAt < new Date().toISOString() && form?.status !== 'submitted');
   const submitted = form?.status === 'submitted';
   const todo = review.filter((r) => !r.same && !r.accepted);
@@ -139,6 +139,11 @@ export default function ClientFormBox({ app, fieldLabel, patchLocal }) {
           {submitted && pdf && (
             <a className="btn-secondary btn-sm" href={pdf.url} target="_blank" rel="noopener noreferrer" title={pdf.onDrive ? 'Also saved in the client’s folder on Google Drive' : 'Saved on the file; it goes to the client’s Drive folder shortly'}>
               <FileDown size={14} /> Questionnaire PDF{pdf.onDrive ? ' · on Drive' : ''}
+            </a>
+          )}
+          {submitted && docx && (
+            <a className="btn-secondary btn-sm" href={docx.url} target="_blank" rel="noopener noreferrer" title={docx.onDrive ? 'Also saved in the client’s folder on Google Drive' : 'Saved on the file; it goes to the client’s Drive folder shortly'}>
+              <FileDown size={14} /> Word{docx.onDrive ? ' · on Drive' : ''}
             </a>
           )}
           {submitted && (

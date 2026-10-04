@@ -152,6 +152,12 @@ try {
     ok(pdf.status === 200 && bytes.subarray(0, 5).toString() === '%PDF-' && bytes.length > 5000, `the questionnaire PDF downloads (${bytes.length} bytes)`);
     ok(/Client Questionnaire - Sara/.test(pdf.headers.get('content-disposition') || ''), 'named "Client Questionnaire - <name>.pdf"');
   }
+  ok(r.data.docx?.url, 'and as a Word file');
+  if (r.data.docx?.url) {
+    const doc = await admin.raw(r.data.docx.url);
+    const bytes = Buffer.from(await doc.arrayBuffer());
+    ok(doc.status === 200 && bytes.subarray(0, 2).toString() === 'PK' && /wordprocessingml/.test(doc.headers.get('content-type') || '') && /\.docx/.test(doc.headers.get('content-disposition') || ''), `the Word file downloads (${bytes.length} bytes)`);
+  }
   const rows = r.data.review;
   const emailRow = rows.find((x) => x.id === 'email');
   ok(emailRow && !emailRow.same, 'review shows a new answer next to the intake');

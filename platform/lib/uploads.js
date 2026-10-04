@@ -93,7 +93,7 @@ export async function readUpload(appId, doc) {
 export async function saveGenerated(appId, { key, filename, bytes, mime = 'application/pdf', text }) {
   const dir = path.join(UPLOAD_DIR, appId, 'generated');
   await fs.mkdir(dir, { recursive: true });
-  const ext = mime === 'application/pdf' ? 'pdf' : 'txt';
+  const ext = mime === 'application/pdf' ? 'pdf' : mime === DOCX_MIME ? 'docx' : 'txt';
   const stored = `${key}.${ext}`;
   await fs.writeFile(path.join(dir, stored), bytes);
   if (text) {

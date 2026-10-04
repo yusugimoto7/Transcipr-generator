@@ -225,10 +225,10 @@ export async function genFile(app, meta) {
 
 /* ------------------------------ saving to Drive ------------------------------ */
 
-const SYNCED_MIME = new Set(['application/pdf', 'image/jpeg']);
+const SYNCED_MIME = new Set(['application/pdf', 'image/jpeg', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
 // The client's submitted questionnaire goes in the client's main folder itself.
 export const CLIENT_ROOT = '(client folder)';
-const ROOT_KEYS = new Set(['client-questionnaire']);
+const ROOT_KEYS = new Set(['client-questionnaire', 'client-questionnaire-docx']);
 const genFolder = (key) => (ROOT_KEYS.has(key) ? CLIENT_ROOT : key.startsWith('final-') ? FINAL_FOLDER : GEN_FOLDER);
 
 /** "Purpose of Travel - Sara.pdf", 7 → "Purpose of Travel - Sara - 007.pdf" */
