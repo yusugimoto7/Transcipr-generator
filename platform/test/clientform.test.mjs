@@ -88,7 +88,7 @@ server.stdout.on('data', (d) => (logs += d));
 server.stderr.on('data', (d) => (logs += d));
 function client() {
   let cookie = '';
-  return async (method, url, body) => {
+  const call = async (method, url, body) => {
     const r = await fetch(BASE + url, { method, headers: { 'Content-Type': 'application/json', cookie }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' });
     const sc = r.headers.get('set-cookie');
     if (sc) cookie = sc.split(';')[0];
@@ -96,6 +96,8 @@ function client() {
     try { data = await r.json(); } catch {}
     return { status: r.status, data };
   };
+  call.raw = (url) => fetch(BASE + url, { headers: { cookie } });
+  return call;
 }
 try {
   for (let i = 0; i < 60; i++) { try { if ((await fetch(`${BASE}/api/health`)).ok) break; } catch {} await new Promise((r) => setTimeout(r, 500)); }
@@ -143,6 +145,13 @@ try {
 
   r = await admin('GET', `/api/applications/${id}/client-form`);
   ok(r.data.form.status === 'submitted' && r.data.form.confirmation.name === 'Sara Example', 'the team sees the submission and confirmation');
+  ok(r.data.pdf?.url, 'the signed questionnaire is saved as a PDF on the file');
+  if (r.data.pdf?.url) {
+    const pdf = await admin.raw(r.data.pdf.url);
+    const bytes = Buffer.from(await pdf.arrayBuffer());
+    ok(pdf.status === 200 && bytes.subarray(0, 5).toString() === '%PDF-' && bytes.length > 5000, `the questionnaire PDF downloads (${bytes.length} bytes)`);
+    ok(/Client Questionnaire - Sara/.test(pdf.headers.get('content-disposition') || ''), 'named "Client Questionnaire - <name>.pdf"');
+  }
   const rows = r.data.review;
   const emailRow = rows.find((x) => x.id === 'email');
   ok(emailRow && !emailRow.same, 'review shows a new answer next to the intake');

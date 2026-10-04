@@ -118,6 +118,7 @@ Google Drive is where every file lives; the server disk is only a cache.
 
 | Folder in the client's Drive folder | What goes there |
 |---|---|
+| *(the client folder itself)* | `Client Questionnaire - First Last.pdf`: the client's questionnaire as they signed and submitted it (questions in English and Persian, their answers, their confirmation). Made when they submit; submitted again after the team reopens it, the file is replaced in place (Drive keeps the earlier version) |
 | `01 - Documents` | everything the client sends — imported from Drive (already there), emailed, or uploaded on the platform |
 | `02 - Final Files` | the numbered files for the IRCC portal; a rebuild replaces them in place, files a rebuild drops go to Drive's bin |
 | `91 - Generated Files` | every other file the platform makes — letters, form data sheets, pre-filled forms, the next-steps note. Each new file gets the next number in the folder at the end of its name (`Purpose of Travel - Sara - 001.pdf`, `Submission Letter - Sara - 002.pdf`, a redraft `Purpose of Travel - Sara - 003.pdf`); earlier versions stay. A file made again with the same content keeps its number. A family's files share the folder and one numbering. |

@@ -226,7 +226,10 @@ export async function genFile(app, meta) {
 /* ------------------------------ saving to Drive ------------------------------ */
 
 const SYNCED_MIME = new Set(['application/pdf', 'image/jpeg']);
-const genFolder = (key) => (key.startsWith('final-') ? FINAL_FOLDER : GEN_FOLDER);
+// The client's submitted questionnaire goes in the client's main folder itself.
+export const CLIENT_ROOT = '(client folder)';
+const ROOT_KEYS = new Set(['client-questionnaire']);
+const genFolder = (key) => (ROOT_KEYS.has(key) ? CLIENT_ROOT : key.startsWith('final-') ? FINAL_FOLDER : GEN_FOLDER);
 
 /** "Purpose of Travel - Sara.pdf", 7 → "Purpose of Travel - Sara - 007.pdf" */
 export function numberedName(name, n) {
@@ -341,6 +344,29 @@ export async function syncApp(appId) {
       }
       if (!up) up = await uploadFromDisk({ parentId: await folderOf(FINAL_FOLDER), name, mime: g.mime || 'application/pdf', file });
       await saved(g, { id: up.id, name, folder: FINAL_FOLDER });
+      uploaded++;
+    } catch (e) {
+      if (e.code !== 'ENOENT') errors.push(`${g.filename || g.key}: ${e.message}`);
+    }
+  }
+
+  // The client's own questionnaire: in the main client folder, replaced in place when submitted again.
+  for (const g of gens.filter((x) => genFolder(x.key) === CLIENT_ROOT)) {
+    try {
+      const file = genPath(appId, g);
+      await fs.access(file);
+      const name = g.filename || g.stored;
+      const prev = app.driveGenerated?.[g.key];
+      let up = null;
+      if (prev?.id && prev.folder === CLIENT_ROOT) {
+        try {
+          up = await uploadFromDisk({ id: prev.id, name, mime: g.mime || 'application/pdf', file });
+        } catch {
+          up = null; // deleted on Drive: upload it again
+        }
+      }
+      if (!up) up = await uploadFromDisk({ parentId: folders.clientFolderId, name, mime: g.mime || 'application/pdf', file });
+      await saved(g, { id: up.id, name, folder: CLIENT_ROOT });
       uploaded++;
     } catch (e) {
       if (e.code !== 'ENOENT') errors.push(`${g.filename || g.key}: ${e.message}`);

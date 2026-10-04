@@ -31,6 +31,10 @@ function view(app, req) {
           open: f.status === 'submitted' ? 0 : clientProblems(f.answers || {}).length,
         }
       : null,
+    // The signed questionnaire as a PDF (made on submit), and whether it is in the client's Drive folder yet.
+    pdf: (app.generated || []).some((g) => g.key === 'client-questionnaire')
+      ? { url: `/api/applications/${app.id}/download/client-questionnaire`, onDrive: Boolean(app.driveGenerated?.['client-questionnaire']?.id) }
+      : null,
     review: f?.answers ? reviewRows(app) : [],
     other: f?.answers ? otherAnswers(f.answers) : [],
   };

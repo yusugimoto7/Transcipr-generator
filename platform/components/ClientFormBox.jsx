@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Link2, Copy, Check, Ban, RotateCcw, ChevronDown, Send, ExternalLink } from 'lucide-react';
+import { Link2, Copy, Check, Ban, RotateCcw, ChevronDown, Send, ExternalLink, FileDown } from 'lucide-react';
 
 const when = (iso) => (iso ? new Date(iso).toLocaleString('en-CA', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 const asText = (v, columns) => {
@@ -68,7 +68,7 @@ export default function ClientFormBox({ app, fieldLabel, patchLocal }) {
   };
 
   if (!v) return null;
-  const { link, form, review, other } = v;
+  const { link, form, review, other, pdf } = v;
   const live = link && !link.revokedAt && !(link.expiresAt && link.expiresAt < new Date().toISOString() && form?.status !== 'submitted');
   const submitted = form?.status === 'submitted';
   const todo = review.filter((r) => !r.same && !r.accepted);
@@ -135,6 +135,11 @@ export default function ClientFormBox({ app, fieldLabel, patchLocal }) {
           </button>
           {live && (
             <button type="button" className="btn-danger-ghost btn-sm" onClick={() => act('revoke')} disabled={!!busy}><Ban size={14} /> Turn off link</button>
+          )}
+          {submitted && pdf && (
+            <a className="btn-secondary btn-sm" href={pdf.url} target="_blank" rel="noopener noreferrer" title={pdf.onDrive ? 'Also saved in the client’s folder on Google Drive' : 'Saved on the file; it goes to the client’s Drive folder shortly'}>
+              <FileDown size={14} /> Questionnaire PDF{pdf.onDrive ? ' · on Drive' : ''}
+            </a>
           )}
           {submitted && (
             <button type="button" className="btn-secondary btn-sm" onClick={() => act('reopen')} disabled={!!busy} title="Let the client change their answers and submit again">

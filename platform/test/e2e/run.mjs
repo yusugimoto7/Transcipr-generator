@@ -27,6 +27,7 @@ import { loadLib } from '../_load.mjs';
 
 const { buildChecklist } = await loadLib('checklist.js');
 const { getSchema } = await loadLib('schema.js');
+const cf = await loadLib('clientForm.js');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, '..', '..');
@@ -415,6 +416,26 @@ async function runType(key) {
   step('the team finishes the intake', r.status === 200, r.data?.error || '');
   app = (await call('GET', `/api/applications/${id}`)).data.application;
   const prog = (await call('GET', `/api/applications/${id}`)).data;
+
+  // 6. The client fills in and signs the questionnaire with their link.
+  r = await call('POST', `/api/applications/${id}/client-form`, { action: 'link' });
+  const token = decodeURIComponent(String(r.data?.link?.url || '').split('/q/')[1] || '');
+  const opened = await fetch(`${BASE}/api/q/${encodeURIComponent(token)}`).then((x) => x.json());
+  const answers = { ...(opened.answers || {}) };
+  for (let pass = 0; pass < 3; pass++) {
+    const neutral = (x) => (x.type === 'yesno' ? false : x.type === 'select' ? x.options[0].v : x.type === 'date' ? '1960-01-01' : x.type === 'month' ? '2000-01' : x.type === 'email' ? P.email : x.persian ? 'نمونه' : 'Example');
+    for (const p of cf.clientProblems(answers)) {
+      const f = cf.CLIENT_SECTIONS.flatMap((s) => s.fields).find((x) => x.id === p.id);
+      if (!f) continue;
+      if (p.row != null) {
+        // A row the platform pre-filled in part: complete the missing column.
+        const col = f.columns.find((c) => c.id === p.col);
+        answers[p.id] = (answers[p.id] || []).map((row, i) => (i === p.row && col ? { ...row, [col.id]: neutral(col) } : row));
+      } else answers[p.id] = f.type === 'rows' ? [Object.fromEntries(f.columns.map((c) => [c.id, neutral(c)]))] : neutral(f);
+    }
+  }
+  const sub = await fetch(`${BASE}/api/q/${encodeURIComponent(token)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers, agree: true, name: P.file.title }) });
+  step('the client submits the questionnaire', sub.status === 200, sub.status === 200 ? '' : JSON.stringify((await sub.json()).problems?.slice(0, 3) || ''));
   report.intakeMissing = prog.missing || prog.application?.missing || null;
 
 
@@ -442,6 +463,9 @@ async function runType(key) {
   report.drive = clientFolder ? [`📁 ${tree[clientFolder].name}`, ...driveTree(clientFolder, 1)] : driveTree('clientsRoot01');
   const finals = report.drive.filter((l) => /^\s{4}\d\d - /.test(l));
   step('Drive: the client folder holds the documents and the final files', report.drive.some((l) => /01 - Documents/.test(l)) && finals.length > 0, `${finals.length} final files on Drive`);
+  // The signed questionnaire sits in the client's main folder, not in a subfolder.
+  const cq = clientFolder && Object.keys(tree).find((k) => !tree[k].trashed && tree[k].parents.includes(clientFolder) && /^Client Questionnaire - /.test(tree[k].name));
+  step('Drive: the signed questionnaire is in the client\'s main folder', !!cq && tree[cq].bytes?.subarray(0, 5).toString() === '%PDF-', cq ? tree[cq].name : 'not there');
   // Duplicate names inside one folder of this client (other clients' folders may reuse names).
   const mine = Object.keys(tree).find((k) => tree[k].mimeType === FOLDER && tree[k].name.startsWith(`${P.file.clientNumber} - `));
   const dupes = [];

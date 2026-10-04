@@ -3,6 +3,7 @@ import { getApplication, updateApplication } from './store';
 import { cleanAnswers, prefill, toIntake, clientProblems, CONFIRM_TEXT } from './clientForm';
 import { deriveData } from './schema';
 import { notifyTeam, fileLabel } from './notify';
+import { storeClientFormPdf } from './clientFormStore';
 
 /**
  * The client's own link to their questionnaire (one per family member's file).
@@ -132,8 +133,15 @@ export async function submitClientForm(appId, { answers, agree, name }, meta = {
   }, { quiet: true });
   if (refused) return { error: 'submitted' };
   if (problems.length) return { error: 'incomplete', problems };
-  await notifyTeam(updated, { kind: 'client-form', text: `${fileLabel(updated)} submitted the client questionnaire`, link: `/application/${updated.id}#intake:client` });
-  return { app: updated };
+  // The signed questionnaire as a PDF, on the file and in the client's main Drive folder.
+  let saved = updated;
+  try {
+    saved = await storeClientFormPdf(updated);
+  } catch (e) {
+    console.error(`[client form] could not save the questionnaire PDF for ${updated.id}: ${e.message}`);
+  }
+  await notifyTeam(saved, { kind: 'client-form', text: `${fileLabel(saved)} submitted the client questionnaire`, link: `/application/${saved.id}#intake:client` });
+  return { app: saved };
 }
 
 /**
