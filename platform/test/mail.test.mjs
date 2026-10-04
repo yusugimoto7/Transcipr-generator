@@ -42,6 +42,7 @@ const tree = {
   elsewhere0001: { name: 'S26160 - Zahra Mousavi', mimeType: FOLDER, parents: ['unrelatedRoot'] }, // same name, NOT under the clients folder
 };
 const uploads = []; // { parent, name, mime, size }
+const sessions = {};
 let nextId = 1;
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
 const meta = (id) => ({ id, name: tree[id].name, mimeType: tree[id].mimeType, modifiedTime: '2026-09-27T10:00:00.000Z', parents: tree[id].parents });
@@ -59,7 +60,23 @@ const google = http.createServer(async (req, res) => {
       return send(res, 400, { error: 'invalid_grant', error_description: e.message });
     }
   }
+  // Streamed (resumable) uploads, as the platform's Drive sync makes them: start a session, then PUT the bytes.
+  const sess = u.pathname.match(/^\/upload\/session\/(\w+)$/);
+  if (req.method === 'PUT' && sess && sessions[sess[1]]) {
+    const { json, mime } = sessions[sess[1]];
+    delete sessions[sess[1]];
+    const id = `up${String(nextId++).padStart(8, '0')}`;
+    tree[id] = { name: json.name, mimeType: mime, parents: json.parents };
+    uploads.push({ id, parent: json.parents[0], name: json.name, mime, size: body.length });
+    return send(res, 200, meta(id));
+  }
   if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(res, 401, { error: 'unauthenticated' });
+  if (u.pathname === '/upload/drive/v3/files' && u.searchParams.get('uploadType') === 'resumable') {
+    const sid = crypto.randomBytes(6).toString('hex');
+    sessions[sid] = { json: JSON.parse(body.toString() || '{}'), mime: req.headers['x-upload-content-type'] };
+    res.writeHead(200, { Location: `http://127.0.0.1:${GOOGLE}/upload/session/${sid}` });
+    return res.end();
+  }
   if (u.pathname === '/upload/drive/v3/files') {
     const text = body.toString('latin1');
     const m = text.match(/\{[^]*?\}/);

@@ -2,12 +2,12 @@ import fs from 'fs/promises';
 import path from 'path';
 import { simpleParser } from 'mailparser';
 import { DATA_DIR, listAllApplications, getApplication, updateApplication, listUsers } from './store';
-import { saveUpload, isAllowedType, readUpload } from './uploads';
+import { saveUpload, isAllowedType } from './uploads';
 import { classifyByFilename } from './generators/classify';
 import { buildChecklist } from './checklist';
-import { ensureClientFolder } from './driveStore';
+import { ensureClientFolder, syncNow } from './driveStore';
 import { startExtractJob, getExtractJob } from './extractJob';
-import { driveStatus, parseDriveLink, uploadFile } from './drive';
+import { driveStatus, parseDriveLink } from './drive';
 import { recordEmail, analyzeEmailSafe } from './emailFacts';
 import { MAX_BODY } from './emails';
 import { notifyTeam, fileLabel } from './notify';
@@ -356,19 +356,14 @@ export async function fileOnDrive(appId, docIds) {
     return result;
   }
   try {
-    const { docsFolderId, created } = await ensureClientFolder(app);
+    const { created } = await ensureClientFolder(app);
     result.folderCreated = created;
-    for (const d of app.documents || []) {
-      if (!docIds.includes(d.id) || d.driveId) continue;
-      const bytes = await readUpload(appId, d);
-      const up = await uploadFile(docsFolderId, d.filename, d.mime, bytes);
-      await updateApplication(appId, (a) => {
-        const x = (a.documents || []).find((y) => y.id === d.id);
-        if (x) Object.assign(x, { driveId: up.id, driveModified: up.modifiedTime, drivePath: d.filename });
-        return a;
-      });
-      result.uploaded++;
-    }
+    // Through the file's Drive sync, so a background sync running at the same time can't upload them twice.
+    const waiting = new Set((app.documents || []).filter((d) => docIds.includes(d.id) && !d.driveId).map((d) => d.id));
+    const r = await syncNow(appId);
+    const after = await getApplication(appId);
+    result.uploaded = (after.documents || []).filter((d) => waiting.has(d.id) && d.driveId).length;
+    if (r?.error || r?.errors?.length) result.error = r.error || r.errors.join(' · ');
   } catch (e) {
     result.error = e.message;
   }

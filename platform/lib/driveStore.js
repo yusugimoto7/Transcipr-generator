@@ -439,6 +439,24 @@ export function queueSync(appId, delay = 1500) {
   Q.timers.set(appId, setTimeout(() => runSync(appId), delay));
 }
 
+/**
+ * Save a file's pending uploads now and wait for it, in turn with the
+ * background sync of the same file: two syncs of one file at once would both
+ * upload a document that has no Drive copy yet.
+ */
+export async function syncNow(appId) {
+  clearTimeout(Q.timers.get(appId));
+  Q.timers.delete(appId);
+  while (Q.running.has(appId)) await new Promise((r) => setTimeout(r, 300));
+  Q.running.add(appId);
+  try {
+    return await syncApp(appId);
+  } finally {
+    Q.running.delete(appId);
+    if (Q.again.delete(appId)) queueSync(appId);
+  }
+}
+
 async function runSync(appId) {
   Q.timers.delete(appId);
   if (Q.running.has(appId)) {

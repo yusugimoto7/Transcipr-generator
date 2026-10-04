@@ -428,9 +428,9 @@ async function runType(key) {
       const f = cf.CLIENT_SECTIONS.flatMap((s) => s.fields).find((x) => x.id === p.id);
       if (!f) continue;
       if (p.row != null) {
-        // A row the platform pre-filled in part: complete the missing column.
+        // A row the platform pre-filled in part: complete the missing column (an end no earlier than the start).
         const col = f.columns.find((c) => c.id === p.col);
-        answers[p.id] = (answers[p.id] || []).map((row, i) => (i === p.row && col ? { ...row, [col.id]: neutral(col) } : row));
+        answers[p.id] = (answers[p.id] || []).map((row, i) => (i === p.row && col ? { ...row, [col.id]: col.id === 'to' && row.from ? row.from : neutral(col) } : row));
       } else answers[p.id] = f.type === 'rows' ? [Object.fromEntries(f.columns.map((c) => [c.id, neutral(c)]))] : neutral(f);
     }
   }
