@@ -10,6 +10,7 @@ Run:  PYTHONPATH=. python survey_assign.py
 """
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -23,7 +24,9 @@ NEW = ("call_center_users = env['res.users'].sudo().browse([21, 30]).filtered('a
 
 
 def install(odoo):
-    for act in odoo.search_read("ir.actions.server", [("code", "ilike", OLD)], ["id", "name", "code"]):
+    for act in odoo.search_read("ir.actions.server", [("code", "ilike", "call_center_users")], ["id", "name", "code"]):
+        if "filtered('active')" in act["code"]:
+            continue  # already applied
         code = act["code"].replace(OLD, NEW)
         # No active call-centre user: create the task unassigned instead of failing.
         code = code.replace("next_user = call_center_users[(index + 1) % len(call_center_users)]",
@@ -37,6 +40,12 @@ def install(odoo):
         code = code.replace("set_param('last_assigned_user', str(next_user))", "set_param('last_assigned_user', str(next_user or ''))")
         code = code.replace("set_param('last_assigned_user', str(next_assigned_user))",
                             "set_param('last_assigned_user', str(next_assigned_user or ''))")
+        # .index() raised ValueError once the last user left the list, and
+        # safe_eval has no ValueError name for the except clause.
+        code = re.sub(r"( *)try:\n\s*index = call_center_users\.index\(int\(last_user\)\) if last_user else -1\n"
+                      r"\s*except ValueError:\n\s*index = -1",
+                      lambda m: m.group(1) + "index = call_center_users.index(int(last_user)) if last_user and "
+                                             "last_user.isdigit() and int(last_user) in call_center_users else -1", code)
         odoo.write("ir.actions.server", [act["id"]], {"code": code})
         log.info("  %s (%d): rotation skips archived users", act["name"], act["id"])
 
