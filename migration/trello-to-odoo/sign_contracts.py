@@ -707,8 +707,27 @@ else:
         parties_en += (', and the dependent child, ' if len(kids) == 1 else ', and the dependent children, ') + ' and '.join(kids.mapped('x_name_en'))
         parties_fa += ('، و فرزند وابسته، ' if len(kids) == 1 else '، و فرزندان وابسته، ') + ' و '.join([k.x_name_fa or k.x_name_en for k in kids])
     services = [l.product_id.name for l in billable]
-    services_en = [n.split(' · ')[0].strip() for n in services]
-    services_fa = [n.split(' · ')[1].strip() if ' · ' in n else n for n in services]
+    # Price notes in a product's name ("(each, max 500)", "(هر نفر، سقف ۵۰۰)")
+    # belong to the price list, not to the agreement's list of services.
+    def no_price_note(t):
+        PRICE_NOTE = ('each', 'per person', 'max', 'free', 'هر نفر', 'سقف', 'رایگان', 'هر فرزند')
+        out, i = '', 0
+        while i < len(t):
+            j = t.find('(', i)
+            k = t.find(')', j) if j >= 0 else -1
+            if j < 0 or k < 0:
+                out += t[i:]
+                break
+            inner = t[j + 1:k].lower()
+            note = False
+            for w in PRICE_NOTE:
+                if w in inner:
+                    note = True
+            out += t[i:j] if note else t[i:k + 1]
+            i = k + 1
+        return ' '.join(out.split()).rstrip(' –-')
+    services_en = [no_price_note(n.split(' · ')[0].strip()) for n in services]
+    services_fa = [no_price_note(n.split(' · ')[1].strip() if ' · ' in n else n) for n in services]
     main = codes[0] if codes else ''
     if main.startswith(('SP', 'PGWP')):
         bio_en, bio_fa = 'Give biometrics on time as required for the study permit application.', 'ارائه بیومتریک به‌موقع، طبق نیاز برای درخواست مجوز تحصیل.'
