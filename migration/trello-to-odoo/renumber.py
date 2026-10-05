@@ -83,6 +83,8 @@ family = names[1] if len(names) > 1 else ''
 touched = []
 for o in lead.order_ids.filtered(lambda o: o.state != 'cancel'):
     ov = {}
+    if o.partner_id and o.partner_id != lead.partner_id and file_no((o.partner_id.name or '').split(' - ')[0]):
+        o.partner_id.sudo().write({'name': label})
     main_hit = (o.client_order_ref or '').strip().upper() == old or not old
     sug_hit = old and (o.x_sugimoto_no or '').strip().upper() == old
     if main_hit:
@@ -167,6 +169,14 @@ def install(odoo):
         "arch_db": ('<data><xpath expr="//header" position="inside">'
                     '<button name="%d" type="action" string="Change contract no." invisible="type == \'lead\'"/>'
                     '</xpath></data>') % open_id})
+    # The quotation's own reference is the contract number: read-only, so a
+    # number is never typed in by hand (corrections go through the button).
+    so_form = odoo.search_read("ir.model.data", [("module", "=", "sale"), ("name", "=", "view_order_form")], ["res_id"])[0]["res_id"]
+    odoo.upsert("p2view", "quote_ref_readonly", "ir.ui.view", {
+        "name": "sale.order.form.ref.readonly", "model": "sale.order", "inherit_id": so_form, "priority": 210,
+        "arch_db": ('<data><xpath expr="//field[@name=\'client_order_ref\']" position="attributes">'
+                    '<attribute name="readonly">1</attribute>'
+                    '<attribute name="string">Contract no.</attribute></xpath></data>')})
     log.info("  Change contract no. button on the CRM card")
 
 

@@ -71,6 +71,12 @@ def taken(number, order, lead=None):
 for order in records:
     lead = order.opportunity_id
     tmpl = lead.x_service if lead else False
+    # A number typed (or copied with a duplicated quotation) into the
+    # quotation's reference is kept only if no other client has it.
+    if lead and file_no(order.client_order_ref) and taken(file_no(order.client_order_ref), order, lead):
+        lead.sudo().message_post(body='The number %s on %s already belongs to another client; it was replaced.' % (order.client_order_ref, order.name),
+                                 message_type='comment', subtype_xmlid='mail.mt_note')
+        order.write({'client_order_ref': False})
     if lead and not file_no(order.client_order_ref):
         head = (lead.name or '').split(' - ')[0].split(' \u2013 ')[0].strip()
         number = file_no(head)
