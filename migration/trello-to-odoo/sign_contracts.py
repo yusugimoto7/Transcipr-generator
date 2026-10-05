@@ -2190,8 +2190,9 @@ for lead in records:
              ('create_date', '>=', lead.create_date - datetime.timedelta(minutes=60))] + match,
             order='id', limit=1) if match else False
         if first:
+            # x_link is stored HTML-escaped ('&amp;model='), so match only up to the '&'.
             env['project.task'].sudo().with_context(active_test=False).search(
-                [('project_id', '=', 5), ('x_link', 'ilike', 'id=%d&model=crm.lead' % lead.id)]).unlink()
+                [('project_id', '=', 5), ('x_link', 'ilike', '#id=%d&' % lead.id)]).unlink()
             lead.sudo().write({'active': False})
             first.sudo().message_post(
                 body='The intake form sent this lead again; the copy #%d was archived automatically.' % lead.id,
