@@ -56,6 +56,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Durable memory (Google Sheet via Apps Script) | `lib/sheet.js`, `google-apps-script.gs` |
 | Draws auto-poster (separate system) | `lib/draws/**`, `app/api/draws/**` |
 | UI | `app/page.jsx` |
+| NOC lookup + employment-letter review (`/noc`, separate tool) | `app/noc/page.jsx`, `app/api/noc/**`, `lib/noc/**`; dataset rebuilt by `scripts/build-noc.mjs` |
 
 ## Conventions that matter here
 
