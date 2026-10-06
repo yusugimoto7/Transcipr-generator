@@ -1,5 +1,6 @@
 import { getAppType } from './appTypes';
 import { firmCode } from './generators/classify';
+import { liveApp } from './docVersions';
 
 /**
  * The service's document checklist for an application, filtered by the
@@ -40,6 +41,7 @@ export function buildChecklist(data = {}, type = 'study-permit') {
  * are reported as such rather than as missing.
  */
 export function checklistStatus(app) {
+  app = liveApp(app); // earlier copies of a document are kept but not counted
   const firm = buildChecklist(app?.data || {}, app?.type);
   // Documents IRCC's current checklists ask for that the firm's list lacks
   // (lib/irccChecklists.js, saved on the file when its Documents tab loads).

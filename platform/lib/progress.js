@@ -1,6 +1,7 @@
 import { checklistStatus, missingItems } from './checklist';
 import { getSchema, isRequired, fieldShown, answered, filledRows } from './schema';
 import { shownStatus, isCleared } from './docStatus';
+import { currentDocs } from './docVersions';
 
 /**
  * Where a client file stands — one place for the numbers the workspace header,
@@ -41,7 +42,7 @@ export function fileProgress(app, schema) {
   const checklist = checklistStatus(app);
   const required = checklist.filter((c) => c.party !== 'firm' && !c.optional);
   const missing = missingItems(checklist);
-  const docs = app.documents || [];
+  const docs = currentDocs(app.documents || []); // earlier copies are kept but not counted
 
   const check = { green: 0, yellow: 0, orange: 0, red: 0, unchecked: 0, toSign: 0, unread: 0, cleared: 0 };
   for (const d of docs) {

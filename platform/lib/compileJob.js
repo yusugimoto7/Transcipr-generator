@@ -9,6 +9,7 @@ import { compilePackage, getPackages, packageCategories } from './compile';
 import { prepareDocument, bundleOrder } from './packageDocs';
 import { planPackage } from './packagePlan';
 import { queueSync } from './driveStore';
+import { liveApp } from './docVersions';
 
 /**
  * Compiling a package as a background job, with progress.
@@ -99,7 +100,7 @@ export async function ensureGenerated(app, key) {
 }
 
 async function run(appId, pkg, { cleanPages, fixRotation }, job) {
-  const app = await getApplication(appId);
+  const app = liveApp(await getApplication(appId)); // the newest copy of each document
   const def = getPackages(app.type)[pkg];
   if (!def) throw new Error('Unknown package.');
   const out = await buildPackageFile(app, def, {

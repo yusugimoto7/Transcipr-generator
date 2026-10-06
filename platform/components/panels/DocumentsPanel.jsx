@@ -10,6 +10,7 @@ import ProgressBar from '@/components/ProgressBar';
 import IrccRequirements from '@/components/IrccRequirements';
 import DocDetail, { CHECK, CheckChip, worstStatus } from '@/components/docs/DocDetail';
 import { shownStatus, isCleared } from '@/lib/docStatus';
+import { supersededIds } from '@/lib/docVersions';
 import AddDocuments from '@/components/docs/AddDocuments';
 import UploadBox from '@/components/docs/UploadBox';
 import { NotesBox, NotesFeed } from '@/components/Notes';
@@ -97,7 +98,9 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
 
   // ---- the list: checklist items with their files, then files that match no item ----
   const matched = new Set(checklist.flatMap((c) => c.docIds || []));
-  const loose = docs.filter((d) => !matched.has(d.id));
+  // Earlier copies of a document are reached from the newest copy's page, not listed.
+  const earlier = supersededIds(docs);
+  const loose = docs.filter((d) => !matched.has(d.id) && !earlier.has(d.id));
   const itemDocs = (c) => (c.docIds || []).map((id) => docById.get(id)).filter(Boolean);
   // Open a document in the pane (from a note): under its checklist item when it has one.
   const openDoc = (docId) => {
@@ -322,6 +325,8 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
                   reviewing={reviewing === current.id}
                   onReview={(r) => setReviewed(current.id, r)}
                   onClear={(c) => setCleared(current.id, c)}
+                  onLink={(id, replaces) => patchDoc(id, { replaces })}
+                  onOpenDoc={(id) => select(`doc=${id}`)}
                   onCategory={(c) => patchDoc(current.id, { category: c })}
                   onRemove={() => removeDoc(current.id)}
                   patchLocal={staff ? patchLocal : null}
@@ -371,7 +376,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
         body: (
           <>
             <p className="small muted" style={{ margin: 0 }}>Rename the file with its checklist code (e.g. “113 - …”) or set its type below so it counts for the right item.</p>
-            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onClear={(c) => setCleared(d.id, c)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} patchLocal={staff ? patchLocal : null} viewer={viewer} />
+            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onClear={(c) => setCleared(d.id, c)} onLink={(id, replaces) => patchDoc(id, { replaces })} onOpenDoc={(id) => select(`doc=${id}`)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} patchLocal={staff ? patchLocal : null} viewer={viewer} />
           </>
         ),
       };

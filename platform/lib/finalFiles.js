@@ -12,6 +12,7 @@ import { rasterizePdf } from './raster';
 import { NEVER, narrowPackage, planPackage, describePlan } from './packagePlan';
 import { finalSetFor, ALWAYS } from './finalSets';
 import { CATEGORY_LABELS } from './docLabels';
+import { liveApp } from './docVersions';
 
 /**
  * The files the firm uploads to the IRCC portal — one PDF per portal slot —
@@ -295,6 +296,7 @@ function slotPackage(app, def, pkgs, claimed) {
  * @returns {Array<{ n, slot, name, filename, kind, ready, note, contents, ... }>}
  */
 export function planFinalFiles(app) {
+  app = liveApp(app); // the newest copy of each document
   const t = getAppType(app.type);
   const list = setSlots(app);
   const inSet = new Set(list.map((s) => s.slot));
@@ -380,6 +382,7 @@ export function planFinalFiles(app) {
  * the photo are never listed.
  */
 export function unplacedDocuments(app, plan = planFinalFiles(app)) {
+  app = liveApp(app);
   const placed = new Set();
   for (const e of plan) for (const s of e.contents || []) for (const f of [s, ...s.children]) (f.ids || []).forEach((id) => placed.add(id));
   return (app.documents || []).filter((d) => !NEVER.has(d.category) && !placed.has(d.id)).map((d) => ({ id: d.id, filename: d.filename, category: d.category || null }));
@@ -395,6 +398,7 @@ const CATCH_ALL = /^(Other Supporting Documents|Additional Documents)$/;
  * @returns {Array<{ id, filename, category, label, where, options: [{ slot, name, action: 'move'|'add', portal? }] }>}
  */
 export function documentSuggestions(app, plan = planFinalFiles(app)) {
+  app = liveApp(app);
   const t = getAppType(app.type);
   const pkgs = packagesFor(app.type);
   const where = new Map(); // doc id -> { slot, section }
@@ -660,7 +664,7 @@ function prepFor(app, entries, have) {
 }
 
 async function build(appId, { cleanPages, fixRotation, only = null }, job) {
-  let app = await getApplication(appId);
+  let app = liveApp(await getApplication(appId));
   const problems = [];
   const wanted = (e) => e.n && (!only || e.slot === only);
 
@@ -739,7 +743,7 @@ async function build(appId, { cleanPages, fixRotation, only = null }, job) {
         await record(key, meta);
         built.push({ ...e, key, size: meta.size });
       } else if (e.kind === 'photo') {
-        const doc = (app.documents || []).find((d) => d.category === 'photo');
+        const doc = liveApp(app).documents.filter((d) => d.category === 'photo').pop(); // the newest photo
         if (!doc) throw new Error(e.note);
         let img = await readUpload(app.id, doc);
         if (doc.mime === 'application/pdf') img = (await rasterizePdf(img, { dpi: 300, lastPage: 1 }))[0]?.buffer;

@@ -7,6 +7,7 @@ import { buildChecklist } from './checklist';
 import { getAppType } from './appTypes';
 import { allFields, APPLICANT_ONLY_STEPS, SAME_PERSON_FIELDS, deriveData, filledRows, toMonth } from './schema';
 import { verifyDocument, crossCheck, needsCheck, verificationSummary } from './verify';
+import { linkCopies, currentDocs } from './docVersions';
 
 /**
  * "Read documents & fill intake" as a background job.
@@ -154,7 +155,7 @@ export async function startExtractJob(appId, { all = false, applicant } = {}) {
       return a;
     });
   }
-  const candidates = (app.documents || []).filter(readable);
+  const candidates = currentDocs(app.documents || []).filter(readable);
   const docs = all ? candidates : candidates.filter((d) => !d.extractedAt);
   const toRead = docs.length ? docs : candidates; // nothing new: read everything again
   if (!toRead.length) {
@@ -463,6 +464,13 @@ async function run(appId, app, batches, job) {
     const byId = new Map((final.documents || []).map((d) => [d.id, d.verification]));
     final = await updateApplication(appId, (a) => {
       for (const d of a.documents || []) if (byId.get(d.id)) d.verification = byId.get(d.id);
+      return a;
+    });
+  }
+  // A document the check shows to be a newer copy of another (same passport / document number) replaces it.
+  if (linkCopies(structuredClone(final.documents || [])).length) {
+    final = await updateApplication(appId, (a) => {
+      linkCopies(a.documents || []);
       return a;
     });
   }

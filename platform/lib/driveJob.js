@@ -2,6 +2,7 @@ import { getApplication, updateApplication } from './store';
 import { saveUpload, deleteUpload } from './uploads';
 import { classifyByFilename } from './generators/classify';
 import { collectDriveFiles, LIMITS } from './driveImport';
+import { numberedName, linkCopies } from './docVersions';
 
 /**
  * "Import from Google Drive" as a background job, like reading documents
@@ -109,7 +110,11 @@ async function run(appId, { url, root, includeBackups, userId }, job) {
     appId,
     (a) => {
       a.documents = (a.documents || []).filter((d) => !replacedIds.has(d.id));
-      a.documents.push(...saved);
+      for (const d of saved) {
+        d.filename = numberedName(a.documents, d.filename, d.id);
+        a.documents.push(d);
+      }
+      linkCopies(a.documents);
       a.driveSource = { url, rootId: result.root.id, rootName: result.root.name, lastImportAt: now, lastImportBy: userId };
       return a;
     },

@@ -8,6 +8,7 @@ import { queueSync } from '@/lib/driveStore';
 import { notifyTeam, fileLabel } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
 import { findingsKey } from '@/lib/docStatus';
+import { numberedName, linkCopies } from '@/lib/docVersions';
 
 export const runtime = 'nodejs';
 
@@ -76,7 +77,12 @@ export async function POST(req, { params }) {
   }
 
   const updated = await updateApplication(app.id, (a) => {
-    a.documents.push(...saved);
+    // A name the file already has gets " - 2", " - 3" …; a newer copy of a document replaces it in use.
+    for (const d of saved) {
+      d.filename = numberedName(a.documents, d.filename, d.id);
+      a.documents.push(d);
+    }
+    linkCopies(a.documents);
     return a;
   });
   queueSync(app.id); // copy the new files to the client's Drive folder
@@ -96,6 +102,7 @@ export async function POST(req, { params }) {
 // Change a document's category, sign off its check, or mark its findings as
 // already checked (OK to move forward).
 // Body: { docId, category } | { docId, reviewed: true|false } | { docId, cleared: true|false }
+//     | { docId, replaces: <earlier document id> | null }  (newer copy of it / separate document)
 export async function PATCH(req, { params }) {
   const { user, app, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
@@ -107,11 +114,24 @@ export async function PATCH(req, { params }) {
   }
   const { docId, category } = body;
   if (!docId) return error('docId is required.');
-  if (('reviewed' in body || 'cleared' in body) && !['admin', 'manager'].includes(user.role)) return error('Only the team can sign off a document.', 403);
+  if (('reviewed' in body || 'cleared' in body || 'replaces' in body) && !['admin', 'manager'].includes(user.role)) return error('Only the team can sign off or link documents.', 403);
   const updated = await updateApplication(app.id, (a) => {
     const doc = (a.documents || []).find((d) => d.id === docId);
     if (!doc) return a;
-    if ('cleared' in body) {
+    if ('replaces' in body) {
+      // The team decides: this document is a newer copy of that one (used instead
+      // of it), or a separate document (both used, never linked again).
+      const prev = doc.replaces;
+      const target = body.replaces ? (a.documents || []).find((d) => d.id === body.replaces && d.id !== doc.id) : null;
+      if (target) {
+        doc.replaces = target.id;
+        doc.separateFrom = (doc.separateFrom || []).filter((id) => id !== target.id);
+        target.separateFrom = (target.separateFrom || []).filter((id) => id !== doc.id);
+      } else if (prev) {
+        delete doc.replaces;
+        doc.separateFrom = [...new Set([...(doc.separateFrom || []), prev])];
+      }
+    } else if ('cleared' in body) {
       // The team checked the Attention / Serious findings and it's OK to move
       // forward: the document shows green; the findings stay on it.
       if (!doc.verification) return a;
@@ -130,7 +150,8 @@ export async function PATCH(req, { params }) {
     return a;
   });
   const fname = (app.documents || []).find((d) => d.id === docId)?.filename || 'a document';
-  if ('cleared' in body) await logActivity(app.id, user, body.cleared ? 'Marked a document’s findings as already checked — OK to move forward' : 'Undid “already checked” on a document', { items: [fname] });
+  if ('replaces' in body) await logActivity(app.id, user, body.replaces ? 'Marked a document as a newer copy of another' : 'Marked a document as separate (not a newer copy)', { items: [fname] });
+  else if ('cleared' in body) await logActivity(app.id, user, body.cleared ? 'Marked a document’s findings as already checked — OK to move forward' : 'Undid “already checked” on a document', { items: [fname] });
   else if ('reviewed' in body) await logActivity(app.id, user, body.reviewed ? 'Signed off a document' : 'Undid a sign-off', { items: [fname] });
   else await logActivity(app.id, user, 'Changed a document’s type', { items: [fname], detail: category || 'none' });
   return json({ documents: updated.documents });

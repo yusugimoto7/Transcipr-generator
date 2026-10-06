@@ -64,12 +64,15 @@ export async function saveUpload(appId, { buffer, filename, mime, category, maxB
   const ext = ALLOWED[mime];
   const stored = `${id}.${ext}`;
   await fs.writeFile(path.join(dir, stored), buffer);
+  // A fingerprint of the content: the very same file sent again is a newer copy of it (lib/docVersions.js).
+  const sha1 = crypto.createHash('sha1').update(buffer).digest('hex');
   return {
     id,
     filename: filename || stored,
     stored,
     mime,
     size: buffer.length,
+    sha1,
     category: category || null,
     uploadedAt: new Date().toISOString(),
     ...extra,

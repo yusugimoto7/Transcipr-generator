@@ -11,6 +11,7 @@ import { driveStatus, parseDriveLink } from './drive';
 import { recordEmail, analyzeEmailSafe } from './emailFacts';
 import { MAX_BODY } from './emails';
 import { notifyTeam, fileLabel } from './notify';
+import { numberedName, linkCopies } from './docVersions';
 
 /**
  * Email intake: documents clients send to the team's mailbox
@@ -317,6 +318,7 @@ export async function attachToApplication(msg, app) {
   if (added.length) {
     await updateApplication(app.id, (a) => {
       a.documents = [...(a.documents || []), ...added];
+      linkCopies(a.documents); // the very same file emailed again
       if (a.status === 'draft') a.status = 'in-progress';
       return a;
     });
@@ -365,12 +367,9 @@ export function teamFilename(app, doc) {
   return unique(app, doc, `${code} - ${safe(label)}${suffix}`, ext);
 }
 
-/** The name, or "… (2)", "… (3)" when another document of the file already has it. */
+/** The name, or "… - 2", "… - 3" when another document of the file already has it. */
 function unique(app, doc, base, ext) {
-  const taken = new Set((app.documents || []).filter((d) => d.id !== doc.id).map((d) => String(d.filename || '').toLowerCase()));
-  let name = `${base}${ext}`;
-  for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})${ext}`;
-  return name;
+  return numberedName(app.documents || [], `${base}${ext}`, doc.id);
 }
 
 /* ------------------------------ Drive filing ------------------------------ */

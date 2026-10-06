@@ -6,6 +6,7 @@ import { CATEGORY_LABELS, OWNER_LABELS } from '@/lib/docLabels';
 import { fmtDay } from '@/lib/format';
 import { NotesBox } from '@/components/Notes';
 import { shownStatus, isCleared } from '@/lib/docStatus';
+import { copiesOf, supersededIds } from '@/lib/docVersions';
 
 // Document check colours (lib/verify.js): green ok · yellow minor · orange attention · red serious.
 export const CHECK = {
@@ -60,7 +61,7 @@ const date = fmtDay;
  * One uploaded document: what it is, the result of the accuracy check
  * (findings, translation-bundle parts), the staff sign-off and a preview.
  */
-export default function DocDetail({ app, doc, staff, tr, onReview, onClear, reviewing, onCategory, onRemove, driveOn, patchLocal, viewer }) {
+export default function DocDetail({ app, doc, staff, tr, onReview, onClear, onLink, onOpenDoc, reviewing, onCategory, onRemove, driveOn, patchLocal, viewer }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const v = doc.verification;
   const url = `/api/applications/${app.id}/upload?docId=${encodeURIComponent(doc.id)}`;
@@ -161,6 +162,7 @@ export default function DocDetail({ app, doc, staff, tr, onReview, onClear, revi
           alertStrip
         )}
         <div className="small muted">{facts.join(' · ')}</div>
+        <Copies app={app} doc={doc} staff={staff} onLink={onLink} onOpenDoc={onOpenDoc} />
         <DriveLine app={app} doc={doc} staff={staff} driveOn={driveOn} />
       </div>
 
@@ -275,6 +277,57 @@ export default function DocDetail({ app, doc, staff, tr, onReview, onClear, revi
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * The copies of this document: a newer copy replaces the earlier ones in the
+ * list and the final files (lib/docVersions.js). The team can open an earlier
+ * copy, mark a document as separate, or as a newer copy of another one.
+ */
+function Copies({ app, doc, staff, onLink, onOpenDoc }) {
+  const docs = app.documents || [];
+  const old = supersededIds(docs);
+  const copies = copiesOf(docs, doc);
+  const i = copies.findIndex((d) => d.id === doc.id);
+  const newer = copies[i + 1] || null;
+  const earlier = copies.slice(0, i);
+  const linkTo = (d) => (
+    <button type="button" className="link-btn" onClick={() => onOpenDoc?.(d.id)} title="Open this copy">{d.filename}</button>
+  );
+  // Earlier documents with the same name (before " - 2", " - 3"): this could be a newer copy of one of them.
+  const base = (n) => String(n || '').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/\s-\s\d{1,3}$/, '').toLowerCase();
+  const candidates = staff && !doc.replaces && !newer ? docs.filter((d) => d.id !== doc.id && !old.has(d.id) && base(d.filename) === base(doc.filename) && String(d.uploadedAt || '') <= String(doc.uploadedAt || '')) : [];
+  if (!newer && !earlier.length && !candidates.length) return null;
+  return (
+    <div className="hint-box small stack-sm" style={{ gap: 6 }}>
+      {newer ? (
+        <>
+          <div><strong>Earlier copy.</strong> Replaced by {linkTo(copies[copies.length - 1])} — kept on the file and on Drive, but not shown in the list or used in the final files.</div>
+          {staff && (
+            <div><button type="button" className="btn-secondary btn-sm" onClick={() => onLink?.(newer.id, null)}>Not the same document — use both</button></div>
+          )}
+        </>
+      ) : earlier.length ? (
+        <>
+          <div>
+            <strong>Newest copy</strong> — used in the list and the final files. Earlier {earlier.length === 1 ? 'copy' : `copies (${earlier.length})`}, kept on the file and on Drive:{' '}
+            {earlier.map((d, k) => <span key={d.id}>{k ? ', ' : ''}{linkTo(d)}</span>)}
+          </div>
+          {staff && (
+            <div><button type="button" className="btn-secondary btn-sm" onClick={() => onLink?.(doc.id, null)}>Not the same document — use both</button></div>
+          )}
+        </>
+      ) : (
+        <label className="cluster" style={{ gap: 6, alignItems: 'center' }}>
+          <span className="muted">Is this a newer copy of another document?</span>
+          <select defaultValue="" onChange={(e) => e.target.value && onLink?.(doc.id, e.target.value)} style={{ maxWidth: 280 }}>
+            <option value="">No — a separate document</option>
+            {candidates.map((d) => <option key={d.id} value={d.id}>Newer copy of {d.filename}</option>)}
+          </select>
+        </label>
+      )}
+    </div>
   );
 }
 
