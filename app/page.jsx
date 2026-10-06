@@ -229,7 +229,6 @@ export default function App() {
   const [view, setView] = useState("deck"); // deck | script
   const [scripts, setScripts] = useState({ fa: "", en: "" });
   const [scriptTopic, setScriptTopic] = useState(null);
-  const [loadingScript, setLoadingScript] = useState(false);
   const [scriptError, setScriptError] = useState(null);
   const [scriptTab, setScriptTab] = useState("fa");
   const [copied, setCopied] = useState("");
@@ -241,29 +240,158 @@ export default function App() {
   const [initialArticle, setInitialArticle] = useState(null);
   const [scriptReturn, setScriptReturn] = useState("deck"); // where "Back" goes
 
-  // Telegram is sent AUTOMATICALLY on approve (no manual button). This tracks
-  // that auto-send so the script view can show its status.
-  const [tgState, setTgState] = useState("idle"); // idle | sending | sent | error
-  const [tgMsg, setTgMsg] = useState("");
+  // ---- background jobs --------------------------------------------------
+  // The slow steps (scripts, Telegram, article, draft, Word file) run on the
+  // SERVER as jobs; this page only starts them and checks on them. A phone
+  // freezes a page the moment you switch apps, which used to freeze the whole
+  // pipeline halfway. Now the work continues on the server, and this page
+  // catches up when it wakes (see the visibility handler below).
+  //   bg[topicKey][kind] = { id, kind, key, status, result, error, topic }
+  const [bg, setBg] = useState({});
+  const [dismissed, setDismissed] = useState({});
+  const bgRef = useRef(bg);
+  bgRef.current = bg;
+  const handledRef = useRef(new Set());
 
-  const sendToTelegramAuto = useCallback(async (topic, fa, en) => {
-    if (!fa && !en) return;
-    setTgState("sending");
-    setTgMsg("");
+  const patchJob = useCallback((key, kind, patch) => {
+    setBg((prev) => {
+      const cur = (prev[key] || {})[kind];
+      if (!cur) return prev;
+      return { ...prev, [key]: { ...prev[key], [kind]: { ...cur, ...patch } } };
+    });
+  }, []);
+
+  const startJob = useCallback(async (kind, topic, extra = {}) => {
+    const key = topicKey(topic);
+    setDismissed((d) => ({ ...d, [key + ":" + kind]: false }));
+    setBg((prev) => {
+      const entry = { ...(prev[key] || {}) };
+      // A new article makes any earlier draft/Word-file result stale.
+      if (kind === "article") {
+        delete entry.publish;
+        delete entry.docfile;
+      }
+      entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now() };
+      return { ...prev, [key]: entry };
+    });
     try {
-      const res = await fetch("/api/telegram", {
+      const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, fa, en }),
+        body: JSON.stringify({ kind, topic, ...extra }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "failed");
-      setTgState("sent");
+      if (!res.ok || !data.job) throw new Error(data.error || "could not start");
+      patchJob(key, kind, { id: data.job.id, startedAt: data.job.startedAt });
     } catch (e) {
-      setTgState("error");
-      setTgMsg(String(e.message || e));
+      patchJob(key, kind, { status: "error", error: String(e.message || e) });
     }
+  }, [patchJob]);
+
+  // Apply what the server says about running jobs.
+  const syncJobs = useCallback(async () => {
+    const running = [];
+    for (const key of Object.keys(bgRef.current)) {
+      for (const j of Object.values(bgRef.current[key])) {
+        if (j.status !== "running") continue;
+        // A job whose start request never completed has no id to ask about.
+        if (!j.id) {
+          if (Date.now() - (j.startedAt || 0) > 25000) {
+            patchJob(key, j.kind, { status: "error", error: "شروع نشد؛ دوباره امتحان کن." });
+          }
+          continue;
+        }
+        running.push(j);
+      }
+    }
+    if (!running.length) return;
+    let data;
+    try {
+      const res = await fetch("/api/jobs?ids=" + encodeURIComponent(running.map((j) => j.id).join(",")), { cache: "no-store" });
+      data = await res.json();
+    } catch (_) {
+      return; // offline or the page is waking up: try again next tick
+    }
+    const byId = new Map((data.jobs || []).map((j) => [j.id, j]));
+    for (const local of running) {
+      const remote = byId.get(local.id);
+      if (!remote) {
+        if ((data.missing || []).includes(local.id)) {
+          patchJob(local.key, local.kind, { status: "error", error: "سرور در حین کار ری‌استارت شد. دوباره امتحان کن." });
+        }
+        continue;
+      }
+      patchJob(local.key, local.kind, { status: remote.status, result: remote.result, error: remote.error });
+      if (remote.status === "done" && !handledRef.current.has(remote.id)) {
+        handledRef.current.add(remote.id);
+        const t = local.topic || {};
+        const base = {
+          title_fa: t.title_fa, title_en: t.title_en, field: t.field, page: t.page,
+          source_url: t.source_url || "", score: t.score || 0, why_now: t.why_now || "",
+        };
+        // The server already saved these to the shared Library; keep this
+        // device's copy in step without writing the Sheet a second time.
+        if (remote.kind === "script" && remote.result) {
+          saveToLibrary({ ...base, id: "script:" + local.key, type: "script", script_fa: remote.result.fa, script_en: remote.result.en }, { remote: false });
+        } else if (remote.kind === "article" && remote.result) {
+          saveToLibrary({ ...base, id: "article:" + local.key, type: "article", article: remote.result.article }, { remote: false });
+        }
+      }
+    }
+  }, [patchJob]);
+
+  // Unfinished jobs are remembered on this device so a reload (or the phone
+  // discarding the page while you were away) can pick them back up. The restore
+  // must run BEFORE anything is written: on first render bg is empty, and
+  // saving that would wipe the very list being restored.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("sugimoto_jobs_v1") || "[]");
+      if (Array.isArray(saved) && saved.length) {
+        setBg((prev) => {
+          const next = { ...prev };
+          for (const j of saved) {
+            if (!j || !j.id || !j.key || !j.kind) continue;
+            next[j.key] = { ...(next[j.key] || {}), [j.kind]: { ...j, status: "running", result: null, error: "" } };
+          }
+          return next;
+        });
+      }
+    } catch (_) {}
+    restoredRef.current = true;
   }, []);
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    try {
+      const open = [];
+      for (const key of Object.keys(bg)) {
+        for (const j of Object.values(bg[key])) {
+          if (j.status === "running" && j.id) open.push({ id: j.id, kind: j.kind, key: j.key, topic: j.topic, startedAt: j.startedAt });
+        }
+      }
+      localStorage.setItem("sugimoto_jobs_v1", JSON.stringify(open.slice(-20)));
+    } catch (_) {}
+  }, [bg]);
+
+  const anyRunning = Object.values(bg).some((o) => Object.values(o).some((j) => j.status === "running"));
+  useEffect(() => {
+    if (!anyRunning) return;
+    syncJobs();
+    const t = setInterval(syncJobs, 2500);
+    // Coming back to the page: ask straight away instead of waiting for a tick
+    // (timers are paused while the page is in the background).
+    const wake = () => { if (document.visibilityState === "visible") syncJobs(); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("pageshow", wake);
+    window.addEventListener("focus", wake);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("pageshow", wake);
+      window.removeEventListener("focus", wake);
+    };
+  }, [anyRunning, syncJobs]);
 
   // drag state
   const [dx, setDx] = useState(0);
@@ -381,14 +509,14 @@ export default function App() {
     });
   }, []);
 
-  const saveToLibrary = useCallback((item) => {
+  const saveToLibrary = useCallback((item, { remote = true } = {}) => {
     const withTs = { ...item, ts: Date.now() };
     setLibrary((prev) => {
       const merged = dedupeLibrary([...prev, withTs]);
       saveLibraryLocal(merged);
       return merged;
     });
-    pushLibraryRemote(withTs);
+    if (remote) pushLibraryRemote(withTs);
   }, []);
 
   // Reopen a saved item in the script view (pulling the matching script AND
@@ -415,11 +543,8 @@ export default function App() {
       );
       setInitialArticle(articleItem ? articleItem.article : item.type === "article" ? item.article : null);
       setScriptError(null);
-      setLoadingScript(false);
       setScriptTab("fa");
       setScriptReturn("library");
-      setTgState("idle"); // reopening from Library never re-sends to Telegram
-      setTgMsg("");
       setView("script");
     },
     [library]
@@ -445,7 +570,7 @@ export default function App() {
     setTimeout(advance, 260);
   };
 
-  const doApprove = async () => {
+  const doApprove = () => {
     if (exiting || !current) return;
     pushHistory();
     setReviewedCount((n) => n + 1);
@@ -462,39 +587,23 @@ export default function App() {
     setScriptError(null);
     setScriptTab("fa");
     setScriptReturn("deck");
-    setTgState("idle");
-    setTgMsg("");
     setView("script");
-    setLoadingScript(true);
     setTimeout(advance, 260);
-    try {
-      const [fa, en] = await Promise.all([
-        fetchScript(topic, "fa"),
-        fetchScript(topic, "en"),
-      ]);
-      setScripts({ fa, en });
-      // Auto-send the approved post to Telegram (no manual button).
-      sendToTelegramAuto(topic, fa, en);
-      if (fa || en) {
-        saveToLibrary({
-          id: "script:" + topicKey(topic),
-          type: "script",
-          title_fa: topic.title_fa,
-          title_en: topic.title_en,
-          field: topic.field,
-          page: topic.page,
-          source_url: topic.source_url || "",
-          score: topic.score || 0,
-          why_now: topic.why_now || "",
-          script_fa: fa,
-          script_en: en,
-        });
-      }
-    } catch (e) {
-      setScriptError("نوشتن سناریو با خطا مواجه شد. برگرد و دوباره تأیید کن.");
-    } finally {
-      setLoadingScript(false);
-    }
+    // The server writes the scripts, saves them to the Library and sends them
+    // to Telegram. Nothing here waits, so leaving the app or moving on to the
+    // next topic cannot interrupt it.
+    startJob("script", topic, { topic });
+  };
+
+  // Open a finished (or running) job from the "in progress" bar.
+  const openJobTopic = (topic) => {
+    setScriptTopic(topic);
+    setScripts({ fa: "", en: "" });
+    setInitialArticle(null);
+    setScriptError(null);
+    setScriptTab("fa");
+    setScriptReturn("deck");
+    setView("script");
   };
 
   // pointer drag
@@ -540,6 +649,41 @@ export default function App() {
     padding: "20px 16px 40px",
     boxSizing: "border-box",
   };
+
+  // What the open topic's background jobs say. A job keeps its own result, so
+  // this is correct however long the page was away.
+  const svKey = scriptTopic ? topicKey(scriptTopic) : "";
+  const svJobs = bg[svKey] || {};
+  const sj = svJobs.script;
+  const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "" } : scripts;
+  const viewLoading = !!sj && sj.status === "running" && !sjResult;
+  const viewError =
+    sj && sj.status === "error" && !(scripts.fa || scripts.en)
+      ? "نوشتن سناریو با خطا مواجه شد. برگرد و دوباره تأیید کن."
+      : scriptError;
+  let viewTg = { state: "idle", msg: "" };
+  if (svJobs.telegram) {
+    const tj = svJobs.telegram;
+    viewTg = { state: tj.status === "running" ? "sending" : tj.status === "done" ? "sent" : "error", msg: tj.error || "" };
+  } else if (sjResult) {
+    viewTg = {
+      state: sj.status === "running" ? "sending" : sjResult.tg === "sent" ? "sent" : sjResult.tg === "error" ? "error" : "idle",
+      msg: sjResult.tgMsg || "",
+    };
+  }
+
+  // Work running or finished in the background, for the bar under the header.
+  const bgRows = [];
+  for (const key of Object.keys(bg)) {
+    for (const kind of ["script", "article"]) {
+      const j = bg[key][kind];
+      if (!j || !j.topic) continue;
+      if (dismissed[key + ":" + kind] && j.status !== "running") continue;
+      if (view === "script" && key === svKey) continue; // that one is on screen already
+      bgRows.push(j);
+    }
+  }
 
   return (
     <div style={wrap}>
@@ -598,6 +742,16 @@ export default function App() {
           Content Wizard →
         </a>
       </div>
+
+      <JobsBar
+        rows={bgRows}
+        onOpen={(j) => {
+          setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }));
+          openJobTopic(j.topic);
+        }}
+        onDismiss={(j) => setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }))}
+        onRetry={(j) => startJob(j.kind, j.topic, { topic: j.topic })}
+      />
 
       {/* Stat strip */}
       {view !== "library" && (
@@ -699,10 +853,10 @@ export default function App() {
         <ScriptView
           key={"sv:" + topicKey(scriptTopic)}
           topic={scriptTopic}
-          scripts={scripts}
+          scripts={viewScripts}
           initialArticle={initialArticle}
-          loading={loadingScript}
-          error={scriptError}
+          loading={viewLoading}
+          error={viewError}
           tab={scriptTab}
           setTab={setScriptTab}
           copied={copied}
@@ -710,25 +864,70 @@ export default function App() {
           onBack={() => { setView(scriptReturn === "library" ? "library" : "deck"); }}
           onUndo={undo}
           canUndo={canUndo && scriptReturn !== "library"}
-          tgState={tgState}
-          tgMsg={tgMsg}
-          onRetryTelegram={() => sendToTelegramAuto(scriptTopic, scripts.fa, scripts.en)}
-          onSaveArticle={(t, art) =>
-            saveToLibrary({
-              id: "article:" + topicKey(t),
-              type: "article",
-              title_fa: t.title_fa,
-              title_en: t.title_en,
-              field: t.field,
-              page: t.page,
-              source_url: t.source_url || "",
-              score: t.score || 0,
-              why_now: t.why_now || "",
-              article: art,
-            })
-          }
+          tgState={viewTg.state}
+          tgMsg={viewTg.msg}
+          onRetryTelegram={() => startJob("telegram", scriptTopic, { topic: scriptTopic, fa: viewScripts.fa, en: viewScripts.en })}
+          articleJob={svJobs.article || null}
+          publishJob={svJobs.publish || null}
+          docJob={svJobs.docfile || null}
+          onJob={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
+    </div>
+  );
+}
+
+// Work that is running (or just finished) on the server for topics you have
+// already moved on from. Tap a finished one to open it.
+function JobsBar({ rows, onOpen, onDismiss, onRetry }) {
+  if (!rows.length) return null;
+  const KIND = { script: "سناریو", article: "مقاله" };
+  return (
+    <div style={{ width: "100%", maxWidth: 460, marginBottom: 12, display: "grid", gap: 8 }}>
+      {rows.map((j) => {
+        const running = j.status === "running";
+        const failed = j.status === "error";
+        const writing = j.kind === "script" && running && j.result && (j.result.fa || j.result.en);
+        return (
+          <div
+            key={j.key + ":" + j.kind}
+            dir="rtl"
+            style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 12,
+              background: failed ? "rgba(241,114,18,0.12)" : "rgba(50,81,93,0.28)",
+              border: `1px solid ${failed ? "rgba(241,114,18,0.35)" : C.slate}`,
+              fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.cream,
+            }}
+          >
+            <span aria-hidden>{running ? "⏳" : failed ? "⚠️" : "✅"}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700 }}>
+                {running
+                  ? writing ? "سناریو نوشته شد، در حال ارسال به تلگرام…" : `در حال نوشتن ${KIND[j.kind]}…`
+                  : failed ? `${KIND[j.kind]} نشد` : `${KIND[j.kind]} آماده است`}
+              </div>
+              <div style={{ opacity: 0.75, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {j.topic.title_fa || j.topic.title_en}
+              </div>
+            </div>
+            {!running && !failed && (
+              <button onClick={() => onOpen(j)} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 9, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+                باز کن
+              </button>
+            )}
+            {failed && (
+              <button onClick={() => onRetry(j)} style={{ background: "transparent", color: C.cream, border: `1px solid ${C.line}`, borderRadius: 9, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+                دوباره
+              </button>
+            )}
+            {!running && (
+              <button onClick={() => onDismiss(j)} aria-label="close" style={{ background: "transparent", color: "rgba(242,229,192,0.6)", border: "none", fontSize: 16, cursor: "pointer", padding: 4 }}>
+                ×
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1029,67 +1228,48 @@ function ScriptBody({ text, tab }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, onSaveArticle, tgState = "idle", tgMsg = "", onRetryTelegram }) {
+function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, tgState = "idle", tgMsg = "", onRetryTelegram, articleJob, publishJob, docJob, onJob }) {
   const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
   const active = tab === "fa" ? scripts.fa : scripts.en;
 
-  // Blog article (on-demand). Seeded from a saved item when opened via Library.
-  const [artState, setArtState] = useState(initialArticle ? "ready" : "idle"); // idle | generating | ready | error
-  const [article, setArticle] = useState(initialArticle || null);
-  const [artMsg, setArtMsg] = useState("");
-  const [pubState, setPubState] = useState("idle"); // idle | publishing | done | error
-  const [pubMsg, setPubMsg] = useState("");
-  const [editLink, setEditLink] = useState("");
+  // Blog article (on-demand). It is written by a server-side job, so this view
+  // only reflects that job's state: leaving the page, or opening another
+  // topic, does not interrupt it, and coming back shows where it got to.
+  // Seeded from a saved item when opened via Library.
+  const artState = articleJob
+    ? articleJob.status === "running" ? "generating" : articleJob.status === "error" ? "error" : "ready"
+    : initialArticle ? "ready" : "idle"; // idle | generating | ready | error
+  const article =
+    articleJob && articleJob.status === "done" && articleJob.result ? articleJob.result.article : initialArticle || null;
+  const artMsg = (articleJob && articleJob.error) || "";
+  const pubState = publishJob
+    ? publishJob.status === "running" ? "publishing" : publishJob.status === "error" ? "error" : "done"
+    : "idle"; // idle | publishing | done | error
+  const pubMsg = (publishJob && publishJob.error) || "";
+  const editLink = (publishJob && publishJob.status === "done" && publishJob.result && publishJob.result.edit_link) || "";
 
-  const generateArticle = async () => {
+  const generateArticle = () => {
     if (artState === "generating") return;
-    setArtState("generating");
-    setArtMsg("");
-    setPubState("idle");
-    setPubMsg("");
-    setEditLink("");
-    try {
-      const res = await fetch("/api/article", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "failed");
-      setArticle(data.article);
-      setArtState("ready");
-      onSaveArticle && onSaveArticle(topic, data.article);
-    } catch (e) {
-      setArtState("error");
-      setArtMsg(String(e.message || e));
-    }
+    onJob("article", {});
   };
 
-  const publishArticle = async () => {
+  const publishArticle = () => {
     if (!article || pubState === "publishing") return;
-    setPubState("publishing");
-    setPubMsg("");
-    try {
-      const res = await fetch("/api/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ article }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "failed");
-      setEditLink(data.edit_link || "");
-      setPubState("done");
-    } catch (e) {
-      setPubState("error");
-      setPubMsg(String(e.message || e));
-    }
+    onJob("publish", { article });
   };
 
   // Word file from the article — generated ENTIRELY in the app (no Google
   // account, no Apps Script, no config). Download locally and/or send the file
   // to the Telegram review channel.
-  const [docState, setDocState] = useState("idle"); // idle | sending | sent | downloaded | error
-  const [docMsg, setDocMsg] = useState("");
+  const [docLocal, setDocLocal] = useState("idle"); // idle | downloaded | error
+  const [docLocalMsg, setDocLocalMsg] = useState("");
+  const docState =
+    docLocal !== "idle"
+      ? docLocal
+      : docJob
+        ? docJob.status === "running" ? "sending" : docJob.status === "error" ? "error" : "sent"
+        : "idle"; // idle | sending | sent | downloaded | error
+  const docMsg = docLocal === "error" ? docLocalMsg : (docJob && docJob.error) || "";
 
   const buildDocHtml = () => {
     if (!article) return "";
@@ -1119,33 +1299,20 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      setDocState("downloaded");
-      setTimeout(() => setDocState("idle"), 2500);
+      setDocLocal("downloaded");
+      setTimeout(() => setDocLocal("idle"), 2500);
     } catch (e) {
-      setDocState("error");
-      setDocMsg(String(e.message || e));
+      setDocLocal("error");
+      setDocLocalMsg(String(e.message || e));
     }
   };
 
   // Send the Word file to the Telegram review channel (uses the existing bot).
-  const sendDocToTelegram = async () => {
+  // A server job, like the rest, so it survives leaving the page.
+  const sendDocToTelegram = () => {
     if (!article || docState === "sending") return;
-    setDocState("sending");
-    setDocMsg("");
-    try {
-      const res = await fetch("/api/docfile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ article }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "failed");
-      setDocState("sent");
-      setTimeout(() => setDocState("idle"), 3000);
-    } catch (e) {
-      setDocState("error");
-      setDocMsg(String(e.message || e));
-    }
+    setDocLocal("idle");
+    onJob("docfile", { article });
   };
 
   return (
