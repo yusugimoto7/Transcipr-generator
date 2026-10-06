@@ -1,17 +1,20 @@
 "use client";
 import { useState } from "react";
 
+// Light, minimal theme shared with the Topic Engine (app/globals.css).
+// Keys kept from the original dark theme so every use site still reads the
+// same role: cream = main text, creamEdge = secondary text, ground2 = panels.
 const C = {
-  ground: "#16282f",
-  ground2: "#1e343d",
-  slate: "#32515d",
-  cream: "#f2e5c0",
-  creamEdge: "#e7d6a6",
-  orange: "#f17212",
-  orangeDeep: "#d9600a",
-  ink: "#22343b",
-  inkSoft: "#5a6f78",
-  line: "rgba(242,229,192,0.14)",
+  ground: "#f6f7f9",
+  ground2: "#ffffff",
+  slate: "#c3c9d2",      // inactive dots, disabled and "done" buttons
+  cream: "#121a24",      // main text
+  creamEdge: "#5b6675",  // secondary text
+  orange: "#f26a12",
+  orangeDeep: "#d9560a",
+  ink: "#ffffff",        // text on orange / gray buttons
+  inkSoft: "#8b95a3",
+  line: "#e6e8ec",
 };
 
 const LIB_KEY = "sugimoto_library_v1";
@@ -257,7 +260,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         <PillSelect options={LANGUAGES} value={settings.language} onChange={(v) => onChange("language", v)} />
       </Section>
       {error && (
-        <div style={{ color: "#f87171", fontSize: 13, marginBottom: 12, direction: "rtl" }}>{error}</div>
+        <div style={{ color: "#e5484d", fontSize: 13, marginBottom: 12, direction: "rtl" }}>{error}</div>
       )}
       <button
         onClick={onNext}
@@ -651,7 +654,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
       </div>
 
       {genError && (
-        <div style={{ color: "#f87171", fontSize: 13, marginBottom: 10, direction: "rtl" }}>{genError}</div>
+        <div style={{ color: "#e5484d", fontSize: 13, marginBottom: 10, direction: "rtl" }}>{genError}</div>
       )}
 
       <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
@@ -858,7 +861,7 @@ export default function ContentWizard() {
       style={{
         minHeight: "100vh",
         background: C.ground,
-        fontFamily: "'Vazirmatn', 'Segoe UI', Tahoma, sans-serif",
+        fontFamily: "'Vazirmatn', 'Inter', system-ui, sans-serif",
         direction: "rtl",
       }}
     >
@@ -932,7 +935,7 @@ export default function ContentWizard() {
         )}
 
         {step === 4 && genError && (
-          <div style={{ color: "#f87171", fontSize: 14, direction: "rtl", textAlign: "center", padding: "32px 0" }}>
+          <div style={{ color: "#e5484d", fontSize: 14, direction: "rtl", textAlign: "center", padding: "32px 0" }}>
             {genError}
           </div>
         )}
