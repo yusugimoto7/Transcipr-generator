@@ -180,10 +180,18 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
           stats.rotatedPages += prepared.rotated;
           if (prepared.reordered) stats.reorderedFiles.push(d.filename);
           if (prepared.uncertain?.length) stats.uncertainPages.push(`${d.filename} (page ${prepared.uncertain.join(', ')})`);
+          // Pages the team took out of this document (lib/finalFiles.js, op "drop-pages").
+          const skip = new Set(app.finalSetup?.skipPages?.[d.id] || []);
+          let k = 0;
           for (const p of prepared.pages) {
+            k++;
+            if (skip.has(k)) {
+              stats.removedByTeam = (stats.removedByTeam || 0) + 1;
+              continue;
+            }
             const file = path.join(work, `p-${String(++pageNo).padStart(5, '0')}.jpg`);
             await fs.writeFile(file, p.buffer);
-            items.push({ kind: 'picture', file, width: p.width, height: p.height, filename: d.filename });
+            items.push({ kind: 'picture', file, width: p.width, height: p.height, filename: d.filename, docId: d.id, page: k });
           }
         } catch (e) {
           console.error(`[compile] could not prepare "${d.filename}": ${e.message}`);
@@ -198,7 +206,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
       const meta = (app.generated || []).find((g) => g.key === node.generatedKey);
       if (!meta?.stored) return [];
       try {
-        return [{ bytes: await readGenerated(app, meta), mime: 'application/pdf', filename: meta.filename }];
+        return [{ bytes: await readGenerated(app, meta), mime: 'application/pdf', filename: meta.filename, genKey: meta.key }];
       } catch {
         return [];
       }
@@ -232,6 +240,7 @@ export async function buildPackageFile(app, def, { cleanPages = true, fixRotatio
     }
     stats.skippedFiles = [...new Set([...stats.skippedFiles, ...compiled.skipped])];
     stats.pages = compiled.pages;
+    stats.pageMap = compiled.pageMap || null;
     stats.linked = Boolean(compiled.linked);
     stats.included = sections.map((s) => ({ name: s.name, count: s.items.length + s.children.reduce((n, c) => n + c.items.length, 0) }));
     const meta = await target.meta();

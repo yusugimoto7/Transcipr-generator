@@ -478,6 +478,9 @@ export default function FinalFiles({ app, patchLocal, onGoIntake, onGoField, fie
                   e.contents?.length > 0 && <Contents contents={e.contents} kind={e.kind} />
                 )}
                 {e.kind === 'form' && <FormChecks checks={formChecks(e)} onGoField={onGoField} fieldInIntake={fieldInIntake} fieldLabel={fieldLabel} />}
+                {e.kind !== 'form' && e.n && (
+                  <FileNote app={app} entry={e} saved={app.finalSetup?.notes?.[e.slot]} busy={Boolean(job)} patchLocal={patchLocal} onApplied={() => poll(0)} />
+                )}
               </div>
               <div className="act">
                 {(() => {
@@ -597,4 +600,90 @@ function summary(r) {
     (r.reorderedFiles?.length ? ` Put ${r.reorderedFiles.length} document(s) in order: translation, certified copy, original.` : '');
   const what = r.only ? (r.built?.length ? `Rebuilt ${r.built.join(', ')}.` : 'Nothing was rebuilt.') : `Built ${r.files.length} final file(s).`;
   return { type: list.length ? 'warn' : 'ok', text: `${what}${fixes}`, list };
+}
+
+
+/**
+ * The team's note on one final file: what to keep in mind when it is made
+ * ("take out pages 3 and 4", "put the CV first", "mention the UK refusal in
+ * the letter"). Save it, or apply it now: the assistant carries it out on
+ * this file and rebuilds it.
+ */
+function FileNote({ app, entry, saved, busy, patchLocal, onApplied }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(saved?.text || '');
+  const [state, setState] = useState(null); // null | 'saving' | 'applying'
+  const [result, setResult] = useState(null);
+  useEffect(() => setText(saved?.text || ''), [saved?.text]);
+  async function send(apply) {
+    setState(apply ? 'applying' : 'saving');
+    setResult(null);
+    try {
+      const res = await fetch(`/api/applications/${app.id}/final-files/note`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slot: entry.slot, text, apply }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Could not save the note.');
+      if (d.finalSetup) patchLocal({ finalSetup: d.finalSetup });
+      if (apply) {
+        setResult({ ok: true, text: d.reply || 'Done.', actions: d.actions || [] });
+        if (d.actions?.some((a) => a.ok)) {
+          window.dispatchEvent(new CustomEvent('assistant-acted'));
+          onApplied?.();
+        }
+      } else setOpen(false);
+    } catch (e) {
+      setResult({ ok: false, text: e.message });
+    } finally {
+      setState(null);
+    }
+  }
+  if (!open && !saved) {
+    return (
+      <button type="button" className="link-btn small" style={{ marginTop: 6 }} onClick={() => setOpen(true)}>
+        <PenLine size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} /> Note for this file
+      </button>
+    );
+  }
+  return (
+    <div className="file-note">
+      {!open ? (
+        <div className="small">
+          <PenLine size={12} aria-hidden="true" style={{ verticalAlign: '-1px' }} /> <span dir="auto">{saved.text}</span>{' '}
+          <span className="faint">— {saved.by || 'team'}</span>{' '}
+          <button type="button" className="link-btn" onClick={() => setOpen(true)}>Edit</button>{' '}
+          <button type="button" className="link-btn" onClick={() => send(true)} disabled={busy || Boolean(state)}>{state === 'applying' ? 'Applying…' : 'Apply now'}</button>
+        </div>
+      ) : (
+        <>
+          <label className="sr-only" htmlFor={`note-${entry.slot}`}>Note for {entry.name}</label>
+          <textarea
+            id={`note-${entry.slot}`}
+            rows={2}
+            dir="auto"
+            value={text}
+            onChange={(ev) => setText(ev.target.value)}
+            placeholder={`e.g. take out pages 3 and 4 · put the CV first · in the letter, mention the previous refusal`}
+          />
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            <button type="button" className="btn-navy btn-sm" onClick={() => send(true)} disabled={busy || Boolean(state) || !text.trim()}>
+              {state === 'applying' ? <><span className="spinner" /> Applying…</> : 'Apply now & rebuild'}
+            </button>
+            <button type="button" className="btn-secondary btn-sm" onClick={() => send(false)} disabled={Boolean(state)}>
+              {state === 'saving' ? 'Saving…' : 'Save note'}
+            </button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => { setOpen(false); setText(saved?.text || ''); }} disabled={Boolean(state)}>Cancel</button>
+          </div>
+        </>
+      )}
+      {result && (
+        <div className={`small ${result.ok ? '' : 'err-text'}`} style={{ marginTop: 6 }} dir="auto">
+          {result.text}
+          {result.actions?.length > 0 && (
+            <ul className="assist-actions">
+              {result.actions.map((a, k) => <li key={k} className={a.ok ? 'ok' : 'bad'}>{a.ok ? '✓' : '!'} {a.ok ? a.name.replace(/_/g, ' ') : `Not done: ${a.error}`}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

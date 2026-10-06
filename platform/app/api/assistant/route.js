@@ -1,4 +1,5 @@
-import { chat } from '@/lib/ai';
+import { chat, chatTools } from '@/lib/ai';
+import { TOOLS, fileContext, runTool } from '@/lib/agent';
 import { getApplication, updateApplication, canAccess, effectiveRole } from '@/lib/store';
 import { emailFactsText } from '@/lib/emails';
 import { notesText } from '@/lib/notes';
@@ -9,7 +10,7 @@ import { json, error, requireUser } from '@/lib/api';
 const MAX_HISTORY = 40; // messages kept per application
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const SYSTEM = `You are the friendly in-app assistant for a platform that helps people
 prepare Canadian temporary-residence applications (study and work permits, visitor visas,
@@ -23,6 +24,21 @@ or the question needs a lawyer/RCIC, say so. Always add a brief reminder, when r
 that this is general information and not legal advice, and that applicants must follow the
 current official IRCC instructions for their country. Never invent facts about the
 applicant — if you need a detail, ask.`;
+
+const AGENT = `You work for the firm's team on this client's file, and you can act on it with your tools:
+change intake answers, take pages out of a final file, move documents between final files, add or
+remove optional final files, draft a letter again with instructions, rebuild final files, save notes,
+mark a document's findings as already checked, change a document's type.
+
+- When the team tells you a fact about the client ("the father's name is Ali Rezaei"), put it in the
+  right intake field (update_intake) with the exact field id, then say what you changed.
+- When they ask for a change to a file ("remove pages 3 and 4 of Client Information"), do it with the
+  tools right away; page numbers are the page numbers of the built file. Then say what you did.
+- Only change what was asked. If a request is unclear (which field, which file, which document), ask
+  one short question instead of guessing. Never invent client facts.
+- After acting, answer in a few lines: what changed, and anything the team should check. Every action
+  is recorded in the file's activity.
+- Answer in the language the team member wrote in (Persian or English).`;
 
 export async function POST(req) {
   const { user, error: authErr } = await requireUser();
@@ -70,8 +86,18 @@ export async function POST(req) {
   );
 
   let reply;
+  let actions = [];
+  const staff = ownedApp && ['admin', 'manager'].includes(effectiveRole(user));
   try {
-    reply = await chat({ system: SYSTEM, history, maxTokens: 1024 });
+    if (staff) {
+      // A team member on a file: the assistant can also act on it (lib/agent.js).
+      const system = `${SYSTEM}\n\n${AGENT}\n\n${fileContext(ownedApp)}`;
+      const out = await chatTools({ system, history: messages, tools: TOOLS, run: (name, args) => runTool(ownedApp.id, user, name, args), maxTokens: 1500 });
+      reply = out.text || 'Done.';
+      actions = out.actions.map((x) => ({ name: x.name, ok: !x.result?.error, error: x.result?.error || null }));
+    } else {
+      reply = await chat({ system: SYSTEM, history, maxTokens: 1024 });
+    }
   } catch (e) {
     return error(`Assistant unavailable: ${e.message}`, 502);
   }
@@ -89,5 +115,5 @@ export async function POST(req) {
     });
   }
 
-  return json({ reply });
+  return json({ reply, actions });
 }

@@ -91,6 +91,25 @@ export default function Workspace({ initialApp, schema, viewerRole, viewerId = n
     [tab]
   );
 
+  // The assistant changed the file (intake, final files, documents): load it again.
+  useEffect(() => {
+    const reload = async () => {
+      try {
+        const res = await fetch(`/api/applications/${app.id}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (d.application) {
+          versionRef.current = d.application.dataVersion || 0;
+          setApp((a) => ({ ...a, ...d.application }));
+        }
+      } catch {
+        /* keep what is shown */
+      }
+    };
+    window.addEventListener('assistant-acted', reload);
+    return () => window.removeEventListener('assistant-acted', reload);
+  }, [app.id]);
+
   // Merge a partial update into local app state.
   const patchLocal = useCallback((partial) => {
     if (partial.dataVersion != null) versionRef.current = partial.dataVersion; // saved on the server alongside

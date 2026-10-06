@@ -229,6 +229,14 @@ export async function compilePackage(title, applicantName, sections, { outPath =
   const perPage = 26;
   const tocPageCount = plain ? 0 : Math.max(1, Math.ceil((marks.length + 4) / perPage));
   const total = tocPageCount + bodyPages;
+  // What each page of the file is: a contents or title page, or which page of
+  // which document (so "remove pages 3 and 4" can be kept on every rebuild).
+  const pageMap = [];
+  for (let i = 0; i < tocPageCount; i++) pageMap.push({ toc: true });
+  for (const b of blocks) {
+    if (b.type === 'divider') pageMap.push({ divider: b.name });
+    else for (let k = 1; k <= b.pages; k++) pageMap.push(b.item.docId ? { docId: b.item.docId, page: b.item.page, filename: b.item.filename } : { gen: b.item.genKey || null, page: k, filename: b.item.filename });
+  }
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'package-'));
   const links = []; // contents lines → target pages (made clickable after the join)
@@ -329,9 +337,9 @@ export async function compilePackage(title, applicantName, sections, { outPath =
     if (outPath) {
       await fs.mkdir(path.dirname(outPath), { recursive: true });
       await fs.copyFile(out, outPath);
-      return { path: outPath, pages: total, skipped, linked };
+      return { path: outPath, pages: total, skipped, linked, pageMap };
     }
-    return { bytes: await fs.readFile(out), pages: total, skipped, linked };
+    return { bytes: await fs.readFile(out), pages: total, skipped, linked, pageMap };
   } finally {
     fs.rm(dir, { recursive: true, force: true }).catch(() => {});
   }

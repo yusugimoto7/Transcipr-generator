@@ -211,7 +211,7 @@ function signedUpload(app, formKey) {
  */
 export function setupOf(app) {
   const s = app.finalSetup || {};
-  return { removed: s.removed || [], added: s.added || [], custom: s.custom || [], assign: s.assign || {}, updatedAt: s.updatedAt || null };
+  return { removed: s.removed || [], added: s.added || [], custom: s.custom || [], assign: s.assign || {}, skipPages: s.skipPages || {}, notes: s.notes || {}, updatedAt: s.updatedAt || null };
 }
 
 const DEFAULT_LIST = ['forms', 'passport', 'photo', 'client-info', 'submission'];
@@ -581,8 +581,47 @@ export function applySetupChange(app, change) {
       }
       break;
     }
+    case 'drop-pages': {
+      // Pages of a built file, as numbered in it: each is a page of a document,
+      // left out of that document on every rebuild. Contents and title pages
+      // are made by the platform and can't be taken out this way.
+      const built = (app.finalFiles?.files || []).find((f) => f.slot === change.slot);
+      if (!built?.pageMap) throw new Error('Build this file first (or rebuild it once), then pages can be taken out.');
+      const pages = [...new Set((change.pages || []).map(Number).filter((n) => n >= 1))];
+      if (!pages.length) throw new Error('Which pages?');
+      const skip = { ...(setup.skipPages || {}) };
+      const notDoc = [];
+      for (const n of pages) {
+        const m = built.pageMap[n - 1];
+        if (!m) throw new Error(`The file has ${built.pageMap.length} pages; there is no page ${n}.`);
+        if (!m.docId) {
+          notDoc.push(n);
+          continue;
+        }
+        skip[m.docId] = [...new Set([...(skip[m.docId] || []), m.page])].sort((x, y) => x - y);
+      }
+      if (notDoc.length === pages.length) throw new Error(`Page${notDoc.length > 1 ? 's' : ''} ${notDoc.join(', ')} ${notDoc.length > 1 ? 'are' : 'is'} a contents, title or letter page the platform makes — change the letter or the set instead.`);
+      setup.skipPages = skip;
+      break;
+    }
+    case 'restore-pages': {
+      // Put back the pages taken out of one document (doc), or of every document.
+      const skip = { ...(setup.skipPages || {}) };
+      if (change.doc) delete skip[change.doc];
+      setup.skipPages = change.doc ? skip : {};
+      break;
+    }
+    case 'note': {
+      // The team's notes for one file: what to keep in mind when it is made again.
+      const notes = { ...(setup.notes || {}) };
+      const text = String(change.text || '').trim().slice(0, 4000);
+      if (text) notes[change.slot] = { text, by: change.by || null, at: new Date().toISOString() };
+      else delete notes[change.slot];
+      setup.notes = notes;
+      break;
+    }
     case 'reset':
-      return { removed: [], added: [], custom: [], assign: {}, updatedAt: new Date().toISOString() };
+      return { removed: [], added: [], custom: [], assign: {}, notes: setup.notes || {}, updatedAt: new Date().toISOString() };
     default:
       throw new Error('Unknown change.');
   }
@@ -772,7 +811,7 @@ async function build(appId, { cleanPages, fixRotation, only = null }, job) {
         const out = await buildPackageFile(app, pkgDef, { cleanPages, fixRotation, job: job.inner, plain, key, filename: e.filename, ...opts });
         app = out.app;
         addStats(out.stats);
-        built.push({ ...e, key, size: out.meta.size, pages: out.stats.pages });
+        built.push({ ...e, key, size: out.meta.size, pages: out.stats.pages, pageMap: out.stats.pageMap || null });
       }
     } catch (err) {
       problems.push({ slot: e.slot, filename: e.filename, name: e.name, reason: err.message });
@@ -784,7 +823,7 @@ async function build(appId, { cleanPages, fixRotation, only = null }, job) {
   // stay) and drop final files left over from an earlier build that no longer
   // exist. Problems are kept with the set, so the reason a file was not built
   // stays visible after the page is reloaded.
-  const fresh = built.map(({ n, slot, name, filename, key, size, pages }) => ({ n, slot, name, filename, key, size, pages }));
+  const fresh = built.map(({ n, slot, name, filename, key, size, pages, pageMap }) => ({ n, slot, name, filename, key, size, pages, ...(pageMap ? { pageMap } : {}) }));
   const freshKeys = new Set(fresh.map((f) => f.key));
   app = await updateApplication(app.id, (a) => {
     const prev = only ? (a.finalFiles?.files || []).filter((f) => f.slot !== only && !freshKeys.has(f.key)) : [];

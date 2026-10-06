@@ -184,6 +184,38 @@ export async function chat({ system, history, maxTokens = 1024, model = MODEL })
 }
 
 /**
+ * A chat in which the model can call the platform's actions (the assistant).
+ * `tools`: [{ name, description, parameters }]; `run(name, args)` carries one
+ * out and returns what to tell the model. Returns { text, actions }.
+ */
+export async function chatTools({ system, history, tools, run, maxTurns = 8, maxTokens = 1500, model = MODEL }) {
+  const messages = buildMessages(system, null, (history || []).map((m) => ({ role: m.role, content: toOpenAIContent(m.content) })));
+  const actions = [];
+  for (let turn = 0; turn < maxTurns; turn++) {
+    const res = await createCompletion(
+      { model, messages, tools: tools.map((t) => ({ type: 'function', function: t })), tool_choice: 'auto' },
+      tokenBudget(maxTokens, model)
+    );
+    const msg = res.choices?.[0]?.message || {};
+    messages.push({ role: 'assistant', content: msg.content || '', ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}) });
+    if (!msg.tool_calls?.length) return { text: (msg.content || '').trim(), actions };
+    for (const call of msg.tool_calls) {
+      let args = {};
+      let out;
+      try {
+        args = JSON.parse(call.function?.arguments || '{}');
+        out = await run(call.function?.name, args);
+      } catch (e) {
+        out = { error: e.message || String(e) };
+      }
+      actions.push({ name: call.function?.name, args, result: out });
+      messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(out ?? null).slice(0, 12000) });
+    }
+  }
+  return { text: 'I did as much as I could in one go — see what changed above, and ask me to continue.', actions };
+}
+
+/**
  * Ask the model to return JSON and parse it robustly. Throws if no JSON is found.
  */
 export async function completeJson(opts) {

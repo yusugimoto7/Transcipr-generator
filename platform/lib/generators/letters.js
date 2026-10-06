@@ -413,7 +413,11 @@ export async function generateLetter(app, key, docBlocks = []) {
   if (letter.kind === 'financial-cover') return generateFinancialCoverLetter(app);
   if (letter.kind === 'financial-summary') return generateFinancialSummary(app);
 
-  const { system, instruction } = buildLetterPrompt(app, letter, docBlocks.length > 0);
+  const built = buildLetterPrompt(app, letter, docBlocks.length > 0);
+  // The team's instructions for this letter (a note on its final file, or asked of the assistant).
+  const teamNote = [app.finalSetup?.letterNotes?.[key]?.text, app.finalSetup?.notes?.[key]?.text].filter(Boolean).join('\n');
+  const instruction = teamNote ? `${built.instruction}\n\nINSTRUCTIONS FROM THE FIRM'S TEAM FOR THIS DRAFT — follow them:\n${teamNote}` : built.instruction;
+  const { system } = built;
   const content = docBlocks.length ? [{ type: 'text', text: instruction }, ...docBlocks] : instruction;
   return complete({ system, content, maxTokens: letter.primary ? 5000 : 3000 });
 }
