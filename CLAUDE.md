@@ -56,6 +56,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Durable memory (Google Sheet via Apps Script) | `lib/sheet.js`, `google-apps-script.gs` |
 | Draws auto-poster (separate system) | `lib/draws/**`, `app/api/draws/**` |
 | Keep-awake + deck warm-up (every 10 min, GitHub Actions → `/api/topics?warm=1`) | `.github/workflows/keepwarm.yml` |
+| Instagram creators (list / reader / health page) | `lib/creators.js`, `lib/social/instagram.js`, `/api/social` |
 | Background jobs (script, Telegram, article, draft, Word file run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
 | UI | `app/page.jsx` |
 

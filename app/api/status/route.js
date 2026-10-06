@@ -204,6 +204,13 @@ function checkKeys() {
         `rewrite: ${process.env.OPENAI_REWRITE_MODEL || "gpt-5.6-luna"}`,
     },
     {
+      name: "Instagram creators",
+      ok: !!(process.env.IG_DISCOVERY_TOKEN || process.env.APIFY_TOKEN),
+      detail:
+        [process.env.IG_DISCOVERY_TOKEN ? "official API on" : "official API off (IG_DISCOVERY_TOKEN)", process.env.APIFY_TOKEN ? "Apify on" : "Apify off (APIFY_TOKEN)"].join(" · ") +
+        " — details at /api/social",
+    },
+    {
       name: "Claude fallback",
       ok: !!process.env.ANTHROPIC_API_KEY,
       detail: process.env.ANTHROPIC_API_KEY ? "key set" : "not set (no safety net)",

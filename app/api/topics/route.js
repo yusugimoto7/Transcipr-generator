@@ -10,6 +10,7 @@ import {
 } from "../../../lib/news";
 import { loadHarvest, mergeCandidates, relevance, isDrawResult } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
+import { getInstagramItems } from "../../../lib/social/instagram";
 import {
   topicPrompt,
   selectTopicsPrompt,
@@ -65,6 +66,7 @@ const SELECT_FROM = 70; // candidates shown to the selection call (token cap)
 const MAX_CARDS = 14; // cards returned per generation
 const MAX_PER_SOURCE = 4; // shortlist slots any one source may take
 const MAX_CASES = 3; // shortlist slots for individual court decisions
+const MAX_SOCIAL = 15; // shortlist slots for creators' posts (news stays the backbone)
 const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
 const GROUND_BUDGET_MS = 12000; // wall-clock cap on fetching text for chosen items
 const WRITE_BATCH = 2; // cards per write call; batches run in parallel
@@ -195,6 +197,8 @@ function recencyBoost(ms, nowMs) {
 async function groundTextFor(item) {
   if (item.text && item.text.length >= MIN_GROUND) return item.text;
   if ((item.snippet || "").length >= MIN_GROUND) return item.snippet;
+  // An Instagram post page is a login wall; its caption is all the text there is.
+  if (item.social) return "";
   let url = item.resolved_url || "";
   if (!url && isGoogleNews(item.source_url) && item.resolved_url === undefined) {
     url = (await resolveGoogleNewsUrl(item.source_url, { timeoutMs: 6000 })) || "";
@@ -212,7 +216,11 @@ async function groundTextFor(item) {
 // SELECTS -> real text fetched for each pick -> model WRITES only from it.
 async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, emit }) {
   const t0 = Date.now();
-  const [harvest, seen] = await Promise.all([loadHarvest(), seenP]);
+  const [harvest, seen, social] = await Promise.all([
+    loadHarvest(),
+    seenP,
+    getInstagramItems({ maxAgeDays: NEWS_WINDOW_DAYS, waitMs: 6000 }).catch(() => ({ items: [] })),
+  ]);
   const seenUrlSet = seen ? seen.urls : null;
   const exclude = [...new Set([...(clientExclude || []), ...((seen && seen.titles) || [])])].slice(-100);
   const harvestAge = harvest ? nowMs - Date.parse(harvest.harvested_at || 0) : Infinity;
@@ -221,7 +229,11 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     ? await fetchFeedItems({ maxAgeDays: NEWS_WINDOW_DAYS, nowMs }).catch(() => null)
     : null;
 
-  const merged = mergeCandidates(harvest ? harvest.items : [], live ? live.items : [], nowMs).items;
+  const merged = mergeCandidates(
+    harvest ? harvest.items : [],
+    [...(live ? live.items : []), ...social.items],
+    nowMs
+  ).items;
   // The brand's own published titles. They are Farsi and the news is mostly
   // English, so word matching cannot connect the two; they go to the
   // selection model as "already covered", which can.
@@ -253,6 +265,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   // farm took 7. The selector can only choose from what it is shown.
   const perSource = new Map();
   let cases = 0;
+  let socialN = 0;
   const ranked = [];
   const byRank = unique
     .map((c) => ({ c, rank: Math.min(relevance(c), 12) + recencyBoost(c.published_ms, nowMs) }))
@@ -262,8 +275,10 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     if (n >= MAX_PER_SOURCE) continue;
     const isCase = /\bv\.?\s+canada\b|\bc\.\s+canada\b/i.test(c.title);
     if (isCase && cases >= MAX_CASES) continue;
+    if (c.social && socialN >= MAX_SOCIAL) continue;
     perSource.set(c.source_name, n + 1);
     if (isCase) cases++;
+    if (c.social) socialN++;
     ranked.push(c);
     if (ranked.length >= SELECT_FROM) break;
   }
@@ -279,6 +294,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         : { failed: true }
       : null,
     pool: merged.length,
+    socialPosts: social.items.length,
     ...counts,
     duplicateStories: collapsed,
     eligible: unique.length,
@@ -362,6 +378,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           snippet: (p.groundText || src.snippet || "").slice(0, 1500),
           grounding: grounded ? "full" : "headline",
           score: p.score,
+          ...(src.social ? { social: src.social, author: src.author } : {}),
         };
         if (!accept(topic, seenUrlSet)) continue;
         if (!emitted) lastStats.timings.firstCardMs = Date.now() - t0;
