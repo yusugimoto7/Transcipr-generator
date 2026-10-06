@@ -12,31 +12,49 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
    ============================================================ */
 
 const C = {
-  ground: "#16282f",       // deep teal ground
-  ground2: "#1e343d",
-  slate: "#32515d",        // brand teal-slate
-  cream: "#f2e5c0",        // brand cream (card)
-  creamEdge: "#e7d6a6",
-  orange: "#f17212",       // brand action orange
-  orangeDeep: "#d9600a",
-  ink: "#22343b",          // text on cream
-  inkSoft: "#5a6f78",
-  reject: "#728089",       // muted slate for reject
-  line: "rgba(242,229,192,0.14)",
+  ground: "#0b1a20",       // deep teal-navy ground
+  ground2: "#102a33",
+  slate: "#2c5563",        // brand teal-slate
+  teal: "#38b2c1",         // bright teal accent
+  cream: "#f7eed6",        // brand cream (card)
+  creamEdge: "#eadfbf",
+  orange: "#ff7a1a",       // brand action orange
+  orangeDeep: "#e85d04",
+  ink: "#16262c",          // text on cream
+  inkSoft: "#5b7079",
+  reject: "#ff6b6b",       // coral for reject / errors
+  success: "#34d399",
+  line: "rgba(247,238,214,0.10)",
+  surface: "rgba(255,255,255,0.045)",
+  surfaceHi: "rgba(255,255,255,0.075)",
+  text2: "rgba(247,238,214,0.62)",
+  text3: "rgba(247,238,214,0.42)",
 };
 
+// "#rrggbb" + alpha -> rgba(), so one accent color can tint, border and glow.
+function alpha(hex, a) {
+  const h = hex.replace("#", "");
+  const n = parseInt(h.length === 3 ? h.split("").map((x) => x + x).join("") : h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+// Each topic type gets its own color, so a type is recognisable at a glance
+// in the list, on the card and in the library.
 const FIELDS = {
-  "Work Permit": { emoji: "🛂", label: "Work Permit" },
-  PNP: { emoji: "📍", label: "PNP" },
-  "Express Entry": { emoji: "⚡", label: "Express Entry" },
-  Study: { emoji: "🎓", label: "Study / PGWP" },
-  LMIA: { emoji: "📄", label: "LMIA" },
-  Policy: { emoji: "📢", label: "Policy" },
-  Court: { emoji: "⚖️", label: "Court" },
-  Europe: { emoji: "🇪🇺", label: "Europe" },
-  Citizenship: { emoji: "🪪", label: "Citizenship" },
-  Family: { emoji: "👪", label: "Family" },
+  "Work Permit": { emoji: "🛂", label: "Work Permit", color: "#38b2c1" },
+  PNP: { emoji: "📍", label: "PNP", color: "#ffa94d" },
+  "Express Entry": { emoji: "⚡", label: "Express Entry", color: "#ffd166" },
+  Study: { emoji: "🎓", label: "Study / PGWP", color: "#9b8cff" },
+  LMIA: { emoji: "📄", label: "LMIA", color: "#f472b6" },
+  Policy: { emoji: "📢", label: "Policy", color: "#5aa9ff" },
+  Court: { emoji: "⚖️", label: "Court", color: "#d4b46a" },
+  Europe: { emoji: "🇪🇺", label: "Europe", color: "#6d8cff" },
+  Citizenship: { emoji: "🪪", label: "Citizenship", color: "#34d399" },
+  Family: { emoji: "👪", label: "Family", color: "#ff8fb1" },
 };
+function fieldOf(t) {
+  return FIELDS[t && t.field] || { emoji: "•", label: (t && t.field) || "Topic", color: "#8fa3ab" };
+}
 
 // No hardcoded fallback topics. Generic how-to cards were not news, repeated,
 // and some had dead links. If the live fetch fails we show the error instead
@@ -703,15 +721,21 @@ export default function App() {
   const likeOp = Math.max(0, Math.min(1, dx / 110));
   const nopeOp = Math.max(0, Math.min(1, -dx / 110));
 
+  const navBtn = {
+    height: 38, minWidth: 38, padding: "0 11px", borderRadius: 12, boxSizing: "border-box",
+    background: C.surface, color: C.cream, border: `1px solid ${C.line}`,
+    fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif",
+    display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, whiteSpace: "nowrap",
+  };
+
   const wrap = {
     minHeight: "100vh",
-    background: `radial-gradient(1200px 600px at 50% -10%, ${C.ground2}, ${C.ground})`,
     fontFamily: "'Space Grotesk', system-ui, sans-serif",
     color: C.cream,
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    padding: "20px 16px 40px",
+    padding: "12px 16px 48px",
     boxSizing: "border-box",
   };
 
@@ -753,60 +777,56 @@ export default function App() {
 
   return (
     <div style={wrap}>
-      {/* Header */}
-      <div style={{ width: "100%", maxWidth: 460, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: C.orange, display: "inline-block", transform: "rotate(45deg)", flexShrink: 0 }} />
-            <span style={{ fontWeight: 700, letterSpacing: 0.5, fontSize: 15 }}>SUGIMOTO</span>
+      {/* Header — frosted bar that stays put while you scroll */}
+      <header
+        className="ui-glass"
+        style={{
+          position: "sticky", top: 10, zIndex: 30, width: "100%", maxWidth: view === "deck" ? 460 : 560, boxSizing: "border-box",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+          padding: "9px 10px 9px 12px", marginBottom: 14, borderRadius: 18, border: `1px solid ${C.line}`,
+          background: "rgba(11,26,32,0.6)", boxShadow: "0 12px 30px -20px rgba(0,0,0,0.9)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div aria-hidden style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", background: `linear-gradient(135deg, #ffa25c, ${C.orange} 50%, ${C.orangeDeep})`, boxShadow: `0 6px 18px -6px ${alpha(C.orange, 0.8)}` }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: "#fff7ea", transform: "rotate(45deg)" }} />
           </div>
-          <div style={{ fontSize: 11.5, color: "rgba(242,229,192,0.55)", marginTop: 2, marginLeft: 18, whiteSpace: "nowrap" }}>
-            Topic Engine
+          <div style={{ minWidth: 0, lineHeight: 1.15 }}>
+            <div style={{ fontWeight: 700, letterSpacing: 1.6, fontSize: 14, whiteSpace: "nowrap" }}>SUGIMOTO</div>
+            <div style={{ fontSize: 11.5, color: C.teal, fontWeight: 600, whiteSpace: "nowrap" }}>Topic Engine</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <nav style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <button
             onClick={() => setView(view === "library" ? "deck" : "library")}
+            className="ui-btn"
+            aria-label="Library"
             style={{
-              background: view === "library" ? C.slate : "transparent", color: C.cream,
-              border: `1px solid ${view === "library" ? C.slate : C.line}`,
-              borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
-              cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif",
-              display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+              ...navBtn, background: view === "library" ? alpha(C.orange, 0.18) : C.surface,
+              border: `1px solid ${view === "library" ? alpha(C.orange, 0.55) : C.line}`,
             }}
           >
-            📚 {library.length ? `Library (${library.length})` : "Library"}
+            📚 <span className="ui-hide-sm">Library</span>
+            {library.length > 0 && (
+              <span style={{ background: C.orange, color: "#fff", borderRadius: 99, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{library.length}</span>
+            )}
           </button>
+          <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.cream }}>
+            ✨ <span className="ui-hide-sm">Wizard</span>
+          </a>
           <button
             onClick={() => loadTopics(true)}
             disabled={loadingTopics}
-            style={{
-              background: "transparent", color: C.cream, border: `1px solid ${C.line}`,
-              borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600,
-              cursor: loadingTopics ? "default" : "pointer", opacity: loadingTopics ? 0.5 : 1,
-              fontFamily: "'Space Grotesk', sans-serif", display: "flex", alignItems: "center", gap: 6,
-              whiteSpace: "nowrap",
-            }}
+            className="ui-btn"
+            aria-label="Refresh topics"
+            title="Get fresh topics"
+            style={{ ...navBtn, opacity: loadingTopics ? 0.6 : 1, cursor: loadingTopics ? "default" : "pointer" }}
           >
-            <span>⟳</span>
-            {loadingTopics ? "Loading…" : "Refresh"}
+            <span className={loadingTopics ? "ui-spin" : ""} style={{ display: "inline-block" }}>⟳</span>
+            <span className="ui-hide-sm">{loadingTopics ? "Loading…" : "Refresh"}</span>
           </button>
-        </div>
-      </div>
-      {/* Content Wizard link — below header so it doesn't crowd the button row on mobile */}
-      <div style={{ width: "100%", maxWidth: 460, marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
-        <a
-          href="/content-wizard"
-          style={{
-            background: "transparent", color: C.orange, border: `1px solid ${C.orange}`,
-            borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600,
-            textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
-            display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap",
-          }}
-        >
-          Content Wizard →
-        </a>
-      </div>
+        </nav>
+      </header>
 
       <JobsBar
         rows={bgRows}
@@ -820,10 +840,10 @@ export default function App() {
 
       {/* Stat strip */}
       {view !== "library" && (
-        <div style={{ width: "100%", maxWidth: 460, display: "flex", gap: 10, marginBottom: 16 }}>
-          <Stat label="Reviewed" value={reviewedCount} />
-          <Stat label="Approved" value={approvedCount} accent />
-          <Stat label="To review" value={topics.filter((t) => !decisions[topicKey(t)]).length} />
+        <div style={{ width: "100%", maxWidth: 460, display: "flex", gap: 8, marginBottom: 14 }}>
+          <Stat label="Reviewed" value={reviewedCount} color={C.teal} icon="◉" />
+          <Stat label="Approved" value={approvedCount} color={C.orange} icon="✓" />
+          <Stat label="To review" value={topics.filter((t) => !decisions[topicKey(t)]).length} color="#9b8cff" icon="☰" />
         </div>
       )}
 
@@ -840,10 +860,10 @@ export default function App() {
       {view === "deck" && (
         <div style={{ width: "100%", maxWidth: 460, flex: 1, display: "flex", flexDirection: "column" }}>
           {topicError && (
-            <div style={{ background: "rgba(241,114,18,0.12)", border: `1px solid rgba(241,114,18,0.3)`, color: C.cream, borderRadius: 12, padding: "10px 12px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
+            <div className="ui-fade" style={{ background: alpha(C.reject, 0.1), border: `1px solid ${alpha(C.reject, 0.35)}`, color: C.cream, borderRadius: 14, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
               {topicError}
               {errDetail && (
-                <div dir="ltr" style={{ marginTop: 6, fontSize: 11, color: "rgba(242,229,192,0.7)", fontFamily: "monospace", textAlign: "left", wordBreak: "break-word" }}>
+                <div dir="ltr" style={{ marginTop: 6, fontSize: 11, color: "rgba(247,238,214,0.7)", fontFamily: "monospace", textAlign: "left", wordBreak: "break-word" }}>
                   {errDetail}
                 </div>
               )}
@@ -909,7 +929,7 @@ export default function App() {
 
           {/* Actions */}
           {!loadingTopics && current && (
-            <div style={{ display: "flex", gap: 14, marginTop: 22, justifyContent: "center", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 18, marginTop: 24, justifyContent: "center", alignItems: "center" }}>
               <UndoBtn onClick={undo} disabled={!canUndo || !!exiting} />
               <ActionBtn kind="reject" onClick={doReject} disabled={!!exiting} />
               <ActionBtn kind="approve" onClick={doApprove} disabled={!!exiting} />
@@ -926,13 +946,14 @@ export default function App() {
                 e.preventDefault();
                 if (!exiting) advance();
               }}
-              style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 16, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
+              className="ui-btn ui-glass"
+              style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 18, border: `1px solid ${alpha(C.orange, 0.4)}`, color: C.orange, borderRadius: 14, padding: "13px", fontWeight: 700, fontSize: 14.5, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
             >
               Next topic →
             </a>
           )}
           {!loadingTopics && current && (
-            <div style={{ textAlign: "center", marginTop: 12, fontSize: 11.5, color: "rgba(242,229,192,0.4)" }}>
+            <div style={{ textAlign: "center", marginTop: 12, fontSize: 11.5, color: C.text3 }}>
               Swipe the card, or use the buttons · ↶ undo · ← رد · تأیید →
             </div>
           )}
@@ -971,23 +992,34 @@ export default function App() {
 
 // Cards (swipe one at a time) or List (every idea's title at a glance).
 function ModeSwitch({ mode, onChange }) {
-  const opt = (m, label) => (
-    <button
-      onClick={() => onChange(m)}
-      aria-pressed={mode === m}
-      style={{
-        flex: 1, padding: "8px 10px", borderRadius: 9, border: "none", cursor: "pointer",
-        background: mode === m ? C.cream : "transparent", color: mode === m ? C.ink : "rgba(242,229,192,0.7)",
-        fontWeight: 700, fontSize: 12.5, fontFamily: "'Space Grotesk', sans-serif",
-      }}
-    >
-      {label}
-    </button>
-  );
+  const idx = mode === "list" ? 1 : 0;
   return (
-    <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, background: "rgba(242,229,192,0.06)", border: `1px solid ${C.line}`, marginBottom: 14 }}>
-      {opt("cards", "🃏 Cards")}
-      {opt("list", "☰ List")}
+    <div className="ui-glass" style={{ position: "relative", display: "flex", padding: 4, borderRadius: 14, border: `1px solid ${C.line}`, marginBottom: 14 }}>
+      {/* sliding highlight under the active option */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute", top: 4, bottom: 4, left: 4, width: "calc(50% - 4px)", borderRadius: 10,
+          background: `linear-gradient(135deg, #fff8e6, ${C.cream})`, boxShadow: "0 8px 18px -10px rgba(0,0,0,0.7)",
+          transform: `translateX(${idx * 100}%)`, transition: "transform 0.28s cubic-bezier(.2,.8,.2,1)",
+        }}
+      />
+      {[["cards", "🃏", "Cards"], ["list", "☰", "List"]].map(([m, ic, label]) => (
+        <button
+          key={m}
+          className="ui-btn"
+          onClick={() => onChange(m)}
+          aria-pressed={mode === m}
+          style={{
+            position: "relative", zIndex: 1, flex: 1, padding: "9px 10px", border: "none", background: "transparent",
+            borderRadius: 10, cursor: "pointer", color: mode === m ? C.ink : C.text2, fontWeight: 700, fontSize: 13,
+            fontFamily: "'Space Grotesk', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+          }}
+        >
+          <span aria-hidden>{ic}</span>
+          {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -1001,32 +1033,41 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
   const counts = { all: topics.length, pending: 0, approved: 0, rejected: 0 };
   for (const t of topics) counts[stateOf(t)]++;
   const rows = topics.map((t, i) => ({ t, i })).filter(({ t }) => filter === "all" || stateOf(t) === filter);
+  const TONE = { all: C.cream, pending: C.teal, approved: C.success, rejected: C.reject };
 
-  const chip = (k, label) => (
-    <button
-      key={k}
-      onClick={() => setFilter(k)}
-      style={{
-        padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap",
-        border: `1px solid ${filter === k ? C.orange : C.line}`,
-        background: filter === k ? "rgba(241,114,18,0.15)" : "transparent",
-        color: filter === k ? C.cream : "rgba(242,229,192,0.65)",
-        fontSize: 12, fontWeight: 600, fontFamily: "'Vazirmatn', sans-serif",
-      }}
-    >
-      {label} <span style={{ opacity: 0.7 }}>{counts[k]}</span>
-    </button>
-  );
-  const smallBtn = (label, onClick, primary, aria) => (
+  const chip = (k, label) => {
+    const on = filter === k;
+    return (
+      <button
+        key={k}
+        className="ui-btn"
+        onClick={() => setFilter(k)}
+        style={{
+          padding: "5px 9px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+          border: `1px solid ${on ? alpha(TONE[k], 0.6) : C.line}`,
+          background: on ? alpha(TONE[k], 0.14) : C.surface,
+          color: on ? C.cream : C.text2, fontSize: 11.5, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif",
+          display: "inline-flex", alignItems: "center", gap: 5,
+        }}
+      >
+        {label}
+        <span style={{ minWidth: 18, padding: "0 5px", borderRadius: 99, background: alpha(TONE[k], on ? 0.3 : 0.14), color: on ? C.cream : TONE[k], fontSize: 11, fontFamily: "'Space Grotesk', sans-serif" }}>
+          {counts[k]}
+        </span>
+      </button>
+    );
+  };
+  const smallBtn = (label, onClick, kind, aria) => (
     <button
       onClick={onClick}
       aria-label={aria}
+      className={"ui-btn" + (kind === "primary" ? " ui-glow-orange" : kind === "danger" ? " ui-glow-danger" : "")}
       style={{
-        minWidth: 34, height: 34, padding: "0 10px", borderRadius: 10, cursor: "pointer",
-        border: primary ? "none" : `1px solid ${C.line}`,
-        background: primary ? C.orange : "transparent",
-        color: primary ? "#fff" : C.cream, fontWeight: 700, fontSize: 13,
-        fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap",
+        minWidth: 36, height: 36, padding: "0 11px", borderRadius: 11, cursor: "pointer",
+        border: kind === "primary" ? "none" : `1px solid ${kind === "danger" ? alpha(C.reject, 0.5) : C.line}`,
+        background: kind === "primary" ? `linear-gradient(135deg, ${C.orange}, ${C.orangeDeep})` : kind === "success" ? alpha(C.success, 0.16) : "transparent",
+        color: kind === "primary" ? "#fff" : kind === "danger" ? C.reject : kind === "success" ? C.success : C.cream,
+        fontWeight: 700, fontSize: 13, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap",
       }}
     >
       {label}
@@ -1035,7 +1076,7 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
 
   return (
     <div>
-      <div dir="rtl" style={{ display: "flex", gap: 6, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+      <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
         {chip("all", "همه")}
         {chip("pending", "در انتظار")}
         {chip("approved", "تأیید شده")}
@@ -1043,28 +1084,34 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
       </div>
 
       {!rows.length && (
-        <div dir="rtl" style={{ textAlign: "center", padding: "28px 0", color: "rgba(242,229,192,0.5)", fontFamily: "'Vazirmatn', sans-serif", fontSize: 13 }}>
+        <div dir="rtl" className="ui-glass" style={{ textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontFamily: "'Vazirmatn', sans-serif", fontSize: 13 }}>
           موردی در این دسته نیست.
         </div>
       )}
 
-      <div style={{ display: "grid", gap: 6 }}>
-        {rows.map(({ t, i }) => {
+      <div style={{ display: "grid", gap: 7 }}>
+        {rows.map(({ t, i }, n) => {
           const st = stateOf(t);
-          const f = FIELDS[t.field] || { emoji: "•", label: t.field };
+          const f = fieldOf(t);
           const job = (jobs[topicKey(t)] || {}).script;
           const date = formatNewsDate(t.date);
+          const score = Number(t.score) || 0;
+          const scoreColor = score >= 85 ? C.orange : score >= 70 ? "#ffa94d" : C.text2;
           return (
             <div
               key={topicKey(t) + i}
               dir="rtl"
+              className="ui-glass ui-lift ui-fade"
               style={{
-                display: "flex", gap: 10, alignItems: "center", padding: "9px 11px", borderRadius: 12,
-                background: st === "approved" ? "rgba(241,114,18,0.09)" : "rgba(242,229,192,0.05)",
-                border: `1px solid ${st === "approved" ? "rgba(241,114,18,0.35)" : C.line}`,
-                opacity: st === "rejected" ? 0.5 : 1,
+                position: "relative", overflow: "hidden", animationDelay: `${Math.min(n, 14) * 28}ms`,
+                display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
+                background: st === "approved" ? alpha(C.success, 0.07) : C.surface,
+                border: `1px solid ${st === "approved" ? alpha(C.success, 0.35) : C.line}`,
+                opacity: st === "rejected" ? 0.45 : 1,
               }}
             >
+              {/* topic-type color stripe on the reading-start edge */}
+              <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   onClick={() => st === "pending" && onShowCard(i)}
@@ -1078,37 +1125,39 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
                 >
                   {t.title_fa || t.title_en}
                 </div>
-                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "2px 9px", marginTop: 4, fontSize: 11, color: "rgba(242,229,192,0.6)", fontFamily: "'Space Grotesk', sans-serif" }}>
-                  <span>{f.emoji} {f.label}</span>
-                  {date && <span>📅 {date}</span>}
+                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Space Grotesk', sans-serif" }}>
+                  <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
+                    {f.emoji} {f.label}
+                  </span>
+                  {date && <span>{date}</span>}
                   {t.source_url && (
-                    <a href={t.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "rgba(242,229,192,0.75)" }}>
+                    <a href={t.source_url} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none" }}>
                       {sourceHost(t.source_url)} ↗
                     </a>
                   )}
-                  <span style={{ color: C.orange, fontWeight: 700 }}>{t.score}</span>
                   {t.grounding === "headline" && (
-                    <span style={{ color: C.orange, border: `1px solid ${C.orangeDeep}`, borderRadius: 99, padding: "0 6px" }}>headline only</span>
+                    <span style={{ color: C.orange, border: `1px solid ${alpha(C.orange, 0.5)}`, borderRadius: 99, padding: "0 6px" }}>headline only</span>
                   )}
+                  <span style={{ color: scoreColor, background: alpha(scoreColor === C.text2 ? C.cream : scoreColor, 0.12), borderRadius: 6, padding: "1px 6px", fontWeight: 700 }}>{score}</span>
                 </div>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                 {st === "pending" && (
                   <div style={{ display: "flex", gap: 6 }}>
-                    {smallBtn("✓", () => onApprove(t), true, "Approve topic")}
-                    {smallBtn("✕", () => onReject(t), false, "Reject topic")}
+                    {smallBtn("✓", () => onApprove(t), "primary", "Approve topic")}
+                    {smallBtn("✕", () => onReject(t), "danger", "Reject topic")}
                   </div>
                 )}
                 {st === "approved" &&
                   (job && job.status === "running" ? (
-                    <span style={{ fontSize: 11.5, color: C.cream, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>⏳ در حال نوشتن</span>
+                    <span className="ui-pulse" style={{ fontSize: 11.5, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>⏳ در حال نوشتن</span>
                   ) : job && job.status === "error" ? (
-                    smallBtn("⚠ دوباره", () => onRetry(t), false, "Retry")
+                    smallBtn("⚠ دوباره", () => onRetry(t), "danger", "Retry")
                   ) : (
-                    smallBtn("باز کن", () => onOpenScript(t), true, "Open script")
+                    smallBtn("باز کن ✓", () => onOpenScript(t), "success", "Open script")
                   ))}
-                {st === "rejected" && smallBtn("↶", () => onRestore(t), false, "Restore topic")}
+                {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", "Restore topic")}
               </div>
             </div>
           );
@@ -1128,41 +1177,44 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry }) {
       {rows.map((j) => {
         const running = j.status === "running";
         const failed = j.status === "error";
+        const tone = running ? C.orange : failed ? C.reject : C.success;
         const writing = j.kind === "script" && running && j.result && (j.result.fa || j.result.en);
         return (
           <div
             key={j.key + ":" + j.kind}
             dir="rtl"
+            className={"ui-glass ui-fade" + (running ? " ui-progress" : "")}
             style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 12,
-              background: failed ? "rgba(241,114,18,0.12)" : "rgba(50,81,93,0.28)",
-              border: `1px solid ${failed ? "rgba(241,114,18,0.35)" : C.slate}`,
+              display: "flex", alignItems: "center", gap: 10, padding: "9px 10px 9px 12px", borderRadius: 14,
+              border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.08),
               fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.cream,
             }}
           >
-            <span aria-hidden>{running ? "⏳" : failed ? "⚠️" : "✅"}</span>
+            <span aria-hidden className={running ? "ui-pulse" : ""} style={{ width: 30, height: 30, borderRadius: 9, background: alpha(tone, 0.18), display: "grid", placeItems: "center", flexShrink: 0 }}>
+              {running ? "⏳" : failed ? "⚠️" : "✓"}
+            </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700 }}>
+              <div style={{ fontWeight: 700, color: tone }}>
                 {running
                   ? writing ? "سناریو نوشته شد، در حال ارسال به تلگرام…" : `در حال نوشتن ${KIND[j.kind]}…`
                   : failed ? `${KIND[j.kind]} نشد` : `${KIND[j.kind]} آماده است`}
               </div>
-              <div style={{ opacity: 0.75, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ color: C.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {j.topic.title_fa || j.topic.title_en}
               </div>
             </div>
             {!running && !failed && (
-              <button onClick={() => onOpen(j)} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 9, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+              <button className="ui-btn" onClick={() => onOpen(j)} style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", border: "none", borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
                 باز کن
               </button>
             )}
             {failed && (
-              <button onClick={() => onRetry(j)} style={{ background: "transparent", color: C.cream, border: `1px solid ${C.line}`, borderRadius: 9, padding: "6px 12px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+              <button className="ui-btn" onClick={() => onRetry(j)} style={{ background: "transparent", color: C.cream, border: `1px solid ${alpha(C.reject, 0.5)}`, borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
                 دوباره
               </button>
             )}
             {!running && (
-              <button onClick={() => onDismiss(j)} aria-label="close" style={{ background: "transparent", color: "rgba(242,229,192,0.6)", border: "none", fontSize: 16, cursor: "pointer", padding: 4 }}>
+              <button className="ui-btn" onClick={() => onDismiss(j)} aria-label="close" style={{ background: "transparent", color: C.text3, border: "none", fontSize: 18, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
                 ×
               </button>
             )}
@@ -1173,11 +1225,17 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry }) {
   );
 }
 
-function Stat({ label, value, accent }) {
+function Stat({ label, value, color = C.cream, icon }) {
   return (
-    <div style={{ flex: 1, background: "rgba(242,229,192,0.05)", border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px" }}>
-      <div style={{ fontSize: 22, fontWeight: 700, color: accent ? C.orange : C.cream, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "rgba(242,229,192,0.45)", marginTop: 5 }}>{label}</div>
+    <div className="ui-glass" style={{ flex: 1, position: "relative", overflow: "hidden", border: `1px solid ${C.line}`, borderRadius: 16, padding: "12px 12px 11px" }}>
+      <div style={{ position: "absolute", top: 0, left: 12, right: 12, height: 2, borderRadius: 2, background: `linear-gradient(90deg, ${color}, transparent)` }} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ fontSize: 24, fontWeight: 700, color: C.cream, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</div>
+        <div aria-hidden style={{ width: 26, height: 26, borderRadius: 8, background: alpha(color, 0.16), color, display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700 }}>
+          {icon}
+        </div>
+      </div>
+      <div style={{ fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: C.text3, marginTop: 8, fontWeight: 600 }}>{label}</div>
     </div>
   );
 }
@@ -1209,11 +1267,15 @@ function DeckWhy({ stats }) {
     </div>
   );
   return (
-    <details style={{ fontSize: 11.5, color: "rgba(242,229,192,0.7)", fontFamily: "'Space Grotesk', sans-serif", marginBottom: 12, direction: "ltr" }}>
-      <summary style={{ cursor: "pointer" }}>
-        {stats.eligible ?? 0} fresh topics in the last 30 days · {stats.written ?? 0} cards ({full} with full article text) · {src}
+    <details className="ui-glass" style={{ fontSize: 11.5, color: C.text2, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 12, direction: "ltr", border: `1px solid ${C.line}`, borderRadius: 12, padding: "8px 12px" }}>
+      <summary style={{ cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: C.success, boxShadow: `0 0 0 3px ${alpha(C.success, 0.2)}`, flexShrink: 0 }} />
+        <span style={{ flex: 1 }}>
+          <b style={{ color: C.cream }}>{stats.eligible ?? 0}</b> fresh topics · <b style={{ color: C.cream }}>{stats.written ?? 0}</b> cards ({full} full text) · {src}
+        </span>
+        <span aria-hidden style={{ color: C.text3 }}>▾</span>
       </summary>
-      <div style={{ marginTop: 8, padding: "8px 10px", background: "rgba(242,229,192,0.06)", borderRadius: 10, display: "grid", gap: 3 }}>
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, display: "grid", gap: 3 }}>
         {row("Articles in pool", stats.pool ?? 0)}
         {row("Already approved or rejected", stats.alreadyUsed ?? 0)}
         {row("Off-topic or draw results", stats.offTopic ?? 0)}
@@ -1251,21 +1313,25 @@ function formatNewsDate(d) {
 }
 
 function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
-  const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
+  const f = fieldOf(topic);
   const isEU = topic.page === "EU";
+  const pill = {
+    display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
+    fontFamily: "'Space Grotesk', sans-serif", direction: "ltr", borderRadius: 99, padding: "4px 10px",
+    background: "rgba(255,255,255,0.55)", border: `1px solid ${C.creamEdge}`, color: C.inkSoft, textDecoration: "none",
+  };
   return (
     <div style={{
-      height: "100%", background: C.cream, borderRadius: 22,
+      height: "100%", background: "linear-gradient(180deg, #fdf7e8 0%, #f7eed6 100%)", borderRadius: 24,
       border: `1px solid ${C.creamEdge}`,
-      boxShadow: ghost ? "none" : "0 24px 50px -20px rgba(0,0,0,0.55)",
-      padding: 24, boxSizing: "border-box", display: "flex", flexDirection: "column",
-      position: "relative", overflow: "hidden",
-      userSelect: "none",
+      boxShadow: ghost ? "none" : `0 32px 60px -30px rgba(0,0,0,0.85), 0 0 0 1px ${alpha(f.color, 0.12)}`,
+      padding: "24px 22px 18px", boxSizing: "border-box", display: "flex", flexDirection: "column",
+      position: "relative", overflow: "hidden", userSelect: "none",
     }}>
-      {/* top strip */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 6, background: isEU ? C.slate : C.orange }} />
+      {/* accent band and a soft glow in this topic type's color */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 6, background: `linear-gradient(90deg, ${f.color}, ${C.orange})` }} />
+      <div style={{ position: "absolute", top: -120, right: -120, width: 300, height: 300, background: `radial-gradient(circle, ${alpha(f.color, 0.22)} 0%, ${alpha(f.color, 0.08)} 40%, transparent 70%)`, pointerEvents: "none" }} />
 
-      {/* stamps */}
       {!ghost && (
         <>
           <Stamp text="تأیید" color={C.orange} op={likeOp} side="left" />
@@ -1274,44 +1340,45 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
       )}
 
       {/* tags */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(50,81,93,0.09)", padding: "6px 10px", borderRadius: 8 }}>
-          <span style={{ fontSize: 14 }}>{f.emoji}</span>
-          <span style={{ fontSize: 12, fontWeight: 600, color: C.slate, fontFamily: "'Space Grotesk', sans-serif" }}>{f.label}</span>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: alpha(f.color, 0.16), border: `1px solid ${alpha(f.color, 0.35)}`, padding: "5px 11px", borderRadius: 99 }}>
+          <span style={{ fontSize: 13 }}>{f.emoji}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: C.ink, fontFamily: "'Space Grotesk', sans-serif" }}>{f.label}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: isEU ? C.slate : C.orangeDeep, fontFamily: "'Space Grotesk', sans-serif" }}>
+        <div style={{ ...pill, color: isEU ? "#3a56c4" : C.orangeDeep, fontWeight: 700 }}>
           {isEU ? "🇪🇺 Europe" : "🇨🇦 Canada"}
         </div>
       </div>
 
       {/* Farsi hook */}
-      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: "16px 0" }}>
+      <div style={{ position: "relative", flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: "14px 0" }}>
         <div dir="rtl" style={{
           fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, color: C.ink,
-          fontSize: 25, lineHeight: 1.55, textAlign: "right", unicodeBidi: "plaintext",
+          fontSize: 26, lineHeight: 1.55, textAlign: "right", unicodeBidi: "plaintext", letterSpacing: -0.2,
         }}>
           {topic.title_fa}
         </div>
         {topic.title_en && (
-          <div style={{ marginTop: 12, fontSize: 13.5, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 500 }}>
+          <div style={{ marginTop: 10, fontSize: 13.5, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 500, lineHeight: 1.45 }}>
             {topic.title_en}
           </div>
         )}
       </div>
 
       {/* why now */}
-      <div style={{ borderTop: `1px dashed ${C.creamEdge}`, paddingTop: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.orange, display: "inline-block", boxShadow: `0 0 0 4px rgba(241,114,18,0.18)` }} />
-          <span style={{ fontSize: 10.5, letterSpacing: 1.2, textTransform: "uppercase", color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>
-            چرا الان
-          </span>
+      <div dir="rtl" style={{ position: "relative", background: alpha(f.color, 0.1), borderRight: `3px solid ${f.color}`, borderRadius: 12, padding: "10px 12px" }}>
+        <div style={{ fontSize: 10.5, letterSpacing: 0.5, color: C.inkSoft, fontFamily: "'Vazirmatn', sans-serif", fontWeight: 700, marginBottom: 3 }}>
+          چرا الان
         </div>
-        <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, lineHeight: 1.8, color: "#43555c", textAlign: "right", unicodeBidi: "plaintext" }}>
+        <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, lineHeight: 1.75, color: "#33464d", textAlign: "right", unicodeBidi: "plaintext" }}>
           {topic.why_now}
         </div>
-        {topic.source_url && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+      </div>
+
+      {/* meta + heat */}
+      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {topic.source_url && (
             <a
               href={topic.source_url}
               target="_blank"
@@ -1320,39 +1387,35 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
               // actually opens (in a new tab) instead of starting a swipe.
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                fontSize: 12, fontWeight: 600, color: C.slate,
-                fontFamily: "'Space Grotesk', sans-serif", textDecoration: "underline",
-                direction: "ltr", cursor: "pointer",
-              }}
+              style={{ ...pill, color: "#1f6f7a", cursor: "pointer" }}
             >
               🔗 {sourceHost(topic.source_url)} ↗
             </a>
-            {formatNewsDate(topic.date) && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", direction: "ltr" }}>
-                📅 {formatNewsDate(topic.date)}
-              </span>
-            )}
-            {topic.grounding === "headline" && (
-              <span
-                title="Only the headline could be read for this one. Open the source and check it before writing a script."
-                style={{ fontSize: 11, fontWeight: 600, color: C.orangeDeep, fontFamily: "'Space Grotesk', sans-serif", direction: "ltr", border: `1px solid ${C.orangeDeep}`, borderRadius: 99, padding: "1px 8px" }}
-              >
-                headline only
-              </span>
-            )}
-          </div>
-        )}
-        {/* heat */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
-          <div style={{ flex: 1, height: 7, background: "rgba(50,81,93,0.12)", borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ width: `${heat(topic.score)}%`, height: "100%", background: `linear-gradient(90deg, ${C.orange}, ${C.orangeDeep})`, borderRadius: 99 }} />
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.orangeDeep, fontFamily: "'Space Grotesk', sans-serif", minWidth: 46, textAlign: "right" }}>
-            {topic.score}<span style={{ fontSize: 10, color: C.inkSoft, fontWeight: 500 }}>/100</span>
-          </div>
+          )}
+          {formatNewsDate(topic.date) && <span style={pill}>📅 {formatNewsDate(topic.date)}</span>}
+          {topic.grounding === "headline" && (
+            <span
+              title="Only the headline could be read for this one. Open the source and check it before writing a script."
+              style={{ ...pill, color: C.orangeDeep, background: alpha(C.orange, 0.1), border: `1px solid ${alpha(C.orange, 0.45)}` }}
+            >
+              headline only
+            </span>
+          )}
         </div>
+        <ScoreRing score={topic.score} />
+      </div>
+    </div>
+  );
+}
+
+// Engagement score as a small ring: warmer and fuller the hotter the topic.
+function ScoreRing({ score, size = 46 }) {
+  const v = heat(Number(score) || 0);
+  const color = v >= 85 ? C.orange : v >= 70 ? "#ffa94d" : C.inkSoft;
+  return (
+    <div title={`Engagement potential ${v}/100`} style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: `conic-gradient(${color} ${v * 3.6}deg, rgba(22,38,44,0.1) 0)`, display: "grid", placeItems: "center" }}>
+      <div style={{ width: size - 8, height: size - 8, borderRadius: "50%", background: "#fbf3e0", display: "grid", placeItems: "center", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 14, color: C.ink }}>
+        {v}
       </div>
     </div>
   );
@@ -1361,11 +1424,11 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
 function Stamp({ text, color, op, side }) {
   return (
     <div style={{
-      position: "absolute", top: 26, [side]: 22, zIndex: 3,
-      border: `3px solid ${color}`, color: color, borderRadius: 10,
-      padding: "4px 12px", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 20,
+      position: "absolute", top: 28, [side]: 22, zIndex: 3,
+      border: `3px solid ${color}`, color: color, borderRadius: 12,
+      padding: "4px 14px", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 21,
       transform: `rotate(${side === "left" ? -14 : 14}deg)`, opacity: op, transition: "opacity 0.1s",
-      pointerEvents: "none", background: "rgba(242,229,192,0.6)",
+      pointerEvents: "none", background: "rgba(253,247,232,0.85)", boxShadow: `0 0 24px ${alpha(color, 0.35)}`,
     }}>
       {text}
     </div>
@@ -1374,22 +1437,22 @@ function Stamp({ text, color, op, side }) {
 
 function ActionBtn({ kind, onClick, disabled }) {
   const approve = kind === "approve";
+  const size = approve ? 74 : 62;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       aria-label={approve ? "Approve topic" : "Reject topic"}
+      className={"ui-btn " + (approve ? "ui-glow-orange" : "ui-glow-danger")}
       style={{
-        width: 68, height: 68, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
-        border: approve ? "none" : `2px solid ${C.reject}`,
-        background: approve ? `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})` : "rgba(242,229,192,0.04)",
-        color: approve ? "#fff" : C.reject, fontSize: 26, display: "flex", alignItems: "center", justifyContent: "center",
-        boxShadow: approve ? "0 12px 24px -8px rgba(241,114,18,0.6)" : "none",
-        opacity: disabled ? 0.5 : 1, transition: "transform 0.12s",
+        width: size, height: size, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
+        border: approve ? "none" : `2px solid ${alpha(C.reject, 0.6)}`,
+        background: approve ? `linear-gradient(135deg, #ff9a4d, ${C.orange} 45%, ${C.orangeDeep})` : "rgba(255,255,255,0.04)",
+        color: approve ? "#fff" : C.reject, fontSize: approve ? 30 : 24, fontWeight: 700,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: approve ? `0 0 0 5px ${alpha(C.orange, 0.12)}, 0 14px 30px -10px ${alpha(C.orange, 0.7)}` : "none",
+        opacity: disabled ? 0.5 : 1,
       }}
-      onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.92)")}
-      onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
-      onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
     >
       {approve ? "✓" : "✕"}
     </button>
@@ -1403,11 +1466,11 @@ function UndoBtn({ onClick, disabled }) {
       disabled={disabled}
       aria-label="Undo — go back to previous topic"
       title="Undo (previous topic)"
+      className="ui-btn ui-glass"
       style={{
-        width: 52, height: 52, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
-        border: `1px solid ${C.line}`, background: "rgba(242,229,192,0.04)",
-        color: C.cream, fontSize: 22, display: "flex", alignItems: "center", justifyContent: "center",
-        opacity: disabled ? 0.35 : 1, transition: "transform 0.12s",
+        width: 48, height: 48, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
+        border: `1px solid ${C.line}`, color: C.cream, fontSize: 20,
+        display: "flex", alignItems: "center", justifyContent: "center", opacity: disabled ? 0.35 : 1,
       }}
     >
       ↶
@@ -1416,26 +1479,37 @@ function UndoBtn({ onClick, disabled }) {
 }
 
 function CardSkeleton() {
+  const bar = (w, h = 14, mt = 10) => <div className="ui-skeleton" style={{ width: w, height: h, marginTop: mt, marginLeft: "auto" }} />;
   return (
-    <div style={{ height: 500, background: "rgba(242,229,192,0.06)", border: `1px solid ${C.line}`, borderRadius: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-      <div style={{ width: 34, height: 34, border: `3px solid rgba(242,229,192,0.2)`, borderTopColor: C.orange, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
-      <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: "rgba(242,229,192,0.6)", direction: "rtl" }}>
-        در حال بررسی اخبار هفتهٔ اخیر…
+    <div className="ui-glass" style={{ height: 520, border: `1px solid ${C.line}`, borderRadius: 24, padding: 24, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <div className="ui-skeleton" style={{ width: 96, height: 26, borderRadius: 99 }} />
+        <div className="ui-skeleton" style={{ width: 80, height: 26, borderRadius: 99 }} />
       </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        {bar("92%", 22, 0)}
+        {bar("74%", 22)}
+        {bar("48%", 14, 16)}
+      </div>
+      <div className="ui-skeleton" style={{ height: 64, borderRadius: 12 }} />
+      <div dir="rtl" style={{ textAlign: "center", marginTop: 14, fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: C.text2 }}>
+        <span className="ui-pulse">در حال بررسی اخبار ۳۰ روز اخیر…</span>
+      </div>
     </div>
   );
 }
 
 function EmptyDeck({ onRefresh }) {
   return (
-    <div style={{ height: 500, background: "rgba(242,229,192,0.05)", border: `1px dashed ${C.line}`, borderRadius: 22, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center", padding: 24 }}>
-      <div style={{ fontSize: 34 }}>🎬</div>
-      <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 15, direction: "rtl", color: C.cream }}>
+    <div className="ui-glass ui-fade" style={{ height: 480, border: `1px dashed ${alpha(C.cream, 0.18)}`, borderRadius: 24, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center", padding: 24 }}>
+      <div style={{ width: 76, height: 76, borderRadius: 24, display: "grid", placeItems: "center", fontSize: 34, background: `linear-gradient(135deg, ${alpha(C.orange, 0.25)}, ${alpha(C.teal, 0.25)})`, border: `1px solid ${C.line}` }}>
+        🎬
+      </div>
+      <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 16, fontWeight: 700, direction: "rtl", color: C.cream }}>
         همهٔ موضوعات این دسته رو دیدی
       </div>
-      <button onClick={onRefresh} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "12px 22px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
-        Get a fresh batch
+      <button className="ui-btn ui-glow-orange" onClick={onRefresh} style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", border: "none", borderRadius: 14, padding: "12px 22px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
+        ⟳ Get a fresh batch
       </button>
     </div>
   );
@@ -1470,7 +1544,7 @@ function ScriptBody({ text, tab }) {
 }
 
 function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, tgState = "idle", tgMsg = "", onRetryTelegram, articleJob, publishJob, docJob, onJob }) {
-  const f = FIELDS[topic.field] || { emoji: "•", label: topic.field };
+  const f = fieldOf(topic);
   const active = tab === "fa" ? scripts.fa : scripts.en;
 
   // Blog article (on-demand). It is written by a server-side job, so this view
@@ -1559,20 +1633,20 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
   return (
     <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <button onClick={onBack} style={{ background: "transparent", color: "rgba(242,229,192,0.7)", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
-          ← Back to deck
-        </button>
+        <BackBtn onClick={onBack} label="Back to deck" />
         {canUndo && (
-          <button onClick={onUndo} style={{ background: "rgba(242,229,192,0.06)", color: C.cream, border: `1px solid ${C.line}`, borderRadius: 9, padding: "6px 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>
+          <button onClick={onUndo} className="ui-btn ui-glass" style={{ color: C.cream, border: `1px solid ${C.line}`, borderRadius: 99, padding: "7px 14px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif" }}>
             ↶ Undo (previous topic)
           </button>
         )}
       </div>
 
-      <div style={{ background: C.cream, borderRadius: 18, padding: "16px 18px", marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 14 }}>{f.emoji}</span>
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: C.slate, fontFamily: "'Space Grotesk', sans-serif" }}>{f.label}</span>
+      <div className="ui-fade" style={{ position: "relative", overflow: "hidden", background: "linear-gradient(180deg, #fdf7e8, #f7eed6)", borderRadius: 20, padding: "18px 18px 16px", marginBottom: 14, boxShadow: "0 24px 50px -30px rgba(0,0,0,0.8)" }}>
+        <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 5, background: `linear-gradient(90deg, ${f.color}, ${C.orange})` }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: alpha(f.color, 0.16), border: `1px solid ${alpha(f.color, 0.35)}`, borderRadius: 99, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, color: C.ink, fontFamily: "'Space Grotesk', sans-serif" }}>
+            {f.emoji} {f.label}
+          </span>
           <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: topic.page === "EU" ? C.slate : C.orangeDeep }}>{topic.page === "EU" ? "🇪🇺 Europe" : "🇨🇦 Canada"}</span>
         </div>
         <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, textAlign: "right", lineHeight: 1.6, unicodeBidi: "plaintext" }}>
@@ -1588,14 +1662,14 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                 display: "inline-flex", alignItems: "center", gap: 6,
                 fontSize: 12.5, fontWeight: 600, color: "#fff",
                 fontFamily: "'Space Grotesk', sans-serif", textDecoration: "none",
-                direction: "ltr", background: C.slate, border: `1px solid ${C.slate}`,
-                borderRadius: 9, padding: "8px 12px",
+                direction: "ltr", background: `linear-gradient(135deg, ${C.teal}, ${C.slate})`, border: "none",
+                borderRadius: 10, padding: "8px 13px", boxShadow: `0 8px 18px -10px ${alpha(C.teal, 0.9)}`,
               }}
             >
               🔗 Read the source: {sourceHost(topic.source_url)} ↗
             </a>
             {formatNewsDate(topic.date) && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: "rgba(242,229,192,0.65)", fontFamily: "'Space Grotesk', sans-serif", direction: "ltr" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif", direction: "ltr" }}>
                 📅 {formatNewsDate(topic.date)}
               </span>
             )}
@@ -1609,19 +1683,19 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
         <Tab active={tab === "en"} onClick={() => setTab("en")} label="English script" />
       </div>
 
-      <div style={{ flex: 1, background: "rgba(242,229,192,0.05)", border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, minHeight: 300 }}>
+      <div className="ui-glass" style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: 18, minHeight: 300 }}>
         {loading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 260, gap: 14 }}>
-            <div style={{ width: 30, height: 30, border: `3px solid rgba(242,229,192,0.2)`, borderTopColor: C.orange, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
-            <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: "rgba(242,229,192,0.6)", direction: "rtl" }}>در حال نوشتن سناریوی فارسی و انگلیسی…</div>
+            <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.cream, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
+            <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: "rgba(247,238,214,0.6)", direction: "rtl" }}>در حال نوشتن سناریوی فارسی و انگلیسی…</div>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : error ? (
-          <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.orange, direction: "rtl", textAlign: "right" }}>{error}</div>
+          <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.reject, direction: "rtl", textAlign: "right" }}>{error}</div>
         ) : (
           <div>
             <div style={{ display: "flex", justifyContent: tab === "fa" ? "flex-start" : "flex-end", marginBottom: 12 }}>
-              <button onClick={() => onCopy(tab)} style={{ background: copied === tab ? C.orangeDeep : "rgba(241,114,18,0.15)", color: copied === tab ? "#fff" : C.orange, border: `1px solid rgba(241,114,18,0.35)`, borderRadius: 9, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
+              <button className="ui-btn" onClick={() => onCopy(tab)} style={{ background: copied === tab ? C.success : alpha(C.orange, 0.14), color: copied === tab ? "#06281c" : C.orange, border: `1px solid ${copied === tab ? C.success : alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}>
                 {copied === tab ? "Copied ✓" : "Copy"}
               </button>
             </div>
@@ -1635,9 +1709,9 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
         <div
           style={{
             marginTop: 16,
-            background: tgState === "error" ? "rgba(241,114,18,0.12)" : "rgba(50,81,93,0.28)",
-            border: `1px solid ${tgState === "error" ? "rgba(241,114,18,0.35)" : C.slate}`,
-            borderRadius: 12,
+            background: alpha(tgState === "error" ? C.reject : tgState === "sent" ? C.success : C.teal, 0.1),
+            border: `1px solid ${alpha(tgState === "error" ? C.reject : tgState === "sent" ? C.success : C.teal, 0.4)}`,
+            borderRadius: 14,
             padding: "12px",
             fontSize: 13.5,
             fontWeight: 600,
@@ -1658,7 +1732,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
           </span>
           {tgState === "error" && (
             <>
-              <span style={{ fontSize: 11, color: C.orange, direction: "ltr", fontWeight: 500 }}>{tgMsg}</span>
+              <span style={{ fontSize: 11, color: C.reject, direction: "ltr", fontWeight: 500 }}>{tgMsg}</span>
               {onRetryTelegram && (
                 <button
                   onClick={onRetryTelegram}
@@ -1679,9 +1753,10 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
             <button
               onClick={generateArticle}
               disabled={artState === "generating"}
+              className={"ui-btn" + (artState === "generating" ? " ui-progress" : "")}
               style={{
-                width: "100%", background: "rgba(50,81,93,0.35)", color: C.cream,
-                border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
+                width: "100%", background: alpha(C.teal, 0.12), color: C.cream,
+                border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 12, padding: "12px",
                 fontWeight: 600, fontSize: 14, cursor: artState === "generating" ? "default" : "pointer",
                 opacity: artState === "generating" ? 0.6 : 1, fontFamily: "'Space Grotesk', sans-serif",
               }}
@@ -1705,13 +1780,13 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                 .article-preview strong{color:#22343b}
               `}</style>
               {/* SEO meta line */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, fontSize: 11, fontFamily: "'Space Grotesk', sans-serif", color: "rgba(242,229,192,0.6)" }}>
-                {article.focus_keyword && <span dir="rtl" style={{ background: "rgba(242,229,192,0.06)", borderRadius: 6, padding: "3px 8px", fontFamily: "'Vazirmatn', sans-serif" }}>🔑 {article.focus_keyword}</span>}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, fontSize: 11, fontFamily: "'Space Grotesk', sans-serif", color: "rgba(247,238,214,0.6)" }}>
+                {article.focus_keyword && <span dir="rtl" style={{ background: alpha(C.teal, 0.14), color: C.teal, borderRadius: 99, padding: "3px 10px", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 600 }}>🔑 {article.focus_keyword}</span>}
                 {!article.parse_ok && <span style={{ color: C.orange }}>⚠️ خروجی ناقص — قبل از انتشار بررسی کن</span>}
               </div>
 
               {/* Article preview */}
-              <div style={{ background: C.cream, borderRadius: 14, padding: "16px 18px", maxHeight: 340, overflowY: "auto" }}>
+              <div style={{ background: "linear-gradient(180deg, #fdf7e8, #f7eed6)", borderRadius: 16, padding: "16px 18px", maxHeight: 360, overflowY: "auto" }}>
                 <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
                   {article.title_fa}
                 </div>
@@ -1730,7 +1805,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                   disabled={pubState === "publishing"}
                   style={{
                     width: "100%", marginTop: 12,
-                    background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`,
+                    background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDeep})`, boxShadow: `0 12px 26px -12px ${alpha(C.orange, 0.8)}`,
                     color: "#fff", border: "none", borderRadius: 12, padding: "13px",
                     fontWeight: 700, fontSize: 14, cursor: pubState === "publishing" ? "default" : "pointer",
                     opacity: pubState === "publishing" ? 0.6 : 1, fontFamily: "'Space Grotesk', sans-serif",
@@ -1745,7 +1820,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                   rel="noopener noreferrer"
                   style={{
                     display: "block", marginTop: 12, textAlign: "center",
-                    background: C.slate, color: C.cream, border: `1px solid ${C.slate}`,
+                    background: alpha(C.success, 0.14), color: C.success, border: `1px solid ${alpha(C.success, 0.5)}`,
                     borderRadius: 12, padding: "13px", fontWeight: 700, fontSize: 14,
                     textDecoration: "none", fontFamily: "'Space Grotesk', sans-serif",
                   }}
@@ -1762,8 +1837,8 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                 <button
                   onClick={downloadDoc}
                   style={{
-                    flex: 1, background: "rgba(50,81,93,0.35)", color: C.cream,
-                    border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
+                    flex: 1, background: alpha(C.teal, 0.12), color: C.cream,
+                    border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 12, padding: "12px",
                     fontWeight: 600, fontSize: 13.5, cursor: "pointer",
                     fontFamily: "'Space Grotesk', sans-serif",
                   }}
@@ -1774,8 +1849,8 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                   onClick={sendDocToTelegram}
                   disabled={docState === "sending"}
                   style={{
-                    flex: 1, background: "rgba(50,81,93,0.35)", color: C.cream,
-                    border: `1px solid ${C.slate}`, borderRadius: 12, padding: "12px",
+                    flex: 1, background: alpha(C.teal, 0.12), color: C.cream,
+                    border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 12, padding: "12px",
                     fontWeight: 600, fontSize: 13.5,
                     cursor: docState === "sending" ? "default" : "pointer",
                     opacity: docState === "sending" ? 0.6 : 1,
@@ -1789,7 +1864,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Space Grotesk', sans-serif" }}>{docMsg}</div>
               )}
 
-              <button onClick={generateArticle} disabled={artState === "generating"} style={{ width: "100%", marginTop: 8, background: "transparent", color: "rgba(242,229,192,0.6)", border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
+              <button onClick={generateArticle} disabled={artState === "generating"} style={{ width: "100%", marginTop: 8, background: "transparent", color: "rgba(247,238,214,0.6)", border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'Space Grotesk', sans-serif" }}>
                 ↻ بازنویسی مقاله
               </button>
             </div>
@@ -1808,7 +1883,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
           e.preventDefault();
           onBack();
         }}
-        style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 12, background: `linear-gradient(180deg, ${C.orange}, ${C.orangeDeep})`, color: "#fff", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
+        style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 12, background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDeep})`, boxShadow: `0 14px 30px -14px ${alpha(C.orange, 0.85)}`, color: "#fff", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Space Grotesk', sans-serif" }}
       >
         Next topic →
       </a>
@@ -1818,11 +1893,12 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
 
 function Tab({ active, onClick, label }) {
   return (
-    <button onClick={onClick} style={{
-      flex: 1, background: active ? C.slate : "rgba(242,229,192,0.05)",
-      color: active ? C.cream : "rgba(242,229,192,0.6)",
-      border: `1px solid ${active ? C.slate : C.line}`, borderRadius: 10, padding: "10px",
-      fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif",
+    <button className="ui-btn" onClick={onClick} style={{
+      flex: 1, background: active ? alpha(C.orange, 0.16) : C.surface,
+      color: active ? C.cream : C.text2,
+      border: `1px solid ${active ? alpha(C.orange, 0.55) : C.line}`, borderRadius: 12, padding: "10px",
+      fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif",
+      boxShadow: active ? `inset 0 -2px 0 ${C.orange}` : "none",
     }}>
       {label}
     </button>
@@ -1839,13 +1915,12 @@ function LibraryView({ items, filter, setFilter, onOpen, onBack }) {
 
   return (
     <div style={{ width: "100%", maxWidth: 560, flex: 1, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <button onClick={onBack} style={{ background: "transparent", color: "rgba(242,229,192,0.7)", border: "none", cursor: "pointer", fontSize: 13, fontFamily: "'Space Grotesk', sans-serif" }}>
-          ← Back to deck
-        </button>
-        <span style={{ fontSize: 12.5, color: "rgba(242,229,192,0.55)", fontFamily: "'Space Grotesk', sans-serif" }}>
-          {items.length} saved
-        </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <BackBtn onClick={onBack} />
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: C.cream }}>Library</span>
+          <span style={{ fontSize: 12, color: C.text3 }}>{items.length} saved</span>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
@@ -1855,16 +1930,16 @@ function LibraryView({ items, filter, setFilter, onOpen, onBack }) {
       </div>
 
       {filtered.length === 0 ? (
-        <div style={{ height: 320, background: "rgba(242,229,192,0.05)", border: `1px dashed ${C.line}`, borderRadius: 18, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, textAlign: "center", padding: 24 }}>
-          <div style={{ fontSize: 30 }}>📚</div>
-          <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: "rgba(242,229,192,0.75)" }}>
+        <div className="ui-glass" style={{ height: 320, border: `1px dashed ${C.line}`, borderRadius: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, textAlign: "center", padding: 24 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 20, display: "grid", placeItems: "center", fontSize: 28, background: `linear-gradient(135deg, ${alpha(C.orange, 0.22)}, ${alpha(C.teal, 0.22)})` }}>📚</div>
+          <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text2 }}>
             هنوز چیزی ذخیره نشده.<br />یک موضوع رو تأیید کن تا سناریو و مقاله‌اش همیشه اینجا بمونه.
           </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map((it) => (
-            <LibraryRow key={it.id + ":" + (it.ts || 0)} item={it} onOpen={() => onOpen(it)} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {filtered.map((it, n) => (
+            <LibraryRow key={it.id + ":" + (it.ts || 0)} item={it} n={n} onOpen={() => onOpen(it)} />
           ))}
         </div>
       )}
@@ -1872,9 +1947,18 @@ function LibraryView({ items, filter, setFilter, onOpen, onBack }) {
   );
 }
 
-function LibraryRow({ item, onOpen }) {
-  const f = FIELDS[item.field] || { emoji: "•", label: item.field };
+function BackBtn({ onClick, label = "Deck" }) {
+  return (
+    <button className="ui-btn ui-glass" onClick={onClick} style={{ border: `1px solid ${C.line}`, color: C.cream, cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Space Grotesk', sans-serif", borderRadius: 99, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+      ← {label}
+    </button>
+  );
+}
+
+function LibraryRow({ item, onOpen, n = 0 }) {
+  const f = fieldOf(item);
   const isArticle = item.type === "article";
+  const tone = isArticle ? C.teal : C.orange;
   let dateStr = "";
   if (item.ts) {
     try {
@@ -1884,24 +1968,27 @@ function LibraryRow({ item, onOpen }) {
   return (
     <button
       onClick={onOpen}
+      className="ui-glass ui-lift ui-fade"
       style={{
-        textAlign: "start", background: C.cream, border: `1px solid ${C.creamEdge}`,
-        borderRadius: 14, padding: "12px 14px", cursor: "pointer",
+        animationDelay: `${Math.min(n, 14) * 25}ms`, textAlign: "start", border: `1px solid ${C.line}`,
+        borderRadius: 14, padding: "11px 12px", cursor: "pointer", color: C.cream,
         display: "flex", alignItems: "center", gap: 12, width: "100%",
       }}
     >
-      <span style={{ fontSize: 20, flexShrink: 0 }}>{isArticle ? "📝" : "🎬"}</span>
+      <span aria-hidden style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 18, flexShrink: 0, background: alpha(tone, 0.16), border: `1px solid ${alpha(tone, 0.35)}` }}>
+        {isArticle ? "📝" : "🎬"}
+      </span>
       <span style={{ flex: 1, minWidth: 0 }}>
-        <span dir="rtl" style={{ display: "block", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 700, fontSize: 14, color: C.ink, lineHeight: 1.5, unicodeBidi: "plaintext", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span dir="rtl" style={{ display: "block", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 700, fontSize: 14, color: C.cream, lineHeight: 1.5, unicodeBidi: "plaintext", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {item.title_fa || item.title_en}
         </span>
-        <span style={{ display: "flex", gap: 8, marginTop: 4, fontSize: 11, color: C.inkSoft, fontFamily: "'Space Grotesk', sans-serif" }}>
-          <span>{f.emoji} {f.label}</span>
-          <span>· {isArticle ? "مقاله" : "سناریو"}</span>
-          {dateStr && <span>· {dateStr}</span>}
+        <span style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, fontSize: 11, color: C.text2, fontFamily: "'Space Grotesk', sans-serif" }}>
+          <span style={{ color: f.color }}>{f.emoji} {f.label}</span>
+          <span style={{ color: tone }}>{isArticle ? "مقاله" : "سناریو"}</span>
+          {dateStr && <span>{dateStr}</span>}
         </span>
       </span>
-      <span style={{ fontSize: 16, color: C.slate, flexShrink: 0 }}>↗</span>
+      <span aria-hidden style={{ fontSize: 15, color: C.text3, flexShrink: 0 }}>↗</span>
     </button>
   );
 }
