@@ -1,4 +1,4 @@
-import { listApplicationsFor, createApplication, effectiveRole, listUsers } from '@/lib/store';
+import { listApplicationsFor, listAllApplications, createApplication, effectiveRole, listUsers } from '@/lib/store';
 import { APP_TYPES, DEFAULT_TYPE, getAppType } from '@/lib/appTypes';
 import { json, error, requireUser } from '@/lib/api';
 import { ROLES, normNumber } from '@/lib/cases';
@@ -52,6 +52,17 @@ export async function POST(req) {
   const role = effectiveRole(user);
   const staff = role === 'admin' || role === 'manager';
   if (body.type && !APP_TYPES[body.type]) return error('Unknown application type.');
+
+  // One main applicant per client file number: a second one is a duplicate
+  // (family members are added on the client's page with their own role).
+  const number = staff ? normNumber(body.clientNumber) : '';
+  const asMain = !ROLES.includes(body.applicantRole) || body.applicantRole === 'main';
+  if (number && asMain) {
+    const existing = (await listAllApplications()).find((a) => normNumber(a.clientNumber) === number && (a.applicantRole || 'main') === 'main');
+    if (existing) {
+      return json({ error: `${number} already has a main applicant (${existing.title}). Open the client’s page and use “Add family member”, or give this client another file number.`, existing: existing.id }, 409);
+    }
+  }
 
   const app = await createApplication({
     userId: user.id,

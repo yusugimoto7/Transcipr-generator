@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronRight, UserPlus, Pencil, X, ArrowLeft, Link2, FilePlus2, Crown, User, Archive } from 'lucide-react';
+import { ChevronRight, UserPlus, Pencil, X, ArrowLeft, Link2, FilePlus2, Crown, User, Archive, Trash2 } from 'lucide-react';
 import { getAppType, APP_TYPE_LIST } from '@/lib/appTypes';
 import { groupCases, caseLabel, caseKeyOf, isDefaultTitle, normNumber, ROLE_LABEL } from '@/lib/cases';
 import { fmtAgo } from '@/lib/format';
@@ -36,6 +36,24 @@ export default function CaseClient({ caseKey, files, others, staff, odooOn }) {
   const archived = c.members.every((m) => m.archived);
   const [archiving, setArchiving] = useState(false);
   const [archErr, setArchErr] = useState('');
+  const [removing, setRemoving] = useState(null); // the member whose removal is being confirmed
+  const [removeBusy, setRemoveBusy] = useState(false);
+  /** Take a family member's file out of this client (nothing on Drive is touched). */
+  async function removeMember(m) {
+    setRemoveBusy(true);
+    setArchErr('');
+    try {
+      const res = await fetch(`/api/applications/${m.id}`, { method: 'DELETE' });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Could not remove this file.');
+      setRemoving(null);
+      router.refresh();
+    } catch (e) {
+      setArchErr(e.message);
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
   async function setArchived(value) {
     setArchiving(true);
     setArchErr('');
@@ -124,10 +142,37 @@ export default function CaseClient({ caseKey, files, others, staff, odooOn }) {
                 <Meter v={m.intake} label="Intake" />
                 <div style={{ marginLeft: 'auto' }}><CheckCell c={m.check} /></div>
               </div>
-              <div className="m-foot">
-                <span className="small faint" suppressHydrationWarning>Updated {fmtAgo(m.updatedAt)}</span>
-                <span className="small strong" style={{ color: 'var(--accent)', display: 'inline-flex', gap: 4, alignItems: 'center' }}>Open file <ChevronRight size={15} aria-hidden="true" /></span>
-              </div>
+              {!main && (m.applicantRole || 'main') === 'main' && (
+                <div className="small" style={{ color: 'var(--warn)' }}>A second main applicant with the same file number — probably a duplicate.</div>
+              )}
+              {removing === m.id ? (
+                <div className="m-foot" onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); }}>
+                  <span className="small">Remove {isDefaultTitle(m.title) ? 'this file' : `${m.title}’s file`}? It leaves the platform; its documents on Google Drive are not touched.</span>
+                  <span className="btn-row">
+                    <button type="button" className="btn-sm" disabled={removeBusy} onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); removeMember(m); }}>
+                      {removeBusy ? <span className="spinner" /> : 'Remove'}
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" disabled={removeBusy} onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); setRemoving(null); }}>Cancel</button>
+                  </span>
+                </div>
+              ) : (
+                <div className="m-foot">
+                  <span className="small faint" suppressHydrationWarning>Updated {fmtAgo(m.updatedAt)}</span>
+                  <span className="cluster" style={{ gap: 12 }}>
+                    {staff && !main && (
+                      <button
+                        type="button"
+                        className="btn-danger-ghost btn-sm"
+                        onClick={(ev) => { ev.preventDefault(); ev.stopPropagation(); setRemoving(m.id); }}
+                        title="Remove this family member's file from the client"
+                      >
+                        <Trash2 size={14} aria-hidden="true" /> Remove
+                      </button>
+                    )}
+                    <span className="small strong" style={{ color: 'var(--accent)', display: 'inline-flex', gap: 4, alignItems: 'center' }}>Open file <ChevronRight size={15} aria-hidden="true" /></span>
+                  </span>
+                </div>
+              )}
             </Link>
           );
         })}

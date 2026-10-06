@@ -283,7 +283,7 @@ function NewFile({ staff, existing, onClose }) {
             <div className="modal-foot">
               <button type="button" className="btn-secondary" onClick={() => setStep(1)} style={{ marginRight: 'auto' }}><ArrowLeft size={15} aria-hidden="true" /> Back</button>
               <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-              <button type="submit" disabled={busy || !title.trim()}>{busy ? <span className="spinner" /> : staff ? 'Create client' : 'Create'}</button>
+              <button type="submit" disabled={busy || !title.trim() || Boolean(taken)}>{busy ? <span className="spinner" /> : staff ? 'Create client' : 'Create'}</button>
             </div>
           </form>
         )}

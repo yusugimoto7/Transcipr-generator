@@ -1,4 +1,4 @@
-import { updateApplication, deleteApplication, effectiveRole } from '@/lib/store';
+import { updateApplication, deleteApplication, effectiveRole, listAllApplications } from '@/lib/store';
 import { everyField, deriveData } from '@/lib/schema';
 import { APP_TYPES, STAGE_LABELS } from '@/lib/appTypes';
 import { json, error, requireAppAccess } from '@/lib/api';
@@ -42,6 +42,16 @@ export async function PATCH(req, { params }) {
 
   const validIds = new Set(everyField().map((f) => f.id));
   const staff = ['admin', 'manager'].includes(effectiveRole(user));
+  // One main applicant per file number: moving a main applicant onto a number another one has makes a duplicate.
+  if (staff && (typeof body.clientNumber === 'string' || ROLES.includes(body.applicantRole))) {
+    const number = typeof body.clientNumber === 'string' ? normNumber(body.clientNumber) : normNumber(app.clientNumber);
+    const role = ROLES.includes(body.applicantRole) ? body.applicantRole : app.applicantRole || 'main';
+    const becomesMain = role === 'main' && (number !== normNumber(app.clientNumber) || (app.applicantRole || 'main') !== 'main');
+    if (number && becomesMain) {
+      const other = (await listAllApplications()).find((x) => x.id !== app.id && normNumber(x.clientNumber) === number && (x.applicantRole || 'main') === 'main');
+      if (other) return error(`${number} already has a main applicant (${other.title}). Link this file there as a family member instead.`, 409);
+    }
+  }
   let conflict = null;
   let typeChanged = false;
   const renamed = [];

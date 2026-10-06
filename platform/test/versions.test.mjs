@@ -82,6 +82,17 @@ try {
   ok(!r.data.documents[1].replaces && r.data.documents[1].separateFrom?.includes(first.id), 'the team can mark it a separate document');
   r = await call('PATCH', `/api/applications/${id}/upload`, { docId: second.id, replaces: first.id });
   ok(r.data.documents[1].replaces === first.id && !(r.data.documents[1].separateFrom || []).length, 'and a newer copy again');
+
+  // One main applicant per file number; family members are added, and can be removed.
+  r = await call('POST', '/api/applications', { type: 'study-permit', clientNumber: 'S99998', title: 'Sara Again', representation: 'firm' });
+  ok(r.status === 409 && r.data.existing === id, 'a second main applicant with the same file number is refused');
+  r = await call('POST', '/api/applications', { type: 'owp-outside', clientNumber: 'S99998', title: 'Ali Example', applicantRole: 'spouse', groupId: 'S99998', representation: 'firm' });
+  ok(r.status === 201, 'a family member with that number is added');
+  const spouse = r.data.application.id;
+  r = await call('PATCH', `/api/applications/${spouse}`, { clientNumber: 'S99998', applicantRole: 'main' });
+  ok(r.status === 409, 'a family member cannot be made a second main applicant');
+  r = await call('DELETE', `/api/applications/${spouse}`);
+  ok(r.status === 200 && (await call('GET', `/api/applications/${spouse}`)).status === 404, 'the family member can be removed');
 } finally {
   try { process.kill(-server.pid, 'SIGKILL'); } catch {}
   await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {});
