@@ -34,6 +34,8 @@ const FIELDS = {
   Policy: { emoji: "📢", label: "Policy" },
   Court: { emoji: "⚖️", label: "Court" },
   Europe: { emoji: "🇪🇺", label: "Europe" },
+  Citizenship: { emoji: "🪪", label: "Citizenship" },
+  Family: { emoji: "👪", label: "Family" },
 };
 
 // No hardcoded fallback topics. Generic how-to cards were not news, repeated,
@@ -404,9 +406,23 @@ export default function App() {
   const historyRef = useRef([]);
   const [canUndo, setCanUndo] = useState(false);
 
+  // What was decided for each topic in this deck, so the list view can show
+  // it and the card view can skip what was already handled from the list.
+  const [decisions, setDecisions] = useState({}); // topicKey -> "approved" | "rejected"
+  const decisionsRef = useRef(decisions);
+  decisionsRef.current = decisions;
+  const [deckMode, setDeckModeState] = useState("cards"); // cards | list
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem("sugimoto_deck_mode");
+      if (m === "list" || m === "cards") setDeckModeState(m);
+    } catch (_) {}
+  }, []);
+
   const resetHistory = useCallback(() => {
     historyRef.current = [];
     setCanUndo(false);
+    setDecisions({});
   }, []);
 
   const pushHistory = () => {
@@ -420,6 +436,14 @@ export default function App() {
     // The card that was acted on is the one at the restored index — un-mark it
     // locally so it's available again.
     unmarkSeenLocal(topics[prev.index]);
+    if (topics[prev.index]) {
+      const k = topicKey(topics[prev.index]);
+      setDecisions((d) => {
+        const n = { ...d };
+        delete n[k];
+        return n;
+      });
+    }
     setExiting(null);
     setDx(0);
     setIndex(prev.index);
@@ -552,20 +576,78 @@ export default function App() {
 
   const current = topics[index];
 
+  const nextUndecided = (from) => {
+    let i = from;
+    while (i < topics.length && decisionsRef.current[topicKey(topics[i])]) i++;
+    return i;
+  };
+
   const advance = () => {
     setDx(0);
     setExiting(null);
-    setIndex((i) => i + 1);
+    setIndex((i) => nextUndecided(i + 1));
+  };
+
+  const setDeckMode = (m) => {
+    setDeckModeState(m);
+    try {
+      localStorage.setItem("sugimoto_deck_mode", m);
+    } catch (_) {}
+    // Back to cards: continue from the first idea not handled in the list.
+    if (m === "cards") setIndex(nextUndecided(0));
+  };
+
+  // A decision, from either view. Approving starts the server job that writes
+  // the scripts; `open` shows them, which the list view skips so you can keep
+  // going down the list while they are written.
+  const approveTopic = (topic, { open = true } = {}) => {
+    setReviewedCount((n) => n + 1);
+    setApprovedCount((n) => n + 1);
+    // Approved: remember it on this device AND in the durable cross-device
+    // history (never repeat it — it's content you're making).
+    markSeenLocal(topic);
+    recordSeenRemote(topic);
+    setDecisions((d) => ({ ...d, [topicKey(topic)]: "approved" }));
+    if (open) {
+      setScriptTopic(topic);
+      setScripts({ fa: "", en: "" });
+      setInitialArticle(null);
+      setScriptError(null);
+      setScriptTab("fa");
+      setScriptReturn("deck");
+      setView("script");
+    }
+    // The server writes the scripts, saves them to the Library and sends them
+    // to Telegram. Nothing here waits, so leaving the app or moving on to the
+    // next topic cannot interrupt it.
+    startJob("script", topic, { topic });
+  };
+
+  const rejectTopic = (topic) => {
+    // Rejecting is a decision too: remember it on this device AND in the durable
+    // cross-device Sheet so it never returns anywhere.
+    markSeenLocal(topic);
+    recordSeenRemote(topic);
+    setReviewedCount((n) => n + 1);
+    setDecisions((d) => ({ ...d, [topicKey(topic)]: "rejected" }));
+  };
+
+  // List view only: put a rejected idea back. Like the card undo, this clears
+  // it on this device; it may already be in the shared history.
+  const restoreTopic = (topic) => {
+    unmarkSeenLocal(topic);
+    setReviewedCount((n) => Math.max(0, n - 1));
+    setDecisions((d) => {
+      const n = { ...d };
+      delete n[topicKey(topic)];
+      return n;
+    });
   };
 
   const doReject = () => {
-    if (exiting) return;
+    if (exiting || !current) return;
     pushHistory();
-    // Rejecting is a decision too: remember it on this device AND in the durable
-    // cross-device Sheet so it never returns anywhere. (Evergreens are exempt.)
-    markSeenLocal(current);
-    recordSeenRemote(current);
-    setReviewedCount((n) => n + 1);
+    rejectTopic(current);
     setExiting("left");
     setTimeout(advance, 260);
   };
@@ -573,26 +655,9 @@ export default function App() {
   const doApprove = () => {
     if (exiting || !current) return;
     pushHistory();
-    setReviewedCount((n) => n + 1);
-    setApprovedCount((n) => n + 1);
-    const topic = current;
-    // Approved: remember it on this device AND in the durable cross-device
-    // history (never repeat it — it's content you're making).
-    markSeenLocal(topic);
-    recordSeenRemote(topic);
+    approveTopic(current, { open: true });
     setExiting("right");
-    setScriptTopic(topic);
-    setScripts({ fa: "", en: "" });
-    setInitialArticle(null);
-    setScriptError(null);
-    setScriptTab("fa");
-    setScriptReturn("deck");
-    setView("script");
     setTimeout(advance, 260);
-    // The server writes the scripts, saves them to the Library and sends them
-    // to Telegram. Nothing here waits, so leaving the app or moving on to the
-    // next topic cannot interrupt it.
-    startJob("script", topic, { topic });
   };
 
   // Open a finished (or running) job from the "in progress" bar.
@@ -681,6 +746,7 @@ export default function App() {
       if (!j || !j.topic) continue;
       if (dismissed[key + ":" + kind] && j.status !== "running") continue;
       if (view === "script" && key === svKey) continue; // that one is on screen already
+      if (view === "deck" && deckMode === "list" && kind === "script") continue; // its row shows it
       bgRows.push(j);
     }
   }
@@ -689,14 +755,13 @@ export default function App() {
     <div style={wrap}>
       {/* Header */}
       <div style={{ width: "100%", maxWidth: 460, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: C.orange, display: "inline-block", transform: "rotate(45deg)" }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: C.orange, display: "inline-block", transform: "rotate(45deg)", flexShrink: 0 }} />
             <span style={{ fontWeight: 700, letterSpacing: 0.5, fontSize: 15 }}>SUGIMOTO</span>
-            <span style={{ fontWeight: 500, fontSize: 15, color: "rgba(242,229,192,0.6)" }}>· Topic Engine</span>
           </div>
-          <div style={{ fontSize: 11.5, color: "rgba(242,229,192,0.5)", marginTop: 3, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl" }}>
-            بر اساس اخبار هفتهٔ اخیر مهاجرت کانادا و اروپا
+          <div style={{ fontSize: 11.5, color: "rgba(242,229,192,0.55)", marginTop: 2, marginLeft: 18, whiteSpace: "nowrap" }}>
+            Topic Engine
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -758,7 +823,7 @@ export default function App() {
         <div style={{ width: "100%", maxWidth: 460, display: "flex", gap: 10, marginBottom: 16 }}>
           <Stat label="Reviewed" value={reviewedCount} />
           <Stat label="Approved" value={approvedCount} accent />
-          <Stat label="In deck" value={Math.max(0, topics.length - index)} />
+          <Stat label="To review" value={topics.filter((t) => !decisions[topicKey(t)]).length} />
         </div>
       )}
 
@@ -787,6 +852,31 @@ export default function App() {
 
           {!loadingTopics && <DeckWhy stats={deckStats} />}
 
+          {!loadingTopics && topics.length > 0 && <ModeSwitch mode={deckMode} onChange={setDeckMode} />}
+
+          {deckMode === "list" && !loadingTopics && topics.length > 0 ? (
+            <IdeasList
+              topics={topics}
+              decisions={decisions}
+              jobs={bg}
+              onApprove={(t) => approveTopic(t, { open: false })}
+              onReject={rejectTopic}
+              onRestore={restoreTopic}
+              onOpenScript={(t) => {
+                setDismissed((d) => ({ ...d, [topicKey(t) + ":script"]: true }));
+                openJobTopic(t);
+              }}
+              onRetry={(t) => startJob("script", t, { topic: t })}
+              onShowCard={(i) => {
+                setDeckModeState("cards");
+                try {
+                  localStorage.setItem("sugimoto_deck_mode", "cards");
+                } catch (_) {}
+                setIndex(i);
+              }}
+            />
+          ) : (
+          <>
           {loadingTopics ? (
             <CardSkeleton />
           ) : current ? (
@@ -846,6 +936,8 @@ export default function App() {
               Swipe the card, or use the buttons · ↶ undo · ← رد · تأیید →
             </div>
           )}
+          </>
+          )}
         </div>
       )}
 
@@ -873,6 +965,155 @@ export default function App() {
           onJob={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
+    </div>
+  );
+}
+
+// Cards (swipe one at a time) or List (every idea's title at a glance).
+function ModeSwitch({ mode, onChange }) {
+  const opt = (m, label) => (
+    <button
+      onClick={() => onChange(m)}
+      aria-pressed={mode === m}
+      style={{
+        flex: 1, padding: "8px 10px", borderRadius: 9, border: "none", cursor: "pointer",
+        background: mode === m ? C.cream : "transparent", color: mode === m ? C.ink : "rgba(242,229,192,0.7)",
+        fontWeight: 700, fontSize: 12.5, fontFamily: "'Space Grotesk', sans-serif",
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ display: "flex", gap: 4, padding: 4, borderRadius: 12, background: "rgba(242,229,192,0.06)", border: `1px solid ${C.line}`, marginBottom: 14 }}>
+      {opt("cards", "🃏 Cards")}
+      {opt("list", "☰ List")}
+    </div>
+  );
+}
+
+// Every idea in the deck as one compact row: title first, so the whole batch
+// can be scanned in seconds. Approving here starts the script job without
+// leaving the list; its progress shows in the row.
+function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, onOpenScript, onRetry, onShowCard }) {
+  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected
+  const stateOf = (t) => decisions[topicKey(t)] || "pending";
+  const counts = { all: topics.length, pending: 0, approved: 0, rejected: 0 };
+  for (const t of topics) counts[stateOf(t)]++;
+  const rows = topics.map((t, i) => ({ t, i })).filter(({ t }) => filter === "all" || stateOf(t) === filter);
+
+  const chip = (k, label) => (
+    <button
+      key={k}
+      onClick={() => setFilter(k)}
+      style={{
+        padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap",
+        border: `1px solid ${filter === k ? C.orange : C.line}`,
+        background: filter === k ? "rgba(241,114,18,0.15)" : "transparent",
+        color: filter === k ? C.cream : "rgba(242,229,192,0.65)",
+        fontSize: 12, fontWeight: 600, fontFamily: "'Vazirmatn', sans-serif",
+      }}
+    >
+      {label} <span style={{ opacity: 0.7 }}>{counts[k]}</span>
+    </button>
+  );
+  const smallBtn = (label, onClick, primary, aria) => (
+    <button
+      onClick={onClick}
+      aria-label={aria}
+      style={{
+        minWidth: 34, height: 34, padding: "0 10px", borderRadius: 10, cursor: "pointer",
+        border: primary ? "none" : `1px solid ${C.line}`,
+        background: primary ? C.orange : "transparent",
+        color: primary ? "#fff" : C.cream, fontWeight: 700, fontSize: 13,
+        fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <div>
+      <div dir="rtl" style={{ display: "flex", gap: 6, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+        {chip("all", "همه")}
+        {chip("pending", "در انتظار")}
+        {chip("approved", "تأیید شده")}
+        {chip("rejected", "رد شده")}
+      </div>
+
+      {!rows.length && (
+        <div dir="rtl" style={{ textAlign: "center", padding: "28px 0", color: "rgba(242,229,192,0.5)", fontFamily: "'Vazirmatn', sans-serif", fontSize: 13 }}>
+          موردی در این دسته نیست.
+        </div>
+      )}
+
+      <div style={{ display: "grid", gap: 6 }}>
+        {rows.map(({ t, i }) => {
+          const st = stateOf(t);
+          const f = FIELDS[t.field] || { emoji: "•", label: t.field };
+          const job = (jobs[topicKey(t)] || {}).script;
+          const date = formatNewsDate(t.date);
+          return (
+            <div
+              key={topicKey(t) + i}
+              dir="rtl"
+              style={{
+                display: "flex", gap: 10, alignItems: "center", padding: "9px 11px", borderRadius: 12,
+                background: st === "approved" ? "rgba(241,114,18,0.09)" : "rgba(242,229,192,0.05)",
+                border: `1px solid ${st === "approved" ? "rgba(241,114,18,0.35)" : C.line}`,
+                opacity: st === "rejected" ? 0.5 : 1,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  onClick={() => st === "pending" && onShowCard(i)}
+                  title={(t.title_en ? t.title_en + " — " : "") + (st === "pending" ? "open as a card" : "")}
+                  style={{
+                    fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
+                    color: C.cream, cursor: st === "pending" ? "pointer" : "default",
+                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                    textDecoration: st === "rejected" ? "line-through" : "none",
+                  }}
+                >
+                  {t.title_fa || t.title_en}
+                </div>
+                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "2px 9px", marginTop: 4, fontSize: 11, color: "rgba(242,229,192,0.6)", fontFamily: "'Space Grotesk', sans-serif" }}>
+                  <span>{f.emoji} {f.label}</span>
+                  {date && <span>📅 {date}</span>}
+                  {t.source_url && (
+                    <a href={t.source_url} target="_blank" rel="noopener noreferrer" style={{ color: "rgba(242,229,192,0.75)" }}>
+                      {sourceHost(t.source_url)} ↗
+                    </a>
+                  )}
+                  <span style={{ color: C.orange, fontWeight: 700 }}>{t.score}</span>
+                  {t.grounding === "headline" && (
+                    <span style={{ color: C.orange, border: `1px solid ${C.orangeDeep}`, borderRadius: 99, padding: "0 6px" }}>headline only</span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                {st === "pending" && (
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {smallBtn("✓", () => onApprove(t), true, "Approve topic")}
+                    {smallBtn("✕", () => onReject(t), false, "Reject topic")}
+                  </div>
+                )}
+                {st === "approved" &&
+                  (job && job.status === "running" ? (
+                    <span style={{ fontSize: 11.5, color: C.cream, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>⏳ در حال نوشتن</span>
+                  ) : job && job.status === "error" ? (
+                    smallBtn("⚠ دوباره", () => onRetry(t), false, "Retry")
+                  ) : (
+                    smallBtn("باز کن", () => onOpenScript(t), true, "Open script")
+                  ))}
+                {st === "rejected" && smallBtn("↶", () => onRestore(t), false, "Restore topic")}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
