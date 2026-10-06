@@ -25,7 +25,7 @@ Be concrete and practical. Do not give legal advice or guarantees.`;
     .filter((d) => d.verification && d.verification.status !== 'green')
     .map((d) => {
       const notes = (app.notes || []).filter((n) => n.docId === d.id).map((n) => `${n.by?.name || 'team'}: ${n.text.replace(/\s+/g, ' ').trim()}`);
-      return `- ${d.filename} [${d.verification.status.toUpperCase()}]: ${d.verification.findings.filter((f) => f.severity !== 'low').map((f) => f.text).join(' | ') || 'minor issues'}${d.verification.reviewedBy ? ` (checked and signed off by ${d.verification.reviewedBy})` : ''}${notes.length ? ` — TEAM NOTE: ${notes.join(' / ')}` : ''}`;
+      return `- ${d.filename} [${d.verification.status.toUpperCase()}]: ${d.verification.findings.filter((f) => f.severity !== 'low').map((f) => f.text).join(' | ') || 'minor issues'}${d.verification.cleared ? ` (the team checked this and marked it OK to move forward — ${d.verification.cleared.by})` : d.verification.reviewedBy ? ` (checked and signed off by ${d.verification.reviewedBy})` : ''}${notes.length ? ` — TEAM NOTE: ${notes.join(' / ')}` : ''}`;
     })
     .join('\n');
   const instruction = `Review this ${service.title} file and return JSON:

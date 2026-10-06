@@ -115,6 +115,51 @@ async function parseMessage(uid, source) {
   };
 }
 
+/**
+ * What went wrong with the mailbox, in words the team can act on. The IMAP
+ * library says only "Command failed"; the mail server's own answer is in
+ * responseText.
+ */
+export function explainMailError(e, cfg = mailConfig()) {
+  const said = String(e?.responseText || e?.response || '').replace(/\s+/g, ' ').trim();
+  const who = `${cfg.user || '(no MAIL_USER)'} on ${cfg.host}:${cfg.port}`;
+  if (e?.authenticationFailed || /auth|login|credential|password|LOGIN failed/i.test(said)) {
+    return `The mail server refused the sign-in for ${who}${said ? ` (it said: “${said}”)` : ''}. Check MAIL_USER and MAIL_PASSWORD (use an app password if the account has two-step verification), and that IMAP access is turned on for this mailbox.`;
+  }
+  if (e?.mailboxMissing || e?.serverResponseCode === 'NONEXISTENT' || /mailbox.*(not exist|doesn.t exist|unknown|not found)|nonexistent/i.test(said)) {
+    return `The folder “${cfg.folder}” was not found in ${who}${e?.folders ? `. Folders there: ${e.folders.join(', ')}` : ''}. Set MAIL_FOLDER to one of them (usually INBOX).`;
+  }
+  if (['ENOTFOUND', 'EAI_AGAIN'].includes(e?.code)) return `The mail server ${cfg.host} could not be found. Check MAIL_IMAP_HOST.`;
+  if (['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'EHOSTUNREACH'].includes(e?.code) || /timed? ?out/i.test(e?.message || '')) {
+    return `Could not connect to ${cfg.host}:${cfg.port} (${e.code || e.message}). Check MAIL_IMAP_HOST / MAIL_IMAP_PORT (IMAP over SSL is usually port 993).`;
+  }
+  return `The mail server answered “${said || e?.message || 'an error'}”${e?.executedCommand ? ` to ${String(e.executedCommand).split(' ').slice(1, 2).join('')}` : ''} (${who}).`;
+}
+
+/** Open the mailbox folder: as configured, else the folder of that name in any case ("Inbox", "inbox"). */
+async function lockFolder(client, folder) {
+  try {
+    return await client.getMailboxLock(folder);
+  } catch (e) {
+    const boxes = await client.list().catch(() => []);
+    const want = String(folder).toLowerCase();
+    const hit = boxes.find((b) => b.path.toLowerCase() === want || String(b.name || '').toLowerCase() === want);
+    if (hit && hit.path !== folder) return client.getMailboxLock(hit.path);
+    e.mailboxMissing = true;
+    e.folders = boxes.map((b) => b.path).slice(0, 15);
+    throw e;
+  }
+}
+
+/** Sign in to the mailbox, with the server's own reason when it refuses. */
+async function openMailbox(cfg) {
+  const { ImapFlow } = await import('imapflow');
+  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.port === 993, auth: { user: cfg.user, pass: process.env.MAIL_PASSWORD }, logger: false });
+  client.on('error', () => {}); // a dropped connection is reported by the command that was waiting
+  await client.connect();
+  return client;
+}
+
 /** New messages since the last run: [{ id, uid, from, subject, date, text, attachments }]. */
 async function fetchNew(store) {
   const cfg = mailConfig();
@@ -128,11 +173,9 @@ async function fetchNew(store) {
     }
     return out;
   }
-  const { ImapFlow } = await import('imapflow');
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.port === 993, auth: { user: cfg.user, pass: process.env.MAIL_PASSWORD }, logger: false });
-  await client.connect();
+  const client = await openMailbox(cfg);
   try {
-    const lock = await client.getMailboxLock(cfg.folder);
+    const lock = await lockFolder(client, cfg.folder);
     try {
       let uids;
       if (store.lastUid) uids = await client.search({ uid: `${store.lastUid + 1}:*` }, { uid: true });
@@ -161,11 +204,10 @@ async function fetchByUids(uids) {
     for (const uid of uids) if (files[uid - 1]) out.push(await parseMessage(uid, await fs.readFile(path.join(cfg.stub, files[uid - 1]))));
     return out;
   }
-  const { ImapFlow } = await import('imapflow');
-  const client = new ImapFlow({ host: cfg.host, port: cfg.port, secure: cfg.port === 993, auth: { user: cfg.user, pass: process.env.MAIL_PASSWORD }, logger: false });
-  await client.connect();
+  let client;
   try {
-    const lock = await client.getMailboxLock(cfg.folder);
+    client = await openMailbox(cfg);
+    const lock = await lockFolder(client, cfg.folder);
     try {
       for (const uid of uids) {
         const m = await client.fetchOne(String(uid), { source: true }, { uid: true });
@@ -174,8 +216,10 @@ async function fetchByUids(uids) {
     } finally {
       lock.release();
     }
+  } catch (e) {
+    throw new Error(explainMailError(e, cfg));
   } finally {
-    await client.logout().catch(() => {});
+    await client?.logout().catch(() => {});
   }
   return out;
 }
@@ -426,8 +470,10 @@ export function checkMail() {
     try {
       msgs = await fetchNew(store);
     } catch (e) {
-      await saveMailStore((s) => Object.assign(s, { lastCheckAt: new Date().toISOString(), lastError: e.message }));
-      throw e;
+      const why = explainMailError(e);
+      console.error(`[mail] check failed: ${why} [${e.message}${e.responseText ? ` · ${e.responseText}` : ''}]`);
+      await saveMailStore((s) => Object.assign(s, { lastCheckAt: new Date().toISOString(), lastError: why }));
+      throw new Error(why);
     }
     counts.fetched = msgs.length;
     const apps = await listAllApplications();

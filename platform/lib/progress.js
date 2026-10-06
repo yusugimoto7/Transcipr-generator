@@ -1,5 +1,6 @@
 import { checklistStatus, missingItems } from './checklist';
 import { getSchema, isRequired, fieldShown, answered, filledRows } from './schema';
+import { shownStatus, isCleared } from './docStatus';
 
 /**
  * Where a client file stands — one place for the numbers the workspace header,
@@ -42,11 +43,14 @@ export function fileProgress(app, schema) {
   const missing = missingItems(checklist);
   const docs = app.documents || [];
 
-  const check = { green: 0, yellow: 0, orange: 0, red: 0, unchecked: 0, toSign: 0, unread: 0 };
+  const check = { green: 0, yellow: 0, orange: 0, red: 0, unchecked: 0, toSign: 0, unread: 0, cleared: 0 };
   for (const d of docs) {
     const v = d.verification;
     if (v?.status) {
-      check[v.status] = (check[v.status] || 0) + 1;
+      // A finding the team checked and marked OK to move forward counts as OK.
+      const s = shownStatus(v);
+      check[s] = (check[s] || 0) + 1;
+      if (isCleared(v)) check.cleared++;
       if (!v.reviewedBy) check.toSign++;
     } else if (!NOT_CHECKED.has(d.category)) check.unchecked++;
     if (!d.extractedAt && !NOT_CHECKED.has(d.category)) check.unread++;

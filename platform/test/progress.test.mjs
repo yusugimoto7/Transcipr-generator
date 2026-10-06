@@ -38,5 +38,20 @@ check(p.final.stale === true, 'final files built before the latest upload are ou
 check(stageOf(p) === 'documents', 'a serious finding keeps the file at the documents stage');
 check(fmtDay('1992-04-18') === '18 Apr 1992', 'a date of birth is never shifted by time zone');
 
+// "Already checked": the team marks a serious finding OK to move forward.
+const { findingsKey, shownStatus, isCleared } = await loadLib('docStatus.js');
+const red = app.documents.find((d) => d.verification?.status === 'red');
+const v0 = red.verification;
+const cleared = { ...v0, findings: v0.findings || [{ severity: 'high', text: 'Name differs from the passport' }] };
+cleared.cleared = { by: 'Team', at: '2026-10-06T10:00:00Z', key: findingsKey(cleared), status: 'red' };
+red.verification = cleared;
+const p2 = fileProgress(app);
+check(shownStatus(cleared) === 'green' && isCleared(cleared), 'a finding marked already checked shows green');
+check(p2.check.red === 0 && p2.check.green === 3 && p2.check.cleared === 1, 'and counts as OK, not serious');
+check(stageOf(p2) !== 'documents' || p2.documents.missing.length > 0, 'a checked finding no longer holds the file back');
+red.verification = { ...cleared, findings: [...cleared.findings, { severity: 'high', text: 'Passport expired' }] };
+check(shownStatus(red.verification) === 'red' && !isCleared(red.verification), 'a new finding after the check brings the alert back');
+red.verification = v0;
+
 console.log(bad ? `\n${bad} problem(s)` : '\nALL PROGRESS CHECKS PASS');
 process.exit(bad ? 1 : 0);

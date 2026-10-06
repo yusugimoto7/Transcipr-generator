@@ -9,6 +9,7 @@ import { fmtTime } from '@/lib/format';
 import ProgressBar from '@/components/ProgressBar';
 import IrccRequirements from '@/components/IrccRequirements';
 import DocDetail, { CHECK, CheckChip, worstStatus } from '@/components/docs/DocDetail';
+import { shownStatus, isCleared } from '@/lib/docStatus';
 import AddDocuments from '@/components/docs/AddDocuments';
 import UploadBox from '@/components/docs/UploadBox';
 import { NotesBox, NotesFeed } from '@/components/Notes';
@@ -109,7 +110,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
   const passes = (label, files, missing) => {
     if (q && ![label, ...files.map((f) => f.filename)].join(' ').toLowerCase().includes(q)) return false;
     if (filter === 'missing') return missing;
-    if (filter === 'problems') return files.some((f) => PROBLEM.has(f.verification?.status));
+    if (filter === 'problems') return files.some((f) => PROBLEM.has(shownStatus(f.verification)));
     if (filter === 'sign') return files.some((f) => f.verification && !f.verification.reviewedBy);
     return true;
   };
@@ -258,6 +259,14 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
     if (res.ok) patchLocal({ documents: data.documents });
     else setReadMsg({ type: 'err', text: data.error || 'Could not save.' });
   }
+  async function setCleared(docId, cleared) {
+    setReviewing(docId);
+    try {
+      await patchDoc(docId, { cleared });
+    } finally {
+      setReviewing(null);
+    }
+  }
   async function setReviewed(docId, reviewed) {
     setReviewing(docId);
     try {
@@ -296,7 +305,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
               <div className="seg" role="group" aria-label="Files for this item">
                 {files.map((f) => (
                   <button key={f.id} type="button" aria-pressed={f.id === current.id} onClick={() => select(`item=${item.id}|file=${f.id}`)} title={f.filename}>
-                    <span className={`dot ${f.verification?.status || 'hollow'}`} aria-hidden="true" /> {f.filename.length > 28 ? `${f.filename.slice(0, 26)}…` : f.filename}
+                    <span className={`dot ${shownStatus(f.verification) || 'hollow'}`} aria-hidden="true" /> {f.filename.length > 28 ? `${f.filename.slice(0, 26)}…` : f.filename}
                   </button>
                 ))}
               </div>
@@ -312,6 +321,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
                   tr={item.tr}
                   reviewing={reviewing === current.id}
                   onReview={(r) => setReviewed(current.id, r)}
+                  onClear={(c) => setCleared(current.id, c)}
                   onCategory={(c) => patchDoc(current.id, { category: c })}
                   onRemove={() => removeDoc(current.id)}
                   patchLocal={staff ? patchLocal : null}
@@ -361,7 +371,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
         body: (
           <>
             <p className="small muted" style={{ margin: 0 }}>Rename the file with its checklist code (e.g. “113 - …”) or set its type below so it counts for the right item.</p>
-            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} patchLocal={staff ? patchLocal : null} viewer={viewer} />
+            <DocDetail driveOn={driveOn} app={app} doc={d} staff={staff} reviewing={reviewing === d.id} onReview={(r) => setReviewed(d.id, r)} onClear={(c) => setCleared(d.id, c)} onCategory={(c) => patchDoc(d.id, { category: c })} onRemove={() => removeDoc(d.id)} patchLocal={staff ? patchLocal : null} viewer={viewer} />
           </>
         ),
       };
@@ -482,7 +492,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
                           ? files.map((f) => (
                               <span key={f.id}>
                                 {f.filename}
-                                {f.verification?.reviewedBy ? <span className="faint">· signed off</span> : null}
+                                {isCleared(f.verification) ? <span className="faint">· checked OK</span> : f.verification?.reviewedBy ? <span className="faint">· signed off</span> : null}
                                 {staff && noteCount(f.id) ? <span className="note-flag" title={`${noteCount(f.id)} note(s)`}><StickyNote size={11} aria-hidden="true" /> {noteCount(f.id)}</span> : null}
                               </span>
                             ))
@@ -502,12 +512,12 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
               <div className="grp"><span>Other files</span><span>{looseShown.length}</span></div>
               {looseShown.map((d) => (
                 <button key={d.id} type="button" role="listitem" className={`doc-row${sel === `doc=${d.id}` ? ' sel' : ''}`} onClick={() => select(`doc=${d.id}`)}>
-                  <span className="st" aria-hidden="true"><span className={`dot ${d.verification?.status || 'hollow'}`} /></span>
+                  <span className="st" aria-hidden="true"><span className={`dot ${shownStatus(d.verification) || 'hollow'}`} /></span>
                   <span style={{ minWidth: 0 }}>
                     <span className="lbl" style={{ overflowWrap: 'anywhere' }}>{d.filename}</span>
                     <span className="files"><span className="faint">{d.category ? CATEGORY_LABELS[d.category] || d.category : 'Type not detected yet'}</span></span>
                   </span>
-                  <span>{d.verification?.status ? <span className={`chip ${CHECK[d.verification.status].cls}`}>{CHECK[d.verification.status].label}</span> : null}</span>
+                  <span>{shownStatus(d.verification) ? <span className={`chip ${CHECK[shownStatus(d.verification)].cls}`}>{CHECK[shownStatus(d.verification)].label}</span> : null}</span>
                 </button>
               ))}
             </div>
@@ -552,7 +562,7 @@ export default function DocumentsPanel({ app, progress, patchLocal, onExtracted,
 
 const RANKS = { red: 4, orange: 3, yellow: 2, green: 1 };
 function RANKV(d) {
-  return RANKS[d.verification?.status] || 0;
+  return RANKS[shownStatus(d.verification)] || 0;
 }
 
 /** Shown when nothing is selected: the check at a glance, reading, and IRCC's current requirements. */

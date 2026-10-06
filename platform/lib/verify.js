@@ -6,6 +6,7 @@ import { buildChecklist } from './checklist';
 import { codeCategory, firmCode } from './generators/classify';
 import { checkDatePair, asciiDigits } from './jalali';
 import { dateFindings } from './dateRules';
+import { shownStatus } from './docStatus';
 
 /**
  * Document check (صحت و سقم): is each document accurate, complete and
@@ -460,7 +461,7 @@ export function verificationSummary(docs) {
   const out = { green: 0, yellow: 0, orange: 0, red: 0, unchecked: 0 };
   for (const d of docs || []) {
     if (!needsCheck(d)) continue;
-    if (d.verification?.status) out[d.verification.status]++;
+    if (d.verification?.status) out[shownStatus(d.verification)]++;
     else out.unchecked++;
   }
   return out;

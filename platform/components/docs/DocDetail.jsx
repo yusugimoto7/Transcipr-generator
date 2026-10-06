@@ -5,6 +5,7 @@ import { Cloud, CloudUpload, ExternalLink, Download, Trash2, UserCheck, Undo2, C
 import { CATEGORY_LABELS, OWNER_LABELS } from '@/lib/docLabels';
 import { fmtDay } from '@/lib/format';
 import { NotesBox } from '@/components/Notes';
+import { shownStatus, isCleared } from '@/lib/docStatus';
 
 // Document check colours (lib/verify.js): green ok · yellow minor · orange attention · red serious.
 export const CHECK = {
@@ -20,7 +21,7 @@ const RANK = { red: 4, orange: 3, yellow: 2, green: 1 };
 export function worstStatus(docs) {
   let best = null;
   for (const d of docs) {
-    const s = d.verification?.status;
+    const s = shownStatus(d.verification);
     if (s && (!best || RANK[s] > RANK[best])) best = s;
   }
   return best;
@@ -28,6 +29,13 @@ export function worstStatus(docs) {
 
 export function CheckChip({ v, showSigned = true }) {
   if (!v?.status) return <span className="chip">Not checked</span>;
+  if (isCleared(v)) {
+    return (
+      <span className="chip ok" title={`${CHECK[v.status]?.label || 'Findings'} checked by ${v.cleared.by} — OK to move forward`}>
+        <span className="dot green" aria-hidden="true" /> Checked OK
+      </span>
+    );
+  }
   const c = CHECK[v.status] || CHECK.yellow;
   return (
     <span className={`chip ${c.cls}`} title={c.title}>
@@ -52,7 +60,7 @@ const date = fmtDay;
  * One uploaded document: what it is, the result of the accuracy check
  * (findings, translation-bundle parts), the staff sign-off and a preview.
  */
-export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, onCategory, onRemove, driveOn, patchLocal, viewer }) {
+export default function DocDetail({ app, doc, staff, tr, onReview, onClear, reviewing, onCategory, onRemove, driveOn, patchLocal, viewer }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const v = doc.verification;
   const url = `/api/applications/${app.id}/upload?docId=${encodeURIComponent(doc.id)}`;
@@ -62,6 +70,9 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
   const showParts = tr || parts.translation || parts.certifiedCopy || parts.original;
   const c = v?.status ? CHECK[v.status] : null;
   const Icon = c?.icon || CircleDashed;
+  // Findings the team already checked: the page leads with that, the alert moves to the bottom.
+  const cleared = isCleared(v);
+  const problem = v?.status === 'orange' || v?.status === 'red';
 
   const facts = [
     doc.category && `Detected: ${CATEGORY_LABELS[doc.category] || doc.category}`,
@@ -70,9 +81,7 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
     doc.source === 'email' ? `Emailed by the client${doc.mailDate ? ` ${date(doc.mailDate)}` : ''}${doc.driveId ? ' · filed on Drive' : ''}` : doc.source === 'drive' ? 'From Google Drive' : `Uploaded ${date(doc.uploadedAt)}`,
   ].filter(Boolean);
 
-  return (
-    <>
-      <div className="stack-sm">
+  const alertStrip = (
         <div className={`status-strip ${v?.status || 'none'}`}>
           <Icon size={18} aria-hidden="true" style={{ flex: '0 0 auto', marginTop: 1 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -93,10 +102,9 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
             </div>
           </div>
         </div>
-        <div className="small muted">{facts.join(' · ')}</div>
-        <DriveLine app={app} doc={doc} staff={staff} driveOn={driveOn} />
-      </div>
-
+  );
+  const alertDetails = (
+    <>
       {v?.findings?.length > 0 && (
         <section aria-label="Findings">
           <h3>Findings</h3>
@@ -133,12 +141,55 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
           {parts.notes && <p className="small muted" style={{ marginTop: 6 }}>{parts.notes}</p>}
         </section>
       )}
+    </>
+  );
+
+  return (
+    <>
+      <div className="stack-sm">
+        {cleared ? (
+          <div className="status-strip green">
+            <CheckCircle2 size={18} aria-hidden="true" style={{ flex: '0 0 auto', marginTop: 1 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="strong">Already checked — OK to move forward</div>
+              <div className="small">
+                {v.cleared.by} checked the {c?.label.toLowerCase()} finding{v.findings?.length === 1 ? '' : 's'} on {date(v.cleared.at)}. The alert is kept at the bottom of this page.
+              </div>
+            </div>
+          </div>
+        ) : (
+          alertStrip
+        )}
+        <div className="small muted">{facts.join(' · ')}</div>
+        <DriveLine app={app} doc={doc} staff={staff} driveOn={driveOn} />
+      </div>
+
+      {!cleared && alertDetails}
 
       {staff && (
         <div className="signoff-wrap">
         {v && (
         <div className="signoff">
-          {v.reviewedBy ? (
+          {cleared ? (
+            <>
+              <span className="small" style={{ color: 'var(--ok)', fontWeight: 600, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                <UserCheck size={16} aria-hidden="true" /> Already checked by {v.cleared.by} on {date(v.cleared.at)} — OK to move forward
+              </span>
+              <button type="button" className="btn-secondary btn-sm" onClick={() => onClear?.(false)} disabled={reviewing}>
+                <Undo2 size={14} aria-hidden="true" /> Undo
+              </button>
+            </>
+          ) : problem ? (
+            <>
+              <span className="small muted">
+                {v.reviewedBy ? `Signed off by ${v.reviewedBy} on ${date(v.reviewedAt)}. ` : ''}
+                Checked the {c.label.toLowerCase()} and it’s fine? Mark it: the document turns green in the list and this alert stays at the bottom of the page.
+              </span>
+              <button type="button" className="btn-navy btn-sm" onClick={() => onClear?.(true)} disabled={reviewing}>
+                <CheckCircle2 size={14} aria-hidden="true" /> Already checked
+              </button>
+            </>
+          ) : v.reviewedBy ? (
             <>
               <span className="small" style={{ color: 'var(--ok)', fontWeight: 600, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                 <UserCheck size={16} aria-hidden="true" /> Signed off by {v.reviewedBy} on {date(v.reviewedAt)}
@@ -215,6 +266,14 @@ export default function DocDetail({ app, doc, staff, tr, onReview, reviewing, on
           )}
         </div>
       </section>
+
+      {cleared && (
+        <section aria-label="The alert the team checked" className="stack-sm">
+          <h3 style={{ margin: 0 }}>The alert the team checked</h3>
+          {alertStrip}
+          {alertDetails}
+        </section>
+      )}
     </>
   );
 }

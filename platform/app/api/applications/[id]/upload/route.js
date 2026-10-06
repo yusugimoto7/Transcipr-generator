@@ -7,6 +7,7 @@ import { json, error, requireOwnedApp } from '@/lib/api';
 import { queueSync } from '@/lib/driveStore';
 import { notifyTeam, fileLabel } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
+import { findingsKey } from '@/lib/docStatus';
 
 export const runtime = 'nodejs';
 
@@ -92,8 +93,9 @@ export async function POST(req, { params }) {
   return json({ documents: updated.documents, added: saved }, 201);
 }
 
-// Change a document's category, or sign off its check.
-// Body: { docId, category } | { docId, reviewed: true|false }
+// Change a document's category, sign off its check, or mark its findings as
+// already checked (OK to move forward).
+// Body: { docId, category } | { docId, reviewed: true|false } | { docId, cleared: true|false }
 export async function PATCH(req, { params }) {
   const { user, app, error: err } = await requireOwnedApp(params.id);
   if (err) return err;
@@ -105,11 +107,19 @@ export async function PATCH(req, { params }) {
   }
   const { docId, category } = body;
   if (!docId) return error('docId is required.');
-  if ('reviewed' in body && !['admin', 'manager'].includes(user.role)) return error('Only the team can sign off a document.', 403);
+  if (('reviewed' in body || 'cleared' in body) && !['admin', 'manager'].includes(user.role)) return error('Only the team can sign off a document.', 403);
   const updated = await updateApplication(app.id, (a) => {
     const doc = (a.documents || []).find((d) => d.id === docId);
     if (!doc) return a;
-    if ('reviewed' in body) {
+    if ('cleared' in body) {
+      // The team checked the Attention / Serious findings and it's OK to move
+      // forward: the document shows green; the findings stay on it.
+      if (!doc.verification) return a;
+      const by = user.name || user.email;
+      const at = new Date().toISOString();
+      if (body.cleared) Object.assign(doc.verification, { cleared: { by, at, key: findingsKey(doc.verification), status: doc.verification.status }, reviewedBy: by, reviewedAt: at });
+      else delete doc.verification.cleared, delete doc.verification.reviewedBy, delete doc.verification.reviewedAt;
+    } else if ('reviewed' in body) {
       // A person looked at the findings and the document: the last word.
       doc.verification = doc.verification || { status: 'green', findings: [] };
       if (body.reviewed) Object.assign(doc.verification, { reviewedBy: user.name || user.email, reviewedAt: new Date().toISOString() });
@@ -120,7 +130,8 @@ export async function PATCH(req, { params }) {
     return a;
   });
   const fname = (app.documents || []).find((d) => d.id === docId)?.filename || 'a document';
-  if ('reviewed' in body) await logActivity(app.id, user, body.reviewed ? 'Signed off a document' : 'Undid a sign-off', { items: [fname] });
+  if ('cleared' in body) await logActivity(app.id, user, body.cleared ? 'Marked a document’s findings as already checked — OK to move forward' : 'Undid “already checked” on a document', { items: [fname] });
+  else if ('reviewed' in body) await logActivity(app.id, user, body.reviewed ? 'Signed off a document' : 'Undid a sign-off', { items: [fname] });
   else await logActivity(app.id, user, 'Changed a document’s type', { items: [fname], detail: category || 'none' });
   return json({ documents: updated.documents });
 }
