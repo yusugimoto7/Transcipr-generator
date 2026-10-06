@@ -56,33 +56,68 @@ function fieldOf(t) {
   return FIELDS[t && t.field] || { emoji: "•", label: (t && t.field) || "Topic", color: "#8fa3ab" };
 }
 
-// No hardcoded fallback topics. Generic how-to cards were not news, repeated,
-// and some had dead links. If the live fetch fails we show the error instead
-// of filler.
-const FALLBACK = [];
 
-async function fetchTopics(exclude = [], force = false) {
+// Topics arrive as a stream, one card per line, so the first card can be
+// shown while the rest are still being written. Falls back to reading the
+// whole body at once where a browser cannot read a stream.
+async function streamTopics(exclude, force, { onTopic, onStats }) {
   const res = await fetch("/api/topics", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ exclude, force }),
+    body: JSON.stringify({ exclude, force, stream: true }),
   });
-  const data = await res.json().catch(() => null);
-  const stats = (data && data.stats) || null;
-  if (!res.ok) {
-    // Surface the server's real reason (e.g. an OpenAI quota / auth error) so
-    // it can be diagnosed instead of hidden behind a generic fallback.
-    const detail = data && (data.message || data.error) ? ": " + (data.message || data.error) : "";
-    const err = new Error("API " + res.status + detail);
-    err.stats = stats;
-    throw err;
+  if (!res.ok) throw new Error("API " + res.status);
+  let error = "";
+  const handle = (line) => {
+    if (!line.trim()) return;
+    let ev;
+    try {
+      ev = JSON.parse(line);
+    } catch (_) {
+      return;
+    }
+    if (ev.type === "topic" && ev.topic) onTopic(ev.topic);
+    else if (ev.type === "stats") onStats(ev.stats || null);
+    else if (ev.type === "error") error = ev.message || ev.error || "error";
+  };
+  if (res.body && res.body.getReader) {
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        handle(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+      }
+    }
+    handle(buf);
+  } else {
+    (await res.text()).split("\n").forEach(handle);
   }
-  if (!data || !Array.isArray(data.topics) || data.topics.length === 0) {
-    const err = new Error("parse");
-    err.stats = stats;
-    throw err;
+  return { error };
+}
+
+// The last deck shown on this device, so reopening the app shows cards
+// immediately instead of waiting on the server.
+const DECK_KEY = "sugimoto_deck_v1";
+function loadDeckCache() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DECK_KEY) || "null");
+    // Older than three days is not worth showing as "today's" topics.
+    if (!d || !Array.isArray(d.topics) || Date.now() - (d.at || 0) > 3 * 86400000) return [];
+    return d.topics;
+  } catch (_) {
+    return [];
   }
-  return { topics: data.topics, stats };
+}
+function saveDeckCache(topics) {
+  try {
+    localStorage.setItem(DECK_KEY, JSON.stringify({ at: Date.now(), topics: topics.slice(-40) }));
+  } catch (_) {}
 }
 
 // ---- topic memory (so a news article/topic is shown only ONCE, ever, on this
@@ -471,70 +506,102 @@ export default function App() {
     setCanUndo(historyRef.current.length > 0);
   };
 
+  // Opening the app: the last deck saved on this device shows at once, and
+  // new cards from the server are appended as each one is written, without
+  // moving you off the card you are on. "Refresh" clears the deck and fills
+  // it again card by card.
+  const topicsRef = useRef(topics);
+  topicsRef.current = topics;
+  const afterRef = useRef(undefined);
+
   const loadTopics = useCallback(async (force = false) => {
-    setLoadingTopics(true);
     setTopicError(null);
     setErrDetail("");
     setUsingFallback(false);
-    try {
-      const seen = loadSeen();
-      const seenTitles = new Set(seen.map((s) => s.key));
-      const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
-      const exclude = seen
-        .map((s) => s.en || s.key)
-        .filter(Boolean)
-        .slice(-80);
 
-      // Page-load fetches use the server cache (near-instant); the explicit
-      // "Refresh trends" button forces a live regenerate.
-      const { topics: parsed, stats } = await fetchTopics(exclude, force);
-      setDeckStats(stats);
-
-      // Drop topics already ACTED ON (approved/rejected) on this device or
-      // approved on any device. Topics are NOT marked seen just for appearing —
-      // only when the user swipes them (see markSeenLocal), so anything left in
-      // the deck stays available next run.
-      const fresh = parsed.filter((t) => !isSeen(t, seenTitles, seenUrls));
-
-      // A tab opened from "Next topic" carries ?after=<key of the card that
-      // was showing>: start on the card after it. Consumed once, so a later
-      // refresh does not keep skipping.
-      let start = 0;
+    // A tab opened from "Next topic" carries ?after=<key of the card that was
+    // showing>: it should open on the card after that one. Read once.
+    if (afterRef.current === undefined) {
+      afterRef.current = null;
       try {
         const after = new URLSearchParams(window.location.search).get("after");
         if (after) {
-          const i = fresh.findIndex((t) => (urlKey(t) || topicKey(t)) === after);
-          if (i >= 0) start = Math.min(i + 1, Math.max(0, fresh.length - 1));
+          afterRef.current = after;
           window.history.replaceState(null, "", window.location.pathname);
         }
       } catch (_) {}
+    }
 
+    const seen = loadSeen();
+    const seenTitles = new Set(seen.map((s) => s.key));
+    const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
+    const exclude = seen.map((s) => s.en || s.key).filter(Boolean).slice(-80);
+    // Drop topics already ACTED ON (approved/rejected). Topics are NOT marked
+    // seen just for appearing, so anything left stays available next time.
+    const fresh = (t) => !isSeen(t, seenTitles, seenUrls);
+    const same = (a, b) => topicKey(a) === topicKey(b) || (!!urlKey(a) && urlKey(a) === urlKey(b));
+
+    let shown = 0;
+    if (force) {
       resetHistory();
-      setTopics(fresh);
-      setIndex(start);
+      setTopics([]);
+      setIndex(0);
+      setLoadingTopics(true);
+    } else if (!topicsRef.current.length) {
+      const cached = loadDeckCache().filter(fresh);
+      if (cached.length) {
+        setTopics(cached);
+        setIndex(0);
+        setLoadingTopics(false);
+        shown = cached.length;
+      } else {
+        setLoadingTopics(true);
+      }
+    } else {
+      shown = topicsRef.current.length;
+    }
+
+    try {
+      const r = await streamTopics(exclude, force, {
+        onTopic: (t) => {
+          if (!fresh(t)) return;
+          setTopics((prev) => (prev.some((x) => same(x, t)) ? prev : [...prev, t]));
+          shown++;
+          setLoadingTopics(false);
+        },
+        onStats: (st) => st && setDeckStats(st),
+      });
       setUpdatedAt(new Date());
-      if (fresh.length === 0) {
+      if (!shown) {
+        if (r.error) throw new Error(r.error);
         setTopicError("خبر تازه‌ای که قبلاً ندیده باشی وجود نداره. اخبار مهاجرتی هر روز منتشر نمی‌شه — بعداً دوباره «Refresh» رو بزن.");
       }
     } catch (e) {
-      // Only fall back to the base deck if we have nothing shown yet; never
-      // re-show base topics that were already seen.
-      const seen = loadSeen();
-      const seenTitles = new Set(seen.map((s) => s.key));
-      const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
-      const freshFallback = FALLBACK.filter((t) => !isSeen(t, seenTitles, seenUrls));
-      resetHistory();
-      setTopics(freshFallback);
-      setIndex(0);
-      setUsingFallback(true);
-      setUpdatedAt(new Date());
-      setTopicError("نتونستم اخبار تازه رو بیارم. دوباره «Refresh» رو بزن.");
-      setErrDetail(String(e?.message || e));
-      setDeckStats(e?.stats || null);
+      // Cards already on screen stay; only an empty deck shows the error.
+      if (!shown) {
+        setUsingFallback(true);
+        setTopicError("نتونستم اخبار تازه رو بیارم. دوباره «Refresh» رو بزن.");
+        setErrDetail(String(e?.message || e));
+      }
     } finally {
       setLoadingTopics(false);
     }
-  }, []);
+  }, [resetHistory]);
+
+  // Keep this device's copy of the deck current, and honour ?after= once the
+  // card it names has arrived (it may come later in the stream).
+  useEffect(() => {
+    if (!topics.length) return;
+    saveDeckCache(topics);
+    const after = afterRef.current;
+    if (after) {
+      const i = topics.findIndex((t) => (urlKey(t) || topicKey(t)) === after);
+      if (i >= 0) {
+        afterRef.current = null;
+        setIndex(Math.min(i + 1, topics.length - 1));
+      }
+    }
+  }, [topics]);
 
   useEffect(() => { loadTopics(); }, [loadTopics]);
 
@@ -787,7 +854,7 @@ export default function App() {
           background: "rgba(11,26,32,0.6)", boxShadow: "0 12px 30px -20px rgba(0,0,0,0.9)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }}>
           <div aria-hidden style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", background: `linear-gradient(135deg, #ffa25c, ${C.orange} 50%, ${C.orangeDeep})`, boxShadow: `0 6px 18px -6px ${alpha(C.orange, 0.8)}` }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: "#fff7ea", transform: "rotate(45deg)" }} />
           </div>
@@ -796,7 +863,7 @@ export default function App() {
             <div style={{ fontSize: 11.5, color: C.teal, fontWeight: 600, whiteSpace: "nowrap" }}>Topic Engine</div>
           </div>
         </div>
-        <nav style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <nav style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <button
             onClick={() => setView(view === "library" ? "deck" : "library")}
             className="ui-btn"

@@ -48,7 +48,6 @@ const MAX_GENERATIONS_PER_HOUR = 60; // hard ceiling on live generations, any tr
 const MAX_GENERATIONS_PER_DAY = 300; // second ceiling — catches a slow-burn runaway an hourly cap alone would miss over 24h
 
 let cache = { topics: null, timestamp: 0, provider: null };
-let inFlight = null; // de-dupe concurrent live generations
 let lastForceAt = 0;
 let generationTimestamps = []; // sliding window backing both caps
 
@@ -68,6 +67,7 @@ const MAX_PER_SOURCE = 4; // shortlist slots any one source may take
 const MAX_CASES = 3; // shortlist slots for individual court decisions
 const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
 const GROUND_BUDGET_MS = 12000; // wall-clock cap on fetching text for chosen items
+const WRITE_BATCH = 2; // cards per write call; batches run in parallel
 const MIN_GROUND = 200; // characters of real text needed to call a card fully grounded
 
 // Why the last generation produced what it did — surfaced in the API response
@@ -94,22 +94,6 @@ function isExpressEntry(t) {
   );
 }
 
-// Drop duplicate topics WITHIN one batch (same article by URL, or same title).
-function dedupeBatch(list) {
-  const seenUrl = new Set();
-  const seenTitle = new Set();
-  const out = [];
-  for (const t of list) {
-    const uk = normalizeUrl(t.source_url);
-    const tk = String(t.title_fa || t.title_en || "").trim().toLowerCase();
-    if ((uk && seenUrl.has(uk)) || (tk && seenTitle.has(tk))) continue;
-    if (uk) seenUrl.add(uk);
-    if (tk) seenTitle.add(tk);
-    out.push(t);
-  }
-  return out;
-}
-
 // Enforce recency deterministically, regardless of what the model returned.
 // News topics carry a "date" (YYYY-MM-DD); if that date is older than
 // MAX_AGE_DAYS, drop it. Evergreen topics (empty/absent/unparseable date) are
@@ -123,60 +107,68 @@ function recentEnough(t, todayStr) {
   return dt >= cutoff;
 }
 
-// Primary source: real RSS/Atom immigration feeds (grounded, dated, deduped).
-// Fallback: the old LLM web-search path. `cache.provider` records which ran.
-async function generate(clientExclude) {
+// Per-card checks applied as each card is produced (they used to run once over
+// the finished batch): drop Express Entry draws, cards too old, articles
+// already used, and duplicates within this run.
+function makeAcceptor(today) {
+  const seenUrl = new Set();
+  const seenTitle = new Set();
+  return (t, seenUrlSet) => {
+    if (isExpressEntry(t) || !recentEnough(t, today)) return false;
+    const uk = normalizeUrl(t.source_url);
+    if (uk && seenUrlSet && seenUrlSet.has(uk)) return false;
+    const tk = String(t.title_fa || t.title_en || "").trim().toLowerCase();
+    if ((uk && seenUrl.has(uk)) || (tk && seenTitle.has(tk))) return false;
+    if (uk) seenUrl.add(uk);
+    if (tk) seenTitle.add(tk);
+    return true;
+  };
+}
+
+// Primary source: the harvested pool (topped up live when stale). Fallback: the
+// old LLM web-search path. Cards are handed to `run.push` one at a time as
+// they are written, so a waiting page shows the first card in seconds instead
+// of waiting for the whole batch. `cache.provider` records which path ran.
+async function generate(clientExclude, run) {
   generationTimestamps.push(Date.now());
   const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local date
   const nowMs = Date.now();
 
-  // If a Google Sheet is configured it is the durable, cross-device source of
-  // truth for what's been shown. Pull it up front so we can avoid repeats.
-  let seenUrlSet = null;
-  let sheetTitles = [];
-  if (sheetEnabled()) {
-    try {
-      const seen = await getSeen();
-      seenUrlSet = new Set(seen.urls.map(normalizeUrl).filter(Boolean));
-      sheetTitles = seen.titles || [];
-    } catch (_) {
-      seenUrlSet = null; // sheet unreachable — degrade gracefully
-    }
-  }
-  const exclude = [...new Set([...(clientExclude || []), ...sheetTitles])].slice(-100);
+  // The Sheet is the durable, cross-device record of what was already used.
+  // Started now and awaited later, so its round trip overlaps the news load
+  // instead of preceding it.
+  const seenP = sheetEnabled()
+    ? getSeen()
+        .then((seen) => ({ urls: new Set(seen.urls.map(normalizeUrl).filter(Boolean)), titles: seen.titles || [] }))
+        .catch(() => null) // sheet unreachable — degrade gracefully
+    : Promise.resolve(null);
+  const accept = makeAcceptor(today);
 
-  // 1. Real news feeds only. NO evergreen/how-to filler: those were generic
-  // pages (not news), repeated, and some had dead links. An honest empty deck
-  // beats filler — if there's no fresh news, the app says so.
-  let list = [];
   let provider = "feeds";
   try {
-    const news = await collectFeedTopics({ today, nowMs, exclude, seenUrlSet });
-    list = news;
-    if (list.length) provider = openaiEnabled() ? "feeds+openai" : "feeds+anthropic";
-    console.log(`[topics] ${news.length} news topics from feeds`);
+    const n = await collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, emit: run.push });
+    if (n) provider = openaiEnabled() ? "feeds+openai" : "feeds+anthropic";
+    console.log(`[topics] ${n} news topics from feeds`);
   } catch (e) {
     console.log("[topics] feed path failed:", String(e?.message || e));
-    list = [];
   }
 
-  // 2. Fallback to the LLM web-search path only if the feeds produced nothing.
-  if (!list.length) {
+  // Fallback to the LLM web-search path only if the feeds produced nothing.
+  if (!run.topics.length) {
+    const seen = await seenP;
+    const exclude = [...new Set([...(clientExclude || []), ...((seen && seen.titles) || [])])].slice(-100);
     const r = await collectSearchTopics(exclude, today);
-    list = r.list;
     provider = r.provider;
+    for (const t of r.list) if (accept(t, seen && seen.urls)) run.push(t);
   }
-
-  const out = finalize(list, today, seenUrlSet);
-  if (!out.length) throw new Error("parse"); // nothing usable at all
+  if (!run.topics.length) throw new Error("parse"); // nothing usable at all
 
   // NOTE: topics are NOT logged to the durable Sheet here. A suggested topic is
   // only recorded once the user actually acts on it — an APPROVED topic is sent
   // to /api/seen by the client. This way topics you never reached stay
   // available next run, and the Sheet holds only what you approved.
-
-  cache = { topics: out, timestamp: Date.now(), provider };
-  return out;
+  cache = { topics: run.topics.slice(), timestamp: Date.now(), provider };
+  return cache.topics;
 }
 
 // Plain model call used by both topic stages, with the Claude fallback.
@@ -218,8 +210,11 @@ async function groundTextFor(item) {
 // .github/workflows/harvest.yml), topped up with a live fetch when the pool is
 // stale or unreachable. Then: filter -> collapse duplicates -> rank -> model
 // SELECTS -> real text fetched for each pick -> model WRITES only from it.
-async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
-  const harvest = await loadHarvest();
+async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, emit }) {
+  const t0 = Date.now();
+  const [harvest, seen] = await Promise.all([loadHarvest(), seenP]);
+  const seenUrlSet = seen ? seen.urls : null;
+  const exclude = [...new Set([...(clientExclude || []), ...((seen && seen.titles) || [])])].slice(-100);
   const harvestAge = harvest ? nowMs - Date.parse(harvest.harvested_at || 0) : Infinity;
   const needLive = !(harvestAge < HARVEST_FRESH_MS);
   const live = needLive
@@ -290,6 +285,7 @@ async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
     selected: 0,
     written: 0,
     headlineOnly: 0,
+    timings: { poolMs: Date.now() - t0 },
   };
   console.log("[topics]", JSON.stringify(lastStats));
   if (!ranked.length) return [];
@@ -319,48 +315,65 @@ async function collectFeedTopics({ today, nowMs, exclude, seenUrlSet }) {
     picks = ranked.slice(0, MAX_CARDS).map((item) => ({ item, field: "Policy", score: 70 }));
   }
   lastStats.selected = picks.length;
+  lastStats.timings.selectMs = Date.now() - t0;
 
-  // Ground each pick in real text, under one overall time budget.
-  const budget = new Promise((r) => setTimeout(r, GROUND_BUDGET_MS, "timeout"));
+  // Ground and write in small batches that run side by side, emitting each
+  // batch's cards as soon as they are written. One call for all 14 meant the
+  // first card waited for the last; now it waits for its own batch only.
+  let emitted = 0;
+  const chunks = [];
+  for (let i = 0; i < picks.length; i += WRITE_BATCH) chunks.push(picks.slice(i, i + WRITE_BATCH));
   await Promise.all(
-    picks.map((p) =>
-      Promise.race([groundTextFor(p.item).then((t) => (p.groundText = t)), budget]).catch(() => {})
-    )
+    chunks.map(async (chunk) => {
+      const budget = new Promise((r) => setTimeout(r, GROUND_BUDGET_MS, "timeout"));
+      await Promise.all(
+        chunk.map((p) =>
+          Promise.race([groundTextFor(p.item).then((t) => (p.groundText = t)), budget]).catch(() => {})
+        )
+      );
+      const toWrite = chunk.map((p) => ({ ...p.item, groundText: p.groundText || "" }));
+      let written = [];
+      try {
+        written = parseTopics(await rewrite(writeCardsPrompt(toWrite, today), 1500)) || [];
+      } catch (e) {
+        console.log("[topics] write batch failed:", String(e?.message || e));
+        return;
+      }
+      const done = new Set();
+      for (const w of written) {
+        const i = Number(w.id);
+        const p = chunk[i];
+        if (!p || done.has(i) || !w.title_fa) continue;
+        done.add(i);
+        const src = p.item;
+        const field = p.field;
+        const grounded = (p.groundText || "").length >= MIN_GROUND;
+        const topic = {
+          title_fa: w.title_fa,
+          title_en: w.title_en || src.title,
+          field,
+          page: w.page || (String(field).toLowerCase() === "europe" ? "EU" : "CA"),
+          why_now: w.why_now || "",
+          date: src.published ? src.published.slice(0, 10) : "",
+          // The publisher's own article when known: better for you to read, and
+          // the script/article steps fetch their source text from this link.
+          source_url: src.resolved_url || src.source_url,
+          source_name: src.source_name,
+          snippet: (p.groundText || src.snippet || "").slice(0, 1500),
+          grounding: grounded ? "full" : "headline",
+          score: p.score,
+        };
+        if (!accept(topic, seenUrlSet)) continue;
+        if (!emitted) lastStats.timings.firstCardMs = Date.now() - t0;
+        emitted++;
+        lastStats.written = emitted;
+        if (!grounded) lastStats.headlineOnly++;
+        emit(topic);
+      }
+    })
   );
-
-  // Stage 2 — write, only from the text each pick carries.
-  const toWrite = picks.map((p) => ({ ...p.item, groundText: p.groundText || "" }));
-  const written = parseTopics(await rewrite(writeCardsPrompt(toWrite, today), 5000)) || [];
-  const topics = [];
-  const doneIdx = new Set();
-  for (const w of written) {
-    const i = Number(w.id);
-    const p = picks[i];
-    if (!p || doneIdx.has(i) || !w.title_fa) continue;
-    doneIdx.add(i);
-    const src = p.item;
-    const field = p.field;
-    const grounded = (p.groundText || "").length >= MIN_GROUND;
-    topics.push({
-      title_fa: w.title_fa,
-      title_en: w.title_en || src.title,
-      field,
-      page: w.page || (String(field).toLowerCase() === "europe" ? "EU" : "CA"),
-      why_now: w.why_now || "",
-      date: src.published ? src.published.slice(0, 10) : "",
-      // The publisher's own article when known: better for you to read, and
-      // the script/article steps fetch their source text from this link.
-      source_url: src.resolved_url || src.source_url,
-      source_name: src.source_name,
-      snippet: (p.groundText || src.snippet || "").slice(0, 1500),
-      grounding: grounded ? "full" : "headline",
-      score: p.score,
-    });
-  }
-  topics.sort((a, b) => (b.score || 0) - (a.score || 0));
-  lastStats.written = topics.length;
-  lastStats.headlineOnly = topics.filter((t) => t.grounding === "headline").length;
-  return topics;
+  lastStats.timings.totalMs = Date.now() - t0;
+  return emitted;
 }
 
 // Old path: ask an LLM (OpenAI search model, else Claude web search) to both
@@ -385,135 +398,175 @@ async function collectSearchTopics(exclude, today) {
   return { list: Array.isArray(parsed) ? parsed : [], provider };
 }
 
-// Shared post-processing for either source: drop Express Entry, drop in-batch
-// duplicates, enforce recency, and drop cross-batch repeats (news only).
-function finalize(list, today, seenUrlSet) {
-  const noEE = list.filter((t) => !isExpressEntry(t));
-  if (list.length - noEE.length > 0) {
-    console.log(`[topics] dropped ${list.length - noEE.length} Express Entry topic(s)`);
-  }
-  let out = recencyLogged(dedupeBatch(noEE), today);
-  if (seenUrlSet) {
-    out = out.filter((t) => {
-      const k = normalizeUrl(t.source_url);
-      return !(k && seenUrlSet.has(k));
-    });
-  }
-  return out;
-}
+// ---- runs: one generation in progress, shared by everyone waiting on it ----
+// A run collects cards as they are written. Every request that needs fresh
+// topics follows the current run instead of starting its own: it is sent the
+// cards written so far, then each new one as it lands.
+let run = null;
 
-// Apply the recency filter and log how many were dropped (visible in Render logs).
-function recencyLogged(list, todayStr) {
-  const kept = list.filter((t) => recentEnough(t, todayStr));
-  const dropped = list.length - kept.length;
-  if (dropped > 0) {
-    console.log(`[topics] dropped ${dropped} stale topic(s) older than ${MAX_AGE_DAYS} days`);
-  }
-  return kept;
-}
-
-// Kick off a regenerate without making the caller wait for it. Guarded by
-// `inFlight` (and the hourly cap) so concurrent requests don't trigger
-// duplicate live searches.
-function refreshInBackground(exclude) {
-  if (inFlight || !underHourlyCap()) return;
-  // generate() updates the cache itself on success.
-  const task = generate(exclude)
-    .catch(() => {
-      // Keep serving the old cache on a failed background refresh; the next
-      // request will just retry.
+function startRun(exclude) {
+  const r = { topics: [], done: false, error: "", listeners: new Set() };
+  r.push = (t) => {
+    r.topics.push(t);
+    for (const l of r.listeners) l({ type: "topic", topic: t });
+  };
+  run = r;
+  r.promise = generate(exclude, r)
+    .catch((e) => {
+      r.error = String(e?.message || e);
     })
     .finally(() => {
-      inFlight = null;
+      r.done = true;
+      for (const l of r.listeners) l({ type: "end" });
+      r.listeners.clear();
+      if (run === r) run = null;
     });
-  inFlight = task;
+  return r;
+}
+
+function follow(r, send) {
+  for (const t of r.topics) send({ type: "topic", topic: t });
+  if (r.done) return Promise.resolve();
+  return new Promise((resolve) => {
+    r.listeners.add((ev) => (ev.type === "topic" ? send(ev) : resolve()));
+  });
+}
+
+// Newline-delimited JSON, flushed per card. `no-transform` keeps the
+// compression layer from buffering the stream until it ends.
+function ndjson(producer) {
+  const enc = new TextEncoder();
+  const body = new ReadableStream({
+    async start(controller) {
+      const send = (o) => {
+        try {
+          controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+        } catch (_) {} // the page went away; the run carries on regardless
+      };
+      try {
+        await producer(send);
+      } catch (e) {
+        send({ type: "error", error: String(e?.message || e) });
+      }
+      try {
+        controller.close();
+      } catch (_) {}
+    },
+  });
+  return new Response(body, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+// Decide where this request's topics come from: the cache, or a run.
+function plan(force, exclude) {
+  const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
+  if (force) {
+    if (run) return { run }; // a fresh batch is already being made: follow it
+    if (Date.now() - lastForceAt < FORCE_COOLDOWN_MS && cache.topics) return { cached: cache.topics, throttled: true };
+    if (!underHourlyCap()) {
+      return cache.topics
+        ? { cached: cache.topics, throttled: true }
+        : { fail: 429, error: "rate_limited", message: "Hourly live-search limit reached." };
+    }
+    lastForceAt = Date.now();
+    return { run: startRun(exclude) };
+  }
+  if (age < FRESH_MS) return { cached: cache.topics };
+  if (age < SERVE_MAX_MS) {
+    // Stale but usable: serve it now, refresh for next time.
+    if (!run && underHourlyCap()) startRun(exclude);
+    return { cached: cache.topics, stale: true };
+  }
+  if (run) return { run };
+  if (!underHourlyCap()) {
+    return cache.topics
+      ? { cached: cache.topics, stale: true }
+      : { fail: 429, error: "rate_limited", message: "Too many live searches this hour — try again shortly." };
+  }
+  return { run: startRun(exclude) };
 }
 
 export async function POST(request) {
+  let exclude = [];
+  let force = false;
+  let stream = false;
   try {
-    let exclude = [];
-    let force = false;
-    try {
-      const body = await request.json();
-      if (Array.isArray(body?.exclude)) {
-        exclude = body.exclude.slice(0, 60).map((t) => String(t).slice(0, 200));
-      }
-      force = !!body?.force;
-    } catch (_) {
-      // no/invalid body — fine, just use defaults
+    const body = await request.json();
+    if (Array.isArray(body?.exclude)) {
+      exclude = body.exclude.slice(0, 60).map((t) => String(t).slice(0, 200));
     }
+    force = !!body?.force;
+    stream = !!body?.stream;
+  } catch (_) {
+    // no/invalid body — fine, just use defaults
+  }
 
-    // Explicit "Refresh trends" clicks still get a cooldown — otherwise
-    // mashing the button (or a broken client retry loop) has no ceiling.
-    if (force) {
-      const sinceLastForce = Date.now() - lastForceAt;
-      if (sinceLastForce < FORCE_COOLDOWN_MS && cache.topics) {
-        return Response.json({
-          topics: cache.topics,
-          cached: true, stats: lastStats,
-          throttled: true,
-          retryAfterMs: FORCE_COOLDOWN_MS - sinceLastForce,
-        });
-      }
-    }
-
-    if (!force) {
-      const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
-
-      if (age < FRESH_MS) {
-        return Response.json({ topics: cache.topics, cached: true, stats: lastStats });
-      }
-
-      if (age < SERVE_MAX_MS) {
-        // Stale but usable: serve instantly, refresh for next time.
-        refreshInBackground(exclude);
-        return Response.json({ topics: cache.topics, cached: true, stats: lastStats, stale: true });
-      }
-
-      // No usable cache at all — must wait on a live generation. Join an
-      // already-running one if another request beat us to it.
-      if (inFlight) {
-        const topics = await inFlight.then(() => cache.topics);
-        if (topics) return Response.json({ topics, cached: true, stats: lastStats });
-      }
-
-      // Hourly cap hit: serve whatever cache exists, however old, rather
-      // than a hard failure; only error out if there's truly nothing.
-      if (!underHourlyCap()) {
-        if (cache.topics) {
-          return Response.json({ topics: cache.topics, cached: true, stats: lastStats, stale: true });
-        }
-        return Response.json(
-          { error: "rate_limited", message: "Too many live searches this hour — try again shortly." },
-          { status: 429 }
-        );
-      }
-    } else if (!underHourlyCap()) {
-      return Response.json(
-        {
-          topics: cache.topics || [],
-          cached: true, stats: lastStats,
-          throttled: true,
-          message: "Hourly live-search limit reached — showing the last known topics.",
-        },
-        { status: cache.topics ? 200 : 429 }
-      );
-    }
-
-    if (force) lastForceAt = Date.now();
-    const task = generate(exclude); // updates the cache (with provider) itself
-    if (!force) inFlight = task.finally(() => { inFlight = null; });
-    const parsed = await task;
-    return Response.json({
-      topics: parsed,
-      cached: false,
-      provider: cache.provider,
-      stats: lastStats,
-    });
+  let pl;
+  try {
+    pl = plan(force, exclude);
   } catch (e) {
-    if (String(e?.message || e) === "parse") {
-      return Response.json({ error: "parse", stats: lastStats }, { status: 502 });
-    }
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
   }
+
+  // Streaming: cards are sent one by one, the first as soon as it exists.
+  if (stream) {
+    return ndjson(async (send) => {
+      if (pl.fail) {
+        send({ type: "error", error: pl.error, message: pl.message });
+        return;
+      }
+      if (pl.cached) {
+        for (const t of pl.cached) send({ type: "topic", topic: t });
+        send({ type: "stats", stats: lastStats, cached: true, stale: !!pl.stale, throttled: !!pl.throttled });
+        send({ type: "done" });
+        return;
+      }
+      await follow(pl.run, send);
+      if (pl.run.error && !pl.run.topics.length) send({ type: "error", error: pl.run.error });
+      send({ type: "stats", stats: lastStats });
+      send({ type: "done" });
+    });
+  }
+
+  // Plain JSON (older clients): the whole batch at once.
+  if (pl.fail) return Response.json({ error: pl.error, message: pl.message }, { status: pl.fail });
+  if (pl.cached) {
+    return Response.json({ topics: pl.cached, cached: true, stats: lastStats, stale: !!pl.stale, throttled: !!pl.throttled });
+  }
+  await pl.run.promise;
+  if (!pl.run.topics.length) {
+    const err = pl.run.error || "parse";
+    return Response.json({ error: err === "parse" ? "parse" : err, stats: lastStats }, { status: err === "parse" ? 502 : 500 });
+  }
+  return Response.json({ topics: pl.run.topics, cached: false, provider: cache.provider, stats: lastStats });
+}
+
+// Warm-up, called on a schedule by .github/workflows/keepwarm.yml. Keeps a
+// recent deck ready so opening the app shows topics immediately instead of
+// waiting for a generation. Regenerates only when the deck is older than
+// WARM_MAX_MS, so it costs one generation every couple of hours at most.
+const WARM_MAX_MS = 2 * 60 * 60 * 1000;
+export async function GET(request) {
+  const warm = new URL(request.url).searchParams.get("warm") === "1";
+  const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
+  let started = false;
+  if (warm && !run && age > WARM_MAX_MS && underHourlyCap()) {
+    startRun([]);
+    started = true;
+  }
+  return Response.json(
+    {
+      ok: true,
+      cards: cache.topics ? cache.topics.length : 0,
+      deckAgeMin: Number.isFinite(age) ? Math.round(age / 60000) : null,
+      generating: !!run,
+      started,
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

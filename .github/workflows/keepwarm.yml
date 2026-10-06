@@ -1,0 +1,29 @@
+# Keeps the app awake and its topic deck ready.
+#
+# Render's free plan puts the app to sleep after 15 minutes without a visit,
+# and the first visit then waits for it to boot AND for a whole topic batch to
+# be generated: two to three minutes of a loading screen. Calling it every 10
+# minutes stops it sleeping, and `?warm=1` regenerates the deck in the
+# background whenever it is more than two hours old, so opening the app shows
+# topics at once. Health checks cost nothing; a warm regeneration is one
+# normal generation, at most every two hours.
+#
+# Override the address with a repository variable APP_URL if the app moves.
+name: keepwarm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake the app and keep the deck warm
+        env:
+          APP_URL: ${{ vars.APP_URL || 'https://sugimoto-topic-engine.onrender.com' }}
+        run: |
+          curl -fsS --retry 3 --retry-delay 10 --max-time 90 "$APP_URL/api/health" -o /dev/null
+          curl -fsS --max-time 30 "$APP_URL/api/topics?warm=1"

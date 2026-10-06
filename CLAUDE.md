@@ -55,6 +55,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Telegram review flow + webhook | `app/api/telegram/**` |
 | Durable memory (Google Sheet via Apps Script) | `lib/sheet.js`, `google-apps-script.gs` |
 | Draws auto-poster (separate system) | `lib/draws/**`, `app/api/draws/**` |
+| Keep-awake + deck warm-up (every 10 min, GitHub Actions → `/api/topics?warm=1`) | `.github/workflows/keepwarm.yml` |
 | Background jobs (script, Telegram, article, draft, Word file run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
 | UI | `app/page.jsx` |
 
@@ -62,6 +63,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 - **Slow steps run as server jobs, not page fetches.** A phone freezes a page when you switch apps, so anything slow must be started with `startJob` in `app/page.jsx` (POST `/api/jobs`) and read back by polling. Never `await` a model call inside a click handler. Jobs are in memory: a deploy or restart mid-job loses it, and the page offers a retry.
 
+- **Topics stream.** `/api/topics` with `stream: true` sends one card per line as each write batch finishes, and the page also shows the deck saved on the device first. Keep both: never make the page wait for a whole batch.
 - **Grounding is non-negotiable.** Every generated text must be supported by fetched source text. Never let a model see only a headline and write from it; if a source is too thin, drop it. Invented facts are the worst bug this app can have.
 - Farsi output is the brand's own voice — never "according to the source", never sales lines or "DM us" in news posts.
 - Express Entry draw results are excluded from topics (the brand covers them elsewhere).

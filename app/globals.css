@@ -197,7 +197,9 @@ a {
 }
 
 /* ---- small screens ----------------------------------------------------- */
-@media (max-width: 420px) {
+/* 520px covers every phone, including the widest (about 430px); the header
+   buttons drop their labels there so they never overlap the logo. */
+@media (max-width: 520px) {
   .ui-hide-sm {
     display: none !important;
   }
