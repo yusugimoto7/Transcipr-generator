@@ -1209,6 +1209,9 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
                   {t.grounding === "headline" && (
                     <span style={{ color: C.orange, border: `1px solid ${alpha(C.orange, 0.5)}`, borderRadius: 99, padding: "0 6px" }}>headline only</span>
                   )}
+                  {t.coverage > 1 && (
+                    <span title={"Also covered by: " + (t.outlets || []).join(", ")} style={{ color: "#c2410c", background: alpha("#f97316", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>🔥 {t.coverage} sources</span>
+                  )}
                   {t.social === "instagram" && (
                     <span title="From a creator's Instagram post — check the claim before scripting" style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>📸 @{t.author}</span>
                   )}
@@ -1354,6 +1357,7 @@ function DeckWhy({ stats }) {
         {row("…of which Instagram posts", stats.socialPosts ?? 0)}
         {row("Already approved or rejected", stats.alreadyUsed ?? 0)}
         {row("Off-topic or draw results", stats.offTopic ?? 0)}
+        {row("Untrusted sources dropped", stats.untrusted ?? 0)}
         {row("Same story, other outlet", stats.duplicateStories ?? 0)}
         {row("Fresh candidates", stats.eligible ?? 0)}
         {row("Chosen by the editor model", stats.selected ?? 0)}
@@ -1467,6 +1471,11 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
             </a>
           )}
           {formatNewsDate(topic.date) && <span style={pill}>📅 {formatNewsDate(topic.date)}</span>}
+          {topic.coverage > 1 && (
+            <span title={"Also covered by: " + (topic.outlets || []).join(", ")} style={{ ...pill, color: "#c2410c", background: alpha("#f97316", 0.1), border: `1px solid ${alpha("#f97316", 0.35)}`, fontWeight: 700 }}>
+              🔥 {topic.coverage} sources
+            </span>
+          )}
           {topic.social === "instagram" && (
             <span title="From a creator's Instagram post — check the claim before scripting" style={{ ...pill, color: "#c13584", background: alpha("#c13584", 0.08), border: `1px solid ${alpha("#c13584", 0.3)}` }}>
               📸 @{topic.author}

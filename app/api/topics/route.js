@@ -8,7 +8,7 @@ import {
   articleKey,
   isGoogleNews,
 } from "../../../lib/news";
-import { loadHarvest, mergeCandidates, relevance, isDrawResult } from "../../../lib/candidates";
+import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
 import {
@@ -65,6 +65,7 @@ const NEWS_WINDOW_DAYS = 30; // how far back topics are drawn from
 const SELECT_FROM = 70; // candidates shown to the selection call (token cap)
 const MAX_CARDS = 14; // cards returned per generation
 const MAX_PER_SOURCE = 4; // shortlist slots any one source may take
+const MAX_PER_SOURCE_DECK = 2; // cards any one source or creator may take in a deck
 const MAX_CASES = 3; // shortlist slots for individual court decisions
 const MAX_SOCIAL = 15; // shortlist slots for creators' posts (news stays the backbone)
 const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
@@ -240,7 +241,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   const ownTitles = [...((harvest && harvest.own_titles) || []), ...((live && live.ownTitles) || [])];
   const cutoff = nowMs - NEWS_WINDOW_DAYS * 86400000;
 
-  const counts = { alreadyUsed: 0, offTopic: 0 };
+  const counts = { alreadyUsed: 0, offTopic: 0, untrusted: 0 };
   const eligible = [];
   for (const c of merged) {
     const t = c.published_ms || Date.parse(c.first_seen || "") || 0;
@@ -254,10 +255,14 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
       counts.offTopic++;
       continue;
     }
+    if (sourceTier(c) < 0) {
+      counts.untrusted++;
+      continue;
+    }
     eligible.push(c);
   }
   eligible.sort((a, b) => (b.published_ms || 0) - (a.published_ms || 0));
-  const { items: unique, collapsed } = collapseStories(eligible);
+  const { items: unique, collapsed } = collapseStories(eligible, Infinity, (a, b) => sourceTier(a) - sourceTier(b));
 
   // Diversity caps on the shortlist. Without them one prolific source fills
   // it: the Federal Court feed alone took 12 of 70 slots with bare case names
@@ -268,7 +273,17 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   let socialN = 0;
   const ranked = [];
   const byRank = unique
-    .map((c) => ({ c, rank: Math.min(relevance(c), 12) + recencyBoost(c.published_ms, nowMs) }))
+    .map((c) => ({
+      c,
+      // Relevance and freshness as before, plus: a story several outlets or
+      // creators carry at once is hot (up to +9), and a primary or
+      // established source wins a tie (+3).
+      rank:
+        Math.min(relevance(c), 12) +
+        recencyBoost(c.published_ms, nowMs) +
+        Math.min((c.coverage || 1) - 1, 3) * 3 +
+        (sourceTier(c) > 0 ? 3 : 0),
+    }))
     .sort((a, b) => b.rank - a.rank);
   for (const { c } of byRank) {
     const n = perSource.get(c.source_name) || 0;
@@ -309,17 +324,25 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   // Stage 1 — select.
   for (const c of ranked) {
     const body = c.text || c.snippet || "";
-    c.brief = body ? body.slice(0, 160).replace(/\s+/g, " ") : "";
+    c.brief =
+      (c.coverage > 1 ? `[covered by ${c.coverage} sources: ${c.outlets.slice(0, 4).join(", ")}] ` : "") +
+      (body ? body.slice(0, 160).replace(/\s+/g, " ") : "");
   }
   const excludeAll = [...exclude, ...ownTitles].slice(-120);
   let picks = [];
   try {
-    const sel = parseTopics(await rewrite(selectTopicsPrompt(ranked, today, excludeAll, MAX_CARDS), 2000)) || [];
+    const sel = parseTopics(await rewrite(selectTopicsPrompt(ranked, today, excludeAll, MAX_CARDS + 4), 2000)) || [];
     const seenIdx = new Set();
+    // One prolific source or creator must not fill the deck (one account
+    // took 3 of 14 cards); the extra picks requested above cover the gaps.
+    const perDeck = new Map();
     for (const p of sel) {
       const i = Number(p.id);
       if (!Number.isInteger(i) || !ranked[i] || seenIdx.has(i)) continue;
       seenIdx.add(i);
+      const who = ranked[i].author || ranked[i].source_name || "";
+      if ((perDeck.get(who) || 0) >= MAX_PER_SOURCE_DECK) continue;
+      perDeck.set(who, (perDeck.get(who) || 0) + 1);
       picks.push({ item: ranked[i], field: p.field || "Policy", score: Number(p.score) || 75 });
       if (picks.length >= MAX_CARDS) break;
     }
@@ -379,6 +402,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           grounding: grounded ? "full" : "headline",
           score: p.score,
           ...(src.social ? { social: src.social, author: src.author } : {}),
+          ...(src.coverage > 1 ? { coverage: src.coverage, outlets: src.outlets.slice(0, 6) } : {}),
         };
         if (!accept(topic, seenUrlSet)) continue;
         if (!emitted) lastStats.timings.firstCardMs = Date.now() - t0;
