@@ -54,6 +54,8 @@ export async function POST(req) {
 
   const prompt = `${BRAND_CONTEXT}
 
+CRITICAL: ALL topic titles ("title" field) MUST be written in Persian (Farsi), regardless of language setting. Topic titles are the hook text that appears on slide 1 — they are always in Persian for @sugimotovisa.
+
 شما برای اینستاگرام @sugimotovisa کار می‌کنید. باید ۵ هوک برای اسلاید اول کاروسل بنویسید — نه اسم موضوع، نه عنوان مقاله. این‌ها متن واقعی هستند که مخاطب روی اسلاید ۱ می‌بیند.
 
 کشور: ${country}

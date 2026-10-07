@@ -55,12 +55,12 @@ async function pushLibraryRemote(items) {
 }
 
 const COUNTRIES = [
-  { label: "کانادا", value: "canada", flag: "🇨🇦" },
-  { label: "فنلاند", value: "finland", flag: "🇫🇮" },
-  { label: "آلمان", value: "germany", flag: "🇩🇪" },
-  { label: "هلند", value: "netherlands", flag: "🇳🇱" },
-  { label: "اسپانیا", value: "spain", flag: "🇪🇸" },
-  { label: "فرانسه", value: "france", flag: "🇫🇷" },
+  { label: "Canada", value: "canada", flag: "🇨🇦" },
+  { label: "Finland", value: "finland", flag: "🇫🇮" },
+  { label: "Germany", value: "germany", flag: "🇩🇪" },
+  { label: "Netherlands", value: "netherlands", flag: "🇳🇱" },
+  { label: "Spain", value: "spain", flag: "🇪🇸" },
+  { label: "France", value: "france", flag: "🇫🇷" },
 ];
 
 const FIELDS_BY_COUNTRY = {
@@ -68,58 +68,72 @@ const FIELDS_BY_COUNTRY = {
     { label: "Express Entry", value: "Express Entry" },
     { label: "PNP", value: "PNP" },
     { label: "Startup Visa", value: "Startup Visa" },
-    { label: "ورک پرمیت", value: "ورک پرمیت" },
-    { label: "تحصیل", value: "تحصیل" },
-    { label: "مهاجرت خانوادگی", value: "مهاجرت خانوادگی" },
-    { label: "اقامت دائم", value: "اقامت دائم" },
-    { label: "سیاست‌گذاری", value: "سیاست‌گذاری" },
-    { label: "مقایسه‌ای", value: "مقایسه‌ای" },
-    { label: "خبرهای مهاجرتی", value: "خبرهای مهاجرتی" },
-    { label: "عمومی", value: "عمومی" },
+    { label: "Work Permit", value: "ورک پرمیت" },
+    { label: "Study", value: "تحصیل" },
+    { label: "Family Immigration", value: "مهاجرت خانوادگی" },
+    { label: "Permanent Residence", value: "اقامت دائم" },
+    { label: "Policy & News", value: "سیاست‌گذاری" },
+    { label: "Immigration News", value: "خبرهای مهاجرتی" },
+    { label: "General", value: "عمومی" },
   ],
   europe: [
-    { label: "تحصیل", value: "تحصیل" },
-    { label: "ورک پرمیت", value: "ورک پرمیت" },
+    { label: "Study", value: "تحصیل" },
+    { label: "Work Permit", value: "ورک پرمیت" },
     { label: "Startup Visa", value: "Startup Visa" },
-    { label: "مهاجرت خانوادگی", value: "مهاجرت خانوادگی" },
-    { label: "سیاست‌گذاری", value: "سیاست‌گذاری" },
-    { label: "مقایسه‌ای", value: "مقایسه‌ای" },
-    { label: "خبرهای مهاجرتی", value: "خبرهای مهاجرتی" },
-    { label: "عمومی", value: "عمومی" },
+    { label: "Family Immigration", value: "مهاجرت خانوادگی" },
+    { label: "Policy & News", value: "سیاست‌گذاری" },
+    { label: "Immigration News", value: "خبرهای مهاجرتی" },
+    { label: "General", value: "عمومی" },
   ],
 };
 
 const EUROPE_COUNTRIES = ["finland", "germany", "netherlands", "spain", "france"];
 
-const COMPARISON_FIELD = "مقایسه‌ای";
+const CONTENT_APPROACHES = [
+  { label: "Analytical", value: "analytical", desc: "Single country deep-dive" },
+  { label: "Comparison", value: "comparison", desc: "Two-country side-by-side" },
+];
 
-function fieldsForCountry(country) {
-  if (!country) return FIELDS_BY_COUNTRY.canada;
-  return EUROPE_COUNTRIES.includes(country) ? FIELDS_BY_COUNTRY.europe : FIELDS_BY_COUNTRY.canada;
-}
+const COMPARISON_DIMENSIONS = [
+  { label: "Requirements", value: "Requirements" },
+  { label: "Processing Time", value: "Processing Time" },
+  { label: "Cost", value: "Cost" },
+  { label: "Language", value: "Language Requirements" },
+  { label: "PR Pathway", value: "PR Pathway" },
+  { label: "Family Options", value: "Family Options" },
+  { label: "Work Rights", value: "Work Rights" },
+  { label: "Startup/Business", value: "Startup/Business" },
+];
 
 const TONES = [
-  { label: "آموزشی و رسمی", value: "آموزشی و رسمی" },
-  { label: "صمیمی و ساده", value: "صمیمی و ساده" },
-  { label: "فوری و خبری", value: "فوری و خبری" },
-  { label: "تحلیلی و عمیق", value: "تحلیلی و عمیق" },
-  { label: "انگیزشی", value: "انگیزشی" },
+  { label: "Educational & Formal", value: "آموزشی و رسمی" },
+  { label: "Friendly & Simple", value: "صمیمی و ساده" },
+  { label: "Urgent & Newsworthy", value: "فوری و خبری" },
+  { label: "Analytical & In-depth", value: "تحلیلی و عمیق" },
+  { label: "Motivational", value: "انگیزشی" },
 ];
 
 const FORMATS = [
-  { label: "کاروسل", value: "carousel" },
-  { label: "اینفوگرافیک", value: "infographic" },
-  { label: "ریل", value: "reel" },
-  { label: "مقاله", value: "article" },
-  { label: "تلگرام", value: "telegram" },
+  { label: "Carousel", value: "carousel" },
+  { label: "Infographic", value: "infographic" },
+  { label: "Reel Script", value: "reel" },
+  { label: "Article", value: "article" },
+  { label: "Telegram Post", value: "telegram" },
+  { label: "Video Script", value: "video_script", stub: true },
+  { label: "Story Script", value: "story_script", stub: true },
 ];
 
 const SLIDE_COUNTS = [5, 7, 10, 12];
 
 const LANGUAGES = [
-  { label: "فارسی", value: "persian" },
-  { label: "English", value: "english" },
+  { label: "🇮🇷 Persian", value: "persian" },
+  { label: "🇬🇧 English", value: "english" },
 ];
+
+function fieldsForCountry(country) {
+  if (!country) return FIELDS_BY_COUNTRY.canada;
+  return EUROPE_COUNTRIES.includes(country) ? FIELDS_BY_COUNTRY.europe : FIELDS_BY_COUNTRY.canada;
+}
 
 // ── shared primitives ──────────────────────────────────────────────────────────
 
@@ -145,7 +159,7 @@ function StepDots({ step }) {
 
 function PillSelect({ options, value, onChange }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, direction: "rtl" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
       {options.map((opt) => {
         const active = value === opt.value;
         return (
@@ -172,6 +186,40 @@ function PillSelect({ options, value, onChange }) {
   );
 }
 
+function MultiPillSelect({ options, value, onChange }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {options.map((opt) => {
+        const active = Array.isArray(value) && value.includes(opt.value);
+        return (
+          <button
+            key={opt.value}
+            onClick={() => {
+              const next = active
+                ? value.filter((v) => v !== opt.value)
+                : [...(value || []), opt.value];
+              onChange(next);
+            }}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 20,
+              border: `1.5px solid ${active ? C.orange : C.line}`,
+              background: active ? C.orange : "transparent",
+              color: active ? C.ink : C.cream,
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              transition: "all 0.18s",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FieldLabel({ children }) {
   return (
     <div
@@ -181,7 +229,6 @@ function FieldLabel({ children }) {
         fontWeight: 600,
         marginBottom: 8,
         letterSpacing: "0.06em",
-        direction: "rtl",
       }}
     >
       {children}
@@ -214,7 +261,7 @@ function Spinner() {
         }}
       />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div>در حال تولید محتوا…</div>
+      <div>Generating content…</div>
     </div>
   );
 }
@@ -223,10 +270,15 @@ function Spinner() {
 
 function SetupStep({ settings, onChange, onNext, loading, error }) {
   const fields = fieldsForCountry(settings.country);
-  const isComparison = settings.field === COMPARISON_FIELD;
-  // second country must differ from first and not be empty
+  const isComparison = settings.contentApproach === "comparison";
   const country2Options = COUNTRIES.filter((c) => c.value !== settings.country);
-  const ready = settings.country && settings.format && (!isComparison || settings.country2);
+  const selectedFormat = FORMATS.find((f) => f.value === settings.format);
+  const isStubFormat = selectedFormat?.stub || false;
+  const ready =
+    settings.country &&
+    settings.format &&
+    !isStubFormat &&
+    (!isComparison || settings.country2);
   const country2Ref = useRef(null);
 
   useEffect(() => {
@@ -237,15 +289,47 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
 
   return (
     <div>
-      <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 24, direction: "rtl" }}>
-        تنظیمات محتوا
+      <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 24 }}>
+        Content Setup
       </h2>
-      <Section label="کشور">
+
+      <Section label="CONTENT APPROACH">
+        <div style={{ display: "flex", gap: 10 }}>
+          {CONTENT_APPROACHES.map((opt) => {
+            const active = settings.contentApproach === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => onChange("contentApproach", opt.value)}
+                style={{
+                  flex: 1,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${active ? C.orange : C.line}`,
+                  background: active ? "rgba(242,106,18,0.08)" : "transparent",
+                  color: active ? C.orange : C.cream,
+                  fontSize: 13,
+                  fontWeight: active ? 700 : 400,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  textAlign: "left",
+                  transition: "all 0.18s",
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{opt.label}</div>
+                <div style={{ fontSize: 11, color: active ? C.orange : C.inkSoft, marginTop: 2 }}>
+                  {opt.desc}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+
+      <Section label="COUNTRY">
         <PillSelect options={COUNTRIES} value={settings.country} onChange={(v) => onChange("country", v)} />
       </Section>
-      <Section label="حوزه">
-        <PillSelect options={fields} value={settings.field} onChange={(v) => onChange("field", v)} />
-      </Section>
+
       {isComparison && (
         <div
           ref={country2Ref}
@@ -254,21 +338,112 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
             padding: "12px 14px",
             borderRadius: 10,
             border: `1.5px solid ${C.orange}`,
-            background: "rgba(241,114,18,0.07)",
+            background: "rgba(242,106,18,0.06)",
           }}
         >
-          <FieldLabel>کشور دوم (مقایسه) ✱</FieldLabel>
-          <PillSelect options={country2Options} value={settings.country2} onChange={(v) => onChange("country2", v)} />
+          <FieldLabel>SECOND COUNTRY (Comparison) ✱</FieldLabel>
+          <PillSelect
+            options={country2Options}
+            value={settings.country2}
+            onChange={(v) => onChange("country2", v)}
+          />
         </div>
       )}
-      <Section label="لحن">
+
+      <Section label="TOPIC AREA">
+        <PillSelect options={fields} value={settings.field} onChange={(v) => onChange("field", v)} />
+      </Section>
+
+      {isComparison && (
+        <Section label="COMPARISON DIMENSIONS (optional)">
+          <MultiPillSelect
+            options={COMPARISON_DIMENSIONS}
+            value={settings.comparisonDimensions}
+            onChange={(v) => onChange("comparisonDimensions", v)}
+          />
+        </Section>
+      )}
+
+      <Section label="TONE">
         <PillSelect options={TONES} value={settings.tone} onChange={(v) => onChange("tone", v)} />
       </Section>
-      <Section label="فرمت">
-        <PillSelect options={FORMATS} value={settings.format} onChange={(v) => onChange("format", v)} />
+
+      <Section label="FORMAT">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {FORMATS.map((opt) => {
+            const active = settings.format === opt.value;
+            if (opt.stub) {
+              return (
+                <div
+                  key={opt.value}
+                  style={{ position: "relative", display: "inline-block" }}
+                  title="Coming soon"
+                >
+                  <button
+                    disabled
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: 20,
+                      border: `1.5px solid ${C.line}`,
+                      background: "transparent",
+                      color: C.slate,
+                      fontSize: 13,
+                      cursor: "not-allowed",
+                      fontFamily: "inherit",
+                      opacity: 0.55,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -4,
+                      background: C.orange,
+                      color: C.ink,
+                      fontSize: 9,
+                      fontWeight: 700,
+                      padding: "1px 5px",
+                      borderRadius: 8,
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    SOON
+                  </span>
+                </div>
+              );
+            }
+            return (
+              <button
+                key={opt.value}
+                onClick={() => onChange("format", opt.value)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: `1.5px solid ${active ? C.orange : C.line}`,
+                  background: active ? C.orange : "transparent",
+                  color: active ? C.ink : C.cream,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  transition: "all 0.18s",
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        {isStubFormat && (
+          <div style={{ color: C.orange, fontSize: 12, marginTop: 8 }}>
+            This format is coming soon — pick another to continue.
+          </div>
+        )}
       </Section>
+
       {settings.format === "carousel" && (
-        <Section label="تعداد اسلاید">
+        <Section label="SLIDE COUNT">
           <PillSelect
             options={SLIDE_COUNTS.map((n) => ({ label: String(n), value: n }))}
             value={settings.slideCount}
@@ -276,12 +451,17 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
           />
         </Section>
       )}
-      <Section label="زبان خروجی">
+
+      <Section label="OUTPUT LANGUAGE">
         <PillSelect options={LANGUAGES} value={settings.language} onChange={(v) => onChange("language", v)} />
       </Section>
+
       {error && (
-        <div style={{ color: "#e5484d", fontSize: 13, marginBottom: 12, direction: "rtl" }}>{error}</div>
+        <div style={{ color: "#e5484d", fontSize: 13, marginBottom: 12 }}>
+          {error}
+        </div>
       )}
+
       <button
         onClick={onNext}
         disabled={!ready || loading}
@@ -297,10 +477,9 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
           cursor: ready && !loading ? "pointer" : "not-allowed",
           opacity: ready && !loading ? 1 : 0.6,
           fontFamily: "inherit",
-          direction: "rtl",
         }}
       >
-        {loading ? "در حال جستجو…" : "پیشنهاد موضوع ←"}
+        {loading ? "Searching…" : "Get Topic Suggestions →"}
       </button>
     </div>
   );
@@ -311,11 +490,11 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
 function SuggestStep({ topics, onPick, onBack }) {
   return (
     <div>
-      <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 8, direction: "rtl" }}>
-        انتخاب موضوع
+      <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
+        Choose a Topic
       </h2>
-      <p style={{ color: C.inkSoft, fontSize: 13, marginBottom: 20, direction: "rtl" }}>
-        یکی از موضوعات زیر را انتخاب کنید
+      <p style={{ color: C.inkSoft, fontSize: 13, marginBottom: 20 }}>
+        Pick a hook — these are grounded in current facts
       </p>
       {topics.map((t, i) => (
         <button
@@ -340,7 +519,9 @@ function SuggestStep({ topics, onPick, onBack }) {
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.line)}
         >
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{t.title}</div>
-          <div style={{ color: C.inkSoft, fontSize: 12, lineHeight: 1.5 }}>{t.angle || t.summary}</div>
+          <div style={{ color: C.inkSoft, fontSize: 12, lineHeight: 1.5, direction: "ltr", textAlign: "left" }}>
+            {t.angle || t.summary}
+          </div>
         </button>
       ))}
       <button
@@ -352,11 +533,10 @@ function SuggestStep({ topics, onPick, onBack }) {
           color: C.creamEdge,
           fontSize: 13,
           cursor: "pointer",
-          direction: "rtl",
           fontFamily: "inherit",
         }}
       >
-        ← بازگشت
+        ← Back
       </button>
     </div>
   );
@@ -371,8 +551,8 @@ function ResultDisplay({ format, parsed, raw }) {
     if (!raw) return null;
     return (
       <div style={{ marginTop: 8 }}>
-        <div style={{ color: C.inkSoft, fontSize: 11, marginBottom: 6, direction: "rtl" }}>
-          خروجی خام مدل (پارس نشد):
+        <div style={{ color: C.inkSoft, fontSize: 11, marginBottom: 6 }}>
+          Raw model output (not parsed):
         </div>
         <pre
           style={{
@@ -409,7 +589,7 @@ function ResultDisplay({ format, parsed, raw }) {
             }}
           >
             <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-              اسلاید {s.num}
+              Slide {s.num}
             </div>
             <div style={{ color: C.cream, fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {s.content}
@@ -426,7 +606,7 @@ function ResultDisplay({ format, parsed, raw }) {
               direction: "rtl",
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>کپشن</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Caption</div>
             <div style={{ color: C.cream, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {parsed.caption}
             </div>
@@ -485,8 +665,8 @@ function ResultDisplay({ format, parsed, raw }) {
   if (format === "reel") {
     if (!parsed.hook && !parsed.body) return <RawFallback />;
     const sections = [
-      { key: "hook", label: "هوک" },
-      { key: "body", label: "متن" },
+      { key: "hook", label: "Hook" },
+      { key: "body", label: "Body" },
       { key: "cta", label: "CTA" },
     ];
     return (
@@ -520,7 +700,7 @@ function ResultDisplay({ format, parsed, raw }) {
             }}
           >
             <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-              متن روی صفحه
+              On-screen text
             </div>
             {parsed.onscreen.map((line, i) => (
               <div key={i} style={{ color: C.cream, fontSize: 13, lineHeight: 1.7 }}>
@@ -550,7 +730,7 @@ function ResultDisplay({ format, parsed, raw }) {
               marginBottom: 10,
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>آمار</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Stats</div>
             {parsed.stats.map((s, i) => (
               <div key={i} style={{ color: C.cream, fontSize: 13, lineHeight: 1.8 }}>
                 • {s}
@@ -568,7 +748,7 @@ function ResultDisplay({ format, parsed, raw }) {
               marginBottom: 10,
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>مقایسه</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Comparison</div>
             <div style={{ color: C.cream, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {parsed.comparison}
             </div>
@@ -583,7 +763,7 @@ function ResultDisplay({ format, parsed, raw }) {
               padding: "14px 16px",
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>نقشه راه</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Roadmap</div>
             <div style={{ color: C.cream, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {parsed.roadmap}
             </div>
@@ -628,8 +808,8 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, direction: "rtl", margin: 0 }}>
-          نتیجه
+        <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, margin: 0 }}>
+          Result
         </h2>
         <span
           style={{
@@ -651,11 +831,11 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <FieldLabel>بازخورد برای تولید مجدد (اختیاری)</FieldLabel>
+        <FieldLabel>FEEDBACK FOR REGENERATION (optional)</FieldLabel>
         <textarea
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
-          placeholder="چیزی که می‌خوای تغییر کنه بنویس..."
+          placeholder="Describe what you'd like changed…"
           rows={3}
           style={{
             width: "100%",
@@ -667,14 +847,14 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             fontSize: 13,
             fontFamily: "inherit",
             resize: "vertical",
-            direction: "rtl",
+            direction: "ltr",
             boxSizing: "border-box",
           }}
         />
       </div>
 
       {genError && (
-        <div style={{ color: "#e5484d", fontSize: 13, marginBottom: 10, direction: "rtl" }}>{genError}</div>
+        <div style={{ color: "#e5484d", fontSize: 13, marginBottom: 10 }}>{genError}</div>
       )}
 
       <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
@@ -695,7 +875,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             opacity: genLoading ? 0.6 : 1,
           }}
         >
-          {genLoading ? "در حال تولید…" : "بازنویسی با این توضیح"}
+          {genLoading ? "Generating…" : "Rewrite with Feedback"}
         </button>
         <button
           onClick={onSave}
@@ -714,7 +894,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             opacity: saved ? 0.7 : 1,
           }}
         >
-          {saved ? "ذخیره شد ✓" : "ذخیره در کتابخانه"}
+          {saved ? "Saved ✓" : "Save to Library"}
         </button>
       </div>
 
@@ -726,11 +906,10 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
           color: C.creamEdge,
           fontSize: 13,
           cursor: "pointer",
-          direction: "rtl",
           fontFamily: "inherit",
         }}
       >
-        ← موضوع جدید
+        ← New topic
       </button>
     </div>
   );
@@ -741,8 +920,10 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
 export default function ContentWizard() {
   const [step, setStep] = useState(1);
   const [settings, setSettings] = useState({
+    contentApproach: "analytical",
     country: "",
     country2: "",
+    comparisonDimensions: [],
     field: "خبرهای مهاجرتی",
     tone: "آموزشی و رسمی",
     format: "carousel",
@@ -761,12 +942,15 @@ export default function ContentWizard() {
   function changeSetting(key, value) {
     setSettings((prev) => {
       const next = { ...prev, [key]: value };
-      // When country changes, reset field to first valid option for new country
       if (key === "country") {
         const validFields = fieldsForCountry(value);
         const stillValid = validFields.some((f) => f.value === prev.field);
         if (!stillValid) next.field = validFields[0]?.value || "";
         next.country2 = "";
+      }
+      if (key === "contentApproach" && value === "analytical") {
+        next.country2 = "";
+        next.comparisonDimensions = [];
       }
       return next;
     });
@@ -776,8 +960,9 @@ export default function ContentWizard() {
     setSuggestLoading(true);
     setSuggestError("");
     try {
+      const isComparison = settings.contentApproach === "comparison";
       const countryParam =
-        settings.field === COMPARISON_FIELD && settings.country2
+        isComparison && settings.country2
           ? `${settings.country},${settings.country2}`
           : settings.country;
       const res = await fetch("/api/suggest-topics", {
@@ -790,7 +975,7 @@ export default function ContentWizard() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "خطا در دریافت موضوعات");
+      if (!res.ok) throw new Error(data.error || "Failed to load topics / خطا در دریافت موضوعات");
       setSuggestedTopics(data.topics || []);
       setStep(2);
     } catch (err) {
@@ -820,7 +1005,7 @@ export default function ContentWizard() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "خطا در تولید محتوا");
+      if (!res.ok) throw new Error(data.error || "Failed to generate / خطا در تولید محتوا");
       setResult(data);
       setStep(4);
     } catch (err) {
@@ -832,8 +1017,9 @@ export default function ContentWizard() {
   }
 
   function handlePickTopic(topic) {
+    const isComparison = settings.contentApproach === "comparison";
     const countryParam =
-      settings.field === COMPARISON_FIELD && settings.country2
+      isComparison && settings.country2
         ? `${settings.country},${settings.country2}`
         : settings.country;
     const merged = {
@@ -843,6 +1029,9 @@ export default function ContentWizard() {
       tone: settings.tone,
       language: settings.language,
       slideCount: settings.slideCount,
+      ...(isComparison && settings.comparisonDimensions.length
+        ? { comparisonDimensions: settings.comparisonDimensions }
+        : {}),
     };
     setChosenTopic(merged);
     setSaved(false);
@@ -882,7 +1071,6 @@ export default function ContentWizard() {
         minHeight: "100vh",
         background: C.ground,
         fontFamily: "'Vazirmatn', 'Inter', system-ui, sans-serif",
-        direction: "rtl",
       }}
     >
       {/* Header */}
@@ -955,7 +1143,7 @@ export default function ContentWizard() {
         )}
 
         {step === 4 && genError && (
-          <div style={{ color: "#e5484d", fontSize: 14, direction: "rtl", textAlign: "center", padding: "32px 0" }}>
+          <div style={{ color: "#e5484d", fontSize: 14, textAlign: "center", padding: "32px 0" }}>
             {genError}
           </div>
         )}

@@ -891,8 +891,8 @@ export default function App() {
               <span style={{ background: C.orange, color: "#fff", borderRadius: 99, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{library.length}</span>
             )}
           </button>
-          <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
-            ✨ <span className="ui-wide">Wizard</span>
+          <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", background: "#f26a12", color: "#ffffff", borderRadius: 8, fontWeight: 700 }}>
+            ✨ <span className="ui-wide">Content Wizard</span>
           </a>
           <button
             onClick={() => loadTopics(true)}
