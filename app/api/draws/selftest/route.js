@@ -14,7 +14,9 @@ export const dynamic = "force-dynamic";
 import { verifyStore } from "../../../../lib/draws/store";
 
 export async function GET(request) {
-  const expected = process.env.DRAWS_CRON_SECRET;
+  // Trimmed on both sides: a value pasted into Render on a phone easily
+  // carries an invisible trailing space or newline.
+  const expected = (process.env.DRAWS_CRON_SECRET || "").trim();
   if (!expected) {
     return Response.json({ error: "DRAWS_CRON_SECRET is not set" }, { status: 500 });
   }
@@ -22,7 +24,7 @@ export async function GET(request) {
   const provided =
     url.searchParams.get("key") ||
     (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (provided !== expected) {
+  if (String(provided || "").trim() !== expected) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

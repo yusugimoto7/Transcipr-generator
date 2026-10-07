@@ -19,7 +19,9 @@ export const maxDuration = 300;
 import { runDrawCycle } from "../../../../lib/draws/run";
 
 function authorize(request) {
-  const expected = process.env.DRAWS_CRON_SECRET;
+  // Trimmed on both sides: a value pasted into Render on a phone easily
+  // carries an invisible trailing space or newline.
+  const expected = (process.env.DRAWS_CRON_SECRET || "").trim();
   if (!expected) {
     return { ok: false, status: 500, error: "DRAWS_CRON_SECRET is not set" };
   }
@@ -27,7 +29,7 @@ function authorize(request) {
   const provided =
     url.searchParams.get("key") ||
     (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (provided !== expected) {
+  if (String(provided || "").trim() !== expected) {
     return { ok: false, status: 401, error: "unauthorized" };
   }
   return { ok: true };

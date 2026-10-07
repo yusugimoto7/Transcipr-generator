@@ -11,7 +11,7 @@ export const maxDuration = 300;
 import { previewDrawCycle } from "../../../../lib/draws/run";
 
 export async function GET(request) {
-  const expected = process.env.DRAWS_CRON_SECRET;
+  const expected = (process.env.DRAWS_CRON_SECRET || "").trim();
   if (!expected) {
     return Response.json({ error: "DRAWS_CRON_SECRET is not set" }, { status: 500 });
   }
@@ -19,7 +19,7 @@ export async function GET(request) {
   const provided =
     url.searchParams.get("key") ||
     (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (provided !== expected) {
+  if (String(provided || "").trim() !== expected) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 

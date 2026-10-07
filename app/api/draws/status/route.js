@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 import { setupStatus } from "../../../../lib/draws/status";
 
 export async function GET(request) {
-  const expected = process.env.DRAWS_CRON_SECRET;
+  // Trimmed on both sides: a value pasted into Render on a phone easily
+  // carries an invisible trailing space or newline.
+  const expected = (process.env.DRAWS_CRON_SECRET || "").trim();
   if (!expected) {
     // Nothing is configured yet, so there is no secret to check against.
     // Report the setup state rather than locking the user out of the one
@@ -21,7 +23,7 @@ export async function GET(request) {
   const provided =
     url.searchParams.get("key") ||
     (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (provided !== expected) {
+  if (String(provided || "").trim() !== expected) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   return Response.json(setupStatus());
