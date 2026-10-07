@@ -186,6 +186,13 @@ async function rewrite(prompt, maxTokens) {
   return callClaude([{ role: "user", content: prompt }], false, maxTokens);
 }
 
+// Coverage only counts as heat while a story is recent.
+function heatWeight(ms, nowMs) {
+  if (!ms) return 1;
+  const days = (nowMs - ms) / 86400000;
+  return days <= 7 ? 3 : days <= 14 ? 1 : 0;
+}
+
 function recencyBoost(ms, nowMs) {
   if (!ms) return 2;
   const days = (nowMs - ms) / 86400000;
@@ -276,12 +283,13 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     .map((c) => ({
       c,
       // Relevance and freshness as before, plus: a story several outlets or
-      // creators carry at once is hot (up to +9), and a primary or
+      // creators carry at once is hot (up to +9, but only while it is recent:
+      // wide coverage last month is not news now), and a primary or
       // established source wins a tie (+3).
       rank:
         Math.min(relevance(c), 12) +
         recencyBoost(c.published_ms, nowMs) +
-        Math.min((c.coverage || 1) - 1, 3) * 3 +
+        Math.min((c.coverage || 1) - 1, 3) * heatWeight(c.published_ms, nowMs) +
         (sourceTier(c) > 0 ? 3 : 0),
     }))
     .sort((a, b) => b.rank - a.rank);
@@ -325,7 +333,9 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   for (const c of ranked) {
     const body = c.text || c.snippet || "";
     c.brief =
-      (c.coverage > 1 ? `[covered by ${c.coverage} sources: ${c.outlets.slice(0, 4).join(", ")}] ` : "") +
+      (c.coverage > 1 && heatWeight(c.published_ms, nowMs) > 0
+        ? `[covered by ${c.coverage} sources: ${c.outlets.slice(0, 4).join(", ")}] `
+        : "") +
       (body ? body.slice(0, 160).replace(/\s+/g, " ") : "");
   }
   const excludeAll = [...exclude, ...ownTitles].slice(-120);
