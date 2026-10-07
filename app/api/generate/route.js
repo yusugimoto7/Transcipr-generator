@@ -18,6 +18,36 @@ const FORMATS = {
   telegram:    { prompt: telegramPrompt,    parse: parseTelegramPost, tokens: 1500 },
 };
 
+function stripHtml(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 8000);
+}
+
+// Fetch the actual article text from a URL with a hard 5-second timeout.
+// Returns null on any failure so callers can fall back silently.
+async function fetchSourceText(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; SugimotoBot/1.0)" },
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    return stripHtml(html) || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function POST(req) {
   let body;
   try {
@@ -26,7 +56,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { topic, sourceText } = body || {};
+  const { topic, sourceText: rawSourceText } = body || {};
   if (!topic?.format) {
     return NextResponse.json({ error: "topic.format is required" }, { status: 400 });
   }
@@ -39,9 +69,26 @@ export async function POST(req) {
     );
   }
 
+  // Auto-fetch source text from the first research fact URL so generation is
+  // grounded in real article text rather than just the fact summaries or model
+  // memory. Falls back to the fact list as plain text when the fetch fails.
+  let sourceText = rawSourceText || "";
+  if (!sourceText.trim()) {
+    const facts = Array.isArray(topic.researchedFacts) ? topic.researchedFacts : [];
+    const firstUrl = facts[0]?.source_url;
+    if (firstUrl) {
+      const fetched = await fetchSourceText(firstUrl);
+      if (fetched) {
+        sourceText = fetched;
+      } else if (facts.length) {
+        sourceText = facts.map((f) => `- ${f.fact} (${f.source_url}, ${f.date})`).join("\n");
+      }
+    }
+  }
+
   let raw;
   try {
-    const prompt = handler.prompt(topic, sourceText || "");
+    const prompt = handler.prompt(topic, sourceText);
     raw = await generateText(prompt, handler.tokens);
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

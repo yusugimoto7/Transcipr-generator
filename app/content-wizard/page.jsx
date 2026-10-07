@@ -340,7 +340,7 @@ function SuggestStep({ topics, onPick, onBack }) {
           onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.line)}
         >
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{t.title}</div>
-          <div style={{ color: C.inkSoft, fontSize: 12, lineHeight: 1.5 }}>{t.summary}</div>
+          <div style={{ color: C.inkSoft, fontSize: 12, lineHeight: 1.5 }}>{t.angle || t.summary}</div>
         </button>
       ))}
       <button
@@ -655,7 +655,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
         <textarea
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
-          placeholder="مثلاً: لحن رسمی‌تر، یک اسلاید درباره هزینه‌ها اضافه کن…"
+          placeholder="چیزی که می‌خوای تغییر کنه بنویس..."
           rows={3}
           style={{
             width: "100%",
@@ -695,7 +695,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             opacity: genLoading ? 0.6 : 1,
           }}
         >
-          {genLoading ? "در حال تولید…" : "تولید مجدد"}
+          {genLoading ? "در حال تولید…" : "بازنویسی با این توضیح"}
         </button>
         <button
           onClick={onSave}
