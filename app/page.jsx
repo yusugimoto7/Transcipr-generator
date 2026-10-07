@@ -275,7 +275,8 @@ export default function App() {
   const [index, setIndex] = useState(0);
   const [approvedCount, setApprovedCount] = useState(0);
   const [reviewedCount, setReviewedCount] = useState(0);
-  const [loadingTopics, setLoadingTopics] = useState(true);
+  const [loadingTopics, setLoadingTopics] = useState(true); // nothing on screen yet
+  const [streaming, setStreaming] = useState(false); // new cards still arriving
   const [topicError, setTopicError] = useState(null);
   const [errDetail, setErrDetail] = useState("");
   const [deckStats, setDeckStats] = useState(null);
@@ -542,10 +543,17 @@ export default function App() {
 
     let shown = 0;
     if (force) {
-      resetHistory();
-      setTopics([]);
-      setIndex(0);
-      setLoadingTopics(true);
+      // A refresh adds to the deck rather than wiping it: ideas not yet
+      // decided stay, approved ones keep their state, and only declined ones
+      // go. Undo history is cleared because row positions change.
+      const keep = topicsRef.current.filter((t) => decisionsRef.current[topicKey(t)] !== "rejected");
+      historyRef.current = [];
+      setCanUndo(false);
+      setTopics(keep);
+      setIndex(nextUndecided(0));
+      shown = keep.length;
+      setLoadingTopics(keep.length === 0);
+      setStreaming(true);
     } else if (!topicsRef.current.length) {
       const cached = loadDeckCache().filter(fresh);
       if (cached.length) {
@@ -560,6 +568,7 @@ export default function App() {
       shown = topicsRef.current.length;
     }
 
+    setStreaming(true);
     try {
       const r = await streamTopics(exclude, force, {
         onTopic: (t) => {
@@ -584,6 +593,7 @@ export default function App() {
       }
     } finally {
       setLoadingTopics(false);
+      setStreaming(false);
     }
   }, [resetHistory]);
 
@@ -886,14 +896,14 @@ export default function App() {
           </a>
           <button
             onClick={() => loadTopics(true)}
-            disabled={loadingTopics}
+            disabled={loadingTopics || streaming}
             className="ui-btn"
             aria-label="Refresh topics"
             title="Get fresh topics"
-            style={{ ...navBtn, opacity: loadingTopics ? 0.6 : 1, cursor: loadingTopics ? "default" : "pointer" }}
+            style={{ ...navBtn, opacity: loadingTopics || streaming ? 0.6 : 1, cursor: loadingTopics || streaming ? "default" : "pointer" }}
           >
-            <span className={loadingTopics ? "ui-spin" : ""} style={{ display: "inline-block" }}>⟳</span>
-            <span className="ui-wide">{loadingTopics ? "Loading…" : "Refresh"}</span>
+            <span className={loadingTopics || streaming ? "ui-spin" : ""} style={{ display: "inline-block" }}>⟳</span>
+            <span className="ui-wide">{loadingTopics || streaming ? "Loading…" : "Refresh"}</span>
           </button>
         </nav>
       </header>
@@ -945,6 +955,12 @@ export default function App() {
 
           {!loadingTopics && topics.length > 0 && <ModeSwitch mode={deckMode} onChange={setDeckMode} />}
 
+          {streaming && !loadingTopics && (
+            <div dir="rtl" className="ui-progress ui-fade" style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text }}>
+              <span className="ui-pulse">⏳</span> موضوع‌های تازه در حال اضافه شدن به انتهای فهرست…
+            </div>
+          )}
+
           {deckMode === "list" && !loadingTopics && topics.length > 0 ? (
             <IdeasList
               topics={topics}
@@ -968,6 +984,14 @@ export default function App() {
             />
           ) : (
           <>
+          {!loadingTopics && topics.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <BackBtn onClick={() => setDeckMode("list")} label="List" />
+              <span style={{ fontSize: 12, color: C.text3, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+                {Math.min(index + 1, topics.length)} / {topics.length}
+              </span>
+            </div>
+          )}
           {loadingTopics ? (
             <CardSkeleton />
           ) : current ? (
@@ -1098,12 +1122,38 @@ function ModeSwitch({ mode, onChange }) {
 // Every idea in the deck as one compact row: title first, so the whole batch
 // can be scanned in seconds. Approving here starts the script job without
 // leaving the list; its progress shows in the row.
+// Where an idea comes from, for the category filter. "Social" is any
+// creator or community platform; everything else is a website (news, official
+// pages, courts). Region comes from the card itself.
+const SOCIAL_HOST = /(^|\.)(instagram\.com|youtube\.com|youtu\.be|reddit\.com|x\.com|twitter\.com|t\.me|tiktok\.com|facebook\.com|linkedin\.com)$/i;
+function isSocialTopic(t) {
+  if (t.social) return true;
+  try {
+    return SOCIAL_HOST.test(new URL(t.source_url || "").hostname);
+  } catch (_) {
+    return false;
+  }
+}
+const CATEGORIES = [
+  ["all", "همه", () => true],
+  ["ca", "🇨🇦 کانادا", (t) => t.page !== "EU"],
+  ["eu", "🇪🇺 اروپا", (t) => t.page === "EU"],
+  ["social", "📱 شبکه‌های اجتماعی", (t) => isSocialTopic(t)],
+  ["web", "🌐 سایت‌ها", (t) => !isSocialTopic(t)],
+];
+
 function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, onOpenScript, onRetry, onShowCard }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected
+  const [cat, setCat] = useState("all"); // see CATEGORIES
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
+  const inCat = CATEGORIES.find((c) => c[0] === cat)[2];
   const counts = { all: topics.length, pending: 0, approved: 0, rejected: 0 };
   for (const t of topics) counts[stateOf(t)]++;
-  const rows = topics.map((t, i) => ({ t, i })).filter(({ t }) => filter === "all" || stateOf(t) === filter);
+  const catCounts = {};
+  for (const [k, , test] of CATEGORIES) catCounts[k] = topics.filter(test).length;
+  const rows = topics
+    .map((t, i) => ({ t, i }))
+    .filter(({ t }) => (filter === "all" || stateOf(t) === filter) && inCat(t));
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -1152,6 +1202,29 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
         {chip("pending", "در انتظار")}
         {chip("approved", "تأیید شده")}
         {chip("rejected", "رد شده")}
+      </div>
+      <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+        {CATEGORIES.map(([k, label]) => {
+          const on = cat === k;
+          return (
+            <button
+              key={k}
+              className="ui-btn"
+              onClick={() => setCat(k)}
+              style={{
+                padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+                border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface,
+                color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif",
+                display: "inline-flex", alignItems: "center", gap: 5,
+              }}
+            >
+              {label}
+              <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Inter', sans-serif" }}>
+                {catCounts[k]}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {!rows.length && (
