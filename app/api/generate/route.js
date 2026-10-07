@@ -39,11 +39,17 @@ export async function POST(req) {
     );
   }
 
+  const prompt = handler.prompt(topic, sourceText || "");
+
+  console.log("[generate] topic:", JSON.stringify({ title: topic.title, country: topic.country, format: topic.format }));
+  console.log("[generate] prompt length:", prompt.length);
+
   let raw;
   try {
-    const prompt = handler.prompt(topic, sourceText || "");
     raw = await generateText(prompt, handler.tokens);
+    console.log("[generate] raw output:", raw?.slice(0, 200));
   } catch (err) {
+    console.error("[generate] error:", err.message, err.status, err.code);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 
