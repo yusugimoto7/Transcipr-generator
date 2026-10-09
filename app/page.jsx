@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { isUntrusted } from "../lib/trust";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -108,7 +109,8 @@ function loadDeckCache() {
     const d = JSON.parse(localStorage.getItem(DECK_KEY) || "null");
     // Older than three days is not worth showing as "today's" topics.
     if (!d || !Array.isArray(d.topics) || Date.now() - (d.at || 0) > 3 * 86400000) return [];
-    return d.topics;
+    // A source blocked since the deck was saved goes too.
+    return d.topics.filter((t) => !isUntrusted(t));
   } catch (_) {
     return [];
   }
@@ -546,7 +548,7 @@ export default function App() {
       // A refresh adds to the deck rather than wiping it: ideas not yet
       // decided stay, approved ones keep their state, and only declined ones
       // go. Undo history is cleared because row positions change.
-      const keep = topicsRef.current.filter((t) => decisionsRef.current[topicKey(t)] !== "rejected");
+      const keep = topicsRef.current.filter((t) => decisionsRef.current[topicKey(t)] !== "rejected" && !isUntrusted(t));
       historyRef.current = [];
       setCanUndo(false);
       setTopics(keep);
@@ -1168,9 +1170,12 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
   for (const t of topics) counts[stateOf(t)]++;
   const catCounts = {};
   for (const [k, , test] of CATEGORIES) catCounts[k] = topics.filter(test).length;
+  // Newest development first (cards arrive in the order they were written,
+  // not by date). The newsletter section keeps its own priority order.
   const rows = topics
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => (filter === "all" || stateOf(t) === filter) && inCat(t));
+  if (!plain) rows.sort((a, b) => String(b.t.date || "").localeCompare(String(a.t.date || "")) || a.i - b.i);
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -1351,7 +1356,9 @@ const FOCUS_LABEL = { iran: "⭐ Iran", study: "⭐ Study permit", startup: "⭐
 // notes and court decisions alike, with the standing priorities (Iran, study
 // permits, Start-up Visa) on top. The server writes the cards in the
 // background; this shows the saved copy first and polls until all are in.
-const LEX_KEY = "sugimoto_lexbase_v1";
+// Every issue's cards are kept on this device, so past issues stay on the
+// platform and show at once; the server adds what is new.
+const LEX_KEY = "sugimoto_lexbase_v2";
 const LEX_GROUPS = [
   ["all", "همه", () => true],
   ["focus", "⭐ اولویت‌ها", (t) => (t.focus || []).length > 0],
@@ -1359,18 +1366,50 @@ const LEX_GROUPS = [
   ["court", "⚖️ پرونده‌های دادگاه", (t) => t.kind === "court"],
 ];
 
+function loadLexArchive() {
+  try {
+    const a = JSON.parse(localStorage.getItem(LEX_KEY) || "null");
+    if (a && a.issues) return { known: [], ...a };
+  } catch (_) {}
+  const out = { issues: {}, known: [] };
+  try {
+    const v1 = JSON.parse(localStorage.getItem("sugimoto_lexbase_v1") || "null");
+    if (v1 && v1.issue && Array.isArray(v1.cards)) {
+      out.issues[v1.issue.key] = { issue: v1.issue, cards: v1.cards };
+      out.known.push(v1.issue.key);
+    }
+  } catch (_) {}
+  return out;
+}
+function saveLexArchive(a) {
+  try {
+    localStorage.setItem(LEX_KEY, JSON.stringify(a));
+  } catch (_) {}
+}
+// Priority items first, then policy notes, then decisions — the server's order.
+function lexOrder(cards) {
+  const g = (t) => ((t.focus || []).length ? 0 : t.kind === "court" ? 2 : 1);
+  return cards.slice().sort((a, b) => g(a) - g(b) || (a.n || 0) - (b.n || 0));
+}
+function mergeLexCards(old = [], fresh = []) {
+  const m = new Map(old.map((c) => [c.n, c]));
+  for (const c of fresh) m.set(c.n, c);
+  return lexOrder([...m.values()]);
+}
+
 function LexbaseSection({ decisions, ...actions }) {
   const [issueKey, setIssueKey] = useState("");
+  const [archive, setArchive] = useState({ issues: {}, known: [] });
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [group, setGroup] = useState("all");
   const [showDone, setShowDone] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(LEX_KEY) || "null");
-      if (saved && saved.issue && (!issueKey || saved.issue.key === issueKey)) setData(saved);
-    } catch (_) {}
+    setArchive(loadLexArchive());
+  }, []);
+
+  useEffect(() => {
     let stop = false;
     let timer = null;
     const load = async () => {
@@ -1378,14 +1417,18 @@ function LexbaseSection({ decisions, ...actions }) {
         const r = await fetch("/api/lexbase/topics" + (issueKey ? "?issue=" + encodeURIComponent(issueKey) : ""), { cache: "no-store" });
         const j = await r.json();
         if (stop) return;
-        if (j.error) throw new Error(j.error);
-        setErr("");
-        // Keep the saved cards on screen until the server has at least as many.
-        setData((prev) => (prev && prev.issue && j.issue && prev.issue.key === j.issue.key && prev.cards.length > j.cards.length ? { ...j, cards: prev.cards } : j));
-        if (j.issue && j.cards.length) {
-          try {
-            localStorage.setItem(LEX_KEY, JSON.stringify(j));
-          } catch (_) {}
+        if (j.error && !j.issue) throw new Error(j.error);
+        setErr(j.error || "");
+        setData(j);
+        if (j.issue && j.issue.total != null && j.cards.length) {
+          setArchive((prev) => {
+            const a = loadLexArchive();
+            const old = (a.issues[j.issue.key] || {}).cards;
+            a.issues[j.issue.key] = { issue: j.issue, cards: mergeLexCards(old, j.cards) };
+            if (!a.known.includes(j.issue.key)) a.known.push(j.issue.key);
+            saveLexArchive(a);
+            return a;
+          });
         }
         if (j.writing || j.pending || (j.issue && j.missing > 0 && j.cards.length === 0)) timer = setTimeout(load, 4000);
       } catch (e) {
@@ -1401,28 +1444,44 @@ function LexbaseSection({ decisions, ...actions }) {
     };
   }, [issueKey]);
 
+  // Issues: everything kept on this device plus whatever the server lists.
+  const issueMap = new Map();
+  for (const [k, v] of Object.entries(archive.issues)) issueMap.set(k, { key: k, subject: v.issue.subject, total: v.issue.total });
+  for (const i of (data && data.issues) || []) {
+    const had = issueMap.get(i.key);
+    issueMap.set(i.key, { ...i, total: i.total != null ? i.total : had ? had.total : null });
+  }
+  const issueList = [...issueMap.values()].sort((a, b) => (a.key < b.key ? 1 : -1));
+  const curKey = issueKey || (data && data.issue && data.issue.key) || (issueList[0] && issueList[0].key) || "";
+  const saved = archive.issues[curKey];
+  const live = data && data.issue && data.issue.key === curKey ? data : null;
+  const iss = live && live.issue.total != null ? live.issue : saved ? saved.issue : live ? live.issue : null;
+  const cards = mergeLexCards(saved ? saved.cards : [], live ? live.cards : []);
+  const writing = !!(live && (live.writing || live.missing > 0));
+
   const seen = loadSeen();
   const seenTitles = new Set(seen.map((s) => s.key));
   const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
-  const cards = (data && data.cards) || [];
   // Decided on an earlier visit: hidden unless asked for, like the main deck.
   const doneBefore = (t) => !decisions[topicKey(t)] && isSeen(t, seenTitles, seenUrls);
   const doneN = cards.filter(doneBefore).length;
   const visible = cards.filter((t) => showDone || !doneBefore(t));
   const inGroup = LEX_GROUPS.find((g) => g[0] === group)[2];
   const rows = visible.filter(inGroup);
-  const iss = data && data.issue;
   const font = { fontFamily: "'Vazirmatn', sans-serif" };
 
   return (
     <div>
-      {data && data.issues && data.issues.length > 1 && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto" }}>
-          {data.issues.map((i) => {
-            const on = iss && iss.key === i.key;
+      {issueList.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
+          {issueList.map((i) => {
+            const on = curKey === i.key;
+            const isNew = !archive.known.includes(i.key) && Object.keys(archive.issues).length > 0;
             return (
-              <button key={i.key} className="ui-btn" onClick={() => setIssueKey(i.key)} style={{ padding: "5px 11px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.12) : C.surface, color: on ? "#6d5bd0" : C.text2, fontSize: 12, fontWeight: 700 }}>
-                {i.subject.replace(/^.*?lexbase\s*[-–—:]?\s*/i, "") || i.key} · {i.total}
+              <button key={i.key} className="ui-btn" onClick={() => setIssueKey(i.key)} style={{ flexShrink: 0, padding: "5px 11px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.12) : C.surface, color: on ? "#6d5bd0" : C.text2, fontSize: 12, fontWeight: 700 }}>
+                {isNew && "🆕 "}
+                {(i.subject || "").replace(/^.*?lexbase\s*[-–—:]?\s*/i, "") || i.key}
+                {i.total != null ? " · " + i.total : ""}
               </button>
             );
           })}
@@ -1430,17 +1489,19 @@ function LexbaseSection({ decisions, ...actions }) {
       )}
 
       <div dir="rtl" className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#6d5bd0", 0.3)}`, background: alpha("#6d5bd0", 0.06), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
-        {iss ? (
+        {iss && iss.total != null ? (
           <>
             <b>📬 {iss.subject || "Lexbase " + iss.key}</b>
             <br />
             {iss.policy} فکت و سیاست · {iss.court} پرونده‌ی دادگاه · {iss.priority} مورد اولویت‌دار (ایران، مجوز تحصیل، استارتاپ ویزا)
-            {data.writing || data.missing > 0 ? (
+            {writing && cards.length < iss.total ? (
               <div className="ui-pulse" style={{ color: "#6d5bd0", fontWeight: 700 }}>
                 ⏳ {cards.length} از {iss.total} موضوع نوشته شده…
               </div>
             ) : null}
           </>
+        ) : iss ? (
+          <span className="ui-pulse">⏳ <b>{iss.subject}</b> — در حال خواندن این شماره… (اولین بار حدود یک دقیقه)</span>
         ) : data && data.pending ? (
           <span className="ui-pulse">⏳ در حال خواندن خبرنامه از ایمیل…</span>
         ) : data ? (
@@ -1465,7 +1526,7 @@ function LexbaseSection({ decisions, ...actions }) {
         </div>
       )}
 
-      {cards.length === 0 && iss ? (
+      {cards.length === 0 && (iss || !data) ? (
         <div style={{ display: "grid", gap: 7 }}>
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="ui-skeleton" style={{ height: 64, borderRadius: 14 }} />
