@@ -649,6 +649,9 @@ export default function App() {
         source_url: item.source_url || "",
         score: item.score || 0,
         why_now: item.why_now || "",
+        // Kept when the saved item has them, so "Original text" finds the source.
+        ...(item.snippet ? { snippet: item.snippet } : {}),
+        ...(item.newsletter ? { newsletter: item.newsletter, issue: item.issue, n: item.n, citation: item.citation || "" } : {}),
       };
       const key = topicKey(topicObj);
       const scriptItem = library.find((x) => x.type === "script" && x.id === "script:" + key);
@@ -1874,6 +1877,99 @@ function ScriptBody({ text, tab }) {
   );
 }
 
+// The source the scripts were written from, untranslated: the newsletter item
+// or the article. For a newsletter item the whole issue can be opened too.
+function OriginalText({ topic }) {
+  const [state, setState] = useState({ loading: true });
+  const [whole, setWhole] = useState(null); // null | { loading } | { text, title } | { error }
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => {
+    let stop = false;
+    setState({ loading: true });
+    setWhole(null);
+    fetch("/api/source", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic }) })
+      .then((r) => r.json())
+      .then((j) => !stop && setState(j.error ? { error: j.error } : j))
+      .catch((e) => !stop && setState({ error: String(e?.message || e) }));
+    return () => {
+      stop = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topic.source_url, topic.title_fa]);
+
+  const loadWhole = () => {
+    setWhole({ loading: true });
+    fetch("/api/source", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic, whole: true }) })
+      .then((r) => r.json())
+      .then((j) => setWhole(j.error ? { error: j.error } : j))
+      .catch((e) => setWhole({ error: String(e?.message || e) }));
+  };
+
+  const copy = async (k, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(k);
+      setTimeout(() => setCopied(""), 1500);
+    } catch (_) {}
+  };
+  const copyBtn = (k, text) => (
+    <button className="ui-btn" onClick={() => copy(k, text)} style={{ background: copied === k ? C.success : alpha(C.orange, 0.14), color: copied === k ? "#06281c" : C.orange, border: `1px solid ${copied === k ? C.success : alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+      {copied === k ? "Copied ✓" : "Copy"}
+    </button>
+  );
+  const label = { lexbase: "Lexbase newsletter — this item", article: "Source article", snippet: "Source excerpt" }[state.kind] || "Source";
+  const isLex = state.kind === "lexbase" || topic.newsletter === "lexbase";
+  const body = { fontFamily: "'Inter', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" };
+
+  if (state.loading) {
+    return <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, padding: "30px 0", textAlign: "center" }}>Loading the original text…</div>;
+  }
+  return (
+    <div dir="ltr">
+      {state.error ? (
+        <div style={{ fontSize: 13, color: C.reject }}>{state.error}</div>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              {label}
+              {state.title && <div style={{ textTransform: "none", letterSpacing: 0, color: C.text2, fontWeight: 600, marginTop: 2 }}>{state.title}</div>}
+            </div>
+            {copyBtn("item", state.text)}
+          </div>
+          <div style={body}>{state.text}</div>
+        </>
+      )}
+
+      {isLex && (
+        <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
+          {!whole ? (
+            <button className="ui-btn" onClick={loadWhole} style={{ width: "100%", padding: "11px", borderRadius: 12, border: `1px solid ${alpha("#6d5bd0", 0.4)}`, background: alpha("#6d5bd0", 0.08), color: "#6d5bd0", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+              📬 Show the whole newsletter
+            </button>
+          ) : whole.loading ? (
+            <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, textAlign: "center" }}>Loading the whole newsletter…</div>
+          ) : whole.error ? (
+            <div style={{ fontSize: 13, color: C.reject }}>{whole.error}</div>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Whole newsletter
+                  <div style={{ textTransform: "none", letterSpacing: 0, color: C.text2, fontWeight: 600, marginTop: 2 }}>{whole.title}</div>
+                </div>
+                {copyBtn("whole", whole.text)}
+              </div>
+              <div style={{ ...body, fontSize: 13.5 }}>{whole.text}</div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, tgState = "idle", tgMsg = "", onRetryTelegram, articleJob, publishJob, docJob, onJob }) {
   const f = fieldOf(topic);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -2012,10 +2108,13 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <Tab active={tab === "fa"} onClick={() => setTab("fa")} label="سناریو فارسی" />
         <Tab active={tab === "en"} onClick={() => setTab("en")} label="English script" />
+        <Tab active={tab === "src"} onClick={() => setTab("src")} label="متن اصلی" />
       </div>
 
       <div className="ui-glass" style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: 18, minHeight: 300 }}>
-        {loading ? (
+        {tab === "src" ? (
+          <OriginalText topic={topic} />
+        ) : loading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 260, gap: 14 }}>
             <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
             <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: "rgba(18,26,36,0.6)", direction: "rtl" }}>در حال نوشتن سناریوی فارسی و انگلیسی…</div>

@@ -436,7 +436,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           grounding: grounded ? "full" : "headline",
           score: p.score,
           ...(src.social ? { social: src.social, author: src.author } : {}),
-          ...(src.newsletter ? { newsletter: src.newsletter, citation: src.citation || "", focus: src.focus || [] } : {}),
+          ...(src.newsletter ? { newsletter: src.newsletter, citation: src.citation || "", focus: src.focus || [], kind: src.kind, issue: src.issue, n: src.n } : {}),
           ...(src.coverage > 1 ? { coverage: src.coverage, outlets: src.outlets.slice(0, 6) } : {}),
         };
         if (!accept(topic, seenUrlSet)) continue;
