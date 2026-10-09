@@ -8,10 +8,11 @@ import {
   articleKey,
   isGoogleNews,
 } from "../../../lib/news";
-import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier } from "../../../lib/candidates";
+import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier, focusOf } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
-import { getLexbaseItems } from "../../../lib/newsletter/lexbase";
+import { getLexbaseItems, lexbaseEnabled } from "../../../lib/newsletter/lexbase";
+import { getLexbaseDeck } from "../../../lib/newsletter/lexbase-deck";
 import {
   topicPrompt,
   selectTopicsPrompt,
@@ -68,6 +69,7 @@ const MAX_CARDS = 14; // cards returned per generation
 const MAX_PER_SOURCE = 4; // shortlist slots any one source may take
 const MAX_PER_SOURCE_DECK = 2; // cards any one source or creator may take in a deck
 const MAX_NEWSLETTER_DECK = 5; // a newsletter issue is many developments, so it may take more
+const MAX_FOCUS_NEWSLETTER = 4; // priority newsletter items every deck carries, chosen or not
 const MAX_CASES = 3; // shortlist slots for individual court decisions
 const MAX_SOCIAL = 15; // shortlist slots for creators' posts (news stays the backbone)
 const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
@@ -293,13 +295,15 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         Math.min(relevance(c), 12) +
         recencyBoost(c.published_ms, nowMs) +
         Math.min((c.coverage || 1) - 1, 3) * heatWeight(c.published_ms, nowMs) +
-        (sourceTier(c) > 0 || c.newsletter ? 3 : 0),
+        (sourceTier(c) > 0 || c.newsletter ? 3 : 0) +
+        // Iranians, study permits, Start-up Visa: the audience's own files.
+        (focusOf(c).length ? 5 : 0),
     }))
     .sort((a, b) => b.rank - a.rank);
   for (const { c } of byRank) {
     const n = perSource.get(c.source_name) || 0;
     const isCase = /\bv\.?\s+canada\b|\bc\.\s+canada\b/i.test(c.title);
-    if (isCase && cases >= MAX_CASES) continue;
+    if (isCase && cases >= MAX_CASES && !c.newsletter) continue;
     if (c.social && socialN >= MAX_SOCIAL) continue;
     // Newsletter items are exempt from the per-source shortlist cap: one
     // issue is many separate developments, each meant to become a topic.
@@ -340,6 +344,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     const body = c.text || c.snippet || "";
     c.brief =
       (c.newsletter ? "[Lexbase newsletter, " + c.kind + (c.citation ? " " + c.citation : "") + "] " : "") +
+      (focusOf(c).length ? "[priority: " + focusOf(c).join(", ") + "] " : "") +
       (c.coverage > 1 && heatWeight(c.published_ms, nowMs) > 0
         ? `[covered by ${c.coverage} sources: ${c.outlets.slice(0, 4).join(", ")}] `
         : "") +
@@ -369,6 +374,18 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   // A failed selection must not empty the deck: fall back to the ranking.
   if (!picks.length) {
     picks = ranked.slice(0, MAX_CARDS).map((item) => ({ item, field: "Policy", score: 70 }));
+  }
+  // Priority newsletter items (Iran, study permits, Start-up Visa) are always
+  // carried, whether or not the selector chose them; the newsletter section
+  // has the rest of the issue.
+  const picked = new Set(picks.map((p) => p.item));
+  let forced = picks.filter((p) => p.item.newsletter && focusOf(p.item).length).length;
+  for (const c of unique) {
+    if (forced >= MAX_FOCUS_NEWSLETTER) break;
+    if (!c.newsletter || picked.has(c) || !focusOf(c).length) continue;
+    const field = c.kind === "court" ? "Court" : focusOf(c).includes("study") ? "Study" : "Policy";
+    picks.unshift({ item: c, field, score: 90 });
+    forced++;
   }
   lastStats.selected = picks.length;
   lastStats.timings.selectMs = Date.now() - t0;
@@ -419,7 +436,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           grounding: grounded ? "full" : "headline",
           score: p.score,
           ...(src.social ? { social: src.social, author: src.author } : {}),
-          ...(src.newsletter ? { newsletter: src.newsletter, citation: src.citation || "" } : {}),
+          ...(src.newsletter ? { newsletter: src.newsletter, citation: src.citation || "", focus: src.focus || [] } : {}),
           ...(src.coverage > 1 ? { coverage: src.coverage, outlets: src.outlets.slice(0, 6) } : {}),
         };
         if (!accept(topic, seenUrlSet)) continue;
@@ -618,6 +635,8 @@ export async function GET(request) {
     startRun([]);
     started = true;
   }
+  // Also keeps the newsletter section written after a restart.
+  if (warm && lexbaseEnabled()) getLexbaseDeck({ waitMs: 0 }).catch(() => {});
   return Response.json(
     {
       ok: true,

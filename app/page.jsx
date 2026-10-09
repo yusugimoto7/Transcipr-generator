@@ -468,7 +468,7 @@ export default function App() {
   useEffect(() => {
     try {
       const m = localStorage.getItem("sugimoto_deck_mode_v2");
-      if (m === "list" || m === "cards") setDeckModeState(m);
+      if (m === "list" || m === "cards" || m === "lexbase") setDeckModeState(m);
     } catch (_) {}
   }, []);
 
@@ -850,7 +850,7 @@ export default function App() {
       if (!j || !j.topic) continue;
       if (dismissed[key + ":" + kind] && j.status !== "running") continue;
       if (view === "script" && key === svKey) continue; // that one is on screen already
-      if (view === "deck" && deckMode === "list" && kind === "script") continue; // its row shows it
+      if (view === "deck" && deckMode !== "cards" && kind === "script") continue; // its row shows it
       bgRows.push(j);
     }
   }
@@ -951,17 +951,30 @@ export default function App() {
             </div>
           )}
 
-          {!loadingTopics && <DeckWhy stats={deckStats} />}
+          {!loadingTopics && deckMode !== "lexbase" && <DeckWhy stats={deckStats} />}
 
-          {!loadingTopics && topics.length > 0 && <ModeSwitch mode={deckMode} onChange={setDeckMode} />}
+          {(deckMode === "lexbase" || (!loadingTopics && topics.length > 0)) && <ModeSwitch mode={deckMode} onChange={setDeckMode} />}
 
-          {streaming && !loadingTopics && (
+          {streaming && !loadingTopics && deckMode !== "lexbase" && (
             <div dir="rtl" className="ui-progress ui-fade" style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text }}>
               <span className="ui-pulse">⏳</span> موضوع‌های تازه در حال اضافه شدن به انتهای فهرست…
             </div>
           )}
 
-          {deckMode === "list" && !loadingTopics && topics.length > 0 ? (
+          {deckMode === "lexbase" ? (
+            <LexbaseSection
+              decisions={decisions}
+              jobs={bg}
+              onApprove={(t) => approveTopic(t, { open: false })}
+              onReject={rejectTopic}
+              onRestore={restoreTopic}
+              onOpenScript={(t) => {
+                setDismissed((d) => ({ ...d, [topicKey(t) + ":script"]: true }));
+                openJobTopic(t);
+              }}
+              onRetry={(t) => startJob("script", t, { topic: t })}
+            />
+          ) : deckMode === "list" && !loadingTopics && topics.length > 0 ? (
             <IdeasList
               topics={topics}
               decisions={decisions}
@@ -1086,20 +1099,21 @@ export default function App() {
 }
 
 // Cards (swipe one at a time) or List (every idea's title at a glance).
+const MODES = [["cards", "🃏", "Cards"], ["list", "☰", "List"], ["lexbase", "📬", "Lexbase"]];
 function ModeSwitch({ mode, onChange }) {
-  const idx = mode === "list" ? 1 : 0;
+  const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
     <div style={{ position: "relative", display: "flex", padding: 3, borderRadius: 12, background: C.surfaceHi, border: `1px solid ${C.line}`, marginBottom: 14 }}>
       {/* sliding highlight under the active option */}
       <div
         aria-hidden
         style={{
-          position: "absolute", top: 3, bottom: 3, left: 3, width: "calc(50% - 3px)", borderRadius: 9,
+          position: "absolute", top: 3, bottom: 3, left: 3, width: `calc((100% - 6px) / ${MODES.length})`, borderRadius: 9,
           background: C.surface, boxShadow: "0 1px 3px rgba(16,24,40,0.12)",
           transform: `translateX(${idx * 100}%)`, transition: "transform 0.28s cubic-bezier(.2,.8,.2,1)",
         }}
       />
-      {[["cards", "🃏", "Cards"], ["list", "☰", "List"]].map(([m, ic, label]) => (
+      {MODES.map(([m, ic, label]) => (
         <button
           key={m}
           className="ui-btn"
@@ -1142,7 +1156,7 @@ const CATEGORIES = [
   ["web", "🌐 سایت‌ها", (t) => !isSocialTopic(t)],
 ];
 
-function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, onOpenScript, onRetry, onShowCard }) {
+function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, onOpenScript, onRetry, onShowCard, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected
   const [cat, setCat] = useState("all"); // see CATEGORIES
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
@@ -1203,7 +1217,7 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
         {chip("approved", "تأیید شده")}
         {chip("rejected", "رد شده")}
       </div>
-      <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+      {!plain && <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
         {CATEGORIES.map(([k, label]) => {
           const on = cat === k;
           return (
@@ -1225,7 +1239,7 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
             </button>
           );
         })}
-      </div>
+      </div>}
 
       {!rows.length && (
         <div dir="rtl" className="ui-glass" style={{ textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontFamily: "'Vazirmatn', sans-serif", fontSize: 13 }}>
@@ -1258,17 +1272,22 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
               <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
-                  onClick={() => st === "pending" && onShowCard(i)}
-                  title={(t.title_en ? t.title_en + " — " : "") + (st === "pending" ? "open as a card" : "")}
+                  onClick={() => st === "pending" && onShowCard && onShowCard(i)}
+                  title={(t.title_en ? t.title_en + " — " : "") + (st === "pending" && onShowCard ? "open as a card" : "")}
                   style={{
                     fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
-                    color: C.text, cursor: st === "pending" ? "pointer" : "default",
+                    color: C.text, cursor: st === "pending" && onShowCard ? "pointer" : "default",
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                     textDecoration: st === "rejected" ? "line-through" : "none",
                   }}
                 >
                   {t.title_fa || t.title_en}
                 </div>
+                {plain && t.why_now && (
+                  <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {t.why_now}
+                  </div>
+                )}
                 <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
                     {f.emoji} {f.label}
@@ -1286,8 +1305,11 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
                     <span title={"Also covered by: " + (t.outlets || []).join(", ")} style={{ color: "#c2410c", background: alpha("#f97316", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>🔥 {t.coverage} sources</span>
                   )}
                   {t.newsletter === "lexbase" && (
-                    <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 Lexbase</span>
+                    <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 {t.citation || "Lexbase"}</span>
                   )}
+                  {(t.focus || []).map((k) => (
+                    <span key={k} style={{ color: "#b42318", background: alpha("#f04438", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>{FOCUS_LABEL[k] || k}</span>
+                  ))}
                   {t.social === "instagram" && (
                     <span title="From a creator's Instagram post — check the claim before scripting" style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>📸 @{t.author}</span>
                   )}
@@ -1316,6 +1338,145 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const FOCUS_LABEL = { iran: "⭐ Iran", study: "⭐ Study permit", startup: "⭐ Start-up Visa" };
+
+// The newsletter section: a card for every item of a Lexbase issue, policy
+// notes and court decisions alike, with the standing priorities (Iran, study
+// permits, Start-up Visa) on top. The server writes the cards in the
+// background; this shows the saved copy first and polls until all are in.
+const LEX_KEY = "sugimoto_lexbase_v1";
+const LEX_GROUPS = [
+  ["all", "همه", () => true],
+  ["focus", "⭐ اولویت‌ها", (t) => (t.focus || []).length > 0],
+  ["policy", "📋 فکت‌ها و سیاست‌ها", (t) => t.kind !== "court"],
+  ["court", "⚖️ پرونده‌های دادگاه", (t) => t.kind === "court"],
+];
+
+function LexbaseSection({ decisions, ...actions }) {
+  const [issueKey, setIssueKey] = useState("");
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [group, setGroup] = useState("all");
+  const [showDone, setShowDone] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LEX_KEY) || "null");
+      if (saved && saved.issue && (!issueKey || saved.issue.key === issueKey)) setData(saved);
+    } catch (_) {}
+    let stop = false;
+    let timer = null;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/lexbase/topics" + (issueKey ? "?issue=" + encodeURIComponent(issueKey) : ""), { cache: "no-store" });
+        const j = await r.json();
+        if (stop) return;
+        if (j.error) throw new Error(j.error);
+        setErr("");
+        // Keep the saved cards on screen until the server has at least as many.
+        setData((prev) => (prev && prev.issue && j.issue && prev.issue.key === j.issue.key && prev.cards.length > j.cards.length ? { ...j, cards: prev.cards } : j));
+        if (j.issue && j.cards.length) {
+          try {
+            localStorage.setItem(LEX_KEY, JSON.stringify(j));
+          } catch (_) {}
+        }
+        if (j.writing || j.pending || (j.issue && j.missing > 0 && j.cards.length === 0)) timer = setTimeout(load, 4000);
+      } catch (e) {
+        if (stop) return;
+        setErr(String(e?.message || e));
+        timer = setTimeout(load, 10000);
+      }
+    };
+    load();
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+  }, [issueKey]);
+
+  const seen = loadSeen();
+  const seenTitles = new Set(seen.map((s) => s.key));
+  const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
+  const cards = (data && data.cards) || [];
+  // Decided on an earlier visit: hidden unless asked for, like the main deck.
+  const doneBefore = (t) => !decisions[topicKey(t)] && isSeen(t, seenTitles, seenUrls);
+  const doneN = cards.filter(doneBefore).length;
+  const visible = cards.filter((t) => showDone || !doneBefore(t));
+  const inGroup = LEX_GROUPS.find((g) => g[0] === group)[2];
+  const rows = visible.filter(inGroup);
+  const iss = data && data.issue;
+  const font = { fontFamily: "'Vazirmatn', sans-serif" };
+
+  return (
+    <div>
+      {data && data.issues && data.issues.length > 1 && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto" }}>
+          {data.issues.map((i) => {
+            const on = iss && iss.key === i.key;
+            return (
+              <button key={i.key} className="ui-btn" onClick={() => setIssueKey(i.key)} style={{ padding: "5px 11px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", border: `1px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.12) : C.surface, color: on ? "#6d5bd0" : C.text2, fontSize: 12, fontWeight: 700 }}>
+                {i.subject.replace(/^.*?lexbase\s*[-–—:]?\s*/i, "") || i.key} · {i.total}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div dir="rtl" className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#6d5bd0", 0.3)}`, background: alpha("#6d5bd0", 0.06), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
+        {iss ? (
+          <>
+            <b>📬 {iss.subject || "Lexbase " + iss.key}</b>
+            <br />
+            {iss.policy} فکت و سیاست · {iss.court} پرونده‌ی دادگاه · {iss.priority} مورد اولویت‌دار (ایران، مجوز تحصیل، استارتاپ ویزا)
+            {data.writing || data.missing > 0 ? (
+              <div className="ui-pulse" style={{ color: "#6d5bd0", fontWeight: 700 }}>
+                ⏳ {cards.length} از {iss.total} موضوع نوشته شده…
+              </div>
+            ) : null}
+          </>
+        ) : data && data.pending ? (
+          <span className="ui-pulse">⏳ در حال خواندن خبرنامه از ایمیل…</span>
+        ) : data ? (
+          <span>هیچ شماره‌ای از Lexbase در ایمیل پیدا نشد. {data.mailbox}</span>
+        ) : (
+          <span className="ui-pulse">⏳ در حال بارگذاری…</span>
+        )}
+        {err && <div dir="ltr" style={{ fontSize: 11, color: C.reject, textAlign: "left" }}>{err}</div>}
+      </div>
+
+      {cards.length > 0 && (
+        <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+          {LEX_GROUPS.map(([k, label, test]) => {
+            const on = group === k;
+            return (
+              <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                {label}
+                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Inter', sans-serif" }}>{visible.filter(test).length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {cards.length === 0 && iss ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="ui-skeleton" style={{ height: 64, borderRadius: 14 }} />
+          ))}
+        </div>
+      ) : (
+        cards.length > 0 && <IdeasList topics={rows} decisions={decisions} plain {...actions} />
+      )}
+
+      {doneN > 0 && (
+        <button className="ui-btn" onClick={() => setShowDone((v) => !v)} style={{ ...font, display: "block", margin: "14px auto 0", padding: "6px 12px", borderRadius: 99, border: `1px solid ${C.line}`, background: C.surface, color: C.text2, fontSize: 12, cursor: "pointer" }} dir="rtl">
+          {showDone ? "پنهان کردن موارد بررسی‌شده" : `${doneN} مورد را قبلاً بررسی کرده‌ای — نمایش`}
+        </button>
+      )}
     </div>
   );
 }
