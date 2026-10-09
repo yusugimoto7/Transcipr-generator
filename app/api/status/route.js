@@ -211,6 +211,11 @@ function checkKeys() {
         " — details at /api/social",
     },
     {
+      name: "Lexbase newsletter (Gmail)",
+      ok: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
+      detail: process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD ? `reading ${process.env.GMAIL_USER} — details at /api/lexbase` : "GMAIL_USER / GMAIL_APP_PASSWORD not set",
+    },
+    {
       name: "Claude fallback",
       ok: !!process.env.ANTHROPIC_API_KEY,
       detail: process.env.ANTHROPIC_API_KEY ? "key set" : "not set (no safety net)",

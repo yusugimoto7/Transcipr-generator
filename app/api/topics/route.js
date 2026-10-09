@@ -11,6 +11,7 @@ import {
 import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
+import { getLexbaseItems } from "../../../lib/newsletter/lexbase";
 import {
   topicPrompt,
   selectTopicsPrompt,
@@ -66,6 +67,7 @@ const SELECT_FROM = 70; // candidates shown to the selection call (token cap)
 const MAX_CARDS = 14; // cards returned per generation
 const MAX_PER_SOURCE = 4; // shortlist slots any one source may take
 const MAX_PER_SOURCE_DECK = 2; // cards any one source or creator may take in a deck
+const MAX_NEWSLETTER_DECK = 5; // a newsletter issue is many developments, so it may take more
 const MAX_CASES = 3; // shortlist slots for individual court decisions
 const MAX_SOCIAL = 15; // shortlist slots for creators' posts (news stays the backbone)
 const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
@@ -224,10 +226,11 @@ async function groundTextFor(item) {
 // SELECTS -> real text fetched for each pick -> model WRITES only from it.
 async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, emit }) {
   const t0 = Date.now();
-  const [harvest, seen, social] = await Promise.all([
+  const [harvest, seen, social, lexbase] = await Promise.all([
     loadHarvest(),
     seenP,
     getInstagramItems({ maxAgeDays: NEWS_WINDOW_DAYS, waitMs: 6000 }).catch(() => ({ items: [] })),
+    getLexbaseItems({ waitMs: 6000 }).catch(() => ({ items: [] })),
   ]);
   const seenUrlSet = seen ? seen.urls : null;
   const exclude = [...new Set([...(clientExclude || []), ...((seen && seen.titles) || [])])].slice(-100);
@@ -239,7 +242,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
 
   const merged = mergeCandidates(
     harvest ? harvest.items : [],
-    [...(live ? live.items : []), ...social.items],
+    [...(live ? live.items : []), ...social.items, ...lexbase.items],
     nowMs
   ).items;
   // The brand's own published titles. They are Farsi and the news is mostly
@@ -252,13 +255,13 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   const eligible = [];
   for (const c of merged) {
     const t = c.published_ms || Date.parse(c.first_seen || "") || 0;
-    if (t && t < cutoff) continue;
+    if (t && t < (c.newsletter ? cutoff - 15 * 86400000 : cutoff)) continue;
     const keys = [articleKey(c.source_url), articleKey(c.resolved_url)].filter(Boolean);
     if (seenUrlSet && keys.some((k) => seenUrlSet.has(k))) {
       counts.alreadyUsed++;
       continue;
     }
-    if (isDrawResult(c) || relevance(c) === 0) {
+    if (isDrawResult(c) || (!c.newsletter && relevance(c) === 0)) {
       counts.offTopic++;
       continue;
     }
@@ -290,15 +293,17 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         Math.min(relevance(c), 12) +
         recencyBoost(c.published_ms, nowMs) +
         Math.min((c.coverage || 1) - 1, 3) * heatWeight(c.published_ms, nowMs) +
-        (sourceTier(c) > 0 ? 3 : 0),
+        (sourceTier(c) > 0 || c.newsletter ? 3 : 0),
     }))
     .sort((a, b) => b.rank - a.rank);
   for (const { c } of byRank) {
     const n = perSource.get(c.source_name) || 0;
-    if (n >= MAX_PER_SOURCE) continue;
     const isCase = /\bv\.?\s+canada\b|\bc\.\s+canada\b/i.test(c.title);
     if (isCase && cases >= MAX_CASES) continue;
     if (c.social && socialN >= MAX_SOCIAL) continue;
+    // Newsletter items are exempt from the per-source shortlist cap: one
+    // issue is many separate developments, each meant to become a topic.
+    if (!c.newsletter && n >= MAX_PER_SOURCE) continue;
     perSource.set(c.source_name, n + 1);
     if (isCase) cases++;
     if (c.social) socialN++;
@@ -318,6 +323,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
       : null,
     pool: merged.length,
     socialPosts: social.items.length,
+    newsletterItems: lexbase.items.length,
     ...counts,
     duplicateStories: collapsed,
     eligible: unique.length,
@@ -333,6 +339,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   for (const c of ranked) {
     const body = c.text || c.snippet || "";
     c.brief =
+      (c.newsletter ? "[Lexbase newsletter, " + c.kind + (c.citation ? " " + c.citation : "") + "] " : "") +
       (c.coverage > 1 && heatWeight(c.published_ms, nowMs) > 0
         ? `[covered by ${c.coverage} sources: ${c.outlets.slice(0, 4).join(", ")}] `
         : "") +
@@ -351,7 +358,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
       if (!Number.isInteger(i) || !ranked[i] || seenIdx.has(i)) continue;
       seenIdx.add(i);
       const who = ranked[i].author || ranked[i].source_name || "";
-      if ((perDeck.get(who) || 0) >= MAX_PER_SOURCE_DECK) continue;
+      if ((perDeck.get(who) || 0) >= (ranked[i].newsletter ? MAX_NEWSLETTER_DECK : MAX_PER_SOURCE_DECK)) continue;
       perDeck.set(who, (perDeck.get(who) || 0) + 1);
       picks.push({ item: ranked[i], field: p.field || "Policy", score: Number(p.score) || 75 });
       if (picks.length >= MAX_CARDS) break;
@@ -412,6 +419,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           grounding: grounded ? "full" : "headline",
           score: p.score,
           ...(src.social ? { social: src.social, author: src.author } : {}),
+          ...(src.newsletter ? { newsletter: src.newsletter, citation: src.citation || "" } : {}),
           ...(src.coverage > 1 ? { coverage: src.coverage, outlets: src.outlets.slice(0, 6) } : {}),
         };
         if (!accept(topic, seenUrlSet)) continue;

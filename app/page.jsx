@@ -1285,6 +1285,9 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
                   {t.coverage > 1 && (
                     <span title={"Also covered by: " + (t.outlets || []).join(", ")} style={{ color: "#c2410c", background: alpha("#f97316", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>🔥 {t.coverage} sources</span>
                   )}
+                  {t.newsletter === "lexbase" && (
+                    <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 Lexbase</span>
+                  )}
                   {t.social === "instagram" && (
                     <span title="From a creator's Instagram post — check the claim before scripting" style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>📸 @{t.author}</span>
                   )}
@@ -1428,6 +1431,7 @@ function DeckWhy({ stats }) {
       <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, display: "grid", gap: 3 }}>
         {row("Articles in pool", stats.pool ?? 0)}
         {row("…of which Instagram posts", stats.socialPosts ?? 0)}
+        {row("…of which Lexbase items", stats.newsletterItems ?? 0)}
         {row("Already approved or rejected", stats.alreadyUsed ?? 0)}
         {row("Off-topic or draw results", stats.offTopic ?? 0)}
         {row("Untrusted sources dropped", stats.untrusted ?? 0)}
@@ -1547,6 +1551,11 @@ function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
           {topic.coverage > 1 && (
             <span title={"Also covered by: " + (topic.outlets || []).join(", ")} style={{ ...pill, color: "#c2410c", background: alpha("#f97316", 0.1), border: `1px solid ${alpha("#f97316", 0.35)}`, fontWeight: 700 }}>
               🔥 {topic.coverage} sources
+            </span>
+          )}
+          {topic.newsletter === "lexbase" && (
+            <span title={"From the Lexbase newsletter" + (topic.citation ? " — " + topic.citation : "")} style={{ ...pill, color: "#6d5bd0", background: alpha("#6d5bd0", 0.08), border: `1px solid ${alpha("#6d5bd0", 0.3)}`, fontWeight: 700 }}>
+              📬 Lexbase{topic.citation ? " · " + topic.citation : ""}
             </span>
           )}
           {topic.social === "instagram" && (
