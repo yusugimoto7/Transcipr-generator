@@ -1532,7 +1532,9 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
   if (!rows.length) return null;
   const KIND = { script: "سناریو", article: "مقاله", carousel: "کاروسل" };
   return (
-    <div style={{ width: "100%", maxWidth: width, marginBottom: 12, display: "grid", gap: 8 }}>
+    // Pinned under the header so a finished or failed job is seen wherever
+    // you are on the page.
+    <div style={{ position: "sticky", top: 76, zIndex: 29, width: "100%", maxWidth: width, marginBottom: 12, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, maxHeight: "40vh", overflowY: "auto", overflowX: "hidden" }}>
       {rows.map((j) => {
         const running = j.status === "running";
         const failed = j.status === "error";
@@ -1545,7 +1547,10 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
             className={"ui-glass ui-fade" + (running ? " ui-progress" : "")}
             style={{
               display: "flex", alignItems: "center", gap: 10, padding: "9px 10px 9px 12px", borderRadius: 14,
-              border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.08),
+              border: `1px solid ${alpha(tone, 0.35)}`,
+              // Solid underneath: it floats over the list.
+              background: `linear-gradient(${alpha(tone, 0.1)}, ${alpha(tone, 0.1)}), ${C.surface}`,
+              boxShadow: "0 6px 18px rgba(16,24,40,0.10)",
               fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text,
             }}
           >
