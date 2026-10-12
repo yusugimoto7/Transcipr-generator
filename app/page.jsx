@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { isUntrusted } from "../lib/trust";
+import { sameTopic } from "../lib/similar";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -231,6 +232,30 @@ function wsPost(action, topic) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, topic }),
   }).catch(() => {});
+}
+
+// A topic opened in a new tab (right-click → open in new tab) travels by its
+// key in the address; the card itself is handed over through this device's
+// storage, so a new idea that is not in the workspace yet still opens.
+const HANDOFF_KEY = "sugimoto_handoff_v1";
+function handOff(topic) {
+  try {
+    const m = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "{}");
+    m[topicKey(topic)] = { topic, at: Date.now() };
+    const keep = Object.entries(m).sort((a, b) => b[1].at - a[1].at).slice(0, 30);
+    localStorage.setItem(HANDOFF_KEY, JSON.stringify(Object.fromEntries(keep)));
+  } catch (_) {}
+}
+function handedOff(key) {
+  try {
+    const m = JSON.parse(localStorage.getItem(HANDOFF_KEY) || "{}");
+    return (m[key] && m[key].topic) || null;
+  } catch (_) {
+    return null;
+  }
+}
+function topicHref(t) {
+  return "/?t=" + encodeURIComponent(topicKey(t));
 }
 
 export default function App() {
@@ -575,31 +600,53 @@ export default function App() {
 
   // One list: new ideas and every topic in the workspace. A new idea that is
   // the same story as a workspace topic (same title or same source) shows as
-  // that topic, with its state.
+  // that topic, with its state. Cards that report the same story in other
+  // words (often written in different runs) are merged into one row that
+  // lists every source; two topics that both have material stay apart.
   const listTopics = useMemo(() => {
     const byUrl = new Map();
     for (const e of Object.values(ws)) {
       const u = urlKey(e.topic);
       if (u && !byUrl.has(u)) byUrl.set(u, e);
     }
-    const out = [];
+    const cands = [];
     const keys = new Set();
     const urls = new Set();
-    const add = (t, ts) => {
+    const add = (t, ts, used) => {
       const k = topicKey(t);
       const u = urlKey(t);
       if (!k || keys.has(k) || (u && urls.has(u))) return;
       keys.add(k);
       if (u) urls.add(u);
-      out.push(ts ? { ...t, _ts: ts } : t);
+      cands.push({ t: ts ? { ...t, _ts: ts } : t, used });
     };
     for (const t of topics) {
       const e = ws[topicKey(t)] || byUrl.get(urlKey(t));
-      if (e) add({ ...t, ...e.topic }, e.updatedAt);
-      else add(t);
+      if (e) add({ ...t, ...e.topic }, e.updatedAt, true);
+      else add(t, 0, false);
     }
-    for (const e of Object.values(ws)) add(e.topic, e.updatedAt);
-    return out;
+    for (const e of Object.values(ws)) add(e.topic, e.updatedAt, true);
+
+    // The row is shown under its best card: the one with material, else the
+    // one written from full text, else the higher-scored.
+    const rank = (c) => (c.used ? 1000 : 0) + (c.t.grounding === "headline" ? 0 : 100) + (Number(c.t.score) || 0);
+    const groups = [];
+    for (const c of cands) {
+      const g = groups.find((g) => !(g.used && c.used) && g.members.some((m) => sameTopic(m.t, c.t)));
+      if (!g) {
+        groups.push({ used: c.used, members: [c] });
+        continue;
+      }
+      g.members.push(c);
+      g.used = g.used || c.used;
+    }
+    return groups.map((g) => {
+      const members = g.members.slice().sort((a, b) => rank(b) - rank(a));
+      const lead = members[0].t;
+      if (members.length === 1) return lead;
+      const also = members.slice(1).map((m) => ({ url: m.t.source_url || "", name: m.t.source_name || "" })).filter((x) => x.url);
+      return { ...lead, _also: also, coverage: Math.max(Number(lead.coverage) || 1, 1) + also.length };
+    });
   }, [topics, ws]);
 
   // ---- decisions ----------------------------------------------------------
@@ -631,8 +678,18 @@ export default function App() {
   // Open a topic: its saved material comes from the workspace; anything a job
   // made in this session comes from the job.
   const openKeyRef = useRef("");
-  const openTopic = (topic) => {
+  const listScrollRef = useRef(0);
+  const openTopic = (topic, { push = true } = {}) => {
     const key = topicKey(topic);
+    if (view === "deck") listScrollRef.current = window.scrollY || 0;
+    handOff(topic); // so a reload or Forward to this address finds it
+    // A history entry per opened topic, so the browser's Back button returns
+    // to the list instead of leaving the app.
+    if (push) {
+      try {
+        window.history.pushState({ t: key }, "", topicHref(topic));
+      } catch (_) {}
+    }
     const e = wsRef.current[key];
     const t = e ? { ...topic, ...e.topic } : topic;
     openKeyRef.current = key;
@@ -663,6 +720,81 @@ export default function App() {
       setLoadingSaved(false);
     }
   };
+
+  // Back to the list, where you were in it.
+  const showList = () => {
+    setView("deck");
+    openKeyRef.current = "";
+    const y = listScrollRef.current;
+    setTimeout(() => {
+      try {
+        window.scrollTo(0, y);
+      } catch (_) {}
+    }, 30);
+  };
+  const backToList = () => {
+    try {
+      if (window.history.state && window.history.state.t) {
+        window.history.back(); // the popstate handler shows the list
+        return;
+      }
+      window.history.replaceState(null, "", "/");
+    } catch (_) {}
+    showList();
+  };
+
+  // A topic by its key, from wherever this page knows it.
+  const findTopic = (key) => {
+    const e = wsRef.current[key];
+    if (e) return e.topic;
+    const t = topicsRef.current.find((x) => topicKey(x) === key);
+    return t || handedOff(key);
+  };
+
+  // Browser Back / Forward between the list and opened topics.
+  useEffect(() => {
+    const onPop = () => {
+      let key = "";
+      try {
+        key = new URLSearchParams(window.location.search).get("t") || "";
+      } catch (_) {}
+      const t = key && findTopic(key);
+      if (t) openTopicRef.current(t, { push: false });
+      else showList();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const openTopicRef = useRef(openTopic);
+  openTopicRef.current = openTopic;
+
+  // Opened with ?t=<key> (a topic opened in a new tab): show that topic once
+  // it is known. Back from it goes to the list, not out of the app.
+  const pendingOpenRef = useRef(undefined);
+  useEffect(() => {
+    if (pendingOpenRef.current === undefined) {
+      pendingOpenRef.current = null;
+      try {
+        const key = new URLSearchParams(window.location.search).get("t");
+        if (key) {
+          pendingOpenRef.current = key;
+          window.history.replaceState(null, "", "/");
+          window.history.pushState({ t: key }, "", "/?t=" + encodeURIComponent(key));
+          // Not found by then (an idea that has expired): stay on the list.
+          setTimeout(() => (pendingOpenRef.current = null), 20000);
+        }
+      } catch (_) {}
+    }
+    const key = pendingOpenRef.current;
+    if (!key) return;
+    const t = findTopic(key);
+    if (t) {
+      pendingOpenRef.current = null;
+      openTopic(t, { push: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ws, topics]);
 
   const navBtn = {
     height: 38, minWidth: 38, padding: "0 11px", borderRadius: 12, boxSizing: "border-box",
@@ -773,7 +905,7 @@ export default function App() {
           </a>
           <button
             onClick={() => {
-              setView("deck");
+              if (view !== "deck") backToList();
               loadTopics(true);
               loadWorkspace();
             }}
@@ -878,7 +1010,7 @@ export default function App() {
           setTab={setScriptTab}
           copied={copied}
           onCopy={copy}
-          onBack={() => setView("deck")}
+          onBack={backToList}
           onWrite={decisions[svKey] === "rejected" ? null : () => approveTopic(scriptTopic)}
           tgState={viewTg.state}
           tgMsg={viewTg.msg}
@@ -949,11 +1081,30 @@ function isSocialTopic(t) {
     return false;
   }
 }
+// Link behaviour for opening a topic: a plain click opens it here; Ctrl/Cmd/
+// Shift-click, middle-click and right-click → "open in new tab" use the link,
+// and the card is handed to the new tab through this device's storage.
+function openLinkProps(t, onOpen) {
+  return {
+    onClick: (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        handOff(t);
+        return;
+      }
+      e.preventDefault();
+      onOpen && onOpen(t);
+    },
+    onAuxClick: () => handOff(t),
+    onContextMenu: () => handOff(t),
+  };
+}
+
+// What has been made from a topic, shown on its row so nobody makes it twice.
 const MATERIAL_BADGE = {
-  script: ["📝", "Scripts written"],
-  article: ["📰", "Blog article written"],
-  carousel: ["🖼", "Carousel made (📢 = sent to the public channel)"],
-  video: ["🎬", "Video requested"],
+  script: ["📝 Script", "Scripts written", "#12945e"],
+  article: ["📰 Article", "Blog article written", "#0e8a99"],
+  carousel: ["🖼 Carousel", "Carousel post made", "#6d5bd0"],
+  video: ["🎬 Video", "Video requested", "#334155"],
 };
 const CATEGORIES = [
   ["all", "همه", () => true],
@@ -1027,6 +1178,24 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
     </button>
   );
 
+  // A real link, like the title: right-click opens the topic in a new tab.
+  const openBtn = (t, label) => (
+    <a
+      href={topicHref(t)}
+      {...openLinkProps(t, onOpen)}
+      aria-label="Open topic"
+      className="ui-btn"
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 36, height: 36, padding: "0 11px",
+        borderRadius: 11, boxSizing: "border-box", textDecoration: "none", border: "none",
+        background: alpha(C.success, 0.16), color: C.success, fontWeight: 700, fontSize: 13,
+        fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </a>
+  );
+
   return (
     <div>
       <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
@@ -1089,18 +1258,19 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
               {/* topic-type color stripe on the reading-start edge */}
               <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  onClick={() => onOpen && onOpen(t)}
-                  title={(t.title_en ? t.title_en + " — " : "") + "open"}
+                <a
+                  href={topicHref(t)}
+                  {...openLinkProps(t, onOpen)}
+                  title={(t.title_en ? t.title_en + " — " : "") + "open (right-click: new tab)"}
                   style={{
                     fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
-                    color: C.text, cursor: onOpen ? "pointer" : "default",
+                    color: C.text, cursor: "pointer",
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                     textDecoration: st === "rejected" ? "line-through" : "none",
                   }}
                 >
                   {t.title_fa || t.title_en}
-                </div>
+                </a>
                 {plain && t.why_now && (
                   <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {t.why_now}
@@ -1116,6 +1286,11 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                       {sourceHost(t.source_url)} ↗
                     </a>
                   )}
+                  {(t._also || []).map((x) => (
+                    <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer" title={"Same story, also reported by " + (x.name || sourceHost(x.url))} style={{ color: C.teal, textDecoration: "none", borderLeft: `1px solid ${C.line}`, paddingLeft: 8 }}>
+                      + {sourceHost(x.url)} ↗
+                    </a>
+                  ))}
                   {t.grounding === "headline" && (
                     <span style={{ color: C.orange, border: `1px solid ${alpha(C.orange, 0.5)}`, borderRadius: 99, padding: "0 6px" }}>headline only</span>
                   )}
@@ -1125,10 +1300,11 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   {t.newsletter === "lexbase" && (
                     <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 {t.citation || "Lexbase"}</span>
                   )}
-                  {Object.keys(((ws[topicKey(t)] || {}).materials) || {}).map((k) => MATERIAL_BADGE[k] && (
-                    <span key={"m" + k} title={MATERIAL_BADGE[k][1]} style={{ color: C.success, background: alpha(C.success, 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>
+                  {Object.entries(((ws[topicKey(t)] || {}).materials) || {}).map(([k, m]) => MATERIAL_BADGE[k] && (
+                    <span key={"m" + k} title={MATERIAL_BADGE[k][1]} style={{ color: "#fff", background: MATERIAL_BADGE[k][2], borderRadius: 99, padding: "1px 8px", fontWeight: 700 }}>
                       {MATERIAL_BADGE[k][0]}
-                      {k === "carousel" && (((ws[topicKey(t)] || {}).materials || {}).carousel || {}).sent?.public ? " 📢" : ""}
+                      {k === "carousel" && m && m.count ? " " + m.count : ""}
+                      {k === "carousel" && m && m.sent && m.sent.public ? " · 📢 published" : ""}
                     </span>
                   ))}
                   {(t.focus || []).map((k) => (
@@ -1148,14 +1324,15 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                     {smallBtn("✕", () => onReject(t), "danger", "Reject topic")}
                   </div>
                 )}
-                {st === "approved" &&
-                  (job && job.status === "running" ? (
-                    <span className="ui-pulse" style={{ fontSize: 11.5, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>⏳ در حال نوشتن</span>
-                  ) : job && job.status === "error" ? (
-                    smallBtn("⚠ دوباره", () => onRetry(t), "danger", "Retry")
-                  ) : (
-                    smallBtn("باز کن ✓", () => onOpen(t), "success", "Open topic")
-                  ))}
+                {st === "approved" && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    {openBtn(t, job && job.status === "running" ? "باز کن ⏳" : "باز کن ✓")}
+                    {job && job.status === "running" && (
+                      <span className="ui-pulse" style={{ fontSize: 11, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>در حال نوشتن…</span>
+                    )}
+                    {job && job.status === "error" && smallBtn("⚠ دوباره", () => onRetry(t), "danger", "Retry")}
+                  </div>
+                )}
                 {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", "Restore topic")}
               </div>
             </div>
