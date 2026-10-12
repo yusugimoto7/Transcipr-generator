@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // server after this response, so the page can be closed or sent to the
 // background without stopping it. See lib/jobs.js.
 //
-//   POST { kind, topic?, article?, fa?, en? }  ->  { job }
+//   POST { kind, topic?, article?, fa?, en?, count?, notes?, num?, target? }  ->  { job }
 export async function POST(request) {
   try {
     const body = await request.json();

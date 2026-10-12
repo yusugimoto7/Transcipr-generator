@@ -172,7 +172,7 @@ async function checkSheet() {
     );
     const data = await r.json().catch(() => ({}));
     if (data && Array.isArray(data.items)) {
-      return [{ name: "Google Sheet", ok: true, detail: `library reachable (${data.items.length} items)` }];
+      return [{ name: "Google Sheet", ok: true, detail: `workspace reachable (${data.items.length} records)` }];
     }
     if (data && data.error) {
       return [{ name: "Google Sheet", ok: false, detail: String(data.error) + " (secret mismatch?)" }];

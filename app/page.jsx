@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { isUntrusted } from "../lib/trust";
 
 /* ============================================================
@@ -207,102 +207,138 @@ async function recordSeenRemote(topic) {
   } catch (_) {}
 }
 
-async function fetchScript(topic, lang) {
-  const res = await fetch("/api/script", {
+// ---- shared workspace: every topic the team acted on, with what was made
+// from it (lib/workspace.js). The list shows these together with the new
+// ideas, so nobody writes the same material twice. A copy is kept on this
+// device so the list appears at once; the server's copy wins. ----
+const WS_KEY = "sugimoto_ws_v1";
+function loadWsCache() {
+  try {
+    const d = JSON.parse(localStorage.getItem(WS_KEY) || "null");
+    return d && Array.isArray(d.entries) ? d.entries : [];
+  } catch (_) {
+    return [];
+  }
+}
+function saveWsCache(entries) {
+  try {
+    localStorage.setItem(WS_KEY, JSON.stringify({ at: Date.now(), entries: entries.slice(0, 400) }));
+  } catch (_) {}
+}
+function wsPost(action, topic) {
+  return fetch("/api/workspace", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ topic, lang }),
-  });
-  if (!res.ok) throw new Error("API " + res.status);
-  const data = await res.json();
-  return data.text || "";
-}
-
-// ---- library: every generated script + article is kept here so approved
-// content can be reused later. Stored in localStorage (instant, per-device) and
-// mirrored to the Google Sheet when configured (durable, cross-device). ----
-const LIB_KEY = "sugimoto_library_v1";
-
-// De-dupe by id, keeping the newest record per id, newest-first.
-function dedupeLibrary(list) {
-  const map = new Map();
-  for (const it of list) {
-    if (!it || !it.id) continue;
-    const prev = map.get(it.id);
-    if (!prev || (it.ts || 0) >= (prev.ts || 0)) map.set(it.id, it);
-  }
-  return [...map.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0));
-}
-
-function loadLibraryLocal() {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = JSON.parse(localStorage.getItem(LIB_KEY) || "[]");
-    return dedupeLibrary(Array.isArray(raw) ? raw : []);
-  } catch (_) {
-    return [];
-  }
-}
-
-function saveLibraryLocal(list) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(LIB_KEY, JSON.stringify(dedupeLibrary(list).slice(0, 300)));
-  } catch (_) {}
-}
-
-async function fetchLibraryRemote() {
-  try {
-    const res = await fetch("/api/library", { method: "GET" });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return Array.isArray(data.items) ? data.items : [];
-  } catch (_) {
-    return [];
-  }
-}
-
-async function pushLibraryRemote(item) {
-  try {
-    await fetch("/api/library", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item }),
-    });
-  } catch (_) {}
+    body: JSON.stringify({ action, topic }),
+  }).catch(() => {});
 }
 
 export default function App() {
-  const [topics, setTopics] = useState([]);
-  const [index, setIndex] = useState(0);
-  const [approvedCount, setApprovedCount] = useState(0);
-  const [reviewedCount, setReviewedCount] = useState(0);
+  const [topics, setTopics] = useState([]); // new ideas from the topic pipeline
   const [loadingTopics, setLoadingTopics] = useState(true); // nothing on screen yet
-  const [streaming, setStreaming] = useState(false); // new cards still arriving
+  const [streaming, setStreaming] = useState(false); // new ideas still arriving
   const [topicError, setTopicError] = useState(null);
   const [errDetail, setErrDetail] = useState("");
   const [deckStats, setDeckStats] = useState(null);
-  const [usingFallback, setUsingFallback] = useState(false);
   const [view, setView] = useState("deck"); // deck | script
   const [scripts, setScripts] = useState({ fa: "", en: "" });
   const [scriptTopic, setScriptTopic] = useState(null);
   const [scriptError, setScriptError] = useState(null);
   const [scriptTab, setScriptTab] = useState("fa");
   const [copied, setCopied] = useState("");
-  const [updatedAt, setUpdatedAt] = useState(null);
-
-  // library — kept scripts + articles, browsable from the 📚 menu
-  const [library, setLibrary] = useState([]);
-  const [libFilter, setLibFilter] = useState("all");
   const [initialArticle, setInitialArticle] = useState(null);
-  const [scriptReturn, setScriptReturn] = useState("deck"); // where "Back" goes
+  const [savedCarousel, setSavedCarousel] = useState(null);
+  const [loadingSaved, setLoadingSaved] = useState(false);
+  const [caps, setCaps] = useState({ carousel: true, telegram: { review: true, public: true }, video: false });
+
+  useEffect(() => {
+    fetch("/api/capabilities", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((c) => c && setCaps(c))
+      .catch(() => {});
+  }, []);
+
+  // ---- workspace ---------------------------------------------------------
+  //   ws[key] = { key, topic, status: "new" | "active" | "archived", materials, updatedAt }
+  const [ws, setWs] = useState({});
+  const wsRef = useRef(ws);
+  wsRef.current = ws;
+  // A change made here wins over the server's copy for a couple of minutes,
+  // so a refresh that started before the change cannot undo it on screen.
+  const overridesRef = useRef({});
+
+  const applyEntries = useCallback((entries) => {
+    const now = Date.now();
+    const next = {};
+    for (const e of entries || []) {
+      if (!e || !e.key || !e.topic) continue;
+      next[e.key] = e;
+    }
+    for (const [k, o] of Object.entries(overridesRef.current)) {
+      if (o.until < now) {
+        delete overridesRef.current[k];
+        continue;
+      }
+      next[k] = { ...(next[k] || { key: k, materials: {} }), ...o.entry, materials: { ...((next[k] || {}).materials || {}), ...(o.entry.materials || {}) } };
+    }
+    setWs(next);
+  }, []);
+
+  const loadWorkspace = useCallback(async () => {
+    try {
+      const r = await fetch("/api/workspace", { cache: "no-store" });
+      const j = await r.json();
+      if (!Array.isArray(j.entries)) return;
+      applyEntries(j.entries);
+      saveWsCache(j.entries);
+    } catch (_) {}
+  }, [applyEntries]);
+
+  useEffect(() => {
+    applyEntries(loadWsCache());
+    loadWorkspace();
+    const t = setInterval(() => document.visibilityState === "visible" && loadWorkspace(), 60000);
+    const wake = () => document.visibilityState === "visible" && loadWorkspace();
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, [applyEntries, loadWorkspace]);
+
+  const patchWs = useCallback((topic, patch) => {
+    const key = topicKey(topic);
+    if (!key) return;
+    const prev = wsRef.current[key] || { key, topic, status: "new", materials: {}, updatedAt: 0 };
+    const entry = {
+      ...prev,
+      ...patch,
+      topic: { ...prev.topic, ...topic },
+      materials: { ...prev.materials, ...(patch.materials || {}) },
+      updatedAt: Date.now(),
+    };
+    overridesRef.current[key] = { until: Date.now() + 120000, entry };
+    setWs((w) => ({ ...w, [key]: entry }));
+  }, []);
+
+  // Approved / archived, as the list shows it.
+  const decisions = useMemo(() => {
+    const d = {};
+    for (const e of Object.values(ws)) {
+      if (e.status === "active") d[e.key] = "approved";
+      else if (e.status === "archived") d[e.key] = "rejected";
+    }
+    return d;
+  }, [ws]);
+  const decisionsRef = useRef(decisions);
+  decisionsRef.current = decisions;
 
   // ---- background jobs --------------------------------------------------
-  // The slow steps (scripts, Telegram, article, draft, Word file) run on the
-  // SERVER as jobs; this page only starts them and checks on them. A phone
-  // freezes a page the moment you switch apps, which used to freeze the whole
-  // pipeline halfway. Now the work continues on the server, and this page
-  // catches up when it wakes (see the visibility handler below).
+  // The slow steps (scripts, Telegram, article, draft, Word file, carousel)
+  // run on the SERVER as jobs; this page only starts them and checks on them.
+  // A phone freezes a page the moment you switch apps, which used to freeze
+  // the whole pipeline halfway. Now the work continues on the server, and
+  // this page catches up when it wakes (see the visibility handler below).
   //   bg[topicKey][kind] = { id, kind, key, status, result, error, topic }
   const [bg, setBg] = useState({});
   const [dismissed, setDismissed] = useState({});
@@ -328,7 +364,12 @@ export default function App() {
         delete entry.publish;
         delete entry.docfile;
       }
-      entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now() };
+      // A new carousel replaces the earlier one and what was done to it.
+      if (kind === "carousel") {
+        delete entry.carousel_slide;
+        delete entry.carousel_send;
+      }
+      entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now(), extra };
       return { ...prev, [key]: entry };
     });
     try {
@@ -381,21 +422,22 @@ export default function App() {
       patchJob(local.key, local.kind, { status: remote.status, result: remote.result, error: remote.error });
       if (remote.status === "done" && !handledRef.current.has(remote.id)) {
         handledRef.current.add(remote.id);
+        // The server already saved the material to the workspace; show it in
+        // the list now rather than at the next workspace refresh.
         const t = local.topic || {};
-        const base = {
-          title_fa: t.title_fa, title_en: t.title_en, field: t.field, page: t.page,
-          source_url: t.source_url || "", score: t.score || 0, why_now: t.why_now || "",
-        };
-        // The server already saved these to the shared Library; keep this
-        // device's copy in step without writing the Sheet a second time.
-        if (remote.kind === "script" && remote.result) {
-          saveToLibrary({ ...base, id: "script:" + local.key, type: "script", script_fa: remote.result.fa, script_en: remote.result.en }, { remote: false });
-        } else if (remote.kind === "article" && remote.result) {
-          saveToLibrary({ ...base, id: "article:" + local.key, type: "article", article: remote.result.article }, { remote: false });
+        const r = remote.result || {};
+        const now = Date.now();
+        if (remote.kind === "script") patchWs(t, { status: "active", materials: { script: { ts: now } } });
+        else if (remote.kind === "article") patchWs(t, { materials: { article: { ts: now } } });
+        else if (remote.kind === "carousel" || remote.kind === "carousel_slide") {
+          patchWs(t, { materials: { carousel: { ts: now, count: (r.slides || []).length, sent: r.sent || {} } } });
+        } else if (remote.kind === "carousel_send") {
+          const cur = ((wsRef.current[local.key] || {}).materials || {}).carousel || {};
+          patchWs(t, { materials: { carousel: { ...cur, sent: r.sent || {} } } });
         }
       }
     }
-  }, [patchJob]);
+  }, [patchJob, patchWs]);
 
   // Unfinished jobs are remembered on this device so a reload (or the phone
   // discarding the page while you were away) can pick them back up. The restore
@@ -450,117 +492,48 @@ export default function App() {
     };
   }, [anyRunning, syncJobs]);
 
-  // drag state
-  const [dx, setDx] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [exiting, setExiting] = useState(null); // 'left' | 'right' | null
-  const startX = useRef(0);
-  const cardRef = useRef(null);
-
-  // undo history — lets you go back to the previous topic after reject/approve
-  const historyRef = useRef([]);
-  const [canUndo, setCanUndo] = useState(false);
-
-  // What was decided for each topic in this deck, so the list view can show
-  // it and the card view can skip what was already handled from the list.
-  const [decisions, setDecisions] = useState({}); // topicKey -> "approved" | "rejected"
-  const decisionsRef = useRef(decisions);
-  decisionsRef.current = decisions;
-  const [deckMode, setDeckModeState] = useState("list"); // cards | list — list by default
+  const [deckMode, setDeckModeState] = useState("list"); // list | lexbase
   useEffect(() => {
     try {
       const m = localStorage.getItem("sugimoto_deck_mode_v2");
-      if (m === "list" || m === "cards" || m === "lexbase") setDeckModeState(m);
+      if (m === "lexbase") setDeckModeState(m);
     } catch (_) {}
   }, []);
-
-  const resetHistory = useCallback(() => {
-    historyRef.current = [];
-    setCanUndo(false);
-    setDecisions({});
-  }, []);
-
-  const pushHistory = () => {
-    historyRef.current.push({ index, reviewedCount, approvedCount });
-    setCanUndo(true);
+  const setDeckMode = (m) => {
+    setDeckModeState(m);
+    try {
+      localStorage.setItem("sugimoto_deck_mode_v2", m);
+    } catch (_) {}
   };
 
-  const undo = () => {
-    const prev = historyRef.current.pop();
-    if (!prev) return;
-    // The card that was acted on is the one at the restored index — un-mark it
-    // locally so it's available again.
-    unmarkSeenLocal(topics[prev.index]);
-    if (topics[prev.index]) {
-      const k = topicKey(topics[prev.index]);
-      setDecisions((d) => {
-        const n = { ...d };
-        delete n[k];
-        return n;
-      });
-    }
-    setExiting(null);
-    setDx(0);
-    setIndex(prev.index);
-    setReviewedCount(prev.reviewedCount);
-    setApprovedCount(prev.approvedCount);
-    setView("deck");
-    setCanUndo(historyRef.current.length > 0);
-  };
-
-  // Opening the app: the last deck saved on this device shows at once, and
-  // new cards from the server are appended as each one is written, without
-  // moving you off the card you are on. "Refresh" clears the deck and fills
-  // it again card by card.
+  // Opening the app: the last ideas saved on this device show at once, and
+  // new ones from the server are added as each one is written. "Refresh"
+  // keeps every idea not archived and adds the new ones.
   const topicsRef = useRef(topics);
   topicsRef.current = topics;
-  const afterRef = useRef(undefined);
 
   const loadTopics = useCallback(async (force = false) => {
     setTopicError(null);
     setErrDetail("");
-    setUsingFallback(false);
-
-    // A tab opened from "Next topic" carries ?after=<key of the card that was
-    // showing>: it should open on the card after that one. Read once.
-    if (afterRef.current === undefined) {
-      afterRef.current = null;
-      try {
-        const after = new URLSearchParams(window.location.search).get("after");
-        if (after) {
-          afterRef.current = after;
-          window.history.replaceState(null, "", window.location.pathname);
-        }
-      } catch (_) {}
-    }
 
     const seen = loadSeen();
     const seenTitles = new Set(seen.map((s) => s.key));
     const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
     const exclude = seen.map((s) => s.en || s.key).filter(Boolean).slice(-80);
-    // Drop topics already ACTED ON (approved/rejected). Topics are NOT marked
-    // seen just for appearing, so anything left stays available next time.
+    // Ideas already acted on come from the workspace instead, with their state.
     const fresh = (t) => !isSeen(t, seenTitles, seenUrls);
     const same = (a, b) => topicKey(a) === topicKey(b) || (!!urlKey(a) && urlKey(a) === urlKey(b));
 
     let shown = 0;
     if (force) {
-      // A refresh adds to the deck rather than wiping it: ideas not yet
-      // decided stay, approved ones keep their state, and only declined ones
-      // go. Undo history is cleared because row positions change.
       const keep = topicsRef.current.filter((t) => decisionsRef.current[topicKey(t)] !== "rejected" && !isUntrusted(t));
-      historyRef.current = [];
-      setCanUndo(false);
       setTopics(keep);
-      setIndex(nextUndecided(0));
       shown = keep.length;
       setLoadingTopics(keep.length === 0);
-      setStreaming(true);
     } else if (!topicsRef.current.length) {
       const cached = loadDeckCache().filter(fresh);
       if (cached.length) {
         setTopics(cached);
-        setIndex(0);
         setLoadingTopics(false);
         shown = cached.length;
       } else {
@@ -581,15 +554,10 @@ export default function App() {
         },
         onStats: (st) => st && setDeckStats(st),
       });
-      setUpdatedAt(new Date());
-      if (!shown) {
-        if (r.error) throw new Error(r.error);
-        setTopicError("خبر تازه‌ای که قبلاً ندیده باشی وجود نداره. اخبار مهاجرتی هر روز منتشر نمی‌شه — بعداً دوباره «Refresh» رو بزن.");
-      }
+      if (!shown && r.error) throw new Error(r.error);
     } catch (e) {
-      // Cards already on screen stay; only an empty deck shows the error.
+      // Ideas already on screen stay; only an empty list shows the error.
       if (!shown) {
-        setUsingFallback(true);
         setTopicError("نتونستم اخبار تازه رو بیارم. دوباره «Refresh» رو بزن.");
         setErrDetail(String(e?.message || e));
       }
@@ -597,210 +565,104 @@ export default function App() {
       setLoadingTopics(false);
       setStreaming(false);
     }
-  }, [resetHistory]);
+  }, []);
 
-  // Keep this device's copy of the deck current, and honour ?after= once the
-  // card it names has arrived (it may come later in the stream).
   useEffect(() => {
-    if (!topics.length) return;
-    saveDeckCache(topics);
-    const after = afterRef.current;
-    if (after) {
-      const i = topics.findIndex((t) => (urlKey(t) || topicKey(t)) === after);
-      if (i >= 0) {
-        afterRef.current = null;
-        setIndex(Math.min(i + 1, topics.length - 1));
-      }
-    }
+    if (topics.length) saveDeckCache(topics);
   }, [topics]);
 
   useEffect(() => { loadTopics(); }, [loadTopics]);
 
-  // Load the library: localStorage first (instant), then merge in the Sheet.
-  useEffect(() => {
-    const local = loadLibraryLocal();
-    setLibrary(local);
-    fetchLibraryRemote().then((remote) => {
-      if (remote && remote.length) {
-        const merged = dedupeLibrary([...local, ...remote]);
-        setLibrary(merged);
-        saveLibraryLocal(merged);
-      }
-    });
-  }, []);
+  // One list: new ideas and every topic in the workspace. A new idea that is
+  // the same story as a workspace topic (same title or same source) shows as
+  // that topic, with its state.
+  const listTopics = useMemo(() => {
+    const byUrl = new Map();
+    for (const e of Object.values(ws)) {
+      const u = urlKey(e.topic);
+      if (u && !byUrl.has(u)) byUrl.set(u, e);
+    }
+    const out = [];
+    const keys = new Set();
+    const urls = new Set();
+    const add = (t, ts) => {
+      const k = topicKey(t);
+      const u = urlKey(t);
+      if (!k || keys.has(k) || (u && urls.has(u))) return;
+      keys.add(k);
+      if (u) urls.add(u);
+      out.push(ts ? { ...t, _ts: ts } : t);
+    };
+    for (const t of topics) {
+      const e = ws[topicKey(t)] || byUrl.get(urlKey(t));
+      if (e) add({ ...t, ...e.topic }, e.updatedAt);
+      else add(t);
+    }
+    for (const e of Object.values(ws)) add(e.topic, e.updatedAt);
+    return out;
+  }, [topics, ws]);
 
-  const saveToLibrary = useCallback((item, { remote = true } = {}) => {
-    const withTs = { ...item, ts: Date.now() };
-    setLibrary((prev) => {
-      const merged = dedupeLibrary([...prev, withTs]);
-      saveLibraryLocal(merged);
-      return merged;
-    });
-    if (remote) pushLibraryRemote(withTs);
-  }, []);
-
-  // Reopen a saved item in the script view (pulling the matching script AND
-  // article for that topic so both are available).
-  const openLibraryItem = useCallback(
-    (item) => {
-      const topicObj = {
-        title_fa: item.title_fa,
-        title_en: item.title_en,
-        field: item.field,
-        page: item.page,
-        source_url: item.source_url || "",
-        score: item.score || 0,
-        why_now: item.why_now || "",
-        // Kept when the saved item has them, so "Original text" finds the source.
-        ...(item.snippet ? { snippet: item.snippet } : {}),
-        ...(item.newsletter ? { newsletter: item.newsletter, issue: item.issue, n: item.n, citation: item.citation || "" } : {}),
-      };
-      const key = topicKey(topicObj);
-      const scriptItem = library.find((x) => x.type === "script" && x.id === "script:" + key);
-      const articleItem = library.find((x) => x.type === "article" && x.id === "article:" + key);
-      setScriptTopic(topicObj);
-      setScripts(
-        scriptItem
-          ? { fa: scriptItem.script_fa || "", en: scriptItem.script_en || "" }
-          : { fa: item.script_fa || "", en: item.script_en || "" }
-      );
-      setInitialArticle(articleItem ? articleItem.article : item.type === "article" ? item.article : null);
-      setScriptError(null);
-      setScriptTab("fa");
-      setScriptReturn("library");
-      setView("script");
-    },
-    [library]
-  );
-
-  const current = topics[index];
-
-  const nextUndecided = (from) => {
-    let i = from;
-    while (i < topics.length && decisionsRef.current[topicKey(topics[i])]) i++;
-    return i;
-  };
-
-  const advance = () => {
-    setDx(0);
-    setExiting(null);
-    setIndex((i) => nextUndecided(i + 1));
-  };
-
-  const setDeckMode = (m) => {
-    setDeckModeState(m);
-    try {
-      localStorage.setItem("sugimoto_deck_mode_v2", m);
-    } catch (_) {}
-    // Back to cards: continue from the first idea not handled in the list.
-    if (m === "cards") setIndex(nextUndecided(0));
-  };
-
-  // A decision, from either view. Approving starts the server job that writes
-  // the scripts; `open` shows them, which the list view skips so you can keep
-  // going down the list while they are written.
-  const approveTopic = (topic, { open = true } = {}) => {
-    setReviewedCount((n) => n + 1);
-    setApprovedCount((n) => n + 1);
-    // Approved: remember it on this device AND in the durable cross-device
-    // history (never repeat it — it's content you're making).
+  // ---- decisions ----------------------------------------------------------
+  // Approve: the server writes the scripts (and sends the news post to
+  // Telegram) as a job, and the topic becomes "used" for everyone.
+  const approveTopic = (topic) => {
     markSeenLocal(topic);
     recordSeenRemote(topic);
-    setDecisions((d) => ({ ...d, [topicKey(topic)]: "approved" }));
-    if (open) {
-      setScriptTopic(topic);
-      setScripts({ fa: "", en: "" });
-      setInitialArticle(null);
-      setScriptError(null);
-      setScriptTab("fa");
-      setScriptReturn("deck");
-      setView("script");
-    }
-    // The server writes the scripts, saves them to the Library and sends them
-    // to Telegram. Nothing here waits, so leaving the app or moving on to the
-    // next topic cannot interrupt it.
+    patchWs(topic, { status: "active" });
     startJob("script", topic, { topic });
   };
 
+  // ✕ archives, for everyone. It can be restored from the Archive filter.
   const rejectTopic = (topic) => {
-    // Rejecting is a decision too: remember it on this device AND in the durable
-    // cross-device Sheet so it never returns anywhere.
     markSeenLocal(topic);
     recordSeenRemote(topic);
-    setReviewedCount((n) => n + 1);
-    setDecisions((d) => ({ ...d, [topicKey(topic)]: "rejected" }));
+    patchWs(topic, { status: "archived" });
+    wsPost("archive", topic);
   };
 
-  // List view only: put a rejected idea back. Like the card undo, this clears
-  // it on this device; it may already be in the shared history.
   const restoreTopic = (topic) => {
     unmarkSeenLocal(topic);
-    setReviewedCount((n) => Math.max(0, n - 1));
-    setDecisions((d) => {
-      const n = { ...d };
-      delete n[topicKey(topic)];
-      return n;
-    });
+    const e = wsRef.current[topicKey(topic)];
+    const used = !!(e && Object.keys(e.materials || {}).length);
+    patchWs(topic, { status: used ? "active" : "new" });
+    wsPost("restore", topic);
   };
 
-  const doReject = () => {
-    if (exiting || !current) return;
-    pushHistory();
-    rejectTopic(current);
-    setExiting("left");
-    setTimeout(advance, 260);
-  };
-
-  const doApprove = () => {
-    if (exiting || !current) return;
-    pushHistory();
-    approveTopic(current, { open: true });
-    setExiting("right");
-    setTimeout(advance, 260);
-  };
-
-  // Open a finished (or running) job from the "in progress" bar.
-  const openJobTopic = (topic) => {
-    setScriptTopic(topic);
+  // Open a topic: its saved material comes from the workspace; anything a job
+  // made in this session comes from the job.
+  const openKeyRef = useRef("");
+  const openTopic = (topic) => {
+    const key = topicKey(topic);
+    const e = wsRef.current[key];
+    const t = e ? { ...topic, ...e.topic } : topic;
+    openKeyRef.current = key;
+    setScriptTopic(t);
     setScripts({ fa: "", en: "" });
     setInitialArticle(null);
+    setSavedCarousel(null);
     setScriptError(null);
     setScriptTab("fa");
-    setScriptReturn("deck");
     setView("script");
+    try {
+      window.scrollTo(0, 0);
+    } catch (_) {}
+    if (e && Object.keys(e.materials || {}).length) {
+      setLoadingSaved(true);
+      fetch("/api/workspace?key=" + encodeURIComponent(key), { cache: "no-store" })
+        .then((r) => r.json())
+        .then(({ entry }) => {
+          if (!entry || openKeyRef.current !== key) return;
+          const m = entry.materials || {};
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "" });
+          if (m.article) setInitialArticle(m.article.article || null);
+          if (m.carousel) setSavedCarousel(m.carousel);
+        })
+        .catch(() => {})
+        .finally(() => openKeyRef.current === key && setLoadingSaved(false));
+    } else {
+      setLoadingSaved(false);
+    }
   };
-
-  // pointer drag
-  const onDown = (e) => {
-    if (exiting) return;
-    setDragging(true);
-    startX.current = e.clientX;
-    if (cardRef.current) cardRef.current.setPointerCapture?.(e.pointerId);
-  };
-  const onMove = (e) => {
-    if (!dragging) return;
-    setDx(e.clientX - startX.current);
-  };
-  const onUp = () => {
-    if (!dragging) return;
-    setDragging(false);
-    if (dx > 120) doApprove();
-    else if (dx < -120) doReject();
-    else setDx(0);
-  };
-
-  const copy = (which) => {
-    const t = which === "fa" ? scripts.fa : scripts.en;
-    if (!t) return;
-    navigator.clipboard?.writeText(t);
-    setCopied(which);
-    setTimeout(() => setCopied(""), 1400);
-  };
-
-  const rot = dragging ? dx / 22 : exiting === "right" ? 14 : exiting === "left" ? -14 : 0;
-  const tx = exiting === "right" ? 700 : exiting === "left" ? -700 : dx;
-  const likeOp = Math.max(0, Math.min(1, dx / 110));
-  const nopeOp = Math.max(0, Math.min(1, -dx / 110));
 
   const navBtn = {
     height: 38, minWidth: 38, padding: "0 11px", borderRadius: 12, boxSizing: "border-box",
@@ -820,9 +682,7 @@ export default function App() {
     boxSizing: "border-box",
   };
 
-  // Column width: the list uses more room on a large screen, a single card
-  // reads best narrow, and the script/library views sit in between.
-  const colMax = view === "deck" ? (deckMode === "list" ? 720 : 460) : 600;
+  const colMax = view === "deck" ? 720 : 640;
 
   // What the open topic's background jobs say. A job keeps its own result, so
   // this is correct however long the page was away.
@@ -831,7 +691,7 @@ export default function App() {
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
   const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "" } : scripts;
-  const viewLoading = !!sj && sj.status === "running" && !sjResult;
+  const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en)
       ? "نوشتن سناریو با خطا مواجه شد. برگرد و دوباره تأیید کن."
@@ -847,18 +707,44 @@ export default function App() {
     };
   }
 
+  // The carousel on screen: the newest job result this session, else the
+  // saved one. `sent` merges what was sent since.
+  let carousel = savedCarousel;
+  let carouselJob = null;
+  for (const kind of ["carousel", "carousel_slide"]) {
+    const j = svJobs[kind];
+    if (!j) continue;
+    if (!carouselJob || (j.startedAt || 0) > (carouselJob.startedAt || 0)) carouselJob = j;
+  }
+  if (carouselJob && carouselJob.result && (carouselJob.result.slides || []).length) carousel = carouselJob.result;
+  const sendJob = svJobs.carousel_send || null;
+  if (carousel && sendJob && sendJob.status === "done" && sendJob.result && sendJob.result.sent) {
+    carousel = { ...carousel, sent: { ...(carousel.sent || {}), ...sendJob.result.sent } };
+  }
+
+  const copy = (which) => {
+    const t = which === "fa" ? viewScripts.fa : viewScripts.en;
+    if (!t) return;
+    navigator.clipboard?.writeText(t);
+    setCopied(which);
+    setTimeout(() => setCopied(""), 1400);
+  };
+
   // Work running or finished in the background, for the bar under the header.
   const bgRows = [];
   for (const key of Object.keys(bg)) {
-    for (const kind of ["script", "article"]) {
+    for (const kind of ["script", "article", "carousel"]) {
       const j = bg[key][kind];
       if (!j || !j.topic) continue;
       if (dismissed[key + ":" + kind] && j.status !== "running") continue;
       if (view === "script" && key === svKey) continue; // that one is on screen already
-      if (view === "deck" && deckMode !== "cards" && kind === "script") continue; // its row shows it
+      if (view === "deck" && kind === "script") continue; // its row shows it
       bgRows.push(j);
     }
   }
+
+  const counts = { pending: 0, approved: 0, rejected: 0 };
+  for (const t of listTopics) counts[decisions[topicKey(t)] || "pending"]++;
 
   return (
     <div style={wrap}>
@@ -882,25 +768,15 @@ export default function App() {
           </div>
         </div>
         <nav style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <button
-            onClick={() => setView(view === "library" ? "deck" : "library")}
-            className="ui-btn"
-            aria-label="Library"
-            style={{
-              ...navBtn, background: view === "library" ? alpha(C.orange, 0.18) : C.surface,
-              border: `1px solid ${view === "library" ? alpha(C.orange, 0.55) : C.line}`,
-            }}
-          >
-            📚 <span className="ui-wide">Library</span>
-            {library.length > 0 && (
-              <span style={{ background: C.orange, color: "#fff", borderRadius: 99, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>{library.length}</span>
-            )}
-          </button>
           <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
             ✨ <span className="ui-wide">Wizard</span>
           </a>
           <button
-            onClick={() => loadTopics(true)}
+            onClick={() => {
+              setView("deck");
+              loadTopics(true);
+              loadWorkspace();
+            }}
             disabled={loadingTopics || streaming}
             className="ui-btn"
             aria-label="Refresh topics"
@@ -918,159 +794,73 @@ export default function App() {
         rows={bgRows}
         onOpen={(j) => {
           setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }));
-          openJobTopic(j.topic);
+          openTopic(j.topic);
         }}
         onDismiss={(j) => setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }))}
-        onRetry={(j) => startJob(j.kind, j.topic, { topic: j.topic })}
+        onRetry={(j) => startJob(j.kind, j.topic, { topic: j.topic, ...(j.extra || {}) })}
       />
-
-      {/* Stat strip */}
-      {view !== "library" && (
-        <div style={{ width: "100%", maxWidth: colMax, display: "flex", gap: 8, marginBottom: 14 }}>
-          <Stat label="Reviewed" value={reviewedCount} color={C.teal} icon="◉" />
-          <Stat label="Approved" value={approvedCount} color={C.orange} icon="✓" />
-          <Stat label="To review" value={topics.filter((t) => !decisions[topicKey(t)]).length} color="#6d5bd0" icon="☰" />
-        </div>
-      )}
-
-      {view === "library" && (
-        <LibraryView
-          items={library}
-          filter={libFilter}
-          setFilter={setLibFilter}
-          onOpen={openLibraryItem}
-          onBack={() => setView("deck")}
-        />
-      )}
 
       {view === "deck" && (
         <div style={{ width: "100%", maxWidth: colMax, flex: 1, display: "flex", flexDirection: "column" }}>
-          {topicError && (
-            <div className="ui-fade" style={{ background: alpha(C.reject, 0.1), border: `1px solid ${alpha(C.reject, 0.35)}`, color: C.text, borderRadius: 14, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
-              {topicError}
-              {errDetail && (
-                <div dir="ltr" style={{ marginTop: 6, fontSize: 11, color: "rgba(18,26,36,0.7)", fontFamily: "monospace", textAlign: "left", wordBreak: "break-word" }}>
-                  {errDetail}
-                </div>
-              )}
-            </div>
-          )}
-
-          {!loadingTopics && deckMode !== "lexbase" && <DeckWhy stats={deckStats} />}
-
-          {(deckMode === "lexbase" || (!loadingTopics && topics.length > 0)) && <ModeSwitch mode={deckMode} onChange={setDeckMode} />}
-
-          {streaming && !loadingTopics && deckMode !== "lexbase" && (
-            <div dir="rtl" className="ui-progress ui-fade" style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text }}>
-              <span className="ui-pulse">⏳</span> موضوع‌های تازه در حال اضافه شدن به انتهای فهرست…
-            </div>
-          )}
+          <ModeSwitch mode={deckMode} onChange={setDeckMode} />
 
           {deckMode === "lexbase" ? (
             <LexbaseSection
               decisions={decisions}
               jobs={bg}
-              onApprove={(t) => approveTopic(t, { open: false })}
+              onApprove={approveTopic}
               onReject={rejectTopic}
               onRestore={restoreTopic}
-              onOpenScript={(t) => {
-                setDismissed((d) => ({ ...d, [topicKey(t) + ":script"]: true }));
-                openJobTopic(t);
-              }}
+              onOpen={openTopic}
               onRetry={(t) => startJob("script", t, { topic: t })}
-            />
-          ) : deckMode === "list" && !loadingTopics && topics.length > 0 ? (
-            <IdeasList
-              topics={topics}
-              decisions={decisions}
-              jobs={bg}
-              onApprove={(t) => approveTopic(t, { open: false })}
-              onReject={rejectTopic}
-              onRestore={restoreTopic}
-              onOpenScript={(t) => {
-                setDismissed((d) => ({ ...d, [topicKey(t) + ":script"]: true }));
-                openJobTopic(t);
-              }}
-              onRetry={(t) => startJob("script", t, { topic: t })}
-              onShowCard={(i) => {
-                setDeckModeState("cards");
-                try {
-                  localStorage.setItem("sugimoto_deck_mode_v2", "cards");
-                } catch (_) {}
-                setIndex(i);
-              }}
             />
           ) : (
-          <>
-          {!loadingTopics && topics.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-              <BackBtn onClick={() => setDeckMode("list")} label="List" />
-              <span style={{ fontSize: 12, color: C.text3, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
-                {Math.min(index + 1, topics.length)} / {topics.length}
-              </span>
-            </div>
-          )}
-          {loadingTopics ? (
-            <CardSkeleton />
-          ) : current ? (
-            <div style={{ position: "relative", height: 560 }}>
-              {/* peek of next card */}
-              {topics[index + 1] && (
-                <div style={{ position: "absolute", inset: 0, transform: "scale(0.94) translateY(14px)", opacity: 0.5 }}>
-                  <TopicCard topic={topics[index + 1]} ghost />
+            <>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <Stat label="New" value={counts.pending} color="#6d5bd0" icon="✦" />
+                <Stat label="Made" value={counts.approved} color={C.success} icon="✓" />
+                <Stat label="Archived" value={counts.rejected} color={C.text3} icon="🗄" />
+              </div>
+
+              {topicError && (
+                <div className="ui-fade" style={{ background: alpha(C.reject, 0.1), border: `1px solid ${alpha(C.reject, 0.35)}`, color: C.text, borderRadius: 14, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
+                  {topicError}
+                  {errDetail && (
+                    <div dir="ltr" style={{ marginTop: 6, fontSize: 11, color: "rgba(18,26,36,0.7)", fontFamily: "monospace", textAlign: "left", wordBreak: "break-word" }}>
+                      {errDetail}
+                    </div>
+                  )}
                 </div>
               )}
-              <div
-                ref={cardRef}
-                onPointerDown={onDown}
-                onPointerMove={onMove}
-                onPointerUp={onUp}
-                onPointerCancel={onUp}
-                style={{
-                  position: "absolute", inset: 0, cursor: dragging ? "grabbing" : "grab",
-                  transform: `translateX(${tx}px) rotate(${rot}deg)`,
-                  transition: dragging ? "none" : "transform 0.26s cubic-bezier(.2,.7,.3,1)",
-                  touchAction: "none",
-                }}
-              >
-                <TopicCard topic={current} likeOp={likeOp} nopeOp={nopeOp} />
-              </div>
-            </div>
-          ) : (
-            <EmptyDeck onRefresh={() => loadTopics(true)} />
-          )}
 
-          {/* Actions */}
-          {!loadingTopics && current && (
-            <div style={{ display: "flex", gap: 18, marginTop: 24, justifyContent: "center", alignItems: "center" }}>
-              <UndoBtn onClick={undo} disabled={!canUndo || !!exiting} />
-              <ActionBtn kind="reject" onClick={doReject} disabled={!!exiting} />
-              <ActionBtn kind="approve" onClick={doApprove} disabled={!!exiting} />
-            </div>
-          )}
-          {!loadingTopics && current && topics[index + 1] && (
-            // A real link: left-click skips to the next card without deciding
-            // on this one (it stays unseen); right-click / middle-click opens
-            // the deck in a new tab already positioned on the next card.
-            <a
-              href={"/?after=" + encodeURIComponent(urlKey(current) || topicKey(current))}
-              onClick={(e) => {
-                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-                e.preventDefault();
-                if (!exiting) advance();
-              }}
-              className="ui-btn ui-glass"
-              style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 18, border: `1px solid ${alpha(C.orange, 0.4)}`, color: C.orange, borderRadius: 14, padding: "13px", fontWeight: 700, fontSize: 14.5, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}
-            >
-              Next topic →
-            </a>
-          )}
-          {!loadingTopics && current && (
-            <div style={{ textAlign: "center", marginTop: 12, fontSize: 11.5, color: C.text3 }}>
-              Swipe the card, or use the buttons · ↶ undo · ← رد · تأیید →
-            </div>
-          )}
-          </>
+              {!loadingTopics && <DeckWhy stats={deckStats} />}
+
+              {streaming && !loadingTopics && (
+                <div dir="rtl" className="ui-progress ui-fade" style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text }}>
+                  <span className="ui-pulse">⏳</span> موضوع‌های تازه در حال اضافه شدن به فهرست…
+                </div>
+              )}
+
+              {loadingTopics && !listTopics.length ? (
+                <div style={{ display: "grid", gap: 7 }}>
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} className="ui-skeleton" style={{ height: 64, borderRadius: 14 }} />
+                  ))}
+                </div>
+              ) : (
+                <IdeasList
+                  topics={listTopics}
+                  decisions={decisions}
+                  jobs={bg}
+                  ws={ws}
+                  onApprove={approveTopic}
+                  onReject={rejectTopic}
+                  onRestore={restoreTopic}
+                  onOpen={openTopic}
+                  onRetry={(t) => startJob("script", t, { topic: t })}
+                />
+              )}
+            </>
           )}
         </div>
       )}
@@ -1082,20 +872,25 @@ export default function App() {
           scripts={viewScripts}
           initialArticle={initialArticle}
           loading={viewLoading}
+          loadingText={loadingSaved && !(sj && sj.status === "running") ? "در حال بارگذاری محتوای ذخیره‌شده…" : ""}
           error={viewError}
           tab={scriptTab}
           setTab={setScriptTab}
           copied={copied}
           onCopy={copy}
-          onBack={() => { setView(scriptReturn === "library" ? "library" : "deck"); }}
-          onUndo={undo}
-          canUndo={canUndo && scriptReturn !== "library"}
+          onBack={() => setView("deck")}
+          onWrite={decisions[svKey] === "rejected" ? null : () => approveTopic(scriptTopic)}
           tgState={viewTg.state}
           tgMsg={viewTg.msg}
           onRetryTelegram={() => startJob("telegram", scriptTopic, { topic: scriptTopic, fa: viewScripts.fa, en: viewScripts.en })}
           articleJob={svJobs.article || null}
           publishJob={svJobs.publish || null}
           docJob={svJobs.docfile || null}
+          carousel={carousel}
+          carouselJob={carouselJob}
+          sendJob={sendJob}
+          videoJob={svJobs.video || null}
+          caps={caps}
           onJob={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
@@ -1103,8 +898,8 @@ export default function App() {
   );
 }
 
-// Cards (swipe one at a time) or List (every idea's title at a glance).
-const MODES = [["cards", "🃏", "Cards"], ["list", "☰", "List"], ["lexbase", "📬", "Lexbase"]];
+// List (every topic, new and used) or the Lexbase newsletter section.
+const MODES = [["list", "☰", "List"], ["lexbase", "📬", "Lexbase"]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
@@ -1138,9 +933,10 @@ function ModeSwitch({ mode, onChange }) {
   );
 }
 
-// Every idea in the deck as one compact row: title first, so the whole batch
-// can be scanned in seconds. Approving here starts the script job without
-// leaving the list; its progress shows in the row.
+// Every topic as one compact row, new and already used alike: title first,
+// so the whole list can be scanned in seconds. ✓ starts the script job
+// without leaving the list; ✕ archives; a used topic shows what was made
+// from it and opens with it. Tapping a title opens the topic.
 // Where an idea comes from, for the category filter. "Social" is any
 // creator or community platform; everything else is a website (news, official
 // pages, courts). Region comes from the card itself.
@@ -1153,6 +949,12 @@ function isSocialTopic(t) {
     return false;
   }
 }
+const MATERIAL_BADGE = {
+  script: ["📝", "Scripts written"],
+  article: ["📰", "Blog article written"],
+  carousel: ["🖼", "Carousel made (📢 = sent to the public channel)"],
+  video: ["🎬", "Video requested"],
+};
 const CATEGORIES = [
   ["all", "همه", () => true],
   ["ca", "🇨🇦 کانادا", (t) => t.page !== "EU"],
@@ -1161,21 +963,29 @@ const CATEGORIES = [
   ["web", "🌐 سایت‌ها", (t) => !isSocialTopic(t)],
 ];
 
-function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, onOpenScript, onRetry, onShowCard, plain = false }) {
-  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected
+function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
+  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
   const [cat, setCat] = useState("all"); // see CATEGORIES
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
   const inCat = CATEGORIES.find((c) => c[0] === cat)[2];
-  const counts = { all: topics.length, pending: 0, approved: 0, rejected: 0 };
-  for (const t of topics) counts[stateOf(t)]++;
+  // "All" is everything not archived; the archive has its own filter.
+  const counts = { all: 0, pending: 0, approved: 0, rejected: 0 };
+  for (const t of topics) {
+    const st = stateOf(t);
+    counts[st]++;
+    if (st !== "rejected") counts.all++;
+  }
   const catCounts = {};
   for (const [k, , test] of CATEGORIES) catCounts[k] = topics.filter(test).length;
   // Newest development first (cards arrive in the order they were written,
   // not by date). The newsletter section keeps its own priority order.
   const rows = topics
     .map((t, i) => ({ t, i }))
-    .filter(({ t }) => (filter === "all" || stateOf(t) === filter) && inCat(t));
-  if (!plain) rows.sort((a, b) => String(b.t.date || "").localeCompare(String(a.t.date || "")) || a.i - b.i);
+    .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t));
+  // Newest first: the news date, or for a saved topic without one, when it was
+  // last worked on.
+  const when = (t) => t.date || (t._ts ? new Date(t._ts).toISOString().slice(0, 10) : "");
+  if (!plain) rows.sort((a, b) => when(b.t).localeCompare(when(a.t)) || a.i - b.i);
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -1221,9 +1031,9 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
     <div>
       <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
         {chip("all", "همه")}
-        {chip("pending", "در انتظار")}
-        {chip("approved", "تأیید شده")}
-        {chip("rejected", "رد شده")}
+        {chip("pending", "جدید")}
+        {chip("approved", "ساخته‌شده")}
+        {chip("rejected", "🗄 آرشیو")}
       </div>
       {!plain && <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
         {CATEGORIES.map(([k, label]) => {
@@ -1280,11 +1090,11 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
               <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
-                  onClick={() => st === "pending" && onShowCard && onShowCard(i)}
-                  title={(t.title_en ? t.title_en + " — " : "") + (st === "pending" && onShowCard ? "open as a card" : "")}
+                  onClick={() => onOpen && onOpen(t)}
+                  title={(t.title_en ? t.title_en + " — " : "") + "open"}
                   style={{
                     fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
-                    color: C.text, cursor: st === "pending" && onShowCard ? "pointer" : "default",
+                    color: C.text, cursor: onOpen ? "pointer" : "default",
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                     textDecoration: st === "rejected" ? "line-through" : "none",
                   }}
@@ -1315,6 +1125,12 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
                   {t.newsletter === "lexbase" && (
                     <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 {t.citation || "Lexbase"}</span>
                   )}
+                  {Object.keys(((ws[topicKey(t)] || {}).materials) || {}).map((k) => MATERIAL_BADGE[k] && (
+                    <span key={"m" + k} title={MATERIAL_BADGE[k][1]} style={{ color: C.success, background: alpha(C.success, 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>
+                      {MATERIAL_BADGE[k][0]}
+                      {k === "carousel" && (((ws[topicKey(t)] || {}).materials || {}).carousel || {}).sent?.public ? " 📢" : ""}
+                    </span>
+                  ))}
                   {(t.focus || []).map((k) => (
                     <span key={k} style={{ color: "#b42318", background: alpha("#f04438", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>{FOCUS_LABEL[k] || k}</span>
                   ))}
@@ -1338,7 +1154,7 @@ function IdeasList({ topics, decisions, jobs, onApprove, onReject, onRestore, on
                   ) : job && job.status === "error" ? (
                     smallBtn("⚠ دوباره", () => onRetry(t), "danger", "Retry")
                   ) : (
-                    smallBtn("باز کن ✓", () => onOpenScript(t), "success", "Open script")
+                    smallBtn("باز کن ✓", () => onOpen(t), "success", "Open topic")
                   ))}
                 {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", "Restore topic")}
               </div>
@@ -1403,7 +1219,6 @@ function LexbaseSection({ decisions, ...actions }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [group, setGroup] = useState("all");
-  const [showDone, setShowDone] = useState(false);
 
   useEffect(() => {
     setArchive(loadLexArchive());
@@ -1459,13 +1274,8 @@ function LexbaseSection({ decisions, ...actions }) {
   const cards = mergeLexCards(saved ? saved.cards : [], live ? live.cards : []);
   const writing = !!(live && (live.writing || live.missing > 0));
 
-  const seen = loadSeen();
-  const seenTitles = new Set(seen.map((s) => s.key));
-  const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
-  // Decided on an earlier visit: hidden unless asked for, like the main deck.
-  const doneBefore = (t) => !decisions[topicKey(t)] && isSeen(t, seenTitles, seenUrls);
-  const doneN = cards.filter(doneBefore).length;
-  const visible = cards.filter((t) => showDone || !doneBefore(t));
+  // Archived items stay out of the groups; the list's Archive filter has them.
+  const visible = cards.filter((t) => decisions[topicKey(t)] !== "rejected");
   const inGroup = LEX_GROUPS.find((g) => g[0] === group)[2];
   const rows = visible.filter(inGroup);
   const font = { fontFamily: "'Vazirmatn', sans-serif" };
@@ -1533,13 +1343,7 @@ function LexbaseSection({ decisions, ...actions }) {
           ))}
         </div>
       ) : (
-        cards.length > 0 && <IdeasList topics={rows} decisions={decisions} plain {...actions} />
-      )}
-
-      {doneN > 0 && (
-        <button className="ui-btn" onClick={() => setShowDone((v) => !v)} style={{ ...font, display: "block", margin: "14px auto 0", padding: "6px 12px", borderRadius: 99, border: `1px solid ${C.line}`, background: C.surface, color: C.text2, fontSize: 12, cursor: "pointer" }} dir="rtl">
-          {showDone ? "پنهان کردن موارد بررسی‌شده" : `${doneN} مورد را قبلاً بررسی کرده‌ای — نمایش`}
-        </button>
+        cards.length > 0 && <IdeasList topics={group === "all" ? cards : rows} decisions={decisions} plain {...actions} />
       )}
     </div>
   );
@@ -1549,7 +1353,7 @@ function LexbaseSection({ decisions, ...actions }) {
 // already moved on from. Tap a finished one to open it.
 function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
   if (!rows.length) return null;
-  const KIND = { script: "سناریو", article: "مقاله" };
+  const KIND = { script: "سناریو", article: "مقاله", carousel: "کاروسل" };
   return (
     <div style={{ width: "100%", maxWidth: width, marginBottom: 12, display: "grid", gap: 8 }}>
       {rows.map((j) => {
@@ -1618,9 +1422,6 @@ function Stat({ label, value, color = C.text, icon }) {
   );
 }
 
-function heat(score) {
-  return Math.max(0, Math.min(100, score));
-}
 
 // One line explaining where this deck came from, so a short deck explains
 // itself: how big the pool was, how much of it you had already used, and how
@@ -1693,222 +1494,12 @@ function formatNewsDate(d) {
   }
 }
 
-function TopicCard({ topic, likeOp = 0, nopeOp = 0, ghost }) {
-  const f = fieldOf(topic);
-  const isEU = topic.page === "EU";
-  const pill = {
-    display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 600,
-    fontFamily: "'Inter', 'Vazirmatn', sans-serif", direction: "ltr", borderRadius: 99, padding: "4px 10px",
-    background: "rgba(255,255,255,0.55)", border: `1px solid ${C.textEdge}`, color: C.inkSoft, textDecoration: "none",
-  };
-  return (
-    <div style={{
-      height: "100%", background: C.surface, borderRadius: 22,
-      border: `1px solid ${C.textEdge}`,
-      boxShadow: ghost ? "none" : "0 1px 2px rgba(16,24,40,0.04), 0 18px 40px -24px rgba(16,24,40,0.25)",
-      padding: "24px 22px 18px", boxSizing: "border-box", display: "flex", flexDirection: "column",
-      position: "relative", overflow: "hidden", userSelect: "none",
-    }}>
-      {/* accent band and a soft glow in this topic type's color */}
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: f.color }} />
 
-      {!ghost && (
-        <>
-          <Stamp text="تأیید" color={C.orange} op={likeOp} side="left" />
-          <Stamp text="رد" color={C.reject} op={nopeOp} side="right" />
-        </>
-      )}
 
-      {/* tags */}
-      <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: alpha(f.color, 0.16), border: `1px solid ${alpha(f.color, 0.35)}`, padding: "5px 11px", borderRadius: 99 }}>
-          <span style={{ fontSize: 13 }}>{f.emoji}</span>
-          <span style={{ fontSize: 12, fontWeight: 700, color: C.ink, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>{f.label}</span>
-        </div>
-        <div style={{ ...pill, color: isEU ? "#3a56c4" : C.orangeDeep, fontWeight: 700 }}>
-          {isEU ? "🇪🇺 Europe" : "🇨🇦 Canada"}
-        </div>
-      </div>
 
-      {/* Farsi hook */}
-      <div style={{ position: "relative", flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center", padding: "14px 0" }}>
-        <div dir="rtl" style={{
-          fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, color: C.ink,
-          fontSize: 26, lineHeight: 1.55, textAlign: "right", unicodeBidi: "plaintext", letterSpacing: -0.2,
-        }}>
-          {topic.title_fa}
-        </div>
-        {topic.title_en && (
-          <div style={{ marginTop: 10, fontSize: 13.5, color: C.inkSoft, fontFamily: "'Inter', 'Vazirmatn', sans-serif", fontWeight: 500, lineHeight: 1.45 }}>
-            {topic.title_en}
-          </div>
-        )}
-      </div>
 
-      {/* why now */}
-      <div dir="rtl" style={{ position: "relative", background: C.surfaceHi, borderRight: `3px solid ${f.color}`, borderRadius: 12, padding: "10px 12px" }}>
-        <div style={{ fontSize: 10.5, letterSpacing: 0.5, color: C.inkSoft, fontFamily: "'Vazirmatn', sans-serif", fontWeight: 700, marginBottom: 3 }}>
-          چرا الان
-        </div>
-        <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, lineHeight: 1.75, color: C.text2, textAlign: "right", unicodeBidi: "plaintext" }}>
-          {topic.why_now}
-        </div>
-      </div>
 
-      {/* meta + heat */}
-      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          {topic.source_url && (
-            <a
-              href={topic.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              // Stop the card's drag handler from swallowing the tap so the link
-              // actually opens (in a new tab) instead of starting a swipe.
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              style={{ ...pill, color: "#1f6f7a", cursor: "pointer" }}
-            >
-              🔗 {sourceHost(topic.source_url)} ↗
-            </a>
-          )}
-          {formatNewsDate(topic.date) && <span style={pill}>📅 {formatNewsDate(topic.date)}</span>}
-          {topic.coverage > 1 && (
-            <span title={"Also covered by: " + (topic.outlets || []).join(", ")} style={{ ...pill, color: "#c2410c", background: alpha("#f97316", 0.1), border: `1px solid ${alpha("#f97316", 0.35)}`, fontWeight: 700 }}>
-              🔥 {topic.coverage} sources
-            </span>
-          )}
-          {topic.newsletter === "lexbase" && (
-            <span title={"From the Lexbase newsletter" + (topic.citation ? " — " + topic.citation : "")} style={{ ...pill, color: "#6d5bd0", background: alpha("#6d5bd0", 0.08), border: `1px solid ${alpha("#6d5bd0", 0.3)}`, fontWeight: 700 }}>
-              📬 Lexbase{topic.citation ? " · " + topic.citation : ""}
-            </span>
-          )}
-          {topic.social === "instagram" && (
-            <span title="From a creator's Instagram post — check the claim before scripting" style={{ ...pill, color: "#c13584", background: alpha("#c13584", 0.08), border: `1px solid ${alpha("#c13584", 0.3)}` }}>
-              📸 @{topic.author}
-            </span>
-          )}
-          {topic.grounding === "headline" && (
-            <span
-              title="Only the headline could be read for this one. Open the source and check it before writing a script."
-              style={{ ...pill, color: C.orangeDeep, background: alpha(C.orange, 0.1), border: `1px solid ${alpha(C.orange, 0.45)}` }}
-            >
-              headline only
-            </span>
-          )}
-        </div>
-        <ScoreRing score={topic.score} />
-      </div>
-    </div>
-  );
-}
 
-// Engagement score as a small ring: warmer and fuller the hotter the topic.
-function ScoreRing({ score, size = 46 }) {
-  const v = heat(Number(score) || 0);
-  const color = v >= 85 ? C.orange : v >= 70 ? "#d97706" : C.inkSoft;
-  return (
-    <div title={`Engagement potential ${v}/100`} style={{ width: size, height: size, borderRadius: "50%", flexShrink: 0, background: `conic-gradient(${color} ${v * 3.6}deg, rgba(22,38,44,0.1) 0)`, display: "grid", placeItems: "center" }}>
-      <div style={{ width: size - 8, height: size - 8, borderRadius: "50%", background: C.surface, display: "grid", placeItems: "center", fontFamily: "'Inter', 'Vazirmatn', sans-serif", fontWeight: 700, fontSize: 14, color: C.ink }}>
-        {v}
-      </div>
-    </div>
-  );
-}
-
-function Stamp({ text, color, op, side }) {
-  return (
-    <div style={{
-      position: "absolute", top: 28, [side]: 22, zIndex: 3,
-      border: `3px solid ${color}`, color: color, borderRadius: 12,
-      padding: "4px 14px", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 21,
-      transform: `rotate(${side === "left" ? -14 : 14}deg)`, opacity: op, transition: "opacity 0.1s",
-      pointerEvents: "none", background: "rgba(255,255,255,0.9)",
-    }}>
-      {text}
-    </div>
-  );
-}
-
-function ActionBtn({ kind, onClick, disabled }) {
-  const approve = kind === "approve";
-  const size = approve ? 74 : 62;
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={approve ? "Approve topic" : "Reject topic"}
-      className={"ui-btn " + (approve ? "ui-glow-orange" : "ui-glow-danger")}
-      style={{
-        width: size, height: size, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
-        border: approve ? "none" : `1.5px solid ${alpha(C.reject, 0.45)}`,
-        background: approve ? C.orange : C.surface,
-        color: approve ? "#fff" : C.reject, fontSize: approve ? 30 : 24, fontWeight: 700,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        boxShadow: approve ? `0 10px 24px -10px ${alpha(C.orange, 0.6)}` : "0 1px 2px rgba(16,24,40,0.06)",
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      {approve ? "✓" : "✕"}
-    </button>
-  );
-}
-
-function UndoBtn({ onClick, disabled }) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      aria-label="Undo — go back to previous topic"
-      title="Undo (previous topic)"
-      className="ui-btn ui-glass"
-      style={{
-        width: 48, height: 48, borderRadius: "50%", cursor: disabled ? "default" : "pointer",
-        border: `1px solid ${C.line}`, color: C.text, fontSize: 20,
-        display: "flex", alignItems: "center", justifyContent: "center", opacity: disabled ? 0.35 : 1,
-      }}
-    >
-      ↶
-    </button>
-  );
-}
-
-function CardSkeleton() {
-  const bar = (w, h = 14, mt = 10) => <div className="ui-skeleton" style={{ width: w, height: h, marginTop: mt, marginLeft: "auto" }} />;
-  return (
-    <div className="ui-glass" style={{ height: 520, border: `1px solid ${C.line}`, borderRadius: 24, padding: 24, boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <div className="ui-skeleton" style={{ width: 96, height: 26, borderRadius: 99 }} />
-        <div className="ui-skeleton" style={{ width: 80, height: 26, borderRadius: 99 }} />
-      </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        {bar("92%", 22, 0)}
-        {bar("74%", 22)}
-        {bar("48%", 14, 16)}
-      </div>
-      <div className="ui-skeleton" style={{ height: 64, borderRadius: 12 }} />
-      <div dir="rtl" style={{ textAlign: "center", marginTop: 14, fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: C.text2 }}>
-        <span className="ui-pulse">در حال بررسی اخبار ۳۰ روز اخیر…</span>
-      </div>
-    </div>
-  );
-}
-
-function EmptyDeck({ onRefresh }) {
-  return (
-    <div className="ui-glass ui-fade" style={{ height: 480, border: `1px dashed ${alpha(C.text, 0.18)}`, borderRadius: 24, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, textAlign: "center", padding: 24 }}>
-      <div style={{ width: 76, height: 76, borderRadius: 24, display: "grid", placeItems: "center", fontSize: 34, background: alpha(C.orange, 0.1), border: `1px solid ${C.line}` }}>
-        🎬
-      </div>
-      <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 16, fontWeight: 700, direction: "rtl", color: C.text }}>
-        همهٔ موضوعات این دسته رو دیدی
-      </div>
-      <button className="ui-btn ui-glow-orange" onClick={onRefresh} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 14, padding: "12px 22px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
-        ⟳ Get a fresh batch
-      </button>
-    </div>
-  );
-}
 
 // Render script text line-by-line with automatic per-line direction, so mixed
 // Farsi + English lines don't get visually scrambled by a single forced base
@@ -2031,14 +1622,14 @@ function OriginalText({ topic }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTab, copied, onCopy, onBack, onUndo, canUndo, tgState = "idle", tgMsg = "", onRetryTelegram, articleJob, publishJob, docJob, onJob }) {
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, tgState = "idle", tgMsg = "", onRetryTelegram, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, videoJob, caps = {}, onJob }) {
   const f = fieldOf(topic);
   const active = tab === "fa" ? scripts.fa : scripts.en;
 
   // Blog article (on-demand). It is written by a server-side job, so this view
   // only reflects that job's state: leaving the page, or opening another
   // topic, does not interrupt it, and coming back shows where it got to.
-  // Seeded from a saved item when opened via Library.
+  // Seeded from the workspace when a used topic is opened.
   const artState = articleJob
     ? articleJob.status === "running" ? "generating" : articleJob.status === "error" ? "error" : "ready"
     : initialArticle ? "ready" : "idle"; // idle | generating | ready | error
@@ -2121,12 +1712,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
   return (
     <div style={{ width: "100%", maxWidth: 600, flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <BackBtn onClick={onBack} label="Back to deck" />
-        {canUndo && (
-          <button onClick={onUndo} className="ui-btn ui-glass" style={{ color: C.text, border: `1px solid ${C.line}`, borderRadius: 99, padding: "7px 14px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
-            ↶ Undo (previous topic)
-          </button>
-        )}
+        <BackBtn onClick={onBack} label="Back to list" />
       </div>
 
       <div className="ui-fade" style={{ position: "relative", overflow: "hidden", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, padding: "18px 18px 16px", marginBottom: 14, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
@@ -2178,11 +1764,21 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
         ) : loading ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 260, gap: 14 }}>
             <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
-            <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: "rgba(18,26,36,0.6)", direction: "rtl" }}>در حال نوشتن سناریوی فارسی و انگلیسی…</div>
+            <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: "rgba(18,26,36,0.6)", direction: "rtl" }}>{loadingText || "در حال نوشتن سناریوی فارسی و انگلیسی…"}</div>
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : error ? (
           <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.reject, direction: "rtl", textAlign: "right" }}>{error}</div>
+        ) : !scripts.fa && !scripts.en ? (
+          // Opened before approval: read the original first, then write.
+          <div dir="rtl" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 240, fontFamily: "'Vazirmatn', sans-serif", textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.8 }}>هنوز سناریویی برای این موضوع نوشته نشده.<br />متن خبر در «متن اصلی» هست.</div>
+            {onWrite && (
+              <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+                ✍️ نوشتن سناریو (فارسی و انگلیسی)
+              </button>
+            )}
+          </div>
         ) : (
           <div>
             <div style={{ display: "flex", justifyContent: tab === "fa" ? "flex-start" : "flex-end", marginBottom: 12 }}>
@@ -2363,21 +1959,231 @@ function ScriptView({ topic, scripts, initialArticle, loading, error, tab, setTa
         </div>
       )}
 
-      {/* A real link, so right-click / middle-click / Ctrl+click can open the
-          next topic in a new tab and this one stays on the current script. The
-          topic just handled is already marked seen, so a fresh tab's deck starts
-          at the next card. A plain left click still stays in-page. */}
-      <a
-        href="/"
-        onClick={(e) => {
-          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-          e.preventDefault();
-          onBack();
-        }}
-        style={{ display: "block", boxSizing: "border-box", textAlign: "center", textDecoration: "none", marginTop: 12, background: C.orange, color: "#fff", borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}
+      {/* What else to make from this topic, once the scripts exist. */}
+      {!loading && !error && (scripts.fa || scripts.en) && (
+        <>
+          <CarouselPanel topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} />
+          <VideoPanel job={videoJob} enabled={!!caps.video} onStart={() => onJob("video", {})} />
+        </>
+      )}
+
+      <button
+        onClick={onBack}
+        className="ui-btn"
+        style={{ display: "block", width: "100%", boxSizing: "border-box", textAlign: "center", marginTop: 16, background: C.surface, color: C.text, border: `1px solid ${C.line}`, borderRadius: 14, padding: "13px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}
       >
-        Next topic →
-      </a>
+        ← Back to list
+      </button>
+    </div>
+  );
+}
+
+// Carousel post from this topic: choose the number of slides and add notes,
+// the server writes the slides (the Content Wizard's carousel prompt) and
+// draws each one with the image model, then the set can go to Telegram.
+// Everything runs as server jobs and is saved with the topic for the team.
+function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
+  const [form, setForm] = useState(false);
+  const [count, setCount] = useState(7);
+  const [notes, setNotes] = useState("");
+  const [copiedCap, setCopiedCap] = useState(false);
+  const running = !!job && job.status === "running";
+  const stage = running ? (job.result && job.result.stage) || "writing" : "";
+  const failed = !!job && job.status === "error" ? job.error : "";
+  const slides = (carousel && carousel.slides) || [];
+  const drawn = slides.filter((s) => s.image_url).length;
+  const missing = slides.length - drawn;
+  const sending = !!sendJob && sendJob.status === "running";
+  const sendErr = sendJob && sendJob.status === "error" ? sendJob.error : "";
+  const sent = (carousel && carousel.sent) || {};
+  const font = "'Inter', 'Vazirmatn', sans-serif";
+  const fa = "'Vazirmatn', sans-serif";
+  const when = (ts) => (ts ? new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
+
+  const start = () => {
+    if (slides.length && !window.confirm("A new carousel replaces the current one. Continue?")) return;
+    setForm(false);
+    onJob("carousel", { count, notes: notes.trim() });
+  };
+  const send = (target) => {
+    if (target === "public" && !window.confirm("Publish this carousel to the public channel @sugimotovisa?")) return;
+    onJob("carousel_send", { target });
+  };
+  const btn = (bg, color, border) => ({
+    background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5,
+    cursor: "pointer", fontFamily: font,
+  });
+
+  return (
+    <div style={{ marginTop: 16, borderTop: `1px solid ${C.line}`, paddingTop: 16 }}>
+      {!slides.length && !running && !form && (
+        <button onClick={() => setForm(true)} className="ui-btn" style={{ ...btn(alpha("#6d5bd0", 0.1), C.text, `1px solid ${alpha("#6d5bd0", 0.4)}`), width: "100%" }}>
+          🖼 ساخت پست کاروسل (Carousel post)
+        </button>
+      )}
+
+      {form && !running && (
+        <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
+          <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>🖼 کاروسل از این موضوع</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تعداد اسلاید</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+            {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+              <button key={n} className="ui-btn" onClick={() => setCount(n)} style={{ minWidth: 38, height: 34, borderRadius: 10, cursor: "pointer", border: `1px solid ${count === n ? "#6d5bd0" : C.line}`, background: count === n ? alpha("#6d5bd0", 0.14) : C.surface, color: count === n ? "#6d5bd0" : C.text, fontWeight: 700, fontFamily: font }}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>یادداشت‌ها (اختیاری)</div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="مثلاً: روی دانشجوها تمرکز کن، اسلاید مقایسه نذار، رنگ‌ها روشن باشه…"
+            style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+          />
+          <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px" }}>
+            متن اسلایدها فقط از متن خبر نوشته می‌شه و هر اسلاید با GPT Image 2 طراحی می‌شه (حدود ۵ سنت برای هر اسلاید، چند دقیقه طول می‌کشه).
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="ui-btn ui-glow-orange" onClick={start} disabled={!caps.carousel} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, opacity: caps.carousel ? 1 : 0.5 }}>
+              ساخت {count} اسلاید
+            </button>
+            <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
+              انصراف
+            </button>
+          </div>
+        </div>
+      )}
+
+      {running && (
+        <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha("#6d5bd0", 0.08), border: `1px solid ${alpha("#6d5bd0", 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
+          <span className="ui-pulse">⏳</span>{" "}
+          {stage === "writing"
+            ? "در حال نوشتن متن اسلایدها…"
+            : slides.length
+              ? `در حال طراحی اسلایدها… ${drawn} از ${slides.length}`
+              : "در حال طراحی اسلاید…"}
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+        </div>
+      )}
+      {failed && !running && (
+        <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>
+      )}
+
+      {slides.length > 0 && (
+        <div>
+          <div dir="rtl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
+            <b style={{ fontSize: 14.5 }}>🖼 کاروسل · {slides.length} اسلاید</b>
+            {!running && (
+              <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
+                ↻ ساخت دوباره
+              </button>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+            {slides.map((sl) => (
+              <div key={sl.num} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
+                {sl.image_url ? (
+                  <a href={sl.image_url} target="_blank" rel="noopener noreferrer">
+                    <img src={sl.image_url} alt={"Slide " + sl.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover", background: C.surfaceHi }} />
+                  </a>
+                ) : (
+                  <div className={running ? "ui-skeleton" : ""} style={{ aspectRatio: "4 / 5", display: "grid", placeItems: "center", background: C.surfaceHi, color: C.text3, fontSize: 12, padding: 8, textAlign: "center", fontFamily: font }}>
+                    {running ? "…" : "⚠️ " + (sl.error ? sl.error.slice(0, 80) : "no image")}
+                  </div>
+                )}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", fontSize: 11.5, fontFamily: font, color: C.text2 }}>
+                  <span title={sl.content} style={{ fontWeight: 700 }}>{sl.num}/{slides.length}</span>
+                  {!running && (
+                    <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: sl.num })} title="Draw this slide again" style={{ background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: C.text2 }}>
+                      ↻ redraw
+                    </button>
+                  )}
+                </div>
+                <div dir="rtl" style={{ padding: "0 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-line" }}>
+                  {sl.content}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {slides.some((sl) => sl.kept === "memory") && (
+            <div dir="rtl" style={{ marginTop: 8, fontSize: 11.5, color: C.orangeDeep, fontFamily: fa, lineHeight: 1.7 }}>
+              ⚠️ بعضی تصاویر در وردپرس ذخیره نشدن و فقط تا ری‌استارت بعدی سرور می‌مونن. اگه لازمشون داری دانلودشون کن یا به تلگرام بفرست.
+            </div>
+          )}
+          {!running && missing > 0 && (
+            <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: "missing" })} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
+              طراحی {missing} اسلاید باقی‌مانده
+            </button>
+          )}
+
+          {carousel.caption && (
+            <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>CAPTION</span>
+                <button
+                  className="ui-btn"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(carousel.caption);
+                    setCopiedCap(true);
+                    setTimeout(() => setCopiedCap(false), 1400);
+                  }}
+                  style={{ background: copiedCap ? C.success : alpha(C.orange, 0.14), color: copiedCap ? "#fff" : C.orange, border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                >
+                  {copiedCap ? "Copied ✓" : "Copy"}
+                </button>
+              </div>
+              <div dir="rtl" style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 180, overflowY: "auto" }}>{carousel.caption}</div>
+            </div>
+          )}
+
+          {drawn > 0 && !running && (
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {caps.telegram?.review !== false && (
+                <button className="ui-btn" disabled={sending} onClick={() => send("review")} style={{ ...btn(alpha(C.teal, 0.12), C.text, `1px solid ${alpha(C.teal, 0.4)}`), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
+                  {sent.review ? "✓ " : "✈ "}کانال بررسی تیم
+                  {sent.review && <div style={{ fontSize: 10.5, fontWeight: 500, color: C.text3 }}>sent {when(sent.review)}</div>}
+                </button>
+              )}
+              {caps.telegram?.public !== false && (
+                <button className="ui-btn" disabled={sending} onClick={() => send("public")} style={{ ...btn(sent.public ? alpha(C.success, 0.12) : C.orange, sent.public ? C.success : "#fff", sent.public ? `1px solid ${alpha(C.success, 0.5)}` : "none"), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
+                  {sent.public ? "✓ " : "📢 "}انتشار در @sugimotovisa
+                  {sent.public && <div style={{ fontSize: 10.5, fontWeight: 500 }}>published {when(sent.public)}</div>}
+                </button>
+              )}
+            </div>
+          )}
+          {sending && <div className="ui-pulse" style={{ marginTop: 8, fontSize: 12, color: C.text3, textAlign: "center", fontFamily: fa }}>در حال ارسال به تلگرام…</div>}
+          {sendErr && <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, textAlign: "center", direction: "ltr" }}>⚠️ {sendErr}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// English video through the team's video workflow. Shown now so the place is
+// ready; it starts working when the server has VIDEO_WORKFLOW_URL.
+function VideoPanel({ job, enabled, onStart }) {
+  const running = !!job && job.status === "running";
+  const state = !job ? "" : job.status === "running" ? "running" : job.status === "error" ? "error" : "done";
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        className="ui-btn"
+        onClick={enabled && !running ? onStart : undefined}
+        disabled={!enabled || running}
+        title={enabled ? "Send the English script to the video workflow" : "The video workflow will be connected later"}
+        style={{
+          width: "100%", background: enabled ? alpha(C.slate, 0.08) : C.surfaceHi, color: enabled ? C.text : C.text3,
+          border: `1px ${enabled ? "solid" : "dashed"} ${C.line}`, borderRadius: 12, padding: "12px", fontWeight: 600,
+          fontSize: 13.5, cursor: enabled && !running ? "pointer" : "default", fontFamily: "'Inter', 'Vazirmatn', sans-serif",
+        }}
+      >
+        🎬 English video (Anthropic workflow)
+        {!enabled ? " — coming soon" : state === "running" ? " — sending…" : state === "done" ? " — requested ✓" : ""}
+      </button>
+      {state === "error" && <div style={{ marginTop: 6, fontSize: 11.5, color: C.reject, textAlign: "center" }}>⚠️ {job.error}</div>}
     </div>
   );
 }
@@ -2396,47 +2202,6 @@ function Tab({ active, onClick, label }) {
   );
 }
 
-// Library — a browsable list of every saved script + article. Tapping a row
-// reopens it in the script view (with copy / Telegram / publish all reusable).
-function LibraryView({ items, filter, setFilter, onOpen, onBack }) {
-  const scripts = items.filter((i) => i.type === "script");
-  const articles = items.filter((i) => i.type === "article");
-  const filtered =
-    filter === "script" ? scripts : filter === "article" ? articles : items;
-
-  return (
-    <div style={{ width: "100%", maxWidth: 600, flex: 1, display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-        <BackBtn onClick={onBack} />
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-          <span style={{ fontSize: 17, fontWeight: 700, color: C.text }}>Library</span>
-          <span style={{ fontSize: 12, color: C.text3 }}>{items.length} saved</span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        <Tab active={filter === "all"} onClick={() => setFilter("all")} label={`همه (${items.length})`} />
-        <Tab active={filter === "script"} onClick={() => setFilter("script")} label={`سناریوها (${scripts.length})`} />
-        <Tab active={filter === "article"} onClick={() => setFilter("article")} label={`مقاله‌ها (${articles.length})`} />
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="ui-glass" style={{ height: 320, border: `1px dashed ${C.line}`, borderRadius: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, textAlign: "center", padding: 24 }}>
-          <div style={{ width: 64, height: 64, borderRadius: 20, display: "grid", placeItems: "center", fontSize: 28, background: alpha(C.orange, 0.1) }}>📚</div>
-          <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text2 }}>
-            هنوز چیزی ذخیره نشده.<br />یک موضوع رو تأیید کن تا سناریو و مقاله‌اش همیشه اینجا بمونه.
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {filtered.map((it, n) => (
-            <LibraryRow key={it.id + ":" + (it.ts || 0)} item={it} n={n} onOpen={() => onOpen(it)} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function BackBtn({ onClick, label = "Deck" }) {
   return (
@@ -2446,40 +2211,3 @@ function BackBtn({ onClick, label = "Deck" }) {
   );
 }
 
-function LibraryRow({ item, onOpen, n = 0 }) {
-  const f = fieldOf(item);
-  const isArticle = item.type === "article";
-  const tone = isArticle ? C.teal : C.orange;
-  let dateStr = "";
-  if (item.ts) {
-    try {
-      dateStr = new Date(item.ts).toLocaleDateString("en-CA");
-    } catch (_) {}
-  }
-  return (
-    <button
-      onClick={onOpen}
-      className="ui-glass ui-lift ui-fade"
-      style={{
-        animationDelay: `${Math.min(n, 14) * 25}ms`, textAlign: "start", border: `1px solid ${C.line}`,
-        borderRadius: 14, padding: "11px 12px", cursor: "pointer", color: C.text,
-        display: "flex", alignItems: "center", gap: 12, width: "100%",
-      }}
-    >
-      <span aria-hidden style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 18, flexShrink: 0, background: alpha(tone, 0.16), border: `1px solid ${alpha(tone, 0.35)}` }}>
-        {isArticle ? "📝" : "🎬"}
-      </span>
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span dir="rtl" style={{ display: "block", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 700, fontSize: 14, color: C.text, lineHeight: 1.5, unicodeBidi: "plaintext", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.title_fa || item.title_en}
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, fontSize: 11, color: C.text2, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
-          <span style={{ color: f.color }}>{f.emoji} {f.label}</span>
-          <span style={{ color: tone }}>{isArticle ? "مقاله" : "سناریو"}</span>
-          {dateStr && <span>{dateStr}</span>}
-        </span>
-      </span>
-      <span aria-hidden style={{ fontSize: 15, color: C.text3, flexShrink: 0 }}>↗</span>
-    </button>
-  );
-}

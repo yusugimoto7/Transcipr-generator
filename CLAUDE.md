@@ -58,8 +58,11 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Keep-awake + deck warm-up (every 10 min, GitHub Actions → `/api/topics?warm=1`) | `.github/workflows/keepwarm.yml` |
 | Instagram creators (list / reader / health page) | `lib/creators.js`, `lib/social/instagram.js`, `/api/social` |
 | Lexbase newsletter from Gmail (IMAP, read-only; PDF → items) | `lib/newsletter/lexbase.js`, `/api/lexbase` |
-| Background jobs (script, Telegram, article, draft, Word file run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
-| UI | `app/page.jsx` |
+| Background jobs (script, Telegram, article, draft, Word file, carousel, video run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
+| Shared workspace — every used/archived topic and what was made from it, for the whole team (Sheet "Library" tab, replaces the old Library view) | `lib/workspace.js`, `app/api/workspace/route.js` |
+| Carousel posts: slide text (Wizard's carousel prompt) → gpt-image-2 → WordPress media → Telegram | `lib/carousel.js`, `lib/wordpress.js` (`uploadMedia`) |
+| English video workflow hook (inactive until `VIDEO_WORKFLOW_URL` is set) | `lib/video.js` |
+| UI (one list: new + used topics, Archive filter, Lexbase tab; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
 
 ## Conventions that matter here
 
