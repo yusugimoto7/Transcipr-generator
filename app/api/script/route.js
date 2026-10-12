@@ -1,7 +1,7 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiScript } from "../../../lib/openai";
 import { scriptPrompt } from "../../../lib/prompts";
-import { fetchArticleText } from "../../../lib/news";
+import { sourceTextFor } from "../../../lib/grounding";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +16,7 @@ export async function POST(request) {
     // Ground the script in the REAL article text so it's about the actual news,
     // not an invented topic. Falls back to the stored snippet if the fetch
     // fails (cached, so the parallel fa+en calls don't double-fetch).
-    let sourceText = "";
-    if (topic.source_url) {
-      sourceText = await fetchArticleText(topic.source_url).catch(() => "");
-    }
-    if (!sourceText && topic.snippet) sourceText = String(topic.snippet);
+    const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
 
     const prompt = scriptPrompt(topic, lang, sourceText);
 

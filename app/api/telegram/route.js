@@ -1,7 +1,7 @@
 import { tgCall, approvalEnabled } from "../../../lib/telegram";
 import { newsPostPrompt } from "../../../lib/prompts";
 import { getRelatedCandidates } from "../../../lib/wordpress";
-import { fetchArticleText } from "../../../lib/news";
+import { sourceTextFor } from "../../../lib/grounding";
 import { openaiEnabled, openaiRewrite } from "../../../lib/openai";
 import { callClaude } from "../../../lib/anthropic";
 
@@ -20,9 +20,7 @@ function escapeHtml(s) {
 // Generate a CLEAN Farsi news post (no hooks / no sales CTA), grounded in the
 // real source article. Falls back to the provided fa script if generation fails.
 async function generateNewsPost(topic, fallback) {
-  let sourceText = "";
-  if (topic?.source_url) sourceText = await fetchArticleText(topic.source_url).catch(() => "");
-  if (!sourceText && topic?.snippet) sourceText = String(topic.snippet);
+  const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
   const prompt = newsPostPrompt(topic, sourceText);
   try {
     if (openaiEnabled()) {

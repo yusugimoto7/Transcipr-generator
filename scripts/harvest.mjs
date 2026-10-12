@@ -16,9 +16,12 @@ import path from "node:path";
 import { fetchFeedItems, fetchArticleText, isGoogleNews } from "../lib/news.js";
 import { mergeCandidates, relevance, isDrawResult, KEEP_DAYS } from "../lib/candidates.js";
 import { resolveGoogleNewsUrl } from "../lib/gnews.js";
+import { harvestSignals } from "../lib/ideas/signals.js";
 
 const dir = process.argv[2] || "harvest-data";
 const file = path.join(dir, "candidates.json");
+const signalsFile = path.join(dir, "signals.json");
+const SIGNALS_EVERY_MS = 20 * 60 * 60 * 1000; // once a day; the harvest itself runs every 2h
 const nowMs = Date.now();
 
 // Per-run enrichment budgets. Each resolve/fetch is a network round trip, and
@@ -110,3 +113,26 @@ const lines = [
 const report = lines.join("\n");
 console.log(report);
 if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, report + "\n");
+
+// ── Demand signals for the general-ideas section (lib/ideas/signals.js) ──────
+// Daily, in the same run, so there is one publisher of the harvest-data
+// branch and no second workflow to race it. A failure here never touches the
+// candidate pool above.
+{
+  let previous = null;
+  try {
+    previous = JSON.parse(fs.readFileSync(signalsFile, "utf8"));
+  } catch (_) {}
+  const age = previous ? nowMs - Date.parse(previous.harvested_at || 0) : Infinity;
+  if (process.env.SIGNALS === "1" || age > SIGNALS_EVERY_MS) {
+    try {
+      const signals = await harvestSignals({ previous });
+      fs.writeFileSync(signalsFile, JSON.stringify(signals));
+      console.log(`signals.json written (${Math.round(fs.statSync(signalsFile).size / 1024)} KB)`);
+    } catch (e) {
+      console.log("signals failed:", String(e && e.message ? e.message : e));
+    }
+  } else {
+    console.log(`signals.json is ${Math.round(age / 3600000)}h old; next refresh after ${SIGNALS_EVERY_MS / 3600000}h`);
+  }
+}

@@ -62,7 +62,9 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Shared workspace — every used/archived topic and what was made from it, for the whole team (Sheet "Library" tab, replaces the old Library view) | `lib/workspace.js`, `app/api/workspace/route.js` |
 | Carousel posts: slide text (Wizard's carousel prompt) → gpt-image-2 → WordPress media → Telegram | `lib/carousel.js`, `lib/wordpress.js` (`uploadMedia`) |
 | English video workflow hook (inactive until `VIDEO_WORKFLOW_URL` is set) | `lib/video.js` |
-| UI (one list: new + used topics, Archive filter, Lexbase tab; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
+| General ideas: demand signals (Google/YouTube autocomplete EN+FA, IRCC Help Centre, Reddit, site titles, official page text) harvested daily → weekly batch of evergreen ideas grounded on canada.ca pages | `lib/ideas/seeds.js` (subjects, pages), `lib/ideas/signals.js`, `lib/ideas/index.js`, `/api/ideas` |
+| Source text for every writing step (Lexbase item → stored official page → fetched page → excerpt) | `lib/grounding.js` |
+| UI (one list: new + used topics, Archive filter; Lexbase and Ideas tabs; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
 
 ## Conventions that matter here
 
@@ -72,6 +74,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 - **Grounding is non-negotiable.** Every generated text must be supported by fetched source text. Never let a model see only a headline and write from it; if a source is too thin, drop it. Invented facts are the worst bug this app can have.
 - Farsi output is the brand's own voice — never "according to the source", never sales lines or "DM us" in news posts.
 - Express Entry draw results are excluded from topics (the brand covers them elsewhere).
+- Evergreen ideas (`topic.evergreen`) are explainers, not news: the script, Telegram post, article and carousel prompts switch framing on that flag, and ground on the official page the harvester stored (`page_id`).
 - Per-feed failures are swallowed on purpose so one dead source never breaks a batch — so when adding a source, confirm it on `/api/feeds` after deploy.
 - Match the surrounding code's comment style: comments explain *why*, not what.
 - Do not put model identifiers in commit messages or code comments.

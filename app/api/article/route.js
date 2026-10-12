@@ -1,7 +1,7 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiArticle } from "../../../lib/openai";
 import { getArticleLinks } from "../../../lib/wordpress";
-import { fetchArticleText } from "../../../lib/news";
+import { sourceTextFor } from "../../../lib/grounding";
 import { articlePrompt, parseArticle, ARTICLE_MIN_CHARS, ARTICLE_MAX_CHARS } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -34,9 +34,7 @@ export async function POST(request) {
     const links = await getArticleLinks(topic);
     const today = new Date().toLocaleDateString("en-CA");
     // Ground the article in the REAL source article text (never fabricate).
-    let sourceText = "";
-    if (topic.source_url) sourceText = await fetchArticleText(topic.source_url).catch(() => "");
-    if (!sourceText && topic.snippet) sourceText = String(topic.snippet);
+    const sourceText = await sourceTextFor(topic, { maxChars: 5000 });
     const prompt = articlePrompt(topic, links, today, sourceText);
 
     async function generate(p) {

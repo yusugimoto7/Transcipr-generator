@@ -521,7 +521,7 @@ export default function App() {
   useEffect(() => {
     try {
       const m = localStorage.getItem("sugimoto_deck_mode_v2");
-      if (m === "lexbase") setDeckModeState(m);
+      if (m === "lexbase" || m === "ideas") setDeckModeState(m);
     } catch (_) {}
   }, []);
   const setDeckMode = (m) => {
@@ -936,7 +936,18 @@ export default function App() {
         <div style={{ width: "100%", maxWidth: colMax, flex: 1, display: "flex", flexDirection: "column" }}>
           <ModeSwitch mode={deckMode} onChange={setDeckMode} />
 
-          {deckMode === "lexbase" ? (
+          {deckMode === "ideas" ? (
+            <IdeasSection
+              decisions={decisions}
+              jobs={bg}
+              ws={ws}
+              onApprove={approveTopic}
+              onReject={rejectTopic}
+              onRestore={restoreTopic}
+              onOpen={openTopic}
+              onRetry={(t) => startJob("script", t, { topic: t })}
+            />
+          ) : deckMode === "lexbase" ? (
             <LexbaseSection
               decisions={decisions}
               jobs={bg}
@@ -1031,7 +1042,7 @@ export default function App() {
 }
 
 // List (every topic, new and used) or the Lexbase newsletter section.
-const MODES = [["list", "☰", "List"], ["lexbase", "📬", "Lexbase"]];
+const MODES = [["list", "☰", "List"], ["lexbase", "📬", "Lexbase"], ["ideas", "💡", "Ideas"]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
@@ -1276,6 +1287,11 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                     {t.why_now}
                   </div>
                 )}
+                {plain && t.evergreen && t.signals && t.signals.length > 0 && (
+                  <div dir="ltr" style={{ fontFamily: "'Inter', 'Vazirmatn', sans-serif", fontSize: 11, lineHeight: 1.6, color: C.text3, marginTop: 2, textAlign: "right", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    🔍 {t.signals.join(" · ")}
+                  </div>
+                )}
                 <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
                     {f.emoji} {f.label}
@@ -1307,6 +1323,9 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                       {k === "carousel" && m && m.sent && m.sent.public ? " · 📢 published" : ""}
                     </span>
                   ))}
+                  {t.evergreen && (
+                    <span title={"Evergreen idea" + (t.signals && t.signals.length ? " — " + t.signals.join(" · ") : "")} style={{ color: "#8a5a00", background: alpha("#f5a623", 0.16), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>💡 {t.format || "idea"}</span>
+                  )}
                   {(t.focus || []).map((k) => (
                     <span key={k} style={{ color: "#b42318", background: alpha("#f04438", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>{FOCUS_LABEL[k] || k}</span>
                   ))}
@@ -1521,6 +1540,122 @@ function LexbaseSection({ decisions, ...actions }) {
         </div>
       ) : (
         cards.length > 0 && <IdeasList topics={group === "all" ? cards : rows} decisions={decisions} plain {...actions} />
+      )}
+    </div>
+  );
+}
+
+// General ideas: evergreen topics built from what people keep asking (Google
+// searches in Persian and English, YouTube, IRCC's Help Centre, Reddit), each
+// grounded on an official page. Batches are made on the server about weekly
+// and kept for everyone; the button asks for a new batch now.
+const IDEA_GROUPS = [
+  ["all", "همه", () => true],
+  ["study", "🎓 تحصیل", (t) => t.subject === "study" || t.subject === "pgwp"],
+  ["work", "🛂 کار", (t) => t.subject === "work"],
+  ["family", "👪 خانواده", (t) => t.subject === "family"],
+  ["pr", "⚡ اقامت و شهروندی", (t) => ["express", "pnp", "citizenship", "suv"].includes(t.subject)],
+  ["other", "🌐 ویزا و پرونده", (t) => ["visit", "refusal"].includes(t.subject)],
+];
+
+function IdeasSection({ decisions, ...actions }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [group, setGroup] = useState("all");
+  const [asking, setAsking] = useState(false);
+  const font = { fontFamily: "'Vazirmatn', sans-serif" };
+
+  useEffect(() => {
+    let stop = false;
+    let timer = null;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/ideas", { cache: "no-store" });
+        const j = await r.json();
+        if (stop) return;
+        if (j.error && !j.ideas) throw new Error(j.error);
+        setData(j);
+        setErr("");
+        if (j.generating) timer = setTimeout(load, 5000);
+      } catch (e) {
+        if (stop) return;
+        setErr(String(e?.message || e));
+        timer = setTimeout(load, 15000);
+      }
+    };
+    load();
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asking]);
+
+  const refresh = async () => {
+    if (!window.confirm("Ask for a new batch of ideas now? (one model call, a few cents)")) return;
+    setAsking(true);
+    try {
+      const r = await fetch("/api/ideas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh: true }) });
+      setData(await r.json());
+    } catch (_) {}
+    setAsking(false);
+  };
+
+  const ideas = ((data && data.ideas) || []).filter((t) => decisions[topicKey(t)] !== "rejected");
+  const inGroup = IDEA_GROUPS.find((g) => g[0] === group)[2];
+  const rows = ideas.filter(inGroup);
+  const sig = data && data.signals;
+  const when = (iso) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "");
+
+  return (
+    <div>
+      <div dir="rtl" className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#f5a623", 0.45)}`, background: alpha("#f5a623", 0.07), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
+        <b>💡 ایده‌های همیشگی</b> — سؤال‌هایی که مردم همیشه می‌پرسند، نه خبر.
+        {sig ? (
+          <div style={{ color: C.text2 }}>
+            منبع ایده‌ها: {sig.google} جست‌وجوی گوگل و یوتیوب (فارسی و انگلیسی) · {sig.helpcentre} سؤال مرکز راهنمای اداره مهاجرت کانادا · {sig.reddit} پرسش ردیت · مقایسه با {sig.covered} مطلب سایت · برداشت {when(sig.at)}
+            {sig.pages < sig.pagesTotal ? ` · ${sig.pages} از ${sig.pagesTotal} صفحهٔ رسمی آماده` : ""}
+          </div>
+        ) : data ? (
+          <div style={{ color: C.orangeDeep }}>هنوز سیگنالی برداشت نشده؛ بعد از اولین اجرای روزانهٔ برداشت‌کننده ایده‌ها ساخته می‌شود.</div>
+        ) : null}
+        {data && data.generating && <div className="ui-pulse" style={{ color: "#8a5a00", fontWeight: 700 }}>⏳ در حال ساختن ایده‌های تازه… (حدود یک دقیقه)</div>}
+        {data && data.error && !data.generating && <div dir="ltr" style={{ fontSize: 11, color: C.reject, textAlign: "left" }}>{data.error}</div>}
+        {err && <div dir="ltr" style={{ fontSize: 11, color: C.reject, textAlign: "left" }}>{err}</div>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
+          {data && data.generatedAt && <span style={{ color: C.text3, fontSize: 11.5 }}>آخرین دسته: {when(data.generatedAt)}</span>}
+          <button className="ui-btn" disabled={asking || (data && data.generating) || !sig} onClick={refresh} style={{ ...font, padding: "5px 11px", borderRadius: 99, cursor: "pointer", border: `1px solid ${alpha("#f5a623", 0.6)}`, background: C.surface, color: "#8a5a00", fontSize: 12, fontWeight: 700, opacity: asking || (data && data.generating) || !sig ? 0.5 : 1 }}>
+            ✨ ایده‌های تازه
+          </button>
+        </div>
+      </div>
+
+      {ideas.length > 0 && (
+        <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+          {IDEA_GROUPS.map(([k, label, test]) => {
+            const on = group === k;
+            return (
+              <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                {label}
+                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Inter', sans-serif" }}>{ideas.filter(test).length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {!data ? (
+        <div style={{ display: "grid", gap: 7 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="ui-skeleton" style={{ height: 64, borderRadius: 14 }} />
+          ))}
+        </div>
+      ) : ideas.length ? (
+        <IdeasList topics={rows} decisions={decisions} plain {...actions} />
+      ) : (
+        <div dir="rtl" className="ui-glass" style={{ ...font, textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontSize: 13 }}>
+          هنوز ایده‌ای ساخته نشده.
+        </div>
       )}
     </div>
   );
