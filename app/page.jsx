@@ -703,7 +703,9 @@ export default function App() {
     try {
       window.scrollTo(0, 0);
     } catch (_) {}
-    if (e && Object.keys(e.materials || {}).length) {
+    // Always ask the server: a teammate (or a job this page lost track of)
+    // may have saved material that this device's copy does not show yet.
+    {
       setLoadingSaved(true);
       fetch("/api/workspace?key=" + encodeURIComponent(key), { cache: "no-store" })
         .then((r) => r.json())
@@ -716,8 +718,6 @@ export default function App() {
         })
         .catch(() => {})
         .finally(() => openKeyRef.current === key && setLoadingSaved(false));
-    } else {
-      setLoadingSaved(false);
     }
   };
 
@@ -825,8 +825,8 @@ export default function App() {
   const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "" } : scripts;
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
   const viewError =
-    sj && sj.status === "error" && !(scripts.fa || scripts.en)
-      ? "نوشتن سناریو با خطا مواجه شد. برگرد و دوباره تأیید کن."
+    sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
+      ? "نوشتن سناریو با خطا مواجه شد (" + (sj.error || "") + ")"
       : scriptError;
   let viewTg = { state: "idle", msg: "" };
   if (svJobs.telegram) {
@@ -1950,7 +1950,16 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
           </div>
         ) : error ? (
-          <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.reject, direction: "rtl", textAlign: "right" }}>{error}</div>
+          <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.reject, textAlign: "right" }}>
+            {error}
+            {onWrite && (
+              <div style={{ marginTop: 14 }}>
+                <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+                  ↻ دوباره بنویس
+                </button>
+              </div>
+            )}
+          </div>
         ) : !scripts.fa && !scripts.en ? (
           // Opened before approval: read the original first, then write.
           <div dir="rtl" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 240, fontFamily: "'Vazirmatn', sans-serif", textAlign: "center" }}>
