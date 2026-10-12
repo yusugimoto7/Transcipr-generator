@@ -2178,6 +2178,8 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
   const [count, setCount] = useState(7);
   const [notes, setNotes] = useState("");
   const [copiedCap, setCopiedCap] = useState(false);
+  const [preview, setPreview] = useState(0); // slide number shown large, 0 = closed
+  const [revNotes, setRevNotes] = useState("");
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
@@ -2267,7 +2269,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
             <b style={{ fontSize: 14.5 }}>🖼 کاروسل · {slides.length} اسلاید</b>
             {!running && (
               <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
-                ↻ ساخت دوباره
+                ↻ از نو (بدون نسخه قبلی)
               </button>
             )}
           </div>
@@ -2275,9 +2277,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
             {slides.map((sl) => (
               <div key={sl.num} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
                 {sl.image_url ? (
-                  <a href={sl.image_url} target="_blank" rel="noopener noreferrer">
+                  <button onClick={() => setPreview(sl.num)} aria-label={"Preview slide " + sl.num} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
                     <img src={sl.image_url} alt={"Slide " + sl.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover", background: C.surfaceHi }} />
-                  </a>
+                  </button>
                 ) : (
                   <div className={running ? "ui-skeleton" : ""} style={{ aspectRatio: "4 / 5", display: "grid", placeItems: "center", background: C.surfaceHi, color: C.text3, fontSize: 12, padding: 8, textAlign: "center", fontFamily: font }}>
                     {running ? "…" : "⚠️ " + (sl.error ? sl.error.slice(0, 80) : "no image")}
@@ -2303,6 +2305,30 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
               ⚠️ بعضی تصاویر در وردپرس ذخیره نشدن و فقط تا ری‌استارت بعدی سرور می‌مونن. اگه لازمشون داری دانلودشون کن یا به تلگرام بفرست.
             </div>
           )}
+          {!running && (
+            <div dir="rtl" style={{ marginTop: 14, background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 14, padding: 12, fontFamily: fa }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6 }}>✏️ یادداشت برای نسخه بعد</div>
+              <textarea
+                value={revNotes}
+                onChange={(e) => setRevNotes(e.target.value)}
+                rows={3}
+                placeholder="چه چیزی عوض بشه؟ مثلاً: اسلاید ۲ کوتاه‌تر، تیتر اسلاید اول درشت‌تر، عکس واقعی‌تر، رنگ‌ها روشن‌تر…"
+                style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+              />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <button
+                  className="ui-btn ui-glow-orange"
+                  disabled={!revNotes.trim()}
+                  onClick={() => onJob("carousel", { count: slides.length, notes: revNotes.trim(), revise: true })}
+                  style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
+                >
+                  ↻ ساخت دوباره با این یادداشت
+                </button>
+                <span style={{ fontSize: 11.5, color: C.text3 }}>نسخه فعلی پایه کار می‌مونه؛ فقط چیزهایی که نوشتی عوض می‌شه.</span>
+              </div>
+            </div>
+          )}
+          {preview > 0 && <SlidePreview slides={slides.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: "missing" })} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
               طراحی {missing} اسلاید باقی‌مانده
@@ -2349,6 +2375,69 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
           {sendErr && <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, textAlign: "center", direction: "ltr" }}>⚠️ {sendErr}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// A slide shown large over the page: arrows, swipe or the keyboard move
+// between slides, Esc or a tap outside closes.
+function SlidePreview({ slides, start, onClose }) {
+  const [i, setI] = useState(Math.max(0, slides.findIndex((s) => s.num === start)));
+  const touchX = useRef(null);
+  const go = (d) => setI((x) => (x + d + slides.length) % slides.length);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const s = slides[i];
+  if (!s) return null;
+  const arrow = (d, label) => (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        go(d);
+      }}
+      aria-label={label}
+      style={{ position: "absolute", top: "50%", [d > 0 ? "right" : "left"]: 10, transform: "translateY(-50%)", width: 44, height: 44, borderRadius: 99, border: "none", background: "rgba(255,255,255,0.9)", fontSize: 20, cursor: "pointer", boxShadow: "0 2px 10px rgba(0,0,0,0.25)" }}
+    >
+      {d > 0 ? "›" : "‹"}
+    </button>
+  );
+  return (
+    <div
+      role="dialog"
+      aria-label="Slide preview"
+      onClick={onClose}
+      onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
+      onTouchEnd={(e) => {
+        if (touchX.current == null) return;
+        const dx = e.changedTouches[0].clientX - touchX.current;
+        touchX.current = null;
+        if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+      }}
+      style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(10,14,20,0.88)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16, boxSizing: "border-box" }}
+    >
+      <div style={{ position: "relative", maxWidth: "min(92vw, 640px)" }} onClick={(e) => e.stopPropagation()}>
+        <img src={s.image_url} alt={"Slide " + s.num} style={{ display: "block", maxWidth: "100%", maxHeight: "80vh", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }} />
+        {slides.length > 1 && arrow(-1, "Previous slide")}
+        {slides.length > 1 && arrow(1, "Next slide")}
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14, color: "#fff", fontSize: 13, fontFamily: "'Inter', sans-serif" }}>
+        <span>{i + 1} / {slides.length}</span>
+        <a href={s.image_url} target="_blank" rel="noopener noreferrer" style={{ color: "#fff", opacity: 0.85 }}>Open full size ↗</a>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "none", borderRadius: 99, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Close ✕</button>
+      </div>
     </div>
   );
 }
