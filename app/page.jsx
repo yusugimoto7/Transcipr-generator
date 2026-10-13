@@ -8,7 +8,8 @@ import { sameTopic } from "../lib/similar";
    SUGIMOTO VISA — Video Topic Engine
    - Pulls this week's live Canada/Europe immigration news
    - One topic per card, swipe/accept/reject (Tinder-style)
-   - On approve: writes a full Reel script in Farsi + English
+   - On approve: writes a full Reel script in Farsi + English;
+     Telegram, article, carousel and the English video are separate steps
    Claude API calls run server-side (see /app/api/*) so the
    API key never reaches the browser.
    ============================================================ */
@@ -273,6 +274,8 @@ export default function App() {
   const [copied, setCopied] = useState("");
   const [initialArticle, setInitialArticle] = useState(null);
   const [savedCarousel, setSavedCarousel] = useState(null);
+  const [savedTg, setSavedTg] = useState(0); // when the news post last went to Telegram
+  const [savedVideo, setSavedVideo] = useState(null);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [caps, setCaps] = useState({ carousel: true, telegram: { review: true, public: true }, video: false });
 
@@ -454,6 +457,8 @@ export default function App() {
         const now = Date.now();
         if (remote.kind === "script") patchWs(t, { status: "active", materials: { script: { ts: now } } });
         else if (remote.kind === "article") patchWs(t, { materials: { article: { ts: now } } });
+        else if (remote.kind === "telegram") patchWs(t, { materials: { telegram: { ts: now } } });
+        else if (remote.kind === "video") patchWs(t, { status: "active", materials: { video: { ts: now, status: r.status || "requested" } } });
         else if (remote.kind === "carousel" || remote.kind === "carousel_slide") {
           patchWs(t, { materials: { carousel: { ts: now, count: (r.slides || []).length, sent: r.sent || {} } } });
         } else if (remote.kind === "carousel_send") {
@@ -650,8 +655,8 @@ export default function App() {
   }, [topics, ws]);
 
   // ---- decisions ----------------------------------------------------------
-  // Approve: the server writes the scripts (and sends the news post to
-  // Telegram) as a job, and the topic becomes "used" for everyone.
+  // Approve: the server writes the scripts as a job, and the topic becomes
+  // "used" for everyone. Telegram is a separate choice on the topic page.
   const approveTopic = (topic) => {
     markSeenLocal(topic);
     recordSeenRemote(topic);
@@ -697,6 +702,8 @@ export default function App() {
     setScripts({ fa: "", en: "" });
     setInitialArticle(null);
     setSavedCarousel(null);
+    setSavedTg(0);
+    setSavedVideo(null);
     setScriptError(null);
     setScriptTab("fa");
     setView("script");
@@ -705,21 +712,27 @@ export default function App() {
     } catch (_) {}
     // Always ask the server: a teammate (or a job this page lost track of)
     // may have saved material that this device's copy does not show yet.
-    {
-      setLoadingSaved(true);
-      fetch("/api/workspace?key=" + encodeURIComponent(key), { cache: "no-store" })
-        .then((r) => r.json())
-        .then(({ entry }) => {
-          if (!entry || openKeyRef.current !== key) return;
-          const m = entry.materials || {};
+    setLoadingSaved(true);
+    loadSaved(key).finally(() => openKeyRef.current === key && setLoadingSaved(false));
+  };
+
+  // The open topic's saved material. `only` limits it to the parts that change
+  // without this page doing anything (the video workflow reports back).
+  const loadSaved = (key, only = null) =>
+    fetch("/api/workspace?key=" + encodeURIComponent(key), { cache: "no-store" })
+      .then((r) => r.json())
+      .then(({ entry }) => {
+        if (!entry || openKeyRef.current !== key) return;
+        const m = entry.materials || {};
+        if (!only) {
           if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "" });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
-        })
-        .catch(() => {})
-        .finally(() => openKeyRef.current === key && setLoadingSaved(false));
-    }
-  };
+          if (m.telegram) setSavedTg(m.telegram.sent || m.telegram.ts || 0);
+        }
+        if (m.video) setSavedVideo(m.video);
+      })
+      .catch(() => {});
 
   // Back to the list, where you were in it.
   const showList = () => {
@@ -822,22 +835,30 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "" } : scripts;
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "" } : { ...scripts };
+  // A rewritten English script (into English, or to a length) replaces the
+  // one on screen, unless it was a draft for the video editor only.
+  const enJob = svJobs.script_en;
+  const enRewrite = enJob && !(enJob.extra && enJob.extra.save === false) ? enJob : null;
+  if (enRewrite && enRewrite.status === "done" && enRewrite.result && enRewrite.result.en) viewScripts.en = enRewrite.result.en;
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? "نوشتن سناریو با خطا مواجه شد (" + (sj.error || "") + ")"
       : scriptError;
-  let viewTg = { state: "idle", msg: "" };
-  if (svJobs.telegram) {
-    const tj = svJobs.telegram;
-    viewTg = { state: tj.status === "running" ? "sending" : tj.status === "done" ? "sent" : "error", msg: tj.error || "" };
-  } else if (sjResult) {
-    viewTg = {
-      state: sj.status === "running" ? "sending" : sjResult.tg === "sent" ? "sent" : sjResult.tg === "error" ? "error" : "idle",
-      msg: sjResult.tgMsg || "",
-    };
-  }
+  // Telegram: this session's send, else when it was last sent (saved).
+  const tj = svJobs.telegram;
+  const viewTg = tj
+    ? { state: tj.status === "running" ? "sending" : tj.status === "done" ? "sent" : "error", msg: tj.error || "", at: (tj.result && tj.result.sent) || 0 }
+    : savedTg
+      ? { state: "sent", msg: "", at: savedTg }
+      : { state: "idle", msg: "", at: 0 };
+
+  // The video: the newest request this session, else the saved record (which
+  // the workflow keeps up to date through its callback).
+  const vj = svJobs.video || null;
+  let video = savedVideo;
+  if (vj && vj.status === "done" && vj.result && (!video || (vj.result.requested_at || 0) > (video.requested_at || 0))) video = vj.result;
 
   // The carousel on screen: the newest job result this session, else the
   // saved one. `sent` merges what was sent since.
@@ -865,7 +886,7 @@ export default function App() {
   // Work running or finished in the background, for the bar under the header.
   const bgRows = [];
   for (const key of Object.keys(bg)) {
-    for (const kind of ["script", "article", "carousel"]) {
+    for (const kind of ["script", "article", "carousel", "video"]) {
       const j = bg[key][kind];
       if (!j || !j.topic) continue;
       if (dismissed[key + ":" + kind] && j.status !== "running") continue;
@@ -1023,16 +1044,20 @@ export default function App() {
           onCopy={copy}
           onBack={backToList}
           onWrite={decisions[svKey] === "rejected" ? null : () => approveTopic(scriptTopic)}
-          tgState={viewTg.state}
-          tgMsg={viewTg.msg}
-          onRetryTelegram={() => startJob("telegram", scriptTopic, { topic: scriptTopic, fa: viewScripts.fa, en: viewScripts.en })}
+          enError={(sjResult && sjResult.enError) || ""}
+          enJob={enRewrite}
+          draftJob={enJob && !enRewrite ? enJob : null}
+          tg={viewTg}
+          onTelegram={() => startJob("telegram", scriptTopic, { topic: scriptTopic, fa: viewScripts.fa, en: viewScripts.en })}
           articleJob={svJobs.article || null}
           publishJob={svJobs.publish || null}
           docJob={svJobs.docfile || null}
           carousel={carousel}
           carouselJob={carouselJob}
           sendJob={sendJob}
-          videoJob={svJobs.video || null}
+          videoJob={vj}
+          video={video}
+          onRefreshVideo={() => loadSaved(svKey, "video")}
           caps={caps}
           onJob={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
@@ -1665,7 +1690,7 @@ function IdeasSection({ decisions, ...actions }) {
 // already moved on from. Tap a finished one to open it.
 function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
   if (!rows.length) return null;
-  const KIND = { script: "سناریو", article: "مقاله", carousel: "کاروسل" };
+  const KIND = { script: "سناریو", article: "مقاله", carousel: "کاروسل", video: "ویدیو انگلیسی" };
   return (
     // Pinned under the header so a finished or failed job is seen wherever
     // you are on the page.
@@ -1695,8 +1720,8 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: tone }}>
                 {running
-                  ? writing ? "سناریو نوشته شد، در حال ارسال به تلگرام…" : `در حال نوشتن ${KIND[j.kind]}…`
-                  : failed ? `${KIND[j.kind]} نشد` : `${KIND[j.kind]} آماده است`}
+                  ? writing ? "سناریوها تقریباً آماده‌اند…" : j.kind === "video" ? "در حال ارسال به ورک‌فلوی ویدیو…" : `در حال نوشتن ${KIND[j.kind]}…`
+                  : failed ? `${KIND[j.kind]} نشد` : j.kind === "video" ? "ویدیو درخواست شد" : `${KIND[j.kind]} آماده است`}
               </div>
               <div style={{ color: C.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {j.topic.title_fa || j.topic.title_en}
@@ -1939,9 +1964,98 @@ function OriginalText({ topic }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, tgState = "idle", tgMsg = "", onRetryTelegram, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, videoJob, caps = {}, onJob }) {
+// Share of letters that are Persian script: an "English" script above about a
+// fifth Persian came back in the wrong language.
+function faShare(text) {
+  const s = String(text || "");
+  const fa = (s.match(/[؀-ۿﭐ-﷿ﹰ-﻿]/g) || []).length;
+  const latin = (s.match(/[A-Za-z]/g) || []).length;
+  return fa + latin ? fa / (fa + latin) : 0;
+}
+
+function when(ts) {
+  return ts ? new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+}
+
+const FONT = "'Inter', 'Vazirmatn', sans-serif";
+const FA_FONT = "'Vazirmatn', sans-serif";
+
+// A titled block on the topic page.
+function Section({ title, hint, children, innerRef, dir = "rtl" }) {
+  return (
+    <section ref={innerRef} style={{ marginTop: 18, scrollMarginTop: 90 }}>
+      {title && (
+        <div dir={dir} style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "0 4px 8px", fontFamily: dir === "rtl" ? FA_FONT : FONT }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{title}</span>
+          {hint && <span style={{ fontSize: 11.5, color: C.text3 }}>{hint}</span>}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+const card = { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" };
+
+// One thing that can be made from the topic: what it is, and where it stands.
+function ActionTile({ icon, title, sub, tone, status, onClick, disabled }) {
+  const s = status || { label: "", tone: C.text3 };
+  return (
+    <button
+      className={"ui-btn ui-tile" + (s.running ? " ui-progress" : "")}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      style={{
+        ...card, position: "relative", overflow: "hidden", textAlign: "left", padding: "13px 13px 12px", cursor: disabled ? "default" : "pointer",
+        display: "flex", flexDirection: "column", gap: 8, minHeight: 112, fontFamily: FONT, color: C.text, opacity: disabled ? 0.6 : 1,
+        borderColor: s.done ? alpha(tone, 0.45) : C.line,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span aria-hidden style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", background: alpha(tone, 0.13), fontSize: 18, flexShrink: 0 }}>{icon}</span>
+        <span style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25 }}>{title}</span>
+      </div>
+      <div dir="rtl" style={{ fontFamily: FA_FONT, fontSize: 11.5, color: C.text2, lineHeight: 1.6, textAlign: "right" }}>{sub}</div>
+      <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: s.tone || C.text3 }}>
+        <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: s.tone || C.text3, flexShrink: 0 }} className={s.running ? "ui-pulse" : ""} />
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
+      </div>
+    </button>
+  );
+}
+
+// Scripts / English / original text, as one segmented control.
+function Segmented({ value, onChange, items }) {
+  return (
+    <div role="tablist" style={{ display: "flex", padding: 3, gap: 3, borderRadius: 12, background: C.surfaceHi, border: `1px solid ${C.line}` }}>
+      {items.map(([k, label, font]) => (
+        <button
+          key={k}
+          role="tab"
+          aria-selected={value === k}
+          className="ui-btn"
+          onClick={() => onChange(k)}
+          style={{
+            flex: 1, border: "none", borderRadius: 9, padding: "8px 6px", cursor: "pointer", fontSize: 12.5, fontWeight: 700,
+            fontFamily: font || FONT, whiteSpace: "nowrap",
+            background: value === k ? C.surface : "transparent", color: value === k ? C.text : C.text2,
+            boxShadow: value === k ? "0 1px 3px rgba(16,24,40,0.12)" : "none",
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tg = { state: "idle", at: 0, msg: "" }, onTelegram, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, videoJob, video, onRefreshVideo, caps = {}, onJob }) {
   const f = fieldOf(topic);
+  const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
+  const enInFarsi = !!scripts.en && faShare(scripts.en) > 0.2;
+  const enRunning = !!enJob && enJob.status === "running";
+  const enFailed = enJob && enJob.status === "error" ? enJob.error : "";
 
   // Blog article (on-demand). It is written by a server-side job, so this view
   // only reflects that job's state: leaving the page, or opening another
@@ -2026,159 +2140,221 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
     onJob("docfile", { article });
   };
 
+  // ---- what to make from the topic ----------------------------------------
+  const articleRef = useRef(null);
+  const carouselRef = useRef(null);
+  const videoRef = useRef(null);
+  const reveal = (ref) => setTimeout(() => ref.current && ref.current.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  const [carouselOpen, setCarouselOpen] = useState(0); // bumped to open the carousel form
+  const [composer, setComposer] = useState(false);
+  const [draft, setDraft] = useState(null); // the video editor's state, kept while the topic is open
+
+  const sendTelegram = () => {
+    if (tg.state === "sending") return;
+    if (tg.state === "sent" && !window.confirm("The news post was already sent to Telegram. Send it again?")) return;
+    onTelegram();
+  };
+
+  const slides = (carousel && carousel.slides) || [];
+  const carRunning = !!carouselJob && carouselJob.status === "running";
+  const vRunning = !!videoJob && videoJob.status === "running";
+  const vStatus = vRunning ? "sending" : videoJob && videoJob.status === "error" && !(video && video.requested_at > (videoJob.startedAt || 0)) ? "error" : (video && video.status) || "";
+
+  const tiles = [
+    {
+      k: "telegram", icon: "✈️", title: "Telegram post", tone: C.teal,
+      sub: "پست خبری تمیز برای کانال بررسی تیم",
+      onClick: sendTelegram,
+      status:
+        tg.state === "sending" ? { label: "Sending…", tone: C.orange, running: true }
+        : tg.state === "sent" ? { label: "Sent" + (tg.at ? " · " + when(tg.at) : ""), tone: C.success, done: true }
+        : tg.state === "error" ? { label: "Failed — tap to retry", tone: C.reject }
+        : { label: "Not sent", tone: C.text3 },
+    },
+    {
+      k: "article", icon: "📝", title: "Blog article", tone: "#0e8a99",
+      sub: "مقاله سئو برای سایت + پیش‌نویس وردپرس",
+      onClick: () => {
+        if (artState === "idle" || artState === "error") generateArticle();
+        reveal(articleRef);
+      },
+      status:
+        artState === "generating" ? { label: "Writing…", tone: C.orange, running: true }
+        : artState === "ready" ? { label: pubState === "done" ? "Draft on the site" : "Ready", tone: C.success, done: true }
+        : artState === "error" ? { label: "Failed — tap to retry", tone: C.reject }
+        : { label: "Not made", tone: C.text3 },
+    },
+    {
+      k: "carousel", icon: "🖼", title: "Carousel post", tone: "#6d5bd0",
+      sub: "اسلایدهای اینستاگرام با تصویر",
+      onClick: () => {
+        if (!slides.length && !carRunning) setCarouselOpen((n) => n + 1);
+        reveal(carouselRef);
+      },
+      status:
+        carRunning ? { label: (carouselJob.result && carouselJob.result.stage === "drawing") ? "Drawing slides…" : "Writing slides…", tone: C.orange, running: true }
+        : slides.length ? { label: slides.length + " slides" + (carousel.sent && carousel.sent.public ? " · published" : ""), tone: C.success, done: true }
+        : carouselJob && carouselJob.status === "error" ? { label: "Failed", tone: C.reject }
+        : { label: "Not made", tone: C.text3 },
+    },
+    {
+      k: "video", icon: "🎬", title: "English video", tone: C.orangeDeep,
+      sub: "ویدیوی آواتار HeyGen از اسکریپت انگلیسی",
+      disabled: !hasScripts,
+      onClick: () => setComposer(true),
+      status:
+        !hasScripts ? { label: "Write the scripts first", tone: C.text3 }
+        : vStatus === "sending" ? { label: "Sending…", tone: C.orange, running: true }
+        : vStatus === "requested" ? { label: "Requested", tone: C.orange, running: true }
+        : vStatus === "rendering" ? { label: "Rendering…", tone: C.orange, running: true }
+        : vStatus === "done" ? { label: "Ready to watch", tone: C.success, done: true }
+        : vStatus === "failed" || vStatus === "error" ? { label: "Failed", tone: C.reject }
+        : !caps.video ? { label: "Workflow not connected", tone: C.text3 }
+        : { label: "Not made", tone: C.text3 },
+    },
+  ];
+
+  const pill = (bg, color) => ({ display: "inline-flex", alignItems: "center", gap: 5, background: bg, color, borderRadius: 99, padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: FONT, whiteSpace: "nowrap" });
+  const smallBtn = (tone) => ({ background: alpha(tone, 0.12), color: tone === C.orange ? C.orangeDeep : tone, border: `1px solid ${alpha(tone, 0.35)}`, borderRadius: 10, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT });
+
   return (
-    <div style={{ width: "100%", maxWidth: 600, flex: 1, display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100%", maxWidth: 640, flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <BackBtn onClick={onBack} label="Back to list" />
+        <BackBtn onClick={onBack} label="All topics" />
       </div>
 
-      <div className="ui-fade" style={{ position: "relative", overflow: "hidden", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, padding: "18px 18px 16px", marginBottom: 14, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
-        <div aria-hidden style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: f.color }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: alpha(f.color, 0.16), border: `1px solid ${alpha(f.color, 0.35)}`, borderRadius: 99, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, color: C.ink, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
-            {f.emoji} {f.label}
-          </span>
-          <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 600, color: topic.page === "EU" ? C.slate : C.orangeDeep }}>{topic.page === "EU" ? "🇪🇺 Europe" : "🇨🇦 Canada"}</span>
+      {/* The topic */}
+      <div className="ui-fade" style={{ ...card, position: "relative", overflow: "hidden", borderRadius: 22, padding: "16px 18px 16px", background: `linear-gradient(165deg, ${alpha(f.color, 0.13)} 0%, ${C.surface} 58%)` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          <span style={pill(alpha(f.color, 0.16), C.ink)}>{f.emoji} {f.label}</span>
+          <span style={pill(C.surface, topic.page === "EU" ? C.slate : C.orangeDeep)}>{topic.page === "EU" ? "🇪🇺 Europe" : "🇨🇦 Canada"}</span>
+          {formatNewsDate(topic.date) && <span style={pill(C.surface, C.text2)}>📅 {formatNewsDate(topic.date)}</span>}
+          {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 Explainer</span>}
         </div>
-        <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, textAlign: "right", lineHeight: 1.6, unicodeBidi: "plaintext" }}>
-          {topic.title_fa}
+        <div dir="rtl" style={{ fontFamily: FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "right", lineHeight: 1.65, unicodeBidi: "plaintext" }}>
+          {topic.title_fa || topic.title_en}
         </div>
-        {topic.source_url && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-            <a
-              href={topic.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                fontSize: 12.5, fontWeight: 600, color: "#fff",
-                fontFamily: "'Inter', 'Vazirmatn', sans-serif", textDecoration: "none",
-                direction: "ltr", background: C.teal, border: "none",
-                borderRadius: 10, padding: "8px 13px",
-              }}
-            >
-              🔗 Read the source: {sourceHost(topic.source_url)} ↗
-            </a>
-            {formatNewsDate(topic.date) && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.inkSoft, fontFamily: "'Inter', 'Vazirmatn', sans-serif", direction: "ltr" }}>
-                📅 {formatNewsDate(topic.date)}
-              </span>
-            )}
+        {topic.title_en && topic.title_fa && (
+          <div dir="ltr" style={{ marginTop: 4, fontSize: 13.5, fontWeight: 600, color: C.text2, lineHeight: 1.5 }}>{topic.title_en}</div>
+        )}
+        {topic.why_now && (
+          <div dir="rtl" style={{ marginTop: 12, padding: "9px 12px", borderRadius: 12, background: alpha(C.surfaceHi, 0.8), borderRight: `3px solid ${f.color}`, fontFamily: FA_FONT, fontSize: 12.5, lineHeight: 1.85, color: C.text2, textAlign: "right", unicodeBidi: "plaintext" }}>
+            {topic.why_now}
           </div>
+        )}
+        {topic.source_url && (
+          <a
+            href={topic.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ui-btn"
+            style={{ marginTop: 14, display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 700, color: C.teal, textDecoration: "none", direction: "ltr", background: C.surface, border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 11, padding: "8px 12px", fontFamily: FONT }}
+          >
+            🔗 {sourceHost(topic.source_url)} <span aria-hidden>↗</span>
+          </a>
         )}
       </div>
 
-      {/* tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <Tab active={tab === "fa"} onClick={() => setTab("fa")} label="سناریو فارسی" />
-        <Tab active={tab === "en"} onClick={() => setTab("en")} label="English script" />
-        <Tab active={tab === "src"} onClick={() => setTab("src")} label="متن اصلی" />
-      </div>
-
-      <div className="ui-glass" style={{ flex: 1, border: `1px solid ${C.line}`, borderRadius: 18, padding: 18, minHeight: 300 }}>
-        {tab === "src" ? (
-          <OriginalText topic={topic} />
-        ) : loading ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 260, gap: 14 }}>
-            <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
-            <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13, color: "rgba(18,26,36,0.6)", direction: "rtl" }}>{loadingText || "در حال نوشتن سناریوی فارسی و انگلیسی…"}</div>
-            <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-          </div>
-        ) : error ? (
-          <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, color: C.reject, textAlign: "right" }}>
-            {error}
-            {onWrite && (
-              <div style={{ marginTop: 14 }}>
-                <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
-                  ↻ دوباره بنویس
-                </button>
-              </div>
-            )}
-          </div>
-        ) : !scripts.fa && !scripts.en ? (
-          // Opened before approval: read the original first, then write.
-          <div dir="rtl" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 240, fontFamily: "'Vazirmatn', sans-serif", textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.8 }}>هنوز سناریویی برای این موضوع نوشته نشده.<br />متن خبر در «متن اصلی» هست.</div>
-            {onWrite && (
-              <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
-                ✍️ نوشتن سناریو (فارسی و انگلیسی)
-              </button>
-            )}
-          </div>
-        ) : (
-          <div>
-            <div style={{ display: "flex", justifyContent: tab === "fa" ? "flex-start" : "flex-end", marginBottom: 12 }}>
-              <button className="ui-btn" onClick={() => onCopy(tab)} style={{ background: copied === tab ? C.success : alpha(C.orange, 0.14), color: copied === tab ? "#06281c" : C.orange, border: `1px solid ${copied === tab ? C.success : alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+      {/* Scripts and the original text */}
+      <Section title="سناریو و متن اصلی">
+        <div className="ui-fade" style={{ ...card, padding: 14, minHeight: 260 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Segmented value={tab} onChange={setTab} items={[["fa", "فارسی", FA_FONT], ["en", "English"], ["src", "متن اصلی", FA_FONT]]} />
+            </div>
+            {tab !== "src" && active && !loading && !(tab === "en" && (enInFarsi || enRunning)) && (
+              <button className="ui-btn" onClick={() => onCopy(tab)} style={{ ...smallBtn(copied === tab ? C.success : C.orange), flexShrink: 0 }}>
                 {copied === tab ? "Copied ✓" : "Copy"}
               </button>
-            </div>
-            <ScriptBody text={active} tab={tab} />
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Telegram — sent AUTOMATICALLY on approve; this only reports status. */}
-      {!loading && !error && tgState !== "idle" && (
-        <div
-          style={{
-            marginTop: 16,
-            background: alpha(tgState === "error" ? C.reject : tgState === "sent" ? C.success : C.teal, 0.1),
-            border: `1px solid ${alpha(tgState === "error" ? C.reject : tgState === "sent" ? C.success : C.teal, 0.4)}`,
-            borderRadius: 14,
-            padding: "12px",
-            fontSize: 13.5,
-            fontWeight: 600,
-            fontFamily: "'Inter', 'Vazirmatn', sans-serif",
-            color: C.text,
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
-          <span>
-            {tgState === "sending"
-              ? "✈ در حال ارسال خودکار به تلگرام…"
-              : tgState === "sent"
-              ? "✓ به‌صورت خودکار به تلگرام ارسال شد"
-              : "⚠️ ارسال خودکار به تلگرام ناموفق بود"}
-          </span>
-          {tgState === "error" && (
-            <>
-              <span style={{ fontSize: 11, color: C.reject, direction: "ltr", fontWeight: 500 }}>{tgMsg}</span>
-              {onRetryTelegram && (
-                <button
-                  onClick={onRetryTelegram}
-                  style={{ alignSelf: "center", background: "transparent", color: C.text, border: `1px solid ${C.slate}`, borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}
-                >
-                  دوباره تلاش کن
+          {tab === "src" ? (
+            <OriginalText topic={topic} />
+          ) : loading ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 220, gap: 14 }}>
+              <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
+              <div style={{ fontFamily: FA_FONT, fontSize: 13, color: C.text2, direction: "rtl" }}>{loadingText || "در حال نوشتن سناریوی فارسی و انگلیسی…"}</div>
+            </div>
+          ) : error ? (
+            <div dir="rtl" style={{ fontFamily: FA_FONT, fontSize: 13.5, color: C.reject, textAlign: "right" }}>
+              {error}
+              {onWrite && (
+                <div style={{ marginTop: 14 }}>
+                  <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: FA_FONT }}>
+                    ↻ دوباره بنویس
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : !hasScripts ? (
+            // Opened before approval: read the original first, then write.
+            <div dir="rtl" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 200, fontFamily: FA_FONT, textAlign: "center" }}>
+              <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.8 }}>هنوز سناریویی برای این موضوع نوشته نشده.<br />متن خبر در «متن اصلی» هست.</div>
+              {onWrite && (
+                <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: FA_FONT }}>
+                  ✍️ نوشتن سناریو (فارسی و انگلیسی)
                 </button>
               )}
-            </>
+            </div>
+          ) : tab === "en" && (enRunning || enInFarsi || !scripts.en) ? (
+            // The English script is missing, came back in Persian, or is
+            // being rewritten: say so instead of showing Persian as English.
+            <div dir="ltr" style={{ fontFamily: FONT }}>
+              {enRunning ? (
+                <div className="ui-progress" style={{ padding: "12px 14px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontSize: 13 }}>
+                  <span className="ui-pulse">⏳</span> Writing the English script…
+                </div>
+              ) : (
+                <div style={{ padding: "12px 14px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.35)}`, fontSize: 13, lineHeight: 1.6 }}>
+                  <b>{enInFarsi ? "This “English” script came out in Persian." : "The English script is missing."}</b>
+                  <div style={{ color: C.text2, marginTop: 2 }}>
+                    Rewrite it in English from the same source text{enInFarsi ? "; the Persian version stays in the Farsi tab" : ""}.
+                  </div>
+                  {(enFailed || (!scripts.en && enError)) && <div style={{ color: C.reject, fontSize: 12, marginTop: 6 }}>⚠️ {enFailed || enError}</div>}
+                  <button className="ui-btn ui-glow-orange" onClick={() => onJob("script_en", { script: scripts.en || scripts.fa })} style={{ marginTop: 10, background: C.orange, color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    ✍️ Write it in English
+                  </button>
+                </div>
+              )}
+              {enInFarsi && !enRunning && (
+                <div style={{ marginTop: 14, opacity: 0.55 }}>
+                  <ScriptBody text={scripts.en} tab="en" />
+                </div>
+              )}
+            </div>
+          ) : (
+            <ScriptBody text={active} tab={tab} />
           )}
         </div>
+      </Section>
+
+      {/* What to make from it */}
+      {!loading && !error && (
+        <Section title="ساخت از این موضوع" hint="هر کدوم جدا؛ هیچ‌چیز خودکار ارسال نمی‌شه">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+            {tiles.map((t) => <ActionTile key={t.k} {...t} />)}
+          </div>
+          {tg.state === "error" && tg.msg && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, direction: "ltr", textAlign: "center", fontFamily: FONT }}>Telegram: {tg.msg}</div>
+          )}
+        </Section>
       )}
 
-      {/* Blog article (on-demand) */}
-      {!loading && !error && (
-        <div style={{ marginTop: 16, borderTop: `1px solid ${C.line}`, paddingTop: 16 }}>
-          {artState !== "ready" && (
-            <button
-              onClick={generateArticle}
-              disabled={artState === "generating"}
-              className={"ui-btn" + (artState === "generating" ? " ui-progress" : "")}
-              style={{
-                width: "100%", background: alpha(C.teal, 0.12), color: C.text,
-                border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 12, padding: "12px",
-                fontWeight: 600, fontSize: 14, cursor: artState === "generating" ? "default" : "pointer",
-                opacity: artState === "generating" ? 0.6 : 1, fontFamily: "'Inter', 'Vazirmatn', sans-serif",
-              }}
-            >
-              {artState === "generating" ? "در حال نوشتن مقاله…" : artState === "error" ? "دوباره امتحان کن" : "📝 ساخت مقاله وبلاگ (Blog article)"}
-            </button>
+      {/* Blog article */}
+      {!loading && !error && artState !== "idle" && (
+        <Section title="📝 مقاله وبلاگ" innerRef={articleRef}>
+          {artState === "generating" && (
+            <div dir="rtl" className="ui-progress" style={{ ...card, padding: "12px 14px", fontFamily: FA_FONT, fontSize: 13 }}>
+              <span className="ui-pulse">⏳</span> در حال نوشتن مقاله…
+              <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+            </div>
           )}
           {artState === "error" && (
-            <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>{artMsg}</div>
+            <div style={{ ...card, padding: 12, textAlign: "center" }}>
+              <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr", fontFamily: FONT, marginBottom: 8 }}>{artMsg}</div>
+              <button className="ui-btn" onClick={generateArticle} style={smallBtn(C.teal)}>دوباره امتحان کن</button>
+            </div>
           )}
 
           {artState === "ready" && article && (
@@ -2192,36 +2368,33 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                 .article-preview a{color:#d9600a;text-decoration:underline}
                 .article-preview strong{color:#22343b}
               `}</style>
-              {/* SEO meta line */}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, fontSize: 11, fontFamily: "'Inter', 'Vazirmatn', sans-serif", color: "rgba(18,26,36,0.6)" }}>
-                {article.focus_keyword && <span dir="rtl" style={{ background: alpha(C.teal, 0.14), color: C.teal, borderRadius: 99, padding: "3px 10px", fontFamily: "'Vazirmatn', sans-serif", fontWeight: 600 }}>🔑 {article.focus_keyword}</span>}
-                {!article.parse_ok && <span style={{ color: C.orange }}>⚠️ خروجی ناقص — قبل از انتشار بررسی کن</span>}
-              </div>
-
-              {/* Article preview */}
-              <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: "16px 18px", maxHeight: 360, overflowY: "auto" }}>
-                <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
-                  {article.title_fa}
+              <div style={{ ...card, padding: "16px 18px" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, fontSize: 11, fontFamily: FONT }}>
+                  {article.focus_keyword && <span dir="rtl" style={{ background: alpha(C.teal, 0.14), color: C.teal, borderRadius: 99, padding: "3px 10px", fontFamily: FA_FONT, fontWeight: 600 }}>🔑 {article.focus_keyword}</span>}
+                  {!article.parse_ok && <span style={{ color: C.orange }}>⚠️ خروجی ناقص — قبل از انتشار بررسی کن</span>}
                 </div>
-                <div
-                  dir="rtl"
-                  className="article-preview"
-                  style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 13.5, lineHeight: 1.9, color: "#2f3f45", textAlign: "right" }}
-                  dangerouslySetInnerHTML={{ __html: article.content_html }}
-                />
+                <div style={{ maxHeight: 360, overflowY: "auto" }}>
+                  <div dir="rtl" style={{ fontFamily: FA_FONT, fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
+                    {article.title_fa}
+                  </div>
+                  <div
+                    dir="rtl"
+                    className="article-preview"
+                    style={{ fontFamily: FA_FONT, fontSize: 13.5, lineHeight: 1.9, color: "#2f3f45", textAlign: "right" }}
+                    dangerouslySetInnerHTML={{ __html: article.content_html }}
+                  />
+                </div>
               </div>
 
-              {/* Publish */}
               {pubState !== "done" ? (
                 <button
+                  className="ui-btn ui-glow-orange"
                   onClick={publishArticle}
                   disabled={pubState === "publishing"}
                   style={{
-                    width: "100%", marginTop: 12,
-                    background: C.orange,
-                    color: "#fff", border: "none", borderRadius: 12, padding: "13px",
+                    width: "100%", marginTop: 10, background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "13px",
                     fontWeight: 700, fontSize: 14, cursor: pubState === "publishing" ? "default" : "pointer",
-                    opacity: pubState === "publishing" ? 0.6 : 1, fontFamily: "'Inter', 'Vazirmatn', sans-serif",
+                    opacity: pubState === "publishing" ? 0.6 : 1, fontFamily: FONT,
                   }}
                 >
                   {pubState === "publishing" ? "در حال ساخت پیش‌نویس…" : pubState === "error" ? "دوباره امتحان کن — انتشار پیش‌نویس" : "⬆ انتشار پیش‌نویس در سایت (Publish draft)"}
@@ -2232,73 +2405,76 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{
-                    display: "block", marginTop: 12, textAlign: "center",
-                    background: alpha(C.success, 0.14), color: C.success, border: `1px solid ${alpha(C.success, 0.5)}`,
-                    borderRadius: 12, padding: "13px", fontWeight: 700, fontSize: 14,
-                    textDecoration: "none", fontFamily: "'Inter', 'Vazirmatn', sans-serif",
+                    display: "block", marginTop: 10, textAlign: "center", background: alpha(C.success, 0.14), color: C.success, border: `1px solid ${alpha(C.success, 0.5)}`,
+                    borderRadius: 12, padding: "13px", fontWeight: 700, fontSize: 14, textDecoration: "none", fontFamily: FONT,
                   }}
                 >
                   ✓ پیش‌نویس ساخته شد — ویرایش در وردپرس ↗
                 </a>
               )}
               {pubState === "error" && (
-                <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>{pubMsg}</div>
+                <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: FONT }}>{pubMsg}</div>
               )}
 
               {/* Word file — generated in the app, no Google account needed. */}
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button
-                  onClick={downloadDoc}
-                  style={{
-                    flex: 1, background: alpha(C.teal, 0.12), color: C.text,
-                    border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 12, padding: "12px",
-                    fontWeight: 600, fontSize: 13.5, cursor: "pointer",
-                    fontFamily: "'Inter', 'Vazirmatn', sans-serif",
-                  }}
-                >
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button className="ui-btn" onClick={downloadDoc} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text }}>
                   {docState === "downloaded" ? "دانلود شد ✓" : "📄 دانلود فایل Word"}
                 </button>
-                <button
-                  onClick={sendDocToTelegram}
-                  disabled={docState === "sending"}
-                  style={{
-                    flex: 1, background: alpha(C.teal, 0.12), color: C.text,
-                    border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 12, padding: "12px",
-                    fontWeight: 600, fontSize: 13.5,
-                    cursor: docState === "sending" ? "default" : "pointer",
-                    opacity: docState === "sending" ? 0.6 : 1,
-                    fontFamily: "'Inter', 'Vazirmatn', sans-serif",
-                  }}
-                >
+                <button className="ui-btn" onClick={sendDocToTelegram} disabled={docState === "sending"} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text, opacity: docState === "sending" ? 0.6 : 1 }}>
                   {docState === "sending" ? "در حال ارسال…" : docState === "sent" ? "ارسال شد ✓" : "✈ فایل به تلگرام"}
                 </button>
               </div>
               {docState === "error" && (
-                <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>{docMsg}</div>
+                <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: FONT }}>{docMsg}</div>
               )}
 
-              <button onClick={generateArticle} disabled={artState === "generating"} style={{ width: "100%", marginTop: 8, background: "transparent", color: "rgba(18,26,36,0.6)", border: "none", cursor: "pointer", fontSize: 12, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+              <button className="ui-btn" onClick={generateArticle} style={{ width: "100%", marginTop: 6, background: "transparent", color: C.text2, border: "none", cursor: "pointer", fontSize: 12, fontFamily: FONT, padding: 8 }}>
                 ↻ بازنویسی مقاله
               </button>
             </div>
           )}
+        </Section>
+      )}
+
+      {/* Carousel (it shows nothing until asked for or made) */}
+      {!loading && !error && (
+        <div ref={carouselRef} style={{ scrollMarginTop: 90 }}>
+          <CarouselPanel topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} openSignal={carouselOpen} />
         </div>
       )}
 
-      {/* What else to make from this topic, once the scripts exist. */}
-      {!loading && !error && (scripts.fa || scripts.en) && (
-        <>
-          <CarouselPanel topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} />
-          <VideoPanel job={videoJob} enabled={!!caps.video} onStart={() => onJob("video", {})} />
-        </>
+      {/* English video */}
+      {!loading && !error && (videoJob || video) && (
+        <Section title="🎬 ویدیوی انگلیسی" innerRef={videoRef}>
+          <VideoPanel job={videoJob} video={video} onRefresh={onRefreshVideo} onOpen={() => setComposer(true)} />
+        </Section>
+      )}
+
+      {composer && (
+        <VideoComposer
+          topic={topic}
+          enabled={!!caps.video}
+          initial={draft || videoDraftFrom(scripts.en, video && video.request)}
+          savedScript={scripts.en}
+          draftJob={draftJob}
+          onDraft={setDraft}
+          onClose={() => setComposer(false)}
+          onFit={(x) => onJob("script_en", { ...x, save: false })}
+          onSubmit={(req) => {
+            onJob("video", { video: req });
+            setComposer(false);
+            reveal(videoRef);
+          }}
+        />
       )}
 
       <button
         onClick={onBack}
         className="ui-btn"
-        style={{ display: "block", width: "100%", boxSizing: "border-box", textAlign: "center", marginTop: 16, background: C.surface, color: C.text, border: `1px solid ${C.line}`, borderRadius: 14, padding: "13px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}
+        style={{ display: "block", width: "100%", boxSizing: "border-box", textAlign: "center", marginTop: 22, background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px", fontWeight: 600, fontSize: 13.5, cursor: "pointer", fontFamily: FONT }}
       >
-        ← Back to list
+        ← All topics
       </button>
     </div>
   );
@@ -2308,8 +2484,12 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 // the server writes the slides (the Content Wizard's carousel prompt) and
 // draws each one with the image model, then the set can go to Telegram.
 // Everything runs as server jobs and is saved with the topic for the team.
-function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
+function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
   const [form, setForm] = useState(false);
+  // The Carousel tile on the topic page opens the form.
+  useEffect(() => {
+    if (openSignal) setForm(true);
+  }, [openSignal]);
   const [count, setCount] = useState(7);
   const [notes, setNotes] = useState("");
   const [copiedCap, setCopiedCap] = useState(false);
@@ -2326,7 +2506,6 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
   const sent = (carousel && carousel.sent) || {};
   const font = "'Inter', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
-  const when = (ts) => (ts ? new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
 
   const start = () => {
     if (slides.length && !window.confirm("A new carousel replaces the current one. Continue?")) return;
@@ -2342,13 +2521,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
     cursor: "pointer", fontFamily: font,
   });
 
+  if (!slides.length && !running && !form && !failed) return null;
   return (
-    <div style={{ marginTop: 16, borderTop: `1px solid ${C.line}`, paddingTop: 16 }}>
-      {!slides.length && !running && !form && (
-        <button onClick={() => setForm(true)} className="ui-btn" style={{ ...btn(alpha("#6d5bd0", 0.1), C.text, `1px solid ${alpha("#6d5bd0", 0.4)}`), width: "100%" }}>
-          🖼 ساخت پست کاروسل (Carousel post)
-        </button>
-      )}
+    <Section title="🖼 پست کاروسل">
 
       {form && !running && (
         <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
@@ -2510,7 +2685,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob }) {
           {sendErr && <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, textAlign: "center", direction: "ltr" }}>⚠️ {sendErr}</div>}
         </div>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -2577,46 +2752,337 @@ function SlidePreview({ slides, start, onClose }) {
   );
 }
 
-// English video through the team's video workflow. Shown now so the place is
-// ready; it starts working when the server has VIDEO_WORKFLOW_URL.
-function VideoPanel({ job, enabled, onStart }) {
-  const running = !!job && job.status === "running";
-  const state = !job ? "" : job.status === "running" ? "running" : job.status === "error" ? "error" : "done";
+// ---- English video ------------------------------------------------------
+// The video is made by the team's n8n workflow (HeyGen digital twin). The
+// page collects what the workflow needs (length, notes, the final script, a
+// benchmark video and the format), starts a server job that hands it over,
+// and then shows what the workflow reports back.
+
+const VIDEO_LENGTHS = [[30, "30 sec"], [45, "45 sec"], [60, "1 min"], [90, "1 min 30"], [120, "2 min"], [150, "2 min 30"], [180, "3 min"]];
+// Spoken English at the presenter's pace (the same rate the server uses).
+const WORDS_PER_SEC = 2.5;
+
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+}
+
+function wordCount(t) {
+  return (String(t || "").trim().match(/\S+/g) || []).length;
+}
+
+const LINK_KINDS = { google_drive: "Google Drive", heygen: "HeyGen", youtube: "YouTube", instagram: "Instagram", other: "Video link" };
+function linkKind(url) {
+  const u = String(url || "").toLowerCase();
+  if (!u) return "";
+  if (/drive\.google\.com|docs\.google\.com/.test(u)) return "google_drive";
+  if (/heygen\.com/.test(u)) return "heygen";
+  if (/youtube\.com|youtu\.be/.test(u)) return "youtube";
+  if (/instagram\.com/.test(u)) return "instagram";
+  return "other";
+}
+
+// The editor's starting point: the English script as it is now, and the
+// options of the last request for this topic, if there was one.
+function videoDraftFrom(script, last) {
+  const preset = last && VIDEO_LENGTHS.some(([s]) => s === last.duration_sec);
+  return {
+    length: last ? (preset ? last.duration_sec : "custom") : 60,
+    customMin: last && !preset ? String(Math.floor(last.duration_sec / 60)) : "1",
+    customSec: last && !preset ? String(last.duration_sec % 60) : "0",
+    script: script || "",
+    notes: (last && last.notes) || "",
+    benchmark: (last && last.benchmark && last.benchmark.url) || "",
+    ratio: (last && last.format && last.format.aspect_ratio) || "9:16",
+    captions: last && last.format ? last.format.captions !== false : true,
+    voice: (last && last.voice) || "primary",
+  };
+}
+
+function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft, onClose, onFit, onSubmit }) {
+  const [d, setD] = useState(initial);
+  const set = (patch) => setD((x) => ({ ...x, ...patch }));
+  useEffect(() => {
+    onDraft(d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+
+  // A finished "fit to length" rewrite lands in the editor once. Anything that
+  // finished before the editor opened is not applied again.
+  const appliedRef = useRef(draftJob ? draftJob.startedAt : 0);
+  useEffect(() => {
+    if (!draftJob || draftJob.status !== "done" || !draftJob.result || !draftJob.result.en) return;
+    if (appliedRef.current === draftJob.startedAt) return;
+    appliedRef.current = draftJob.startedAt;
+    set({ script: draftJob.result.en });
+  }, [draftJob]);
+  const fitting = !!draftJob && draftJob.status === "running" && appliedRef.current !== draftJob.startedAt;
+  const fitError = draftJob && draftJob.status === "error" && appliedRef.current !== draftJob.startedAt ? draftJob.error : "";
+
+  // Esc closes; the page behind does not scroll.
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const seconds = d.length === "custom" ? (Number(d.customMin) || 0) * 60 + (Number(d.customSec) || 0) : d.length;
+  const words = wordCount(d.script);
+  const spoken = words / WORDS_PER_SEC;
+  const targetWords = Math.round(seconds * WORDS_PER_SEC);
+  const off = seconds ? (spoken - seconds) / seconds : 0;
+  const fits = Math.abs(off) <= 0.15;
+  const persian = faShare(d.script) > 0.2;
+  const bench = d.benchmark.trim();
+  const benchErr = bench && !/^https?:\/\/\S+$/i.test(bench) ? "Paste the full link, starting with https://" : "";
+  const kind = linkKind(bench);
+  const lenErr = seconds < 10 ? "At least 10 seconds" : seconds > 600 ? "At most 10 minutes" : "";
+
+  const blocker = !enabled
+    ? "The video workflow is not connected yet (VIDEO_WORKFLOW_URL on Render)."
+    : words < 10 ? "The script is empty."
+    : persian ? "The script is in Persian. Rewrite it in English first."
+    : lenErr || benchErr || (fitting ? "Wait for the rewrite to finish." : "");
+
+  const submit = () => {
+    if (blocker) return;
+    onSubmit({
+      script_en: d.script.trim(),
+      duration_sec: seconds,
+      notes: d.notes.trim(),
+      benchmark_url: bench,
+      aspect_ratio: d.ratio,
+      captions: d.captions,
+      voice: d.voice,
+    });
+  };
+
+  const label = { fontSize: 12, fontWeight: 800, color: C.text, letterSpacing: 0.2, marginBottom: 7, display: "flex", alignItems: "center", gap: 8 };
+  const hint = { fontSize: 11.5, color: C.text3, fontWeight: 500 };
+  const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: "10px 12px", fontFamily: FONT, fontSize: 13.5, color: C.text, background: C.surface, outline: "none" };
+  const chip = (on) => ({
+    height: 36, padding: "0 12px", borderRadius: 10, cursor: "pointer", fontFamily: FONT, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap",
+    border: `1px solid ${on ? C.orange : C.line}`, background: on ? alpha(C.orange, 0.12) : C.surface, color: on ? C.orangeDeep : C.text,
+  });
+  const block = { padding: "14px 16px", borderTop: `1px solid ${C.line}` };
+
   return (
-    <div style={{ marginTop: 12 }}>
-      <button
-        className="ui-btn"
-        onClick={enabled && !running ? onStart : undefined}
-        disabled={!enabled || running}
-        title={enabled ? "Send the English script to the video workflow" : "The video workflow will be connected later"}
-        style={{
-          width: "100%", background: enabled ? alpha(C.slate, 0.08) : C.surfaceHi, color: enabled ? C.text : C.text3,
-          border: `1px ${enabled ? "solid" : "dashed"} ${C.line}`, borderRadius: 12, padding: "12px", fontWeight: 600,
-          fontSize: 13.5, cursor: enabled && !running ? "pointer" : "default", fontFamily: "'Inter', 'Vazirmatn', sans-serif",
-        }}
-      >
-        🎬 English video (Anthropic workflow)
-        {!enabled ? " — coming soon" : state === "running" ? " — sending…" : state === "done" ? " — requested ✓" : ""}
-      </button>
-      {state === "error" && <div style={{ marginTop: 6, fontSize: 11.5, color: C.reject, textAlign: "center" }}>⚠️ {job.error}</div>}
+    <div className="ui-sheet-wrap" role="dialog" aria-modal="true" aria-label="English video" onClick={onClose}>
+      <div className="ui-sheet" dir="ltr" onClick={(e) => e.stopPropagation()} style={{ fontFamily: FONT, color: C.text }}>
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 12px" }}>
+          <span aria-hidden style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", background: alpha(C.orangeDeep, 0.13), fontSize: 18, flexShrink: 0 }}>🎬</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15.5 }}>English video</div>
+            <div style={{ fontSize: 12, color: C.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{topic.title_en || topic.title_fa}</div>
+          </div>
+          <button className="ui-btn" onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: 99, border: `1px solid ${C.line}`, background: C.surface, cursor: "pointer", fontSize: 15, color: C.text2 }}>✕</button>
+        </div>
+
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          {/* 1. length */}
+          <div style={block}>
+            <div style={label}>1 · Length</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {VIDEO_LENGTHS.map(([s, l]) => (
+                <button key={s} className="ui-btn" onClick={() => set({ length: s })} style={chip(d.length === s)}>{l}</button>
+              ))}
+              <button className="ui-btn" onClick={() => set({ length: "custom" })} style={chip(d.length === "custom")}>Custom…</button>
+            </div>
+            {d.length === "custom" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                <input inputMode="numeric" value={d.customMin} onChange={(e) => set({ customMin: e.target.value.replace(/\D/g, "").slice(0, 2) })} style={{ ...field, width: 70, textAlign: "center" }} aria-label="Minutes" />
+                <span style={hint}>min</span>
+                <input inputMode="numeric" value={d.customSec} onChange={(e) => set({ customSec: e.target.value.replace(/\D/g, "").slice(0, 2) })} style={{ ...field, width: 70, textAlign: "center" }} aria-label="Seconds" />
+                <span style={hint}>sec</span>
+                {lenErr && <span style={{ fontSize: 12, color: C.reject, marginLeft: 4 }}>{lenErr}</span>}
+              </div>
+            )}
+          </div>
+
+          {/* 2. script */}
+          <div style={block}>
+            <div style={{ ...label, justifyContent: "space-between" }}>
+              <span>2 · Script <span style={hint}>· edit freely, this is what the presenter says</span></span>
+              {savedScript && d.script !== savedScript && (
+                <button className="ui-btn" onClick={() => set({ script: savedScript })} style={{ background: "transparent", border: "none", color: C.text2, fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>↺ Reset</button>
+              )}
+            </div>
+            <textarea
+              value={d.script}
+              onChange={(e) => set({ script: e.target.value })}
+              rows={11}
+              dir="auto"
+              disabled={fitting}
+              style={{ ...field, lineHeight: 1.7, resize: "vertical", minHeight: 180, opacity: fitting ? 0.5 : 1 }}
+            />
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 8, fontSize: 12 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, color: !seconds ? C.text3 : fits ? C.success : C.orangeDeep }}>
+                <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: !seconds ? C.text3 : fits ? C.success : C.orange }} />
+                {words} words · about {fmtDur(spoken)} spoken
+              </span>
+              {seconds > 0 && <span style={{ color: C.text3 }}>target {fmtDur(seconds)} ≈ {targetWords} words{!fits && words ? (off > 0 ? " · too long" : " · too short") : ""}</span>}
+              {(persian || (!fits && seconds >= 10 && words >= 10)) && (
+                <button
+                  className="ui-btn"
+                  disabled={fitting}
+                  onClick={() => onFit({ script: d.script, seconds, notes: d.notes.trim() })}
+                  style={{ marginLeft: "auto", background: alpha(C.orange, 0.12), color: C.orangeDeep, border: `1px solid ${alpha(C.orange, 0.4)}`, borderRadius: 9, padding: "6px 11px", fontSize: 12, fontWeight: 700, cursor: fitting ? "default" : "pointer", fontFamily: FONT }}
+                >
+                  {fitting ? "Rewriting…" : persian ? `✍️ Rewrite in English (${fmtDur(seconds)})` : `✂️ Fit to ${fmtDur(seconds)}`}
+                </button>
+              )}
+            </div>
+            {fitting && <div className="ui-pulse" style={{ marginTop: 6, fontSize: 11.5, color: C.text3 }}>Rewriting from the source text only; nothing invented to fill time.</div>}
+            {fitError && <div style={{ marginTop: 6, fontSize: 11.5, color: C.reject }}>⚠️ {fitError}</div>}
+          </div>
+
+          {/* 3. notes */}
+          <div style={block}>
+            <div style={label}>3 · Notes <span style={hint}>optional</span></div>
+            <textarea
+              value={d.notes}
+              onChange={(e) => set({ notes: e.target.value })}
+              rows={3}
+              dir="auto"
+              placeholder="Who it's for, tone, what to stress, on-screen text, B-roll ideas…"
+              style={{ ...field, lineHeight: 1.6, resize: "vertical" }}
+            />
+          </div>
+
+          {/* 4. benchmark */}
+          <div style={block}>
+            <div style={label}>4 · Benchmark video <span style={hint}>optional · the style to match</span></div>
+            <div style={{ position: "relative" }}>
+              <input
+                value={d.benchmark}
+                onChange={(e) => set({ benchmark: e.target.value })}
+                placeholder="Google Drive or HeyGen link"
+                inputMode="url"
+                style={{ ...field, paddingRight: kind ? 110 : 12, borderColor: benchErr ? C.reject : C.line }}
+              />
+              {kind && !benchErr && (
+                <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, fontWeight: 700, color: C.teal, background: alpha(C.teal, 0.12), borderRadius: 99, padding: "3px 9px" }}>
+                  {LINK_KINDS[kind]}
+                </span>
+              )}
+            </div>
+            <div style={{ ...hint, marginTop: 6, lineHeight: 1.5 }}>
+              {benchErr ? <span style={{ color: C.reject }}>{benchErr}</span> : "Sent to the workflow as the reference for look, pacing and framing. A Drive file must be shared as “Anyone with the link”."}
+            </div>
+          </div>
+
+          {/* 5. format */}
+          <div style={block}>
+            <div style={label}>5 · Format</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+              {[["9:16", "Reel / Short", "9:16"], ["16:9", "YouTube", "16:9"], ["1:1", "Feed", "1:1"]].map(([v, l, sub]) => (
+                <button key={v} className="ui-btn" onClick={() => set({ ratio: v })} style={{ ...chip(d.ratio === v), height: "auto", padding: "8px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                  <span>{l}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.7 }}>{sub}</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+              <button className="ui-btn" onClick={() => set({ captions: !d.captions })} style={chip(d.captions)}>{d.captions ? "✓ " : ""}Burn in captions</button>
+              <button className="ui-btn" onClick={() => set({ voice: "primary" })} style={chip(d.voice === "primary")}>Voice: main clone</button>
+              <button className="ui-btn" onClick={() => set({ voice: "secondary" })} style={chip(d.voice === "secondary")}>Voice: second clone</button>
+            </div>
+          </div>
+        </div>
+
+        {/* footer */}
+        <div style={{ padding: "12px 16px 16px", borderTop: `1px solid ${C.line}`, background: C.surface }}>
+          {blocker && <div style={{ fontSize: 12, color: enabled ? C.orangeDeep : C.text2, marginBottom: 8, textAlign: "center" }}>{blocker}</div>}
+          <button
+            className="ui-btn ui-glow-orange"
+            onClick={submit}
+            disabled={!!blocker}
+            style={{ width: "100%", background: blocker ? C.surfaceHi : C.orange, color: blocker ? C.text3 : "#fff", border: "none", borderRadius: 13, padding: "14px", fontWeight: 800, fontSize: 14.5, cursor: blocker ? "default" : "pointer", fontFamily: FONT }}
+          >
+            🎬 Generate {seconds >= 10 ? fmtDur(seconds) + " " : ""}video
+          </button>
+          <div style={{ ...hint, textAlign: "center", marginTop: 7 }}>The workflow renders in HeyGen and sends the result to Telegram for approval.</div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function Tab({ active, onClick, label }) {
+// Where the English video stands: sent, rendering, ready (with links) or
+// failed. Asks the server every 20 seconds while the workflow is working.
+function VideoPanel({ job, video, onRefresh, onOpen }) {
+  const refreshRef = useRef(onRefresh);
+  refreshRef.current = onRefresh;
+  const st = video && video.status;
+  const waiting = st === "requested" || st === "rendering";
+  useEffect(() => {
+    if (!waiting) return;
+    const t = setInterval(() => refreshRef.current && refreshRef.current(), 20000);
+    return () => clearInterval(t);
+  }, [waiting]);
+
+  const sending = !!job && job.status === "running";
+  const sendErr = job && job.status === "error" && !(video && video.requested_at > (job.startedAt || 0)) ? job.error : "";
+  const req = (video && video.request) || {};
+  const tone = sendErr || st === "failed" ? C.reject : st === "done" ? C.success : C.orange;
+  const title = sending
+    ? "Sending to the video workflow…"
+    : sendErr ? "Could not reach the video workflow"
+    : st === "requested" ? "Requested · waiting for the workflow"
+    : st === "rendering" ? "Rendering in HeyGen…"
+    : st === "done" ? "Video ready"
+    : st === "failed" ? "The workflow reported a failure"
+    : "Video";
+  const link = { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 11, padding: "9px 13px", fontSize: 13, fontWeight: 700, textDecoration: "none", fontFamily: FONT };
+
   return (
-    <button className="ui-btn" onClick={onClick} style={{
-      flex: 1, background: active ? alpha(C.orange, 0.16) : C.surface,
-      color: active ? C.text : C.text2,
-      border: `1px solid ${active ? alpha(C.orange, 0.55) : C.line}`, borderRadius: 12, padding: "10px",
-      fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif",
-      boxShadow: active ? `inset 0 -2px 0 ${C.orange}` : "none",
-    }}>
-      {label}
-    </button>
+    <div dir="ltr" className={"ui-fade" + (sending || waiting ? " ui-progress" : "")} style={{ ...card, padding: 14, fontFamily: FONT, borderColor: alpha(tone, 0.4) }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden className={sending || waiting ? "ui-pulse" : ""} style={{ width: 9, height: 9, borderRadius: 99, background: tone, flexShrink: 0 }} />
+        <b style={{ fontSize: 14 }}>{title}</b>
+        {video && video.requested_at > 0 && <span style={{ marginLeft: "auto", fontSize: 11.5, color: C.text3 }}>{when(video.requested_at)}</span>}
+      </div>
+      {(sendErr || (st === "failed" && video.error)) && (
+        <div style={{ marginTop: 6, fontSize: 12, color: C.reject }}>⚠️ {sendErr || video.error}</div>
+      )}
+      {req.duration_sec > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, fontSize: 11.5, color: C.text2 }}>
+          <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>⏱ {fmtDur(req.duration_sec)}</span>
+          {req.format && <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>▭ {req.format.aspect_ratio}{req.format.captions ? " · captions" : ""}</span>}
+          {req.script_en && <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>{wordCount(req.script_en)} words</span>}
+          {req.benchmark && req.benchmark.url && (
+            <a href={req.benchmark.url} target="_blank" rel="noopener noreferrer" style={{ background: alpha(C.teal, 0.1), color: C.teal, borderRadius: 99, padding: "3px 9px", textDecoration: "none", fontWeight: 600 }}>
+              benchmark ↗
+            </a>
+          )}
+        </div>
+      )}
+      {waiting && <div style={{ marginTop: 8, fontSize: 11.5, color: C.text3 }}>HeyGen usually takes a few minutes. You can leave this page; the result is saved with the topic.</div>}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+        {st === "done" && video.video_url && (
+          <a href={video.video_url} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ ...link, background: C.orange, color: "#fff" }}>▶ Watch / download</a>
+        )}
+        {video && video.page_url && (
+          <a href={video.page_url} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ ...link, background: C.surface, color: C.text, border: `1px solid ${C.line}` }}>Open in HeyGen ↗</a>
+        )}
+        {!sending && (
+          <button className="ui-btn" onClick={onOpen} style={{ ...link, background: "transparent", color: C.text2, border: `1px solid ${C.line}`, cursor: "pointer" }}>
+            {st === "done" ? "↻ Make another version" : sendErr || st === "failed" ? "↻ Try again" : "✎ Edit and send again"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
-
 
 function BackBtn({ onClick, label = "Deck" }) {
   return (

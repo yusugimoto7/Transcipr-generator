@@ -192,3 +192,58 @@ header.ui-glass {
     display: inline;
   }
 }
+
+/* ---- topic page -------------------------------------------------------- */
+@media (hover: hover) {
+  .ui-tile:hover:not(:disabled) {
+    box-shadow: 0 6px 18px rgba(16, 24, 40, 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+/* The video editor: a sheet from the bottom on a phone, a centred dialog on
+   a wider screen. */
+.ui-sheet-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10, 14, 20, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: ui-fade-in 0.18s ease both;
+}
+.ui-sheet {
+  width: 100%;
+  max-width: 600px;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -10px 40px rgba(10, 14, 20, 0.25);
+  overflow: hidden;
+  animation: ui-sheet-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (min-width: 640px) {
+  .ui-sheet-wrap {
+    align-items: center;
+    padding: 24px;
+  }
+  .ui-sheet {
+    border-radius: 22px;
+    max-height: 90vh;
+  }
+}
+@keyframes ui-fade-in {
+  from { opacity: 0; }
+}
+@keyframes ui-sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-sheet-wrap,
+  .ui-sheet {
+    animation: none;
+  }
+}

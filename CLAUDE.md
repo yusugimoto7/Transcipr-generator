@@ -61,7 +61,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Background jobs (script, Telegram, article, draft, Word file, carousel, video run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
 | Shared workspace — every used/archived topic and what was made from it, for the whole team (Sheet "Library" tab, replaces the old Library view) | `lib/workspace.js`, `app/api/workspace/route.js` |
 | Carousel posts: slide text (Wizard's carousel prompt) → gpt-image-2 → WordPress media → Telegram | `lib/carousel.js`, `lib/wordpress.js` (`uploadMedia`) |
-| English video workflow hook (inactive until `VIDEO_WORKFLOW_URL` is set) | `lib/video.js` |
+| English video: options sheet on the topic page → n8n workflow "Topic Engine: English video" (HeyGen) → reports back to `/api/video/callback`. Inactive until `VIDEO_WORKFLOW_URL` + `VIDEO_WORKFLOW_SECRET` are set | `lib/video.js`, `app/api/video/callback/route.js` |
 | General ideas: demand signals (Google/YouTube autocomplete EN+FA, IRCC Help Centre, Reddit, site titles, official page text) harvested daily → weekly batch of evergreen ideas grounded on canada.ca pages | `lib/ideas/seeds.js` (subjects, pages), `lib/ideas/signals.js`, `lib/ideas/index.js`, `/api/ideas` |
 | Source text for every writing step (Lexbase item → stored official page → fetched page → excerpt) | `lib/grounding.js` |
 | UI (one list: new + used topics, Archive filter; Lexbase and Ideas tabs; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
@@ -72,6 +72,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 - **Topics stream.** `/api/topics` with `stream: true` sends one card per line as each write batch finishes, and the page also shows the deck saved on the device first. Keep both: never make the page wait for a whole batch.
 - **Grounding is non-negotiable.** Every generated text must be supported by fetched source text. Never let a model see only a headline and write from it; if a source is too thin, drop it. Invented facts are the worst bug this app can have.
+- Nothing goes to Telegram automatically: the news post, the article, the carousel and the English video are each started from their own tile on the topic page.
 - Farsi output is the brand's own voice — never "according to the source", never sales lines or "DM us" in news posts.
 - Express Entry draw results are excluded from topics (the brand covers them elsewhere).
 - Evergreen ideas (`topic.evergreen`) are explainers, not news: the script, Telegram post, article and carousel prompts switch framing on that flag, and ground on the official page the harvester stored (`page_id`).
