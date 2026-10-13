@@ -1067,7 +1067,7 @@ export default function App() {
 }
 
 // List (every topic, new and used) or the Lexbase newsletter section.
-const MODES = [["list", "☰", "List"], ["lexbase", "📬", "Lexbase"], ["ideas", "💡", "Ideas"]];
+const MODES = [["list", "📰", "News"], ["lexbase", "📬", "Lexbase"], ["ideas", "💡", "Ideas"]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
@@ -1583,8 +1583,24 @@ const IDEA_GROUPS = [
   ["other", "🌐 ویزا و پرونده", (t) => ["visit", "refusal"].includes(t.subject)],
 ];
 
+// The last ideas seen on this device show at once; the server's answer
+// replaces them when it arrives (after a restart that can take a while).
+const IDEAS_KEY = "sugimoto_ideas_v1";
+function loadIdeasCache() {
+  try {
+    const d = JSON.parse(localStorage.getItem(IDEAS_KEY) || "null");
+    return d && Array.isArray(d.ideas) ? d : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function IdeasSection({ decisions, ...actions }) {
   const [data, setData] = useState(null);
+  useEffect(() => {
+    const c = loadIdeasCache();
+    if (c) setData((d) => d || c);
+  }, []);
   const [err, setErr] = useState("");
   const [group, setGroup] = useState("all");
   const [asking, setAsking] = useState(false);
@@ -1599,7 +1615,14 @@ function IdeasSection({ decisions, ...actions }) {
         const j = await r.json();
         if (stop) return;
         if (j.error && !j.ideas) throw new Error(j.error);
-        setData(j);
+        // An empty answer while the server is still reading its memory must
+        // not wipe the ideas already on screen.
+        setData((prev) => (prev && prev.ideas && prev.ideas.length && !(j.ideas || []).length && !j.generating ? { ...prev, signals: j.signals || prev.signals, generating: false } : j));
+        if ((j.ideas || []).length) {
+          try {
+            localStorage.setItem(IDEAS_KEY, JSON.stringify({ ideas: j.ideas, generatedAt: j.generatedAt, signals: j.signals }));
+          } catch (_) {}
+        }
         setErr("");
         if (j.generating) timer = setTimeout(load, 5000);
       } catch (e) {
