@@ -17,7 +17,7 @@ function Login() {
     try {
       const { user } = await api("/auth/login", { method: "POST", body: { email, password } });
       const next = q.get("next") || "";
-      window.location.href = user.must_change ? "/editing/password" : next.startsWith("/") && !next.startsWith("//") ? next : "/editing";
+      window.location.href = user.must_change ? "/editing/password" : /^\/(?![\/\\])/.test(next) ? next : "/editing";
     } catch (err) {
       setError(err.message);
       setBusy(false);
