@@ -64,7 +64,15 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | English video: options sheet on the topic page → n8n workflow "Topic Engine: English video" (HeyGen) → reports back to `/api/video/callback`. Inactive until `VIDEO_WORKFLOW_URL` + `VIDEO_WORKFLOW_SECRET` are set | `lib/video.js`, `app/api/video/callback/route.js` |
 | General ideas: demand signals (Google/YouTube autocomplete EN+FA, IRCC Help Centre, Reddit, site titles, official page text) harvested daily → weekly batch of evergreen ideas grounded on canada.ca pages | `lib/ideas/seeds.js` (subjects, pages), `lib/ideas/signals.js`, `lib/ideas/index.js`, `/api/ideas` |
 | Source text for every writing step (Lexbase item → stored official page → fetched page → excerpt) | `lib/grounding.js` |
+| Video Editing section (login, team, projects, review, corrections, approval). The editing method is NOT here: it lives in english-sugimotovisa (`scripts/rough_cut.py`, GitHub job `rough_cut`); this app only stores state on that repo's `editing-data` branch and starts the job | `lib/editing/**`, `app/editing/**`, `app/api/editing/**`, `middleware.js` |
 | UI (one list: new + used topics, Archive filter; Lexbase and Ideas tabs; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
+
+## Video Editing section
+
+- Off unless `EDITING_SESSION_SECRET` and `EDITING_GITHUB_TOKEN` are set; then only `/editing` and `/api/editing` need a login. `APP_LOGIN=all` puts the whole app behind the same login (members see only Video Editing); leave it off until Hamed decides.
+- Locally use `EDITING_STORE_DIR=/some/folder` instead of the GitHub token: data stays in that folder and no worker is started.
+- Rules that never change: only pauses, false starts and retakes are removed (decided in english-sugimotovisa, never here); a version can be approved only after it reached review; nothing is posted to Instagram or TikTok from this section; a change to the editing rules goes into english-sugimotovisa's files, never only into this app.
+- A member only ever reads their own projects: every API route loads the project through `loadProject(user, id)`, which answers 403 otherwise. Keep it that way for any new route.
 
 ## Conventions that matter here
 
