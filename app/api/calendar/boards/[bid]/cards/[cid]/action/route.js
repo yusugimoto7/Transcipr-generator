@@ -1,5 +1,5 @@
 import { guard, json } from "../../../../../../../../lib/editing/auth";
-import { approveCard, archiveCard, approvalValid, getBoard, checkId, addEvent } from "../../../../../../../../lib/calendar/model";
+import { approveCard, archiveCard, approvalValid, getBoard, checkId, addEvent, requestReview, rejectCard } from "../../../../../../../../lib/calendar/model";
 import { publishCard, resetChannel } from "../../../../../../../../lib/calendar/publisher";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ function fail(e) {
   return json({ error: String(e.message || e) }, e.status || 500);
 }
 
-// approve | unapprove | publish_now | retry { channel } | archive
+// approve | unapprove | request_review { note } | reject { note } | publish_now | retry { channel } | archive
 // Approving and publishing are Hamed's (admin) alone. Publishing runs in the background: the page
 // reads the result from the card.
 export async function POST(request, { params }) {
@@ -22,6 +22,10 @@ export async function POST(request, { params }) {
       case "approve":
       case "unapprove":
         return json({ card: await approveCard(g.user, params.bid, params.cid, body.action === "approve") });
+      case "request_review":
+        return json({ card: await requestReview(g.user, params.bid, params.cid, body.note) });
+      case "reject":
+        return json({ card: await rejectCard(g.user, params.bid, params.cid, body.note) });
       case "archive":
         await archiveCard(g.user, params.bid, params.cid);
         return json({ ok: true });
