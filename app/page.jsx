@@ -274,10 +274,11 @@ export default function App() {
   const [copied, setCopied] = useState("");
   const [initialArticle, setInitialArticle] = useState(null);
   const [savedCarousel, setSavedCarousel] = useState(null);
+  const [savedStory, setSavedStory] = useState(null);
   const [savedTg, setSavedTg] = useState(0); // when the news post last went to Telegram
   const [savedVideo, setSavedVideo] = useState(null);
   const [loadingSaved, setLoadingSaved] = useState(false);
-  const [caps, setCaps] = useState({ carousel: true, telegram: { review: true, public: true }, video: false });
+  const [caps, setCaps] = useState({ carousel: true, story: true, telegram: { review: true, public: true }, video: false });
 
   useEffect(() => {
     fetch("/api/capabilities", { cache: "no-store" })
@@ -397,6 +398,10 @@ export default function App() {
         delete entry.carousel_slide;
         delete entry.carousel_send;
       }
+      if (kind === "story") {
+        delete entry.story_draw;
+        delete entry.story_send;
+      }
       entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now(), extra };
       return { ...prev, [key]: entry };
     });
@@ -464,6 +469,11 @@ export default function App() {
         } else if (remote.kind === "carousel_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).carousel || {};
           patchWs(t, { materials: { carousel: { ...cur, sent: r.sent || {} } } });
+        } else if (remote.kind === "story" || remote.kind === "story_draw") {
+          patchWs(t, { materials: { story: { ts: now, count: (r.pages || []).length, sent: r.sent || {} } } });
+        } else if (remote.kind === "story_send") {
+          const cur = ((wsRef.current[local.key] || {}).materials || {}).story || {};
+          patchWs(t, { materials: { story: { ...cur, sent: r.sent || {} } } });
         }
       }
     }
@@ -702,6 +712,7 @@ export default function App() {
     setScripts({ fa: "", en: "" });
     setInitialArticle(null);
     setSavedCarousel(null);
+    setSavedStory(null);
     setSavedTg(0);
     setSavedVideo(null);
     setScriptError(null);
@@ -728,6 +739,7 @@ export default function App() {
           if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "" });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
+          if (m.story) setSavedStory(m.story);
           if (m.telegram) setSavedTg(m.telegram.sent || m.telegram.ts || 0);
         }
         if (m.video) setSavedVideo(m.video);
@@ -875,6 +887,20 @@ export default function App() {
     carousel = { ...carousel, sent: { ...(carousel.sent || {}), ...sendJob.result.sent } };
   }
 
+  // The story, the same way as the carousel.
+  let story = savedStory;
+  let storyJob = null;
+  for (const kind of ["story", "story_draw"]) {
+    const j = svJobs[kind];
+    if (!j) continue;
+    if (!storyJob || (j.startedAt || 0) > (storyJob.startedAt || 0)) storyJob = j;
+  }
+  if (storyJob && storyJob.result && (storyJob.result.pages || []).length) story = storyJob.result;
+  const storySendJob = svJobs.story_send || null;
+  if (story && storySendJob && storySendJob.status === "done" && storySendJob.result && storySendJob.result.sent) {
+    story = { ...story, sent: { ...(story.sent || {}), ...storySendJob.result.sent } };
+  }
+
   const copy = (which) => {
     const t = which === "fa" ? viewScripts.fa : viewScripts.en;
     if (!t) return;
@@ -886,7 +912,7 @@ export default function App() {
   // Work running or finished in the background, for the bar under the header.
   const bgRows = [];
   for (const key of Object.keys(bg)) {
-    for (const kind of ["script", "article", "carousel", "video"]) {
+    for (const kind of ["script", "article", "carousel", "story", "video"]) {
       const j = bg[key][kind];
       if (!j || !j.topic) continue;
       if (dismissed[key + ":" + kind] && j.status !== "running") continue;
@@ -1055,6 +1081,9 @@ export default function App() {
           carousel={carousel}
           carouselJob={carouselJob}
           sendJob={sendJob}
+          story={story}
+          storyJob={storyJob}
+          storySendJob={storySendJob}
           videoJob={vj}
           video={video}
           onRefreshVideo={() => loadSaved(svKey, "video")}
@@ -1140,6 +1169,7 @@ const MATERIAL_BADGE = {
   script: ["📝 Script", "Scripts written", "#12945e"],
   article: ["📰 Article", "Blog article written", "#0e8a99"],
   carousel: ["🖼 Carousel", "Carousel post made", "#6d5bd0"],
+  story: ["📱 Story", "Instagram story made", "#c2410c"],
   video: ["🎬 Video", "Video requested", "#334155"],
 };
 const CATEGORIES = [
@@ -1346,6 +1376,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                       {MATERIAL_BADGE[k][0]}
                       {k === "carousel" && m && m.count ? " " + m.count : ""}
                       {k === "carousel" && m && m.sent && m.sent.public ? " · 📢 published" : ""}
+                      {k === "story" && m && m.count > 1 ? " " + m.count : ""}
                     </span>
                   ))}
                   {t.evergreen && (
@@ -2072,7 +2103,7 @@ function Segmented({ value, onChange, items }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tg = { state: "idle", at: 0, msg: "" }, onTelegram, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, videoJob, video, onRefreshVideo, caps = {}, onJob }) {
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tg = { state: "idle", at: 0, msg: "" }, onTelegram, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob }) {
   const f = fieldOf(topic);
   const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -2166,9 +2197,11 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
   // ---- what to make from the topic ----------------------------------------
   const articleRef = useRef(null);
   const carouselRef = useRef(null);
+  const storyRef = useRef(null);
   const videoRef = useRef(null);
   const reveal = (ref) => setTimeout(() => ref.current && ref.current.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   const [carouselOpen, setCarouselOpen] = useState(0); // bumped to open the carousel form
+  const [storyOpen, setStoryOpen] = useState(0);
   const [composer, setComposer] = useState(false);
   const [draft, setDraft] = useState(null); // the video editor's state, kept while the topic is open
 
@@ -2180,6 +2213,9 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
   const slides = (carousel && carousel.slides) || [];
   const carRunning = !!carouselJob && carouselJob.status === "running";
+  const storyPages = (story && story.pages) || [];
+  const stRunning = !!storyJob && storyJob.status === "running";
+  const stStage = stRunning ? (storyJob.result && storyJob.result.stage) || "writing" : "";
   const vRunning = !!videoJob && videoJob.status === "running";
   const vStatus = vRunning ? "sending" : videoJob && videoJob.status === "error" && !(video && video.requested_at > (videoJob.startedAt || 0)) ? "error" : (video && video.status) || "";
 
@@ -2218,6 +2254,20 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         carRunning ? { label: (carouselJob.result && carouselJob.result.stage === "drawing") ? "Drawing slides…" : "Writing slides…", tone: C.orange, running: true }
         : slides.length ? { label: slides.length + " slides" + (carousel.sent && carousel.sent.public ? " · published" : ""), tone: C.success, done: true }
         : carouselJob && carouselJob.status === "error" ? { label: "Failed", tone: C.reject }
+        : { label: "Not made", tone: C.text3 },
+    },
+    {
+      k: "story", icon: "📱", title: "Story", tone: "#c2410c",
+      sub: "استوری فکت با اسکرین‌شات از منبع اصلی",
+      onClick: () => {
+        if (!storyPages.length && !stRunning) setStoryOpen((n) => n + 1);
+        reveal(storyRef);
+      },
+      status:
+        stRunning ? { label: stStage === "screenshots" ? "Taking screenshots…" : stStage === "drawing" ? "Drawing…" : "Writing…", tone: C.orange, running: true }
+        : storyPages.length ? { label: (storyPages.length === 1 ? "1 page" : storyPages.length + " pages") + (story.sent && story.sent.public ? " · published" : ""), tone: C.success, done: true }
+        : storyJob && storyJob.status === "error" ? { label: "Failed", tone: C.reject }
+        : caps.story === false ? { label: "HCTI not set", tone: C.text3 }
         : { label: "Not made", tone: C.text3 },
     },
     {
@@ -2464,6 +2514,13 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {!loading && !error && (
         <div ref={carouselRef} style={{ scrollMarginTop: 90 }}>
           <CarouselPanel topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} openSignal={carouselOpen} />
+        </div>
+      )}
+
+      {/* Story (nothing until asked for or made) */}
+      {!loading && !error && (
+        <div ref={storyRef} style={{ scrollMarginTop: 90 }}>
+          <StoryPanel topic={topic} story={story} job={storyJob} sendJob={storySendJob} caps={caps} onJob={onJob} openSignal={storyOpen} />
         </div>
       )}
 
@@ -2714,6 +2771,193 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 
 // A slide shown large over the page: arrows, swipe or the keyboard move
 // between slides, Esc or a tap outside closes.
+// Instagram fact story: 1 to 4 pages (1 by default). The server writes a
+// short Farsi fact per page, photographs the original source (the Lexbase PDF
+// or the news page) with the proving sentence highlighted, and draws each
+// page at 1080x1920. Screenshots are taken only for topics made into stories.
+const STORY_TONE = "#c2410c";
+function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
+  const [form, setForm] = useState(false);
+  useEffect(() => {
+    if (openSignal) setForm(true);
+  }, [openSignal]);
+  const [count, setCount] = useState(1);
+  const [notes, setNotes] = useState("");
+  const [revNotes, setRevNotes] = useState("");
+  const [copiedCap, setCopiedCap] = useState(false);
+  const [preview, setPreview] = useState(0);
+  const running = !!job && job.status === "running";
+  const stage = running ? (job.result && job.result.stage) || "writing" : "";
+  const failed = !!job && job.status === "error" ? job.error : "";
+  const pages = (story && story.pages) || [];
+  const drawn = pages.filter((p) => p.image_url).length;
+  const missing = pages.length - drawn;
+  const sending = !!sendJob && sendJob.status === "running";
+  const sendErr = sendJob && sendJob.status === "error" ? sendJob.error : "";
+  const sent = (story && story.sent) || {};
+  const font = "'Inter', 'Vazirmatn', sans-serif";
+  const fa = "'Vazirmatn', sans-serif";
+  const isLex = topic && (topic.newsletter === "lexbase" || /\/api\/lexbase\//.test(topic.source_url || ""));
+
+  const start = () => {
+    if (pages.length && !window.confirm("A new story replaces the current one. Continue?")) return;
+    setForm(false);
+    onJob("story", { count, notes: notes.trim() });
+  };
+  const send = (target) => {
+    if (target === "public" && !window.confirm("Publish this story to the public channel @sugimotovisa?")) return;
+    onJob("story_send", { target });
+  };
+  const btn = (bg, color, border) => ({ background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: font });
+
+  if (!pages.length && !running && !form && !failed) return null;
+  return (
+    <Section title="📱 استوری">
+      {form && !running && (
+        <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
+          <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>📱 استوری فکت از این موضوع</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تعداد صفحه</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {[1, 2, 3, 4].map((n) => (
+              <button key={n} className="ui-btn" onClick={() => setCount(n)} style={{ minWidth: 44, height: 34, borderRadius: 10, cursor: "pointer", border: `1px solid ${count === n ? STORY_TONE : C.line}`, background: count === n ? alpha(STORY_TONE, 0.12) : C.surface, color: count === n ? STORY_TONE : C.text, fontWeight: 700, fontFamily: font }}>
+                {n}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>یادداشت‌ها (اختیاری)</div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="مثلاً: روی عدد اصلی تمرکز کن، صفحه دوم درباره مهلت باشه…"
+            style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+          />
+          <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px", lineHeight: 1.7 }}>
+            هر صفحه یک واقعیت از متن منبع + اسکرین‌شات واقعی از {isLex ? "PDF اصلی لکس‌بیس" : "صفحه منبع"} که جمله‌اش هایلایت شده. اسکرین‌شات فقط برای همین موضوع گرفته می‌شه.
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="ui-btn ui-glow-orange" onClick={start} disabled={caps.story === false} style={{ ...btn(STORY_TONE, "#fff", "none"), flex: 1, opacity: caps.story === false ? 0.5 : 1 }}>
+              ساخت استوری {count === 1 ? "تک‌صفحه" : count + " صفحه‌ای"}
+            </button>
+            <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
+              انصراف
+            </button>
+          </div>
+          {caps.story === false && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 8 }}>HCTI_USER_ID / HCTI_API_KEY روی سرور تنظیم نشده.</div>}
+        </div>
+      )}
+
+      {running && (
+        <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(STORY_TONE, 0.07), border: `1px solid ${alpha(STORY_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
+          <span className="ui-pulse">⏳</span>{" "}
+          {stage === "writing" ? "در حال نوشتن متن استوری…" : stage === "screenshots" ? "در حال گرفتن اسکرین‌شات از منبع اصلی…" : `در حال طراحی صفحه‌ها… ${drawn} از ${pages.length}`}
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+        </div>
+      )}
+      {failed && !running && <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>}
+
+      {pages.length > 0 && (
+        <div>
+          <div dir="rtl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
+            <b style={{ fontSize: 14.5 }}>📱 استوری · {pages.length} صفحه</b>
+            {!running && (
+              <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
+                ↻ از نو (بدون نسخه قبلی)
+              </button>
+            )}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 10 }}>
+            {pages.map((pg) => (
+              <div key={pg.num} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
+                {pg.image_url ? (
+                  <button onClick={() => setPreview(pg.num)} aria-label={"Preview page " + pg.num} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
+                    <img src={pg.image_url} alt={"Story page " + pg.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover", background: C.surfaceHi }} />
+                  </button>
+                ) : (
+                  <div className={running ? "ui-skeleton" : ""} style={{ aspectRatio: "9 / 16", display: "grid", placeItems: "center", background: C.surfaceHi, color: C.text3, fontSize: 12, padding: 8, textAlign: "center", fontFamily: font }}>
+                    {running ? "…" : "⚠️ " + (pg.error ? pg.error.slice(0, 80) : "no image")}
+                  </div>
+                )}
+                <div dir="rtl" style={{ padding: "6px 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2 }}>
+                  <b style={{ color: C.text }}>{pg.headline}</b>
+                  {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحه دیگه استفاده شد.</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {!running && missing > 0 && (
+            <button className="ui-btn" onClick={() => onJob("story_draw", {})} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
+              طراحی {missing} صفحه باقی‌مانده
+            </button>
+          )}
+
+          {!running && (
+            <div dir="rtl" style={{ marginTop: 14, background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 14, padding: 12, fontFamily: fa }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6 }}>✏️ یادداشت برای نسخه بعد</div>
+              <textarea
+                value={revNotes}
+                onChange={(e) => setRevNotes(e.target.value)}
+                rows={3}
+                placeholder="چه چیزی عوض بشه؟ مثلاً: تیتر کوتاه‌تر، عدد رو در تیتر بیار…"
+                style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+              />
+              <button
+                className="ui-btn ui-glow-orange"
+                disabled={!revNotes.trim()}
+                onClick={() => onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true })}
+                style={{ ...btn(STORY_TONE, "#fff", "none"), width: "100%", marginTop: 8, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
+              >
+                ↻ ساخت دوباره با این یادداشت
+              </button>
+            </div>
+          )}
+          {preview > 0 && <SlidePreview slides={pages.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
+
+          {story.caption && (
+            <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>CAPTION</span>
+                <button
+                  className="ui-btn"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(story.caption);
+                    setCopiedCap(true);
+                    setTimeout(() => setCopiedCap(false), 1400);
+                  }}
+                  style={{ background: copiedCap ? C.success : alpha(C.orange, 0.14), color: copiedCap ? "#fff" : C.orange, border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                >
+                  {copiedCap ? "Copied ✓" : "Copy"}
+                </button>
+              </div>
+              <div dir="rtl" style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{story.caption}</div>
+            </div>
+          )}
+
+          {drawn > 0 && !running && (
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              {caps.telegram?.review !== false && (
+                <button className="ui-btn" disabled={sending} onClick={() => send("review")} style={{ ...btn(alpha(C.teal, 0.12), C.text, `1px solid ${alpha(C.teal, 0.4)}`), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
+                  {sent.review ? "✓ " : "✈ "}کانال بررسی تیم
+                  {sent.review && <div style={{ fontSize: 10.5, fontWeight: 500, color: C.text3 }}>sent {when(sent.review)}</div>}
+                </button>
+              )}
+              {caps.telegram?.public !== false && (
+                <button className="ui-btn" disabled={sending} onClick={() => send("public")} style={{ ...btn(sent.public ? alpha(C.success, 0.12) : C.orange, sent.public ? C.success : "#fff", sent.public ? `1px solid ${alpha(C.success, 0.5)}` : "none"), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
+                  {sent.public ? "✓ " : "📢 "}انتشار در @sugimotovisa
+                  {sent.public && <div style={{ fontSize: 10.5, fontWeight: 500 }}>published {when(sent.public)}</div>}
+                </button>
+              )}
+            </div>
+          )}
+          {sending && <div className="ui-pulse" style={{ marginTop: 8, fontSize: 12, color: C.text3, textAlign: "center", fontFamily: fa }}>در حال ارسال به تلگرام…</div>}
+          {sendErr && <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, textAlign: "center", direction: "ltr" }}>⚠️ {sendErr}</div>}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function SlidePreview({ slides, start, onClose }) {
   const [i, setI] = useState(Math.max(0, slides.findIndex((s) => s.num === start)));
   const touchX = useRef(null);
