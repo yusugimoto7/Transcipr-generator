@@ -10,6 +10,10 @@ import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyb
 import { CSS } from "@dnd-kit/utilities";
 import { Shell, apiAt } from "../editing/ui";
 import c from "./calendar.module.css";
+import p from "./publishing.module.css";
+import Composer, { NetChip, StatusPill } from "./Composer";
+import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf } from "./Publishing";
+import { NETWORKS, onNetworks } from "./channels";
 
 const CH = [
   ["instagram", "IG", "Instagram"], ["tiktok", "TT", "TikTok"], ["youtube", "YT", "YouTube"],
@@ -226,28 +230,17 @@ function BoardView({ board, users, filter, onOpen, onMove, onAdd }) {
 
 // ---- month view ---------------------------------------------------------------------------------
 
-function Mini({ card, board, onOpen }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id });
-  const label = board.labels.find((l) => l.id === (card.labels || [])[0]);
-  return (
-    <div ref={setNodeRef} {...attributes} {...listeners} className={`${c.mini} ${isDragging ? c.dragging : ""}`} style={{ borderLeftColor: label ? COLORS[label.color] : undefined }} onClick={() => onOpen(card.id)}>
-      {card.publish_at && <b>{timeOf(card.publish_at)}{card.approved ? " ✓" : ""}</b>}
-      <span dir="auto">{card.title}</span>
-    </div>
-  );
-}
-
-function DayCell({ date, month, cards, dues, board, onOpen }) {
+function DayCell({ date, month, cards, dues, onOpen, onNew }) {
   const { setNodeRef, isOver } = useDroppable({ id: "day-" + dayKey(date) });
   const today = dayKey(date) === dayKey(new Date());
   return (
-    <div ref={setNodeRef} className={`${c.day} ${date.getMonth() !== month ? c.other : ""} ${today ? c.today : ""} ${isOver ? c.over : ""}`}>
+    <div ref={setNodeRef} onDoubleClick={() => onNew(new Date(date.getFullYear(), date.getMonth(), date.getDate(), 18).toISOString())} className={`${c.day} ${date.getMonth() !== month ? c.other : ""} ${today ? c.today : ""} ${isOver ? c.over : ""}`}>
       <span className={c.num}>{date.getDate()}</span>
       {cards.map((card) => (
-        <Mini key={card.id} card={card} board={board} onOpen={onOpen} />
+        <Tile key={card.id} card={card} onOpen={onOpen} />
       ))}
       {dues.map((card) => (
-        <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card.id)} dir="auto">
+        <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
           Due: {card.title}
         </span>
       ))}
@@ -255,7 +248,7 @@ function DayCell({ date, month, cards, dues, board, onOpen }) {
   );
 }
 
-function Unscheduled({ cards, board, onOpen }) {
+function Unscheduled({ cards, onOpen }) {
   const { setNodeRef, isOver } = useDroppable({ id: "unscheduled" });
   return (
     <aside ref={setNodeRef} className={c.side} style={isOver ? { background: "#fff4e5" } : undefined}>
@@ -263,26 +256,24 @@ function Unscheduled({ cards, board, onOpen }) {
         <span className={c.grow}>No publish date</span>
         <span className={c.count}>{cards.length}</span>
       </div>
-      <span className={c.muted}>Drag a card onto a day to schedule it. Drag it back here to unschedule.</span>
+      <span className={c.muted}>Drag a post onto a day to schedule it, or back here to unschedule.</span>
       {cards.map((card) => (
-        <Mini key={card.id} card={card} board={board} onOpen={onOpen} />
+        <Tile key={card.id} card={card} onOpen={onOpen} />
       ))}
     </aside>
   );
 }
 
-function MonthView({ board, filter, onOpen, onMove }) {
+function MonthView({ cards, onOpen, onMove, onNew }) {
   const [anchor, setAnchor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
-  const [showDue, setShowDue] = useState(true);
+  const [showDue, setShowDue] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } })
   );
-  const published = board.lists.find((l) => l.role === "published");
-  const cards = board.cards.filter(filter);
   const start = new Date(anchor);
   start.setDate(1 - ((anchor.getDay() + 6) % 7)); // weeks start on Monday
   const days = Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
@@ -293,20 +284,20 @@ function MonthView({ board, filter, onOpen, onMove }) {
     if (showDue && card.due_at) (dueDay[dayKey(new Date(card.due_at))] ||= []).push(card);
   }
   for (const k of Object.keys(byDay)) byDay[k].sort((a, b) => new Date(a.publish_at) - new Date(b.publish_at));
-  const unscheduled = cards.filter((x) => !x.publish_at && (!published || x.list_id !== published.id));
+  const unscheduled = cards.filter((x) => !x.publish_at && x.status !== "published" && onNetworks(x).length);
   const [active, setActive] = useState(null);
   const onDragEnd = ({ active: a, over }) => {
     setActive(null);
     if (!over) return;
-    const card = board.cards.find((x) => x.id === a.id);
+    const card = cards.find((x) => x.id === a.id);
     if (over.id === "unscheduled") {
-      if (card.publish_at) onMove(card.id, { publish_at: null });
+      if (card.publish_at) onMove(card, { publish_at: null });
       return;
     }
     const [y, m, d] = over.id.slice(4).split("-").map(Number);
     const old = card.publish_at ? new Date(card.publish_at) : null;
     const when = new Date(y, m - 1, d, old ? old.getHours() : 18, old ? old.getMinutes() : 0);
-    if (!old || when.getTime() !== old.getTime()) onMove(card.id, { publish_at: when.toISOString() });
+    if (!old || when.getTime() !== old.getTime()) onMove(card, { publish_at: when.toISOString() });
   };
   const title = anchor.toLocaleString([], { month: "long", year: "numeric" });
   return (
@@ -328,7 +319,7 @@ function MonthView({ board, filter, onOpen, onMove }) {
         </label>
       </div>
       <div className={c.calWrap}>
-        <Unscheduled cards={unscheduled} board={board} onOpen={onOpen} />
+        <Unscheduled cards={unscheduled} onOpen={onOpen} />
         <div className={c.gridScroll}>
           <div className={c.grid}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
@@ -337,26 +328,25 @@ function MonthView({ board, filter, onOpen, onMove }) {
               </div>
             ))}
             {days.map((d) => (
-              <DayCell key={dayKey(d)} date={d} month={anchor.getMonth()} cards={byDay[dayKey(d)] || []} dues={dueDay[dayKey(d)] || []} board={board} onOpen={onOpen} />
+              <DayCell key={dayKey(d)} date={d} month={anchor.getMonth()} cards={byDay[dayKey(d)] || []} dues={dueDay[dayKey(d)] || []} onOpen={onOpen} onNew={onNew} />
             ))}
           </div>
         </div>
       </div>
-      <DragOverlay>{active ? <div className={c.mini}>{board.cards.find((x) => x.id === active)?.title}</div> : null}</DragOverlay>
+      <DragOverlay>{active ? <div className={c.mini}>{cards.find((x) => x.id === active)?.title}</div> : null}</DragOverlay>
     </DndContext>
   );
 }
 
 // ---- card editor --------------------------------------------------------------------------------
 
-function CardEditor({ boardId, cardId, board, users, me, channels, sources, onClose, onChanged }) {
+function CardEditor({ boardId, cardId, board, users, onClose, onChanged, onCompose }) {
   const [card, setCard] = useState(null);
   const [draft, setDraft] = useState(null);
   const [comments, setComments] = useState([]);
   const [msg, setMsg] = useState({ error: "", ok: "" });
   const [busy, setBusy] = useState(false);
   const [comment, setComment] = useState("");
-  const admin = me.role === "admin";
   const load = useCallback(async () => {
     const d = await calApi(`/boards/${boardId}/cards/${cardId}`);
     setCard(d.card);
@@ -372,17 +362,16 @@ function CardEditor({ boardId, cardId, board, users, me, channels, sources, onCl
     onClose();
   };
   const set = (k, v) => setDraft({ ...draft, [k]: v });
-  const setCh = (k, f, v) => set("channels", { ...draft.channels, [k]: { ...draft.channels[k], [f]: v } });
   const save = async () => {
     setBusy(true);
     try {
-      const fields = ["title", "description", "labels", "members", "start_at", "due_at", "publish_at", "channels", "media", "links", "checklist", "list_id"];
+      const fields = ["title", "description", "labels", "members", "start_at", "due_at", "links", "checklist", "list_id"];
       const body = {};
       for (const f of fields) if (JSON.stringify(card[f]) !== JSON.stringify(draft[f])) body[f] = draft[f];
       const d = await calApi(`/boards/${boardId}/cards/${cardId}`, { method: "PATCH", body });
       setCard({ ...card, ...d.card });
       setDraft({ ...card, ...d.card });
-      setMsg({ error: "", ok: d.card.approved || !card.approval ? "Saved." : "Saved. The content changed, so Hamed needs to approve it again." });
+      setMsg({ error: "", ok: "Saved." });
       onChanged();
     } catch (e) {
       setMsg({ error: e.message, ok: "" });
@@ -400,7 +389,7 @@ function CardEditor({ boardId, cardId, board, users, me, channels, sources, onCl
       }
       await load();
       onChanged();
-      setMsg({ error: "", ok: a === "publish_now" ? "Publishing started. This card updates when each channel is done." : "Done." });
+      setMsg({ error: "", ok: "Done." });
     } catch (e) {
       setMsg({ error: e.message, ok: "" });
     }
@@ -417,12 +406,6 @@ function CardEditor({ boardId, cardId, board, users, me, channels, sources, onCl
       setMsg({ error: err.message, ok: "" });
     }
   };
-  useEffect(() => {
-    const live = card && Object.values(card.publish || {}).some((p) => p.status === "publishing");
-    if (!live) return;
-    const t = setInterval(() => load().catch(() => {}), 8000);
-    return () => clearInterval(t);
-  }, [card, load]);
   const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || (id === "scheduler" ? "Scheduler" : "Someone");
   return (
     <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && close()}>
@@ -467,83 +450,24 @@ function CardEditor({ boardId, cardId, board, users, me, channels, sources, onCl
                   <textarea id="card-desc" className={c.textarea} dir="auto" value={draft.description} onChange={(e) => set("description", e.target.value)} placeholder="Notes, script, brief…" />
                 </div>
                 <div className={c.section}>
-                  <h3>Media</h3>
+                  <h3>Post</h3>
                   <div className={c.bar}>
-                    <select id="media-kind" className={c.select} value={draft.media.kind} onChange={(e) => set("media", { ...draft.media, kind: e.target.value })}>
-                      <option value="none">No media</option>
-                      <option value="video">Video</option>
-                      <option value="image">Image</option>
-                    </select>
-                    {draft.media.kind !== "none" && (
-                      <input id="media-url" className={`${c.input} ${c.grow}`} placeholder="Drive link (Anyone with the link) or https:// file link" value={draft.media.url} onChange={(e) => set("media", { ...draft.media, url: e.target.value })} />
-                    )}
+                    <StatusPill status={card.status} />
+                    {onNetworks(card).map((n) => (
+                      <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
+                    ))}
+                    {card.publish_at && <span className={c.muted}>{shortWhen(card.publish_at)}</span>}
                   </div>
-                  {sources.videos.length > 0 && draft.media.kind === "video" && (
-                    <select id="media-pick" className={c.select} value="" onChange={(e) => {
-                      const v = sources.videos.find((x) => x.id === e.target.value);
-                      if (v) set("media", { kind: "video", url: v.url, project_id: v.id });
-                    }}>
-                      <option value="">Use an approved Video Editing video…</option>
-                      {sources.videos.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.title} (v{v.version})
-                        </option>
-                      ))}
-                    </select>
+                  {captionOf(card) && (
+                    <p dir="auto" className={c.muted} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                      {captionOf(card).slice(0, 280)}
+                    </p>
                   )}
-                </div>
-                <div className={c.section}>
-                  <h3>Channels and captions</h3>
-                  {CH.map(([k, , name]) => {
-                    const x = draft.channels[k];
-                    const st = (draft.publish || {})[k];
-                    const len = (x.caption || "").length;
-                    return (
-                      <div key={k} className={`${c.channel} ${x.on ? "" : c.off}`}>
-                        <label className={c.bar} style={{ fontWeight: 600, fontSize: 14 }}>
-                          <input id={`ch-${k}`} type="checkbox" checked={x.on} onChange={(e) => setCh(k, "on", e.target.checked)} /> {name}
-                          {channels[k] && !channels[k].connected && <span className={`${c.badge} ${c.warn}`}>not connected</span>}
-                          {st && (
-                            <span className={`${c.badge} ${st.status === "published" ? c.ok : st.status === "publishing" ? "" : c.bad}`}>
-                              {st.status}
-                              {st.url && (
-                                <>
-                                  {" "}
-                                  ·{" "}
-                                  <a href={st.url} target="_blank" rel="noreferrer">
-                                    open
-                                  </a>
-                                </>
-                              )}
-                            </span>
-                          )}
-                        </label>
-                        {st && (st.error || st.note) && <span className={c.muted}>{st.error || st.note}</span>}
-                        {st && admin && ["failed", "unknown", "missed"].includes(st.status) && (
-                          <div>
-                            <button className={c.btn} disabled={busy} onClick={() => action("retry", { channel: k })}>
-                              Clear and allow another try
-                            </button>
-                          </div>
-                        )}
-                        {x.on && (
-                          <>
-                            {k === "instagram" && (
-                              <select id="ig-format" className={c.select} value={x.format} onChange={(e) => setCh(k, "format", e.target.value)}>
-                                <option value="reel">Reel (video)</option>
-                                <option value="post">Feed post (image)</option>
-                              </select>
-                            )}
-                            {k === "youtube" && <input id="yt-title" className={c.input} dir="auto" placeholder="YouTube title" value={x.title || ""} onChange={(e) => setCh(k, "title", e.target.value)} />}
-                            <textarea id={`cap-${k}`} className={c.textarea} dir="auto" placeholder={k === "youtube" ? "Description" : "Caption"} value={x.caption} onChange={(e) => setCh(k, "caption", e.target.value)} />
-                            <span className={c.muted} style={{ color: len > CAPTION_MAX[k] ? "#b42318" : undefined }}>
-                              {len}/{CAPTION_MAX[k]}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <div>
+                    <button className={`${c.btn} ${c.primary}`} onClick={() => (dirty && !window.confirm("Close without saving your changes?") ? null : onCompose(boardId, cardId))}>
+                      {onNetworks(card).length ? "Edit the post" : "Write the post"}
+                    </button>
+                  </div>
                 </div>
                 <div className={c.section}>
                   <h3>Checklist</h3>
@@ -585,35 +509,6 @@ function CardEditor({ boardId, cardId, board, users, me, channels, sources, onCl
                 </div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-                <div className={c.section}>
-                  <h3>Publish</h3>
-                  <input id="publish-at" type="datetime-local" className={c.input} value={toLocalInput(draft.publish_at)} onChange={(e) => set("publish_at", fromLocalInput(e.target.value))} />
-                  {card.approved ? (
-                    <span className={c.note}>Approved by Hamed. It goes out at the publish time{draft.publish_at ? "" : " (set one)"}.</span>
-                  ) : card.approval ? (
-                    <span className={c.error}>Changed after approval: Hamed needs to approve it again.</span>
-                  ) : (
-                    <span className={c.muted}>Waiting for Hamed's approval. Nothing is published before that.</span>
-                  )}
-                  {admin && (
-                    <div className={c.bar}>
-                      {!card.approved ? (
-                        <button className={`${c.btn} ${c.primary}`} disabled={busy || dirty} onClick={() => action("approve")} title={dirty ? "Save first" : ""}>
-                          Approve for publishing
-                        </button>
-                      ) : (
-                        <>
-                          <button className={c.btn} disabled={busy} onClick={() => action("unapprove")}>
-                            Withdraw approval
-                          </button>
-                          <button className={`${c.btn} ${c.primary}`} disabled={busy || dirty} onClick={() => window.confirm("Publish on the selected channels now?") && action("publish_now")}>
-                            Publish now
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
                 <div className={c.section}>
                   <h3>Timeline</h3>
                   <label className={c.field}>
@@ -855,69 +750,80 @@ function BoardSettings({ board, onSave, onClose }) {
 
 // ---- page ---------------------------------------------------------------------------------------
 
+const VIEWS = [
+  ["month", "Calendar"],
+  ["week", "Week"],
+];
+
 function Calendar({ user }) {
   const q = useSearchParams();
   const admin = user.role === "admin";
   const [boards, setBoards] = useState([]);
-  const [bid, setBid] = useState("");
-  const [data, setData] = useState(null);
-  const [view, setView] = useState("board");
-  const [open, setOpen] = useState("");
+  const [data, setData] = useState({}); // board id -> { board, users, channels, settings, me }
+  const [market, setMarket] = useState("all");
+  const [view, setView] = useState("month");
+  const [nets, setNets] = useState([]); // network filter, empty = all
+  const [labelFilter, setLabelFilter] = useState("");
+  const [mine, setMine] = useState(false);
+  const [open, setOpen] = useState(null); // planning card { bid, id }
+  const [compose, setCompose] = useState(null); // { bid, id, start }
   const [panel, setPanel] = useState("");
   const [sources, setSources] = useState({ topics: [], videos: [] });
   const [error, setError] = useState("");
-  const [labelFilter, setLabelFilter] = useState("");
-  const [mine, setMine] = useState(false);
   const busy = useRef(0);
 
   useEffect(() => {
     try {
-      const v = localStorage.getItem("cal-view");
-      if (v) setView(v);
+      setView(localStorage.getItem("cal-view2") || "month");
+      setMarket(localStorage.getItem("cal-market") || "all");
     } catch (_) {}
-    calApi("/boards")
-      .then((d) => {
-        setBoards(d.boards);
-        let saved = "";
-        try {
-          saved = localStorage.getItem("cal-board") || "";
-        } catch (_) {}
-        setBid(d.boards.some((b) => b.id === saved) ? saved : d.boards[0]?.id || "");
-      })
-      .catch((e) => setError(e.message));
+    calApi("/boards").then((d) => setBoards(d.boards)).catch((e) => setError(e.message));
     calApi("/sources").then(setSources).catch(() => {});
   }, []);
-  const load = useCallback(async () => {
-    if (!bid) return;
+  useEffect(() => {
     try {
-      const d = await calApi(`/boards/${bid}`);
-      if (busy.current === 0) setData(d);
+      localStorage.setItem("cal-view2", view);
+      localStorage.setItem("cal-market", market);
+    } catch (_) {}
+  }, [view, market]);
+
+  const load = useCallback(async () => {
+    if (!boards.length) return;
+    try {
+      const all = await Promise.all(boards.map((b) => calApi(`/boards/${b.id}`)));
+      if (busy.current === 0) setData(Object.fromEntries(all.map((d) => [d.board.id, d])));
       setError("");
     } catch (e) {
       setError(e.message);
     }
-  }, [bid]);
+  }, [boards]);
   useEffect(() => {
-    setData(null);
     load();
-    try {
-      if (bid) localStorage.setItem("cal-board", bid);
-    } catch (_) {}
-    const t = setInterval(() => !open && load(), 20000);
+    const t = setInterval(() => !open && !compose && load(), 20000);
     return () => clearInterval(t);
-  }, [bid, load, open]);
-  useEffect(() => {
-    try {
-      localStorage.setItem("cal-view", view);
-    } catch (_) {}
-  }, [view]);
+  }, [load, open, compose]);
 
-  // Optimistic: the card moves at once; the server write follows and a failure reloads the board.
-  const move = async (id, fields) => {
-    setData((d) => ({ ...d, board: { ...d.board, cards: d.board.cards.map((x) => (x.id === id ? { ...x, ...fields } : x)) } }));
+  const first = boards[0] && data[boards[0].id];
+  const one = market !== "all" && data[market] ? data[market] : null;
+  const planBoard = one || first;
+  const allCards = Object.values(data).flatMap((d) => d.board.cards.map((x) => ({ ...x, board_id: d.board.id, board_name: d.board.name })));
+  const cards = allCards.filter(
+    (x) =>
+      (market === "all" || x.board_id === market) &&
+      (!nets.length || onNetworks(x).some((n) => nets.includes(n.key))) &&
+      (!mine || (x.members || []).includes(user.id) || x.created_by === user.id)
+  );
+  const counts = Object.fromEntries(LIST_TABS.map(([k]) => [k, cards.filter((x) => inTab(x, k)).length]));
+
+  // Optimistic: the post moves at once; the server write follows and a failure reloads.
+  const move = async (card, fields) => {
+    setData((d) => {
+      const b = d[card.board_id].board;
+      return { ...d, [card.board_id]: { ...d[card.board_id], board: { ...b, cards: b.cards.map((x) => (x.id === card.id ? { ...x, ...fields } : x)) } } };
+    });
     busy.current++;
     try {
-      await calApi(`/boards/${bid}/cards/${id}`, { method: "PATCH", body: fields });
+      await calApi(`/boards/${card.board_id}/cards/${card.id}`, { method: "PATCH", body: fields });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -925,7 +831,7 @@ function Calendar({ user }) {
       load();
     }
   };
-  const add = async (listId, title, extra = {}) => {
+  const add = async (bid, listId, title, extra = {}) => {
     try {
       const { card } = await calApi(`/boards/${bid}/cards`, { method: "POST", body: { title, list_id: listId, ...extra } });
       await load();
@@ -934,104 +840,199 @@ function Calendar({ user }) {
       setError(e.message);
     }
   };
+  const quick = async (card, action) => {
+    let note = "";
+    if (action === "reject") {
+      note = window.prompt("What should change? (sent to the team with the post)");
+      if (note === null) return;
+    }
+    try {
+      await calApi(`/boards/${card.board_id}/cards/${card.id}/action`, { method: "POST", body: { action, note } });
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
   const addBoard = async () => {
-    const name = window.prompt("Name of the new board (for example a market or a page)");
+    const name = window.prompt("Name of the new market or page");
     if (!name) return;
     try {
       const { board } = await calApi("/boards", { method: "POST", body: { name } });
       setBoards([...boards, { id: board.id, name: board.name }]);
-      setBid(board.id);
+      setMarket(board.id);
     } catch (e) {
       setError(e.message);
     }
   };
   const fromSource = async (source, video) => {
     setPanel("");
-    const card = await add(data.board.lists[0].id, source.title, {
+    const b = planBoard.board;
+    const card = await add(b.id, b.lists[0].id, source.title, {
       source,
       ...(video ? { media: { kind: "video", url: video.url, project_id: video.id } } : {}),
     });
-    if (card) setOpen(card.id);
+    if (card) setOpen({ bid: b.id, id: card.id });
   };
-  const filter = useCallback(
+  const openPost = (card) => setCompose({ bid: card.board_id, id: card.id });
+  const newPost = (start) => setCompose({ bid: market !== "all" ? market : boards[0]?.id, id: "", start: typeof start === "string" ? start : "" });
+  const planFilter = useCallback(
     (card) => (!labelFilter || (card.labels || []).includes(labelFilter)) && (!mine || (card.members || []).includes(user.id)),
     [labelFilter, mine, user.id]
   );
+  const ready = boards.length > 0 && boards.every((b) => data[b.id]);
+
+  const NavItem = ({ v, label, n }) => (
+    <button className={`${p.nav} ${view === v ? p.on : ""}`} onClick={() => setView(v)}>
+      <span>{label}</span>
+      {n !== undefined && <span className={p.n}>{n}</span>}
+    </button>
+  );
 
   return (
-    <>
-      {q.get("connected") && <div className={c.note}>{q.get("connected")}</div>}
-      <div className={c.bar}>
-        <div className={c.tabs}>
-          {boards.map((b) => (
-            <button key={b.id} className={`${c.tab} ${b.id === bid ? c.on : ""}`} onClick={() => setBid(b.id)}>
-              {b.name}
-            </button>
-          ))}
-          {admin && (
-            <button className={c.tab} onClick={addBoard} title="Add a board">
-              +
-            </button>
-          )}
-        </div>
-        <span className={c.grow} />
-        <div className={c.seg} role="tablist">
-          <button className={view === "board" ? c.on : ""} onClick={() => setView("board")}>
-            Board
+    <div className={p.shell}>
+      <nav className={p.side} aria-label="Content calendar">
+        <button className={p.newPost} onClick={() => newPost()} disabled={!ready}>
+          + New post
+        </button>
+        <div className={p.navHead}>Publishing</div>
+        {VIEWS.map(([v, label]) => (
+          <NavItem key={v} v={v} label={label} />
+        ))}
+        <div className={p.navHead}>Posts</div>
+        {LIST_TABS.map(([k, label]) => (
+          <NavItem key={k} v={"list-" + k} label={label} n={counts[k]} />
+        ))}
+        <div className={p.navHead}>Planning</div>
+        <NavItem v="board" label="Board" />
+        <button className={p.nav} onClick={() => setPanel("source")} disabled={!ready}>
+          <span>From a topic or video</span>
+        </button>
+        <div className={p.navHead}>Settings</div>
+        <button className={p.nav} onClick={() => setPanel("channels")} disabled={!ready}>
+          <span>Channels</span>
+        </button>
+        {admin && (
+          <button className={p.nav} onClick={() => setPanel("settings")} disabled={!ready}>
+            <span>Lists and labels</span>
           </button>
-          <button className={view === "calendar" ? c.on : ""} onClick={() => setView("calendar")}>
-            Calendar
-          </button>
-        </div>
-      </div>
-      {data && (
+        )}
+      </nav>
+
+      <div className={p.main}>
+        {q.get("connected") && <div className={c.note}>{q.get("connected")}</div>}
         <div className={c.bar}>
-          <button className={`${c.btn} ${c.primary}`} onClick={() => setPanel("source")}>
-            + From a topic or video
-          </button>
-          <select id="label-filter" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label="Filter by label">
-            <option value="">All labels</option>
-            {data.board.labels.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
+          <div className={c.tabs}>
+            {view !== "board" && (
+              <button className={`${c.tab} ${market === "all" ? c.on : ""}`} onClick={() => setMarket("all")}>
+                All markets
+              </button>
+            )}
+            {boards.map((b) => (
+              <button key={b.id} className={`${c.tab} ${(market === b.id || (view === "board" && market === "all" && b.id === boards[0].id)) ? c.on : ""}`} onClick={() => setMarket(b.id)}>
+                {b.name}
+              </button>
             ))}
-          </select>
-          <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-            <input id="mine" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only my cards
-          </label>
+            {admin && (
+              <button className={c.tab} onClick={addBoard} title="Add a market or page">
+                +
+              </button>
+            )}
+          </div>
           <span className={c.grow} />
-          {data.settings.dry_run && <span className={`${c.badge} ${c.warn}`}>Test mode: nothing is really posted</span>}
-          <button className={c.btn} onClick={() => setPanel("channels")}>
-            Channels
-          </button>
-          {admin && (
-            <button className={c.btn} onClick={() => setPanel("settings")}>
-              Lists and labels
-            </button>
-          )}
+          {first && first.settings.dry_run && <span className={`${c.badge} ${c.warn}`}>Test mode: nothing is really posted</span>}
         </div>
+        {view !== "board" ? (
+          <div className={c.bar}>
+            <span className={c.muted}>Networks</span>
+            {NETWORKS.map((n) => {
+              const sel = nets.includes(n.key);
+              return (
+                <button key={n.key} className={`${c.chip} ${sel ? c.on : ""}`} style={sel ? { background: n.color } : undefined} onClick={() => setNets(sel ? nets.filter((x) => x !== n.key) : [...nets, n.key])}>
+                  {n.name}
+                </button>
+              );
+            })}
+            <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
+              <input id="mine" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only mine
+            </label>
+          </div>
+        ) : (
+          planBoard && (
+            <div className={c.bar}>
+              <select id="label-filter" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label="Filter by label">
+                <option value="">All labels</option>
+                {planBoard.board.labels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input id="mine-plan" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only my cards
+              </label>
+            </div>
+          )
+        )}
+        {error && <div className={c.error}>{error}</div>}
+        {!ready ? (
+          <p className={c.muted}>Loading…</p>
+        ) : view === "month" ? (
+          <MonthView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
+        ) : view === "week" ? (
+          <WeekView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
+        ) : view === "board" ? (
+          <BoardView
+            board={planBoard.board}
+            users={planBoard.users}
+            filter={planFilter}
+            onOpen={(id) => setOpen({ bid: planBoard.board.id, id })}
+            onMove={(id, fields) => move({ id, board_id: planBoard.board.id }, fields)}
+            onAdd={(listId, title) => add(planBoard.board.id, listId, title)}
+          />
+        ) : (
+          <>
+            <h2 style={{ margin: 0, fontSize: 18 }}>{LIST_TABS.find(([k]) => "list-" + k === view)?.[1]}</h2>
+            <PostList cards={cards} tab={view.slice(5)} admin={admin} onOpen={openPost} onAction={quick} />
+          </>
+        )}
+      </div>
+
+      {open && data[open.bid] && (
+        <CardEditor key={open.id} boardId={open.bid} cardId={open.id} board={data[open.bid].board} users={data[open.bid].users} onClose={() => setOpen(null)} onChanged={load} onCompose={(bid, id) => {
+          setOpen(null);
+          setCompose({ bid, id });
+        }} />
       )}
-      {error && <div className={c.error}>{error}</div>}
-      {!data ? (
-        <p className={c.muted}>{boards.length || error ? "Loading the board…" : "Loading…"}</p>
-      ) : view === "board" ? (
-        <BoardView board={data.board} users={data.users} filter={filter} onOpen={setOpen} onMove={move} onAdd={(listId, title) => add(listId, title)} />
-      ) : (
-        <MonthView board={data.board} filter={filter} onOpen={setOpen} onMove={move} />
+      {compose && first && (
+        <Composer
+          key={compose.id || "new" + compose.start}
+          boards={boards}
+          boardId={compose.bid}
+          cardId={compose.id}
+          start={compose.start}
+          me={first.me}
+          channels={first.channels}
+          sources={sources}
+          onClose={() => {
+            setCompose(null);
+            load();
+          }}
+          onSaved={load}
+          onOpenCard={(bid, id) => {
+            setCompose(null);
+            setOpen({ bid, id });
+          }}
+        />
       )}
-      {open && data && (
-        <CardEditor key={open} boardId={bid} cardId={open} board={data.board} users={data.users} me={data.me} channels={data.channels} sources={sources} onClose={() => setOpen("")} onChanged={load} />
-      )}
-      {panel === "source" && data && <SourcePicker sources={sources} admin={admin} onPick={fromSource} onClose={() => setPanel("")} />}
-      {panel === "channels" && data && <ChannelsPanel channels={data.channels} settings={data.settings} onClose={() => setPanel("")} />}
-      {panel === "settings" && data && (
-        <BoardSettings board={data.board} onSave={async (body) => {
-          await calApi(`/boards/${bid}`, { method: "PATCH", body });
+      {panel === "source" && planBoard && <SourcePicker sources={sources} admin={admin} onPick={fromSource} onClose={() => setPanel("")} />}
+      {panel === "channels" && first && <ChannelsPanel channels={first.channels} settings={first.settings} onClose={() => setPanel("")} />}
+      {panel === "settings" && planBoard && (
+        <BoardSettings board={planBoard.board} onSave={async (body) => {
+          await calApi(`/boards/${planBoard.board.id}`, { method: "PATCH", body });
           await load();
         }} onClose={() => setPanel("")} />
       )}
-    </>
+    </div>
   );
 }
 
