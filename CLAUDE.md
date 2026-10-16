@@ -65,6 +65,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | General ideas: demand signals (Google/YouTube autocomplete EN+FA, IRCC Help Centre, Reddit, site titles, official page text) harvested daily → weekly batch of evergreen ideas grounded on canada.ca pages | `lib/ideas/seeds.js` (subjects, pages), `lib/ideas/signals.js`, `lib/ideas/index.js`, `/api/ideas` |
 | Source text for every writing step (Lexbase item → stored official page → fetched page → excerpt) | `lib/grounding.js` |
 | Video Editing section (login, team, projects, review, corrections, approval). The editing method is NOT here: it lives in english-sugimotovisa (`scripts/rough_cut.py`, GitHub job `rough_cut`); this app only stores state on that repo's `editing-data` branch and starts the job | `lib/editing/**`, `app/editing/**`, `app/api/editing/**`, `middleware.js` |
+| Content calendar (Trello-style boards per market, month view, cards from topics and approved videos, publishing to Instagram, TikTok, YouTube, LinkedIn page, X after Hamed's approval) | `lib/calendar/**`, `app/calendar/**`, `app/api/calendar/**` |
 | UI (one list: new + used topics, Archive filter; Lexbase and Ideas tabs; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
 
 ## Video Editing section
@@ -73,6 +74,15 @@ There is no test suite. Diagnostics live in the deployed app instead:
 - Locally use `EDITING_STORE_DIR=/some/folder` instead of the GitHub token: data stays in that folder and no worker is started.
 - Rules that never change: only pauses, false starts and retakes are removed (decided in english-sugimotovisa, never here); a version can be approved only after it reached review; nothing is posted to Instagram or TikTok from this section; a change to the editing rules goes into english-sugimotovisa's files, never only into this app.
 - A member only ever reads their own projects: every API route loads the project through `loadProject(user, id)`, which answers 403 otherwise. Keep it that way for any new route.
+
+## Content calendar
+
+- Same accounts as Video Editing, same switch: off until `EDITING_SESSION_SECRET` and `EDITING_GITHUB_TOKEN` are set. State is on the `editing-data` branch, one file per board.
+- Everyone signed in adds, edits and moves cards. Only the admin approves, publishes and edits lists and labels. Topic Engine topics can be turned into cards by the admin only; members add their own cards and their approved videos.
+- Approval covers the captions and media of the switched-on channels (`contentHash`); changing either needs a new approval, moving the card or its date does not. A card is published only while its approval holds. Never weaken this: it is how "nothing goes to Instagram or TikTok without Hamed's approval" is kept here.
+- Publishing: `CALENDAR_AUTOPUBLISH=true` arms a clock (instrumentation.js) that publishes due, approved cards every minute. `CALENDAR_DRY_RUN=true` makes every channel only pretend. Failures are never retried by themselves; a post interrupted by a restart is marked "unknown" for a person to check.
+- Publishing screens follow Zoho Social: New post composer (network icons, one caption with per-network customisation via `channels[k].custom`, media, schedule, live previews), month and week calendars coloured by `postStatus`, and post lists (Drafts, Waiting for approval, Scheduled, Published, Failed). Members "Send for approval"; Hamed approves, sends back with a note, or publishes. The Trello board stays as "Planning".
+- Channels: X, LinkedIn and Instagram use the draws poster's keys on Render. TikTok and YouTube are connected from the calendar's Channels panel (tokens stored encrypted with a key from `EDITING_SESSION_SECRET`). Instagram gets the media through a signed app link, `/api/calendar/media/...`.
 
 ## Conventions that matter here
 

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { COOKIE, readSession, sessionSecret } from "./lib/editing/session";
 
-// Login gate. By default it guards ONLY the new Video Editing section (/editing, /api/editing);
+// Login gate. By default it guards ONLY the Video Editing section and the content calendar
+// (/editing, /calendar and their APIs);
 // every existing Topic Engine page and API passes straight through, exactly as before.
 //
 // APP_LOGIN=all extends the same login to the whole app (members see only Video Editing; the
@@ -15,10 +16,15 @@ const OPEN = [
   "/api/telegram/webhook",
   "/api/video/callback",
   "/api/draws/run",
+  "/api/calendar/tick", // the publishing clock; carries its own secret
 ];
 
+// Video Editing and the content calendar share the same team accounts.
 function isEditing(p) {
-  return p === "/editing" || p.startsWith("/editing/") || p.startsWith("/api/editing/");
+  return (
+    p === "/editing" || p.startsWith("/editing/") || p.startsWith("/api/editing/") ||
+    p === "/calendar" || p.startsWith("/calendar/") || p.startsWith("/api/calendar/")
+  );
 }
 
 export async function middleware(req) {
@@ -28,6 +34,7 @@ export async function middleware(req) {
   if (!editing && !all) return NextResponse.next();
   if (!sessionSecret()) return NextResponse.next(); // section off: its pages say so
   if (OPEN.includes(pathname)) return NextResponse.next();
+  if (pathname.startsWith("/api/calendar/media/")) return NextResponse.next(); // signed links for Instagram
   if (pathname === "/api/topics" && searchParams.get("warm") === "1") return NextResponse.next(); // keepwarm job
 
   const api = pathname.startsWith("/api/");

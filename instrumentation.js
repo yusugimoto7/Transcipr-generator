@@ -5,6 +5,15 @@
 // exactly as before.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Content calendar publishing clock: off unless CALENDAR_AUTOPUBLISH=true.
+  if (process.env.CALENDAR_AUTOPUBLISH === "true") {
+    try {
+      const { startCalendarScheduler } = await import("./lib/calendar/scheduler");
+      startCalendarScheduler();
+    } catch (err) {
+      console.error("[calendar] failed to start scheduler:", err);
+    }
+  }
   if (process.env.DRAWS_AUTORUN !== "true") return;
   try {
     const { startScheduler } = await import("./lib/draws/scheduler");

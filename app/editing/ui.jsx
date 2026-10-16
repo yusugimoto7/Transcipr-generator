@@ -20,8 +20,12 @@ export const STATUS = {
 };
 export const ACTIVE = ["queued", "preparing", "deciding", "rendering", "verifying", "delivering"];
 
-export async function api(path, { method = "GET", body } = {}) {
-  const res = await fetch("/api/editing" + path, {
+export function api(path, opts) {
+  return apiAt("/api/editing", path, opts);
+}
+
+export async function apiAt(base, path, { method = "GET", body } = {}) {
+  const res = await fetch(base + path, {
     method,
     headers: body ? { "Content-Type": "application/json" } : {},
     body: body ? JSON.stringify(body) : undefined,
@@ -87,6 +91,7 @@ export function Shell({ children, wide }) {
     window.location.href = "/editing/login";
   };
   const nav = [
+    ["/calendar", "Calendar"],
     ["/editing", "Projects"],
     ["/editing/new", "New project"],
     ["/editing/topics", "Topics"],
@@ -94,10 +99,10 @@ export function Shell({ children, wide }) {
     ["/editing/password", "Password"],
   ];
   return (
-    <div className={s.page}>
+    <div className={s.page} style={wide ? { maxWidth: "none" } : undefined}>
       <header className={s.top}>
         <div className={s.brand}>
-          Video Editing<small>Sugimoto Visa</small>
+          {path.startsWith("/calendar") ? "Content calendar" : "Video Editing"}<small>Sugimoto Visa</small>
         </div>
         {me.user && (
           <nav className={s.nav}>
