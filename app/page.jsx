@@ -1371,6 +1371,14 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   {t.newsletter === "lexbase" && (
                     <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 {t.citation || "Lexbase"}</span>
                   )}
+                  {t.kind === "court" && (t.outcome === "allowed" || t.outcome === "dismissed") && (
+                    <span
+                      title={t.outcome === "allowed" ? "The Court allowed the application" : "The Court dismissed the application"}
+                      style={{ color: t.outcome === "allowed" ? "#0f7b4b" : "#b42318", background: alpha(t.outcome === "allowed" ? "#12945e" : "#d92d20", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}
+                    >
+                      {t.outcome === "allowed" ? "✓ Allowed · پذیرفته شد" : "✕ Dismissed · رد شد"}
+                    </span>
+                  )}
                   {Object.entries(((ws[topicKey(t)] || {}).materials) || {}).map(([k, m]) => MATERIAL_BADGE[k] && (
                     <span key={"m" + k} title={MATERIAL_BADGE[k][1]} style={{ color: "#fff", background: MATERIAL_BADGE[k][2], borderRadius: 99, padding: "1px 8px", fontWeight: 700 }}>
                       {MATERIAL_BADGE[k][0]}
