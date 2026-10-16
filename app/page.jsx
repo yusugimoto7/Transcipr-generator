@@ -2776,12 +2776,32 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 // or the news page) with the proving sentence highlighted, and draws each
 // page at 1080x1920. Screenshots are taken only for topics made into stories.
 const STORY_TONE = "#c2410c";
+// The same names as STORY_BACKGROUNDS in lib/story/index.js.
+const STORY_BGS = [["black", "#000000"], ["white", "#ffffff"], ["red", "#e53935"], ["blue", "#2f6fed"], ["green", "#0e7a4f"], ["yellow", "#ffd60a"]];
+function BgSwatches({ value, onPick, disabled }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {STORY_BGS.map(([k, hex]) => (
+        <button
+          key={k}
+          className="ui-btn"
+          disabled={disabled}
+          aria-label={k}
+          title={k}
+          onClick={() => onPick(k)}
+          style={{ width: 34, height: 34, borderRadius: 99, background: hex, cursor: disabled ? "default" : "pointer", border: value === k ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxShadow: value === k ? `0 0 0 2px #fff inset` : "none" }}
+        />
+      ))}
+    </div>
+  );
+}
 function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
   const [form, setForm] = useState(false);
   useEffect(() => {
     if (openSignal) setForm(true);
   }, [openSignal]);
   const [count, setCount] = useState(1);
+  const [bg, setBg] = useState("black");
   const [notes, setNotes] = useState("");
   const [revNotes, setRevNotes] = useState("");
   const [copiedCap, setCopiedCap] = useState(false);
@@ -2802,7 +2822,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const start = () => {
     if (pages.length && !window.confirm("A new story replaces the current one. Continue?")) return;
     setForm(false);
-    onJob("story", { count, notes: notes.trim() });
+    onJob("story", { count, notes: notes.trim(), bg });
   };
   const send = (target) => {
     if (target === "public" && !window.confirm("Publish this story to the public channel @sugimotovisa?")) return;
@@ -2823,6 +2843,10 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                 {n}
               </button>
             ))}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>رنگ پس‌زمینه</div>
+          <div style={{ marginBottom: 12 }}>
+            <BgSwatches value={bg} onPick={setBg} />
           </div>
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>یادداشت‌ها (اختیاری)</div>
           <textarea
@@ -2886,6 +2910,12 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             ))}
           </div>
 
+          {!running && (
+            <div dir="rtl" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2, flexWrap: "wrap" }}>
+              <span>رنگ پس‌زمینه:</span>
+              <BgSwatches value={story.bg || "black"} onPick={(k) => k !== (story.bg || "black") && onJob("story_draw", { bg: k })} />
+            </div>
+          )}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("story_draw", {})} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
               طراحی {missing} صفحه باقی‌مانده
@@ -2905,7 +2935,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               <button
                 className="ui-btn ui-glow-orange"
                 disabled={!revNotes.trim()}
-                onClick={() => onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true })}
+                onClick={() => onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "black" })}
                 style={{ ...btn(STORY_TONE, "#fff", "none"), width: "100%", marginTop: 8, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
               >
                 ↻ ساخت دوباره با این یادداشت
