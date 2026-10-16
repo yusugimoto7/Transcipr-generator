@@ -85,6 +85,10 @@ There is no test suite. Diagnostics live in the deployed app instead:
 - Publishing screens follow Zoho Social: New post composer (network icons, one caption with per-network customisation via `channels[k].custom`, media, schedule, live previews), month and week calendars coloured by `postStatus`, and post lists (Drafts, Waiting for approval, Scheduled, Published, Failed). Members "Send for approval"; Hamed approves, sends back with a note, or publishes. The Trello board stays as "Planning".
 - Channels: X, LinkedIn and Instagram use the draws poster's keys on Render. TikTok and YouTube are connected from the calendar's Channels panel (tokens stored encrypted with a key from `EDITING_SESSION_SECRET`). Instagram gets the media through a signed app link, `/api/calendar/media/...`.
 
+## Project skills
+
+Team decisions for specific features live in `.claude/skills/` and load in every session: `instagram-story`, `carousel-design`, `video-benchmarks`, `lexbase-court-outcome`. Read the matching one before changing that feature, and update it when Hamed decides something new about it.
+
 ## Conventions that matter here
 
 - **Slow steps run as server jobs, not page fetches.** A phone freezes a page when you switch apps, so anything slow must be started with `startJob` in `app/page.jsx` (POST `/api/jobs`) and read back by polling. Never `await` a model call inside a click handler. Jobs are in memory: a deploy or restart mid-job loses it, and the page offers a retry.
