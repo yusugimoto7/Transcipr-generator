@@ -2776,6 +2776,35 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 // or the news page) with the proving sentence highlighted, and draws each
 // page at 1080x1920. Screenshots are taken only for topics made into stories.
 const STORY_TONE = "#c2410c";
+// Save one story page. On a phone the share sheet offers "Save Image" (to
+// Photos); elsewhere it downloads. The image comes through the app because
+// the page cannot read HCTI's images itself.
+async function saveStoryImage(url, name) {
+  try {
+    const res = await fetch("/api/story/image?u=" + encodeURIComponent(url) + "&name=" + encodeURIComponent(name));
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const blob = await res.blob();
+    const file = new File([blob], name, { type: blob.type || "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return; // closed the share sheet
+      }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (_) {
+    window.open(url, "_blank", "noopener"); // long-press to save from there
+  }
+}
+
 // The same names as STORY_BACKGROUNDS in lib/story/index.js.
 const STORY_BGS = [["purple", "#8a3893"], ["black", "#000000"], ["blue", "#2f6fed"], ["red", "#e53935"], ["green", "#0e7a4f"], ["white", "#ffffff"]];
 function BgSwatches({ value, onPick, disabled }) {
@@ -2903,6 +2932,15 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   </div>
                 )}
                 <div dir="rtl" style={{ padding: "6px 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2 }}>
+                  {pg.image_url && (
+                    <button
+                      className="ui-btn"
+                      onClick={() => saveStoryImage(pg.image_url, `sugimoto-story-${pg.num}.png`)}
+                      style={{ display: "block", marginBottom: 6, background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: fa }}
+                    >
+                      ⬇ ذخیره تصویر
+                    </button>
+                  )}
                   <b style={{ color: C.text }}>{pg.headline}</b>
                   {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحه دیگه استفاده شد.</div>}
                 </div>
