@@ -2777,7 +2777,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 // page at 1080x1920. Screenshots are taken only for topics made into stories.
 const STORY_TONE = "#c2410c";
 // The same names as STORY_BACKGROUNDS in lib/story/index.js.
-const STORY_BGS = [["black", "#000000"], ["white", "#ffffff"], ["red", "#e53935"], ["blue", "#2f6fed"], ["green", "#0e7a4f"], ["yellow", "#ffd60a"]];
+const STORY_BGS = [["black", "#000000"], ["purple", "#8a3a9c"], ["blue", "#2f6fed"], ["red", "#e53935"], ["green", "#0e7a4f"], ["white", "#ffffff"]];
 function BgSwatches({ value, onPick, disabled }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
