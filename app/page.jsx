@@ -3116,6 +3116,64 @@ function wordCount(t) {
   return (String(t || "").trim().match(/\S+/g) || []).length;
 }
 
+// The team's benchmark videos, from the shared Drive folder: a thumbnail of
+// each, which format its shape suits, tap to use it (and its format).
+function BenchmarkPicker({ value, ratio, onPick }) {
+  const [state, setState] = useState({ loading: true, videos: [], folder: "", error: "" });
+  const load = (fresh) => {
+    setState((x) => ({ ...x, loading: true }));
+    fetch("/api/video/benchmarks" + (fresh ? "?fresh=1" : ""), { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setState({ loading: false, videos: j.videos || [], folder: j.folder || "", error: j.error || "" }))
+      .catch((e) => setState((x) => ({ ...x, loading: false, error: String(e.message || e) })));
+  };
+  useEffect(() => {
+    load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Videos that suit the chosen format first.
+  const videos = state.videos.slice().sort((a, b) => (b.ratio === ratio) - (a.ratio === ratio));
+  const tag = (v) => (v.orientation === "vertical" ? "▯ Vertical" : v.orientation === "horizontal" ? "▭ Horizontal" : v.orientation === "square" ? "□ Square" : "");
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11.5, color: C.text3, marginBottom: 8 }}>
+        <span>From the Benchmarks folder</span>
+        {state.folder && <a href={state.folder} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none", fontWeight: 600 }}>Open folder ↗</a>}
+        <button className="ui-btn" onClick={() => load(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 11.5, padding: 0 }}>
+          {state.loading ? "Loading…" : "↻ Refresh"}
+        </button>
+      </div>
+      {state.error && <div style={{ fontSize: 11.5, color: C.reject, marginBottom: 6 }}>{state.error}</div>}
+      {!state.loading && !state.videos.length && !state.error && <div style={{ fontSize: 11.5, color: C.text3 }}>No videos in the folder yet.</div>}
+      <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+        {videos.map((v) => {
+          const on = value === v.url;
+          const fits = !ratio || !v.ratio || v.ratio === ratio;
+          return (
+            <button
+              key={v.id}
+              className="ui-btn"
+              onClick={() => onPick(v)}
+              title={v.title}
+              style={{ flex: "0 0 auto", width: v.orientation === "horizontal" ? 180 : 104, padding: 0, borderRadius: 12, overflow: "hidden", cursor: "pointer", textAlign: "left", background: C.surface, border: on ? `2px solid ${C.orange}` : `1px solid ${C.line}`, opacity: fits || on ? 1 : 0.55 }}
+            >
+              <div style={{ position: "relative", aspectRatio: v.orientation === "horizontal" ? "16 / 9" : v.orientation === "square" ? "1 / 1" : "9 / 16", background: "#111" }}>
+                <img src={v.thumb} alt="" loading="lazy" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+                <span style={{ position: "absolute", left: 6, bottom: 6, fontSize: 10, fontWeight: 700, color: "#fff", background: "rgba(0,0,0,0.6)", borderRadius: 99, padding: "2px 7px" }}>{tag(v)}</span>
+                {on && <span style={{ position: "absolute", right: 6, top: 6, fontSize: 11, fontWeight: 800, color: "#fff", background: C.orange, borderRadius: 99, padding: "1px 7px" }}>✓</span>}
+              </div>
+              <div style={{ padding: "5px 7px 7px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.title}</div>
+                {v.fits && <div style={{ fontSize: 10, color: C.text3 }}>{v.fits}</div>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const LINK_KINDS = { google_drive: "Google Drive", heygen: "HeyGen", youtube: "YouTube", instagram: "Instagram", other: "Video link" };
 function linkKind(url) {
   const u = String(url || "").toLowerCase();
@@ -3304,6 +3362,12 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
           {/* 4. benchmark */}
           <div style={block}>
             <div style={label}>4 · Benchmark video <span style={hint}>optional · the style to match</span></div>
+            <BenchmarkPicker
+              value={d.benchmark}
+              ratio={d.ratio}
+              onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}) })}
+            />
+            <div style={{ ...hint, margin: "10px 0 6px" }}>Or paste a link to a new benchmark video:</div>
             <div style={{ position: "relative" }}>
               <input
                 value={d.benchmark}
