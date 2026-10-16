@@ -694,6 +694,20 @@ export default function App() {
   // made in this session comes from the job.
   const openKeyRef = useRef("");
   const listScrollRef = useRef(0);
+  // A card made from the editor's links joins the list (and is
+  // already in the shared workspace, so the team sees it too).
+  const customJob = (bg[CUSTOM_NEWS_KEY] || {}).custom_news;
+  const customDoneRef = useRef("");
+  useEffect(() => {
+    if (!customJob || customJob.status !== "done" || !customJob.result || !customJob.result.topic) return;
+    if (customDoneRef.current === customJob.id) return;
+    customDoneRef.current = customJob.id;
+    const t = customJob.result.topic;
+    setTopics((prev) => [t, ...prev.filter((x) => topicKey(x) !== topicKey(t))]);
+    patchWs(t, { status: "new" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customJob && customJob.status, customJob && customJob.id]);
+
   const openTopic = (topic, { push = true } = {}) => {
     const key = topicKey(topic);
     if (view === "deck") listScrollRef.current = window.scrollY || 0;
@@ -1022,6 +1036,12 @@ export default function App() {
                   )}
                 </div>
               )}
+
+              <CustomNewsBox
+                job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
+                onStart={(links, note) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note })}
+                onOpen={openTopic}
+              />
 
               {!loadingTopics && <DeckWhy stats={deckStats} />}
 
@@ -1742,6 +1762,83 @@ function IdeasSection({ decisions, ...actions }) {
       ) : (
         <div dir="rtl" className="ui-glass" style={{ ...font, textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontSize: 13 }}>
           هنوز ایده‌ای ساخته نشده.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// News from the editor's own links: paste links (one or more) and a note;
+// the server reads the pages and writes one card from them, which joins the
+// list for everyone. The note sets the angle; facts come only from the pages.
+const CUSTOM_NEWS_KEY = "custom-news";
+function CustomNewsBox({ job, onStart, onOpen }) {
+  const [open, setOpen] = useState(false);
+  const [links, setLinks] = useState("");
+  const [note, setNote] = useState("");
+  const running = !!job && job.status === "running";
+  const failed = !!job && job.status === "error" ? job.error : "";
+  const done = !!job && job.status === "done" && job.result && job.result.topic;
+  const count = (links.match(/https?:\/\/\S+/gi) || []).length;
+  const fa = "'Vazirmatn', sans-serif";
+  const lastId = useRef("");
+  useEffect(() => {
+    // A finished card clears the form for the next one.
+    if (done && job.id !== lastId.current) {
+      lastId.current = job.id;
+      setLinks("");
+      setNote("");
+    }
+  }, [done, job]);
+  const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontSize: 13, lineHeight: 1.7, resize: "vertical", background: C.surface };
+
+  return (
+    <div dir="rtl" className="ui-glass" style={{ marginBottom: 12, borderRadius: 14, border: `1px solid ${alpha(C.teal, 0.35)}`, background: alpha(C.teal, 0.05), fontFamily: fa }}>
+      <button
+        className="ui-btn"
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 13px", background: "transparent", border: "none", cursor: "pointer", fontFamily: fa, fontSize: 13.5, fontWeight: 800, color: C.text }}
+      >
+        <span>🔗 ساخت خبر از لینک‌های خودت</span>
+        <span style={{ color: C.text3, fontSize: 12 }}>{running ? "⏳ در حال ساخت…" : open ? "▲" : "▼"}</span>
+      </button>
+      {(open || running || failed || done) && (
+        <div style={{ padding: "0 13px 13px" }}>
+          {!running && (
+            <>
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 6 }}>لینک‌ها (هر لینک در یک خط، حداکثر ۵)</div>
+              <textarea dir="ltr" value={links} onChange={(e) => setLinks(e.target.value)} rows={3} placeholder={"https://www.canada.ca/…\nhttps://www.cicnews.com/…"} style={{ ...field, fontFamily: "'Inter', monospace", fontSize: 12.5 }} />
+              <div style={{ fontSize: 12, color: C.text2, margin: "8px 0 6px" }}>یادداشت (اختیاری) — زاویه و تأکید؛ فکت‌ها فقط از خود لینک‌ها می‌آیند</div>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="مثلاً: روی اثرش برای دانشجوهای ایرانی تمرکز کن، تاریخ اجرا را برجسته کن…" style={{ ...field, fontFamily: fa }} />
+              <button
+                className="ui-btn ui-glow-orange"
+                disabled={!count}
+                onClick={() => onStart(links, note.trim())}
+                style={{ marginTop: 10, width: "100%", background: count ? C.teal : alpha(C.teal, 0.4), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 14, cursor: count ? "pointer" : "default", fontFamily: fa }}
+              >
+                ساخت خبر از {count || ""} لینک
+              </button>
+            </>
+          )}
+          {running && (
+            <div className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(C.teal, 0.08), fontSize: 13 }}>
+              <span className="ui-pulse">⏳</span> در حال خواندن صفحه‌ها و نوشتن خبر… می‌تونی از این صفحه بری.
+            </div>
+          )}
+          {failed && !running && <div dir="ltr" style={{ marginTop: 8, fontSize: 12, color: C.reject, textAlign: "left" }}>⚠️ {failed}</div>}
+          {done && !running && (
+            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: alpha(C.success, 0.08), border: `1px solid ${alpha(C.success, 0.3)}`, fontSize: 13 }}>
+              ✓ خبر ساخته شد و به فهرست اضافه شد:{" "}
+              <a href={"/?t=" + encodeURIComponent(topicKey(job.result.topic))} onClick={(e) => { e.preventDefault(); onOpen(job.result.topic); }} style={{ color: C.teal, fontWeight: 700 }}>
+                {job.result.topic.title_fa}
+              </a>
+              {(job.result.skipped || []).length > 0 && (
+                <div dir="ltr" style={{ marginTop: 6, fontSize: 11.5, color: C.orangeDeep, textAlign: "left" }}>
+                  Not used: {job.result.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

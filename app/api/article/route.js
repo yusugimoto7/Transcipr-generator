@@ -2,6 +2,7 @@ import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiArticle } from "../../../lib/openai";
 import { getArticleLinks } from "../../../lib/wordpress";
 import { sourceTextFor } from "../../../lib/grounding";
+import { editorNoteBlock } from "../../../lib/custom-news";
 import { articlePrompt, parseArticle, ARTICLE_MIN_CHARS, ARTICLE_MAX_CHARS } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -35,7 +36,7 @@ export async function POST(request) {
     const today = new Date().toLocaleDateString("en-CA");
     // Ground the article in the REAL source article text (never fabricate).
     const sourceText = await sourceTextFor(topic, { maxChars: 5000 });
-    const prompt = articlePrompt(topic, links, today, sourceText);
+    const prompt = articlePrompt(topic, links, today, sourceText) + editorNoteBlock(topic, "en");
 
     async function generate(p) {
       if (openaiEnabled()) {

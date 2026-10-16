@@ -2,6 +2,7 @@ import { tgCall, approvalEnabled } from "../../../lib/telegram";
 import { newsPostPrompt } from "../../../lib/prompts";
 import { getRelatedCandidates } from "../../../lib/wordpress";
 import { sourceTextFor } from "../../../lib/grounding";
+import { editorNoteBlock } from "../../../lib/custom-news";
 import { openaiEnabled, openaiRewrite } from "../../../lib/openai";
 import { callClaude } from "../../../lib/anthropic";
 
@@ -21,7 +22,7 @@ function escapeHtml(s) {
 // real source article. Falls back to the provided fa script if generation fails.
 async function generateNewsPost(topic, fallback) {
   const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
-  const prompt = newsPostPrompt(topic, sourceText);
+  const prompt = newsPostPrompt(topic, sourceText) + editorNoteBlock(topic, "fa");
   try {
     if (openaiEnabled()) {
       try {
