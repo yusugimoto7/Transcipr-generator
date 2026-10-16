@@ -2669,6 +2669,21 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 // the server writes the slides (the Content Wizard's carousel prompt) and
 // draws each one with the image model, then the set can go to Telegram.
 // Everything runs as server jobs and is saved with the topic for the team.
+// Every drawn slide as its own file (not a zip), one after another. The
+// browser may ask once to allow several downloads from this site.
+async function downloadSlides(slides, topic) {
+  const base = String((topic && topic.title_en) || "carousel").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "carousel";
+  for (const s of slides.filter((x) => x.image_url)) {
+    const a = document.createElement("a");
+    a.href = "/api/carousel/download?url=" + encodeURIComponent(s.image_url) + "&name=" + encodeURIComponent(`${base}-${String(s.num).padStart(2, "0")}.jpg`);
+    a.download = "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    await new Promise((r) => setTimeout(r, 700));
+  }
+}
+
 function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
   const [form, setForm] = useState(false);
   // The Carousel tile on the topic page opens the form.
@@ -2763,9 +2778,16 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
           <div dir="rtl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
             <b style={{ fontSize: 14.5 }}>🖼 کاروسل · {slides.length} اسلاید</b>
             {!running && (
-              <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
-                ↻ از نو (بدون نسخه قبلی)
-              </button>
+              <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                {drawn > 0 && (
+                  <button className="ui-btn" onClick={() => downloadSlides(slides, topic)} style={{ background: alpha(C.teal, 0.1), border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 9, padding: "5px 10px", color: C.text, cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
+                    ⬇ دانلود همه ({drawn})
+                  </button>
+                )}
+                <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
+                  ↻ از نو (بدون نسخه قبلی)
+                </button>
+              </span>
             )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
@@ -3302,6 +3324,7 @@ function videoDraftFrom(script, last) {
 function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft, onClose, onFit, onSubmit }) {
   const [d, setD] = useState(initial);
   const set = (patch) => setD((x) => ({ ...x, ...patch }));
+  const [change, setChange] = useState("");
   useEffect(() => {
     onDraft(d);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3315,6 +3338,7 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
     if (appliedRef.current === draftJob.startedAt) return;
     appliedRef.current = draftJob.startedAt;
     set({ script: draftJob.result.en });
+    setChange("");
   }, [draftJob]);
   const fitting = !!draftJob && draftJob.status === "running" && appliedRef.current !== draftJob.startedAt;
   const fitError = draftJob && draftJob.status === "error" && appliedRef.current !== draftJob.startedAt ? draftJob.error : "";
@@ -3441,6 +3465,31 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
             </div>
             {fitting && <div className="ui-pulse" style={{ marginTop: 6, fontSize: 11.5, color: C.text3 }}>Rewriting from the source text only; nothing invented to fill time.</div>}
             {fitError && <div style={{ marginTop: 6, fontSize: 11.5, color: C.reject }}>⚠️ {fitError}</div>}
+
+            {/* Change the script with a note: rewritten from the source text, at the length chosen above. */}
+            <div style={{ marginTop: 12, padding: 10, borderRadius: 12, border: `1px dashed ${alpha(C.orange, 0.45)}`, background: alpha(C.orange, 0.04) }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>✏️ Change the script <span style={hint}>· e.g. "more detail on who qualifies", "simpler words", "start with the deadline"</span></div>
+              <textarea
+                value={change}
+                onChange={(e) => setChange(e.target.value)}
+                rows={2}
+                dir="auto"
+                disabled={fitting}
+                placeholder="What should change?"
+                style={{ ...field, lineHeight: 1.6, resize: "vertical" }}
+              />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <button
+                  className="ui-btn"
+                  disabled={fitting || !change.trim()}
+                  onClick={() => onFit({ script: d.script, seconds, notes: "CHANGE REQUESTED BY THE EDITOR (apply it): " + change.trim() + (d.notes.trim() ? "\nVideo notes: " + d.notes.trim() : "") })}
+                  style={{ background: change.trim() && !fitting ? C.orange : alpha(C.orange, 0.35), color: "#fff", border: "none", borderRadius: 9, padding: "7px 13px", fontSize: 12.5, fontWeight: 700, cursor: change.trim() && !fitting ? "pointer" : "default", fontFamily: FONT }}
+                >
+                  {fitting ? "Rewriting…" : "↻ Regenerate script"}
+                </button>
+                <span style={{ fontSize: 11.5, color: C.text3 }}>Length follows the choice above ({seconds ? fmtDur(seconds) : "not set"}); facts only from the source.</span>
+              </div>
+            </div>
           </div>
 
           {/* 3. notes */}
