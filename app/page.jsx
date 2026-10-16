@@ -2777,7 +2777,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 // page at 1080x1920. Screenshots are taken only for topics made into stories.
 const STORY_TONE = "#c2410c";
 // The same names as STORY_BACKGROUNDS in lib/story/index.js.
-const STORY_BGS = [["black", "#000000"], ["purple", "#8a3a9c"], ["blue", "#2f6fed"], ["red", "#e53935"], ["green", "#0e7a4f"], ["white", "#ffffff"]];
+const STORY_BGS = [["purple", "#8a3893"], ["black", "#000000"], ["blue", "#2f6fed"], ["red", "#e53935"], ["green", "#0e7a4f"], ["white", "#ffffff"]];
 function BgSwatches({ value, onPick, disabled }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -2801,7 +2801,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
     if (openSignal) setForm(true);
   }, [openSignal]);
   const [count, setCount] = useState(1);
-  const [bg, setBg] = useState("black");
+  const [bg, setBg] = useState("purple");
   const [notes, setNotes] = useState("");
   const [revNotes, setRevNotes] = useState("");
   const [copiedCap, setCopiedCap] = useState(false);
@@ -2913,7 +2913,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           {!running && (
             <div dir="rtl" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2, flexWrap: "wrap" }}>
               <span>رنگ پس‌زمینه:</span>
-              <BgSwatches value={story.bg || "black"} onPick={(k) => k !== (story.bg || "black") && onJob("story_draw", { bg: k })} />
+              <BgSwatches value={story.bg || "purple"} onPick={(k) => k !== (story.bg || "purple") && onJob("story_draw", { bg: k })} />
             </div>
           )}
           {!running && missing > 0 && (
@@ -2935,7 +2935,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               <button
                 className="ui-btn ui-glow-orange"
                 disabled={!revNotes.trim()}
-                onClick={() => onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "black" })}
+                onClick={() => onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "purple" })}
                 style={{ ...btn(STORY_TONE, "#fff", "none"), width: "100%", marginTop: 8, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
               >
                 ↻ ساخت دوباره با این یادداشت
