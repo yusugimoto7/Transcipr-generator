@@ -94,7 +94,7 @@ function CardFace({ card, board, users, onOpen }) {
             ))}
           </div>
         )}
-        <div dir="auto" className={`${c.cardTitle} ${hasFarsi(card.title) ? c.rtl : ""}`}>
+        <div dir="auto" className={`${c.cardTitle} ${hasFarsi(card.title) ? c.fa : ""}`}>
           {card.title}
         </div>
         <div className={c.badges}>
@@ -154,7 +154,7 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
   return (
     <section className={c.list} aria-label={list.name}>
       <div className={c.listHead}>
-        <span className={c.grow}>{list.name}</span>
+        <span className={c.grow} dir="auto">{list.name}</span>
         {list.role === "scheduled" && <span title="Approved posts move here">🗓</span>}
         {list.role === "published" && <span title="Posts move here once published">✓</span>}
         <span className={c.count}>{cards.length}</span>
@@ -432,6 +432,14 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   const [saving, setSaving] = useState(""); // "" | "saving" | "saved"
   const [pop, setPop] = useState(""); // labels | members | dates | links | move
   const [title, setTitle] = useState("");
+  // The title box grows with the title, so a long Persian title is never cut to one line.
+  const titleRef = useRef(null);
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [title]);
   const [desc, setDesc] = useState(null); // null: not editing
   const [item, setItem] = useState("");
   const [comment, setComment] = useState("");
@@ -605,11 +613,14 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
         <button className={c.closeX} onClick={close} aria-label="Close">
           ✕
         </button>
-        {(cover || card.media?.kind === "video") && (
+        {cover || card.media?.kind === "video" ? (
           <div className={c.coverBand} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
             {card.media.kind === "video" && <span className={c.coverPlay}>▶</span>}
             {fileCount(card.media) > 1 && <span className={c.coverCount}>{fileCount(card.media)} files</span>}
           </div>
+        ) : (
+          // No picture: a band in the card's first label colour, as Trello's card header.
+          <div className={c.colorBand} style={{ background: labels[0] ? COLORS[labels[0].color] || COLORS.gray : undefined }} aria-hidden />
         )}
         <div className={c.headRow}>
           <span className={c.headIcon} aria-hidden>
@@ -618,7 +629,8 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
           <div className={c.grow} style={{ minWidth: 0 }}>
             <textarea
               id="card-title"
-              className={c.titleInput}
+              ref={titleRef}
+              className={`${c.titleInput} ${hasFarsi(title) ? c.fa : ""}`}
               dir="auto"
               rows={1}
               value={title}
@@ -627,11 +639,15 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
               aria-label="Title"
             />
-            <div className={c.muted}>
-              in list{" "}
-              <button className={c.linkish} onClick={() => setPop(pop === "move" ? "" : "move")}>
-                {list ? list.name : "?"}
+            <div className={c.whereRow}>
+              <span className={c.whereText}>
+                <b>{board.name}</b> / <span dir="auto">{list ? list.name : "?"}</span>
+              </span>
+              <button className={c.moveLink} onClick={() => setPop(pop === "move" ? "" : "move")}>
+                Move
               </button>
+            </div>
+            <div className={c.muted}>
               {card.source && (
                 <span>
                   {" "}
@@ -853,7 +869,10 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
           </div>
 
           <aside className={c.cardSide}>
-            <div className={c.sideHead}>Add to card</div>
+            <div className={c.sideHead}>
+              <span className={c.deskOnly}>Add to card</span>
+              <span className={c.phoneOnly}>Quick actions</span>
+            </div>
             <SideBtn k="members" icon="👤" label="Members" />
             <SideBtn k="labels" icon="🏷" label="Labels" />
             <SideBtn k="check" icon="☑" label="Checklist" onClick={() => document.getElementById("chk-new")?.focus()} />
@@ -1058,6 +1077,8 @@ function Calendar({ user }) {
   const [data, setData] = useState({}); // board id -> { board, users, channels, settings, me }
   const [market, setMarket] = useState("all");
   const [view, setView] = useState("month");
+  const phone = useNarrow(900);
+  const [sheet, setSheet] = useState(""); // phone: "posts" | "more"
   const [nets, setNets] = useState([]); // network filter, empty = all
   const [labelFilter, setLabelFilter] = useState("");
   const [mine, setMine] = useState(false);
@@ -1224,9 +1245,61 @@ function Calendar({ user }) {
     </button>
   );
 
+  // On a phone the left navigation becomes a bottom tab bar (as in Trello's app): the main places
+  // one tap away, the rest in a sheet, instead of a strip of cut-off pills.
+  const phoneSheetItems = sheet === "posts"
+    ? LIST_TABS.map(([k, label]) => ({ key: "list-" + k, label, n: counts[k], onClick: () => setView("list-" + k) }))
+    : [
+        { key: "week", label: "Week", onClick: () => setView("week") },
+        { key: "source", label: "From a topic or video", onClick: () => setPanel("source") },
+        { key: "channels", label: "Channels", onClick: () => setPanel("channels") },
+        ...(admin ? [{ key: "settings", label: "Lists and labels", onClick: () => setPanel("settings") }] : []),
+      ];
+  const tab = (k, icon, label, on, onClick, disabled) => (
+    <button key={k} className={`${p.tabItem} ${on ? p.tabOn : ""}`} onClick={onClick} disabled={disabled} aria-current={on ? "page" : undefined}>
+      <span className={p.tabIcon} aria-hidden>{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+
   return (
     <div className={p.shell}>
-      <nav className={p.side} aria-label="Content calendar">
+      {phone && (
+        <>
+          <nav className={p.tabBar} aria-label="Content calendar">
+            {tab("month", "📅", "Calendar", view === "month" || view === "week", () => setView("month"))}
+            {tab("posts", "📋", "Posts", view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
+            <button className={p.tabNew} onClick={() => newPost()} disabled={!ready} aria-label="New post">
+              +
+            </button>
+            {tab("board", "🗂", "Board", view === "board", () => setView("board"))}
+            {tab("more", "☰", "More", false, () => setSheet(sheet === "more" ? "" : "more"), !ready)}
+          </nav>
+          {sheet && (
+            <div className={p.sheetBg} onClick={() => setSheet("")}>
+              <div className={p.sheet} onClick={(e) => e.stopPropagation()} role="menu">
+                <div className={p.sheetHandle} aria-hidden />
+                <div className={p.sheetTitle}>{sheet === "posts" ? "Posts" : "More"}</div>
+                {phoneSheetItems.map((it) => (
+                  <button
+                    key={it.key}
+                    role="menuitem"
+                    className={`${p.sheetItem} ${view === it.key ? p.sheetOn : ""}`}
+                    onClick={() => {
+                      setSheet("");
+                      it.onClick();
+                    }}
+                  >
+                    <span>{it.label}</span>
+                    {it.n !== undefined && <span className={p.n}>{it.n}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      <nav className={p.side} aria-label="Content calendar" hidden={phone}>
         <button className={p.newPost} onClick={() => newPost()} disabled={!ready}>
           + New post
         </button>

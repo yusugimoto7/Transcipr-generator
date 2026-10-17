@@ -5,6 +5,7 @@ import { isUntrusted } from "../lib/trust";
 import { sameTopic } from "../lib/similar";
 import CalendarStrip from "./CalendarStrip";
 import CalendarButtons from "./CalendarButtons";
+import { AppBar, barStyles } from "./editing/ui";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -964,7 +965,35 @@ export default function App() {
 
   return (
     <div style={wrap}>
-      {/* Header — frosted bar that stays put while you scroll */}
+      {/* Signed in: the same dark bar as the calendar and Video Editing, so the app reads as one.
+          Without accounts the Topic Engine keeps its own frosted header. */}
+      {me ? (
+        <div style={{ position: "sticky", top: 0, zIndex: 40, alignSelf: "stretch", margin: "-12px -16px 14px" }}>
+          <AppBar
+            me={{ loading: false, enabled: true, user: me }}
+            actions={
+              <>
+                <a href="/content-wizard" className={barStyles.actBtn} title="Content Wizard">
+                  ✨ <span className={barStyles.actLabel}>Wizard</span>
+                </a>
+                <button
+                  className={barStyles.actBtn}
+                  onClick={() => {
+                    if (view !== "deck") backToList();
+                    loadTopics(true);
+                    loadWorkspace();
+                  }}
+                  disabled={loadingTopics || streaming}
+                  title="Get fresh topics"
+                >
+                  <span className={loadingTopics || streaming ? "ui-spin" : ""} style={{ display: "inline-block" }}>⟳</span>
+                  <span className={barStyles.actLabel}>{loadingTopics || streaming ? "Loading…" : "Refresh"}</span>
+                </button>
+              </>
+            }
+          />
+        </div>
+      ) : (
       <header
         className="ui-glass"
         style={{
@@ -1005,6 +1034,7 @@ export default function App() {
           </button>
         </nav>
       </header>
+      )}
 
       <JobsBar
         width={colMax}
@@ -1044,12 +1074,6 @@ export default function App() {
             />
           ) : (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <Stat label="New" value={counts.pending} color="#6d5bd0" icon="✦" />
-                <Stat label="Made" value={counts.approved} color={C.success} icon="✓" />
-                <Stat label="Archived" value={counts.rejected} color={C.text3} icon="🗄" />
-              </div>
-
               {topicError && (
                 <div className="ui-fade" style={{ background: alpha(C.reject, 0.1), border: `1px solid ${alpha(C.reject, 0.35)}`, color: C.text, borderRadius: 14, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
                   {topicError}

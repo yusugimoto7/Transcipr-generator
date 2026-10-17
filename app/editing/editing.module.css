@@ -11,6 +11,11 @@
 .app:hover, .barBtn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .appOn, .appOn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
 .spacer { flex: 1 1 auto; }
+.actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.actBtn { display: inline-flex; align-items: center; gap: 6px; color: rgba(255, 255, 255, 0.86); background: none; border: 0; font: inherit; font-size: 14px; font-weight: 600; padding: 7px 10px; border-radius: 8px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.actBtn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.actBtn:disabled { opacity: 0.55; cursor: default; }
+@media (max-width: 700px) { .actLabel { display: none; } }
 .account { position: relative; display: flex; align-items: center; gap: 4px; flex: none; }
 .me { border: 0; background: none; padding: 3px; border-radius: 99px; cursor: pointer; display: grid; }
 .me:hover { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); }

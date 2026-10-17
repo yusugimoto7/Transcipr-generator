@@ -5,6 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import s from "./editing.module.css";
 
+// The bar's classes, for pages outside this folder that add their own buttons to it.
+export { s as barStyles };
+
 export { s };
 
 export const STATUS = {
@@ -43,9 +46,10 @@ export async function apiAt(base, path, { method = "GET", body } = {}) {
   return data;
 }
 
-export function useMe() {
+export function useMe(skip = false) {
   const [state, setState] = useState({ loading: true, enabled: true, user: null });
   const load = useCallback(() => {
+    if (skip) return;
     api("/me").then((d) => setState({ loading: false, enabled: d.enabled, user: d.user })).catch(() => setState({ loading: false, enabled: true, user: null }));
   }, []);
   useEffect(load, [load]);
@@ -106,16 +110,13 @@ const APPS = [
   ["editing", "/editing", "Video Editing", "🎬"],
 ];
 
-// One bar for the whole app (one login): the parts this person may open, and their account.
-export function Shell({ children, wide }) {
-  const me = useMe();
+// The bar itself, shared by every part of the app (the Topic Engine draws it too, with its own
+// buttons in `actions`), so moving between parts never feels like changing apps.
+export function AppBar({ me: given, actions = null }) {
+  const own = useMe(!!given);
+  const me = given || own;
   const path = usePathname();
-  const router = useRouter();
   const [menu, setMenu] = useState(false);
-  useEffect(() => {
-    if (!me.loading && me.enabled && !me.user) router.replace("/editing/login?next=" + encodeURIComponent(path));
-    if (me.user && me.user.must_change && path !== "/editing/password") router.replace("/editing/password");
-  }, [me, path, router]);
   useEffect(() => {
     if (!menu) return;
     const close = (e) => !e.target.closest("[data-menu]") && setMenu(false);
@@ -128,10 +129,7 @@ export function Shell({ children, wide }) {
   };
   const ax = (me.user && me.user.ax) || [];
   const apps = APPS.filter(([k]) => ax.includes(k));
-  const current = path.startsWith("/calendar") ? "calendar" : path.startsWith("/editing") && !path.startsWith("/editing/team") && !path.startsWith("/editing/password") ? "editing" : "";
-  const sub = current === "editing" && ax.includes("editing")
-    ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics to record"]]
-    : [];
+  const current = path === "/" ? "topics" : path.startsWith("/calendar") ? "calendar" : path.startsWith("/editing") && !path.startsWith("/editing/team") && !path.startsWith("/editing/password") ? "editing" : "";
   const appLink = ([k, href, label, icon]) => {
     const cls = `${s.app} ${current === k ? s.appOn : ""}`;
     return href === "/" ? (
@@ -145,14 +143,14 @@ export function Shell({ children, wide }) {
     );
   };
   return (
-    <div className={s.shell}>
-      <header className={s.bar}>
+    <header className={s.bar}>
         <a href={ax.includes("topics") ? "/" : current ? APPS.find(([k]) => k === current)[1] : "/"} className={s.logo} aria-label="Sugimoto Visa">
           <span className={s.mark} aria-hidden />
           <span className={s.logoText}>Sugimoto</span>
         </a>
         {me.user && <nav className={s.apps}>{apps.map(appLink)}</nav>}
         <span className={s.spacer} />
+        {actions && <div className={s.actions}>{actions}</div>}
         {me.user && (
           <div className={s.account} data-menu>
             {ax.includes("team") && (
@@ -194,7 +192,27 @@ export function Shell({ children, wide }) {
             )}
           </div>
         )}
-      </header>
+    </header>
+  );
+}
+
+// One bar for the whole app (one login): the parts this person may open, and their account.
+export function Shell({ children, wide }) {
+  const me = useMe();
+  const path = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    if (!me.loading && me.enabled && !me.user) router.replace("/editing/login?next=" + encodeURIComponent(path));
+    if (me.user && me.user.must_change && path !== "/editing/password") router.replace("/editing/password");
+  }, [me, path, router]);
+  const ax = (me.user && me.user.ax) || [];
+  const current = path.startsWith("/editing") && !path.startsWith("/editing/team") && !path.startsWith("/editing/password") ? "editing" : "";
+  const sub = current === "editing" && ax.includes("editing")
+    ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics to record"]]
+    : [];
+  return (
+    <div className={s.shell}>
+      <AppBar me={me} />
       {sub.length > 0 && me.user && (
         <nav className={s.subnav}>
           {sub.map(([href, label]) => (
