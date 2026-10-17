@@ -2,10 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { api, s, Shell, when } from "../ui";
+import { SECTIONS } from "../../../lib/editing/access";
+
+const SHORT = { topics: "Topic Engine", calendar: "Calendar", editing: "Video Editing", publishing: "Publishing" };
+const HINT = { topics: "topics, scripts, carousels, stories, articles", calendar: "plan and schedule posts (you approve)", editing: "their own video projects", publishing: "send to Telegram and WordPress from the Topic Engine" };
 
 function Team({ user }) {
   const [users, setUsers] = useState(null);
-  const [f, setF] = useState({ name: "", email: "", temp_password: "", may_approve_own: false });
+  const blank = { name: "", email: "", temp_password: "", may_approve_own: false, access: { topics: true, calendar: true, editing: true, publishing: false } };
+  const [f, setF] = useState(blank);
   const [msg, setMsg] = useState({ error: "", ok: "" });
   const [reset, setReset] = useState({});
   const load = () => api("/team").then((d) => setUsers(d.users)).catch((e) => setMsg({ error: e.message, ok: "" }));
@@ -16,9 +21,9 @@ function Team({ user }) {
   const add = async (e) => {
     e.preventDefault();
     try {
-      await api("/team", { method: "POST", body: { name: f.name, email: f.email, password: f.temp_password, may_approve_own: f.may_approve_own } });
+      await api("/team", { method: "POST", body: { name: f.name, email: f.email, password: f.temp_password, may_approve_own: f.may_approve_own, access: f.access } });
       setMsg({ error: "", ok: `${f.name} can now sign in with ${f.email} and the temporary password. They choose their own at first sign-in.` });
-      setF({ name: "", email: "", temp_password: "", may_approve_own: false });
+      setF(blank);
       load();
     } catch (err) {
       setMsg({ error: err.message, ok: "" });
@@ -49,6 +54,7 @@ function Team({ user }) {
                   <th>Name</th>
                   <th>Email</th>
                   <th>Role</th>
+                  <th>Can open</th>
                   <th>May approve own cuts</th>
                   <th>Account</th>
                   <th>New temporary password</th>
@@ -66,6 +72,24 @@ function Team({ user }) {
                     </td>
                     <td>{u.email}</td>
                     <td>{u.role === "admin" ? "Admin" : "Member"}</td>
+                    <td>
+                      {u.role === "admin" ? (
+                        "Everything"
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {SECTIONS.map((k) => {
+                            const has = (u.ax || []).includes(k);
+                            const next = Object.fromEntries(SECTIONS.map((x) => [x, x === k ? !has : (u.ax || []).includes(x)]));
+                            return (
+                              <label key={k} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13, whiteSpace: "nowrap" }} title={HINT[k]}>
+                                <input id={`ax-${k}-${u.id}`} type="checkbox" checked={has} onChange={() => patch(u.id, { access: next }, `${u.name} ${has ? "can no longer open" : "can now open"} ${SHORT[k]} (within a few minutes).`)} />
+                                {SHORT[k]}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       {u.role === "admin" ? (
                         "Always"
@@ -118,6 +142,17 @@ function Team({ user }) {
           <span>Temporary password (give it to them yourself; at least 10 characters)</span>
           <input id="new-pass" className={s.input} value={f.temp_password} onChange={(e) => setF({ ...f, temp_password: e.target.value })} minLength={10} required />
         </label>
+        <div className={s.field}>
+          <span>Can open</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px" }}>
+            {SECTIONS.map((k) => (
+              <label key={k} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 14 }} title={HINT[k]}>
+                <input id={"new-ax-" + k} type="checkbox" checked={!!f.access[k]} onChange={(e) => setF({ ...f, access: { ...f.access, [k]: e.target.checked } })} />
+                {SHORT[k]}
+              </label>
+            ))}
+          </div>
+        </div>
         <label className={s.row} style={{ fontSize: 14 }}>
           <input id="new-approve" type="checkbox" checked={f.may_approve_own} onChange={(e) => setF({ ...f, may_approve_own: e.target.checked })} />
           May approve their own cuts (off: you approve)

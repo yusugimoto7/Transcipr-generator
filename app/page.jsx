@@ -281,6 +281,20 @@ export default function App() {
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [caps, setCaps] = useState({ carousel: true, story: true, telegram: { review: true, public: true }, video: false });
 
+  // The signed-in person (one login for the whole app): which other parts the header links to.
+  const [me, setMe] = useState(null);
+  useEffect(() => {
+    fetch("/api/editing/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setMe(d && d.enabled ? d.user : null))
+      .catch(() => {});
+  }, []);
+  const ax = (me && me.ax) || [];
+  const signOut = async () => {
+    await fetch("/api/editing/auth/logout", { method: "POST" }).catch(() => {});
+    window.location.href = "/editing/login";
+  };
+
   useEffect(() => {
     fetch("/api/capabilities", { cache: "no-store" })
       .then((r) => r.json())
@@ -965,9 +979,7 @@ export default function App() {
           <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
             ✨ <span className="ui-wide">Wizard</span>
           </a>
-          <a href="/editing" className="ui-btn" aria-label="Video Editing" title="Video Editing" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
-            🎬 <span className="ui-wide">Editing</span>
-          </a>
+          <AppMenu me={me} ax={ax} navBtn={navBtn} onSignOut={signOut} />
           <button
             onClick={() => {
               if (view !== "deck") backToList();
@@ -2243,6 +2255,49 @@ function Section({ title, hint, children, innerRef, dir = "rtl" }) {
 const card = { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" };
 
 // One thing that can be made from the topic: what it is, and where it stands.
+// The other parts of the app (one login): a small menu so the header stays one line on a phone.
+function AppMenu({ me, ax, navBtn, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  const items = [
+    (!me || ax.includes("calendar")) && ["/calendar", "📅", "Content calendar"],
+    (!me || ax.includes("editing")) && ["/editing", "🎬", "Video Editing"],
+    ax.includes("team") && ["/editing/team", "👥", "Team · who can open what"],
+    me && ["/editing/password", "🔑", "Change password"],
+  ].filter(Boolean);
+  const row = { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, color: C.text, textDecoration: "none", fontSize: 14, fontWeight: 600, fontFamily: FONT, background: "none", border: "none", width: "100%", cursor: "pointer", textAlign: "left" };
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button className="ui-btn" onClick={() => setOpen((o) => !o)} aria-label="Apps and account" title="Calendar, Video Editing, Team" style={{ ...navBtn, fontWeight: 800, color: me ? C.orange : C.text }}>
+        {me ? String(me.name || "?").trim().charAt(0).toUpperCase() : "☰"}
+      </button>
+      {open && (
+        <div role="menu" style={{ position: "absolute", right: 0, top: 44, zIndex: 50, minWidth: 230, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 12px 32px rgba(16,24,40,0.16)", padding: 6, direction: "ltr" }}>
+          {me && <div style={{ padding: "8px 12px 10px", fontSize: 12.5, color: C.text3, borderBottom: `1px solid ${C.line}`, marginBottom: 4, fontFamily: FONT }}>Signed in as <b style={{ color: C.text }}>{me.name}</b></div>}
+          {items.map(([href, icon, label]) => (
+            <a key={href} href={href} role="menuitem" style={row}>
+              <span style={{ width: 20, textAlign: "center" }}>{icon}</span>
+              {label}
+            </a>
+          ))}
+          {me && (
+            <button role="menuitem" onClick={onSignOut} style={{ ...row, color: C.reject }}>
+              <span style={{ width: 20, textAlign: "center" }}>↩</span>
+              Sign out
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ActionTile({ icon, title, sub, tone, status, onClick, disabled }) {
   const s = status || { label: "", tone: C.text3 };
   return (
@@ -2411,7 +2466,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
   const vStatus = vRunning ? "sending" : videoJob && videoJob.status === "error" && !(video && video.requested_at > (videoJob.startedAt || 0)) ? "error" : (video && video.status) || "";
 
   const tiles = [
-    {
+    caps.publishing !== false && {
       k: "telegram", icon: "✈️", title: "Telegram post", tone: C.teal,
       sub: "پست خبری تمیز برای کانال بررسی تیم",
       onClick: sendTelegram,
@@ -2597,7 +2652,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {!loading && !error && (
         <Section title="ساخت از این موضوع" hint="هر کدوم جدا؛ هیچ‌چیز خودکار ارسال نمی‌شه">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-            {tiles.map((t) => <ActionTile key={t.k} {...t} />)}
+            {tiles.filter(Boolean).map((t) => <ActionTile key={t.k} {...t} />)}
           </div>
           {tg.state === "error" && tg.msg && (
             <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, direction: "ltr", textAlign: "center", fontFamily: FONT }}>Telegram: {tg.msg}</div>
@@ -2650,7 +2705,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                 </div>
               </div>
 
-              {pubState !== "done" ? (
+              {caps.publishing === false ? null : pubState !== "done" ? (
                 <button
                   className="ui-btn ui-glow-orange"
                   onClick={publishArticle}
@@ -2685,9 +2740,9 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                 <button className="ui-btn" onClick={downloadDoc} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text }}>
                   {docState === "downloaded" ? "دانلود شد ✓" : "📄 دانلود فایل Word"}
                 </button>
-                <button className="ui-btn" onClick={sendDocToTelegram} disabled={docState === "sending"} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text, opacity: docState === "sending" ? 0.6 : 1 }}>
+                {caps.publishing !== false && <button className="ui-btn" onClick={sendDocToTelegram} disabled={docState === "sending"} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text, opacity: docState === "sending" ? 0.6 : 1 }}>
                   {docState === "sending" ? "در حال ارسال…" : docState === "sent" ? "ارسال شد ✓" : "✈ فایل به تلگرام"}
-                </button>
+                </button>}
               </div>
               {docState === "error" && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: FONT }}>{docMsg}</div>

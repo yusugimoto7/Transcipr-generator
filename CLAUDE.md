@@ -71,7 +71,14 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 ## Video Editing section
 
-- Off unless `EDITING_SESSION_SECRET` and `EDITING_GITHUB_TOKEN` are set; then only `/editing` and `/api/editing` need a login. `APP_LOGIN=all` puts the whole app behind the same login (members see only Video Editing); leave it off until Hamed decides.
+- Off unless `EDITING_SESSION_SECRET` and `EDITING_GITHUB_TOKEN` are set; then Video Editing, the calendar and the Team page need a login. `APP_LOGIN=all` puts the whole Topic Engine behind the same login too (one sign-in for everything).
+
+## One login, access per person
+
+- Accounts are the Video Editing accounts (`lib/editing/auth.js`, users on the `editing-data` branch). Hamed (admin) has everything; each member has what he ticks on the Team page: `topics`, `calendar`, `editing`, `publishing` (Telegram and WordPress sends from the Topic Engine). Accounts from before access existed have `calendar` + `editing`. Rules in `lib/editing/access.js`.
+- `middleware.js` maps every path to a part (`sectionOf`) and checks a 5-minute access ticket (`ve_access`, signed like the session) that it renews from the stored account through `/api/editing/auth/ticket` on this server (`http://127.0.0.1:$PORT`). `guard()` re-checks calendar/editing/team access against the stored account on every API call, so taking those away applies at once; for the Topic Engine it applies when the ticket renews.
+- Machine callers stay open in `access.js` (Telegram webhook and file fetches, `/api/video/callback`, `/api/draws/*` with its key, `/api/calendar/tick`, `/api/calendar/media/*`, `/api/topics?warm=1`). A new machine endpoint must be added there or it will start answering 401 once `APP_LOGIN=all` is on.
+- Without `publishing`, `/api/capabilities` reports Telegram off (the send buttons hide) and `/api/jobs` refuses the send kinds (`PUBLISH_JOBS`); `/api/telegram`, `/api/publish`, `/api/docfile`, `/api/gdoc` refuse POST. `/api/telegram/setup` and `/updates` are admin only.
 - Locally use `EDITING_STORE_DIR=/some/folder` instead of the GitHub token: data stays in that folder and no worker is started.
 - Rules that never change: only pauses, false starts and retakes are removed (decided in english-sugimotovisa, never here); a version can be approved only after it reached review; nothing is posted to Instagram or TikTok from this section; a change to the editing rules goes into english-sugimotovisa's files, never only into this app.
 - A member only ever reads their own projects: every API route loads the project through `loadProject(user, id)`, which answers 403 otherwise. Keep it that way for any new route.

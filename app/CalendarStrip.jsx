@@ -35,7 +35,7 @@ export default function CalendarStrip({ topic, version, C, FONT }) {
       const res = await fetch(`/api/calendar/topic?key=${encodeURIComponent(key)}`, { cache: "no-store" });
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) return setState({ phase: "signin" });
-      if (res.status === 503) return setState({ phase: "off" });
+      if (res.status === 503 || res.status === 403) return setState({ phase: "off" });
       if (res.status === 404) return setState({ phase: "ready", made: {}, cards: [], boards: [] });
       if (!res.ok) throw new Error(d.error || `error ${res.status}`);
       setState({ phase: "ready", ...d });
