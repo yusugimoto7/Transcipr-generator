@@ -8,12 +8,12 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Shell, apiAt } from "../editing/ui";
+import { Shell, apiAt, Avatar } from "../editing/ui";
 import c from "./calendar.module.css";
 import p from "./publishing.module.css";
 import Composer, { NetChip, StatusPill } from "./Composer";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf } from "./Publishing";
-import { NETWORKS, onNetworks } from "./channels";
+import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
 
 const CH = [
   ["instagram", "IG", "Instagram"], ["tiktok", "TT", "TikTok"], ["youtube", "YT", "YouTube"],
@@ -53,55 +53,80 @@ const hasFarsi = (t) => /[؀-ۿ]/.test(t || "");
 
 // ---- card face ----------------------------------------------------------------------------------
 
-function CardFace({ card, board, users, onOpen, compact }) {
+function fileCount(media) {
+  if (!media || media.kind === "none") return 0;
+  return (media.items && media.items.length) || (media.url ? 1 : 0);
+}
+
+// When a date is: Trello colours a due date red when late and yellow when close.
+function dueState(card) {
+  if (!card.due_at) return "";
+  if (card.status === "published") return "done";
+  const t = new Date(card.due_at).getTime() - Date.now();
+  return t < 0 ? "late" : t < 24 * 3600 * 1000 ? "soon" : "";
+}
+
+function CardFace({ card, board, users, onOpen }) {
   const labels = (card.labels || []).map((id) => board.labels.find((l) => l.id === id)).filter(Boolean);
   const people = (card.members || []).map((id) => users.find((u) => u.id === id)).filter(Boolean);
   const done = (card.checklist || []).filter((i) => i.done).length;
-  const overdue = card.due_at && new Date(card.due_at) < new Date() && !Object.keys(card.publish || {}).length;
+  const files = fileCount(card.media);
+  const cover = thumbOf(card.media);
+  const due = dueState(card);
+  const st = STATUS[card.status] || STATUS.draft;
+  const nets = onNetworks(card);
   return (
     <div className={c.card} onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen()}>
-      {labels.length > 0 && (
-        <div className={c.labels}>
-          {labels.map((l) => (
-            <span key={l.id} className={c.label} style={{ background: COLORS[l.color] || COLORS.gray }}>
-              {l.name}
-            </span>
-          ))}
+      {(cover || card.media?.kind === "video") && (
+        <div className={c.cover} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+          {card.media.kind === "video" && <span className={c.coverPlay}>▶</span>}
+          {files > 1 && <span className={c.coverCount}>1/{files}</span>}
         </div>
       )}
-      <div dir="auto" className={hasFarsi(card.title) ? c.rtl : ""}>
-        {card.title}
-      </div>
-      {!compact && (
+      <div className={c.cardBody}>
+        {labels.length > 0 && (
+          <div className={c.labels}>
+            {labels.map((l) => (
+              <span key={l.id} className={c.label} style={{ background: COLORS[l.color] || COLORS.gray }} title={l.name}>
+                {l.name}
+              </span>
+            ))}
+          </div>
+        )}
+        <div dir="auto" className={`${c.cardTitle} ${hasFarsi(card.title) ? c.rtl : ""}`}>
+          {card.title}
+        </div>
         <div className={c.badges}>
-          {card.publish_at && <span className={c.badge}>🗓 {shortWhen(card.publish_at)}</span>}
-          {card.due_at && <span className={`${c.badge} ${overdue ? c.bad : ""}`}>Due {shortWhen(card.due_at)}</span>}
+          {(card.publish_at || nets.length > 0) && (
+            <span className={c.badge} style={{ background: st.color, color: "#fff" }} title={st.name}>
+              {card.status === "published" ? "✓" : "🗓"} {card.publish_at ? shortWhen(card.publish_at) : st.name}
+            </span>
+          )}
+          {card.due_at && (
+            <span className={`${c.badge} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} title="Ready by">
+              🕑 {shortWhen(card.due_at)}
+            </span>
+          )}
+          {card.description && <span className={c.icon} title="This card has a description">≡</span>}
           {card.checklist && card.checklist.length > 0 && (
-            <span className={`${c.badge} ${done === card.checklist.length ? c.ok : ""}`}>
+            <span className={`${c.badge} ${done === card.checklist.length ? c.ok : ""}`} title="Checklist">
               ☑ {done}/{card.checklist.length}
             </span>
           )}
-          {card.approved && <span className={`${c.badge} ${c.ok}`}>Approved</span>}
-          {card.stale_approval && <span className={`${c.badge} ${c.warn}`}>Changed after approval</span>}
-          {CH.filter(([k]) => card.channels && card.channels[k] && card.channels[k].on).map(([k, short]) => {
-            const st = (card.publish || {})[k];
-            return (
-              <span key={k} title={st ? `${k}: ${st.status}` : k} className={`${c.chan} ${st && st.status === "published" ? c.done : ""} ${st && ["failed", "unknown", "missed"].includes(st.status) ? c.failed : ""}`}>
-                {short}
-              </span>
-            );
-          })}
+          {files > 0 && <span className={c.icon} title={`${files} file${files > 1 ? "s" : ""}`}>📎 {files}</span>}
+          {card.stale_approval && <span className={`${c.badge} ${c.warn}`}>changed after approval</span>}
+          {nets.map((n) => (
+            <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
+          ))}
           {people.length > 0 && (
             <span className={c.avatars}>
               {people.map((u) => (
-                <span key={u.id} className={c.avatar} title={u.name}>
-                  {initials(u.name)}
-                </span>
+                <Avatar key={u.id} user={u} size={24} />
               ))}
             </span>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -129,6 +154,8 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
     <section className={c.list} aria-label={list.name}>
       <div className={c.listHead}>
         <span className={c.grow}>{list.name}</span>
+        {list.role === "scheduled" && <span title="Approved posts move here">🗓</span>}
+        {list.role === "published" && <span title="Posts move here once published">✓</span>}
         <span className={c.count}>{cards.length}</span>
       </div>
       <SortableContext items={cards.map((x) => x.id)} strategy={verticalListSortingStrategy}>
@@ -143,8 +170,8 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
           <textarea id={`new-${list.id}`} className={c.textarea} style={{ minHeight: 56 }} autoFocus placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submit(e)} />
           <div className={c.bar}>
             <button className={`${c.btn} ${c.primary}`}>Add card</button>
-            <button type="button" className={`${c.btn} ${c.ghost}`} onClick={() => setAdding(false)}>
-              Cancel
+            <button type="button" className={`${c.btn} ${c.ghost}`} onClick={() => setAdding(false)} aria-label="Cancel">
+              ✕
             </button>
           </div>
         </form>
@@ -228,6 +255,53 @@ function BoardView({ board, users, filter, onOpen, onMove, onAdd }) {
   );
 }
 
+// A phone: the month grid becomes an agenda (days with their posts), as Trello does on mobile.
+function useNarrow(px = 700) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia(`(max-width: ${px}px)`);
+    const on = () => setNarrow(m.matches);
+    on();
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, [px]);
+  return narrow;
+}
+
+function Agenda({ days, month, byDay, dues, onOpen, onNew }) {
+  const today = dayKey(new Date());
+  const shown = days.filter((d) => d.getMonth() === month && ((byDay[dayKey(d)] || []).length || (dues[dayKey(d)] || []).length || dayKey(d) === today));
+  return (
+    <div className={c.agenda}>
+      {shown.map((d) => {
+        const k = dayKey(d);
+        return (
+          <section key={k} className={`${c.agDay} ${k === today ? c.agToday : ""}`}>
+            <div className={c.agHead}>
+              <span className={c.agNum}>{d.getDate()}</span>
+              <span>{d.toLocaleDateString([], { weekday: "long" })} · {d.toLocaleDateString([], { month: "short" })}</span>
+              <span className={c.grow} />
+              <button className={`${c.btn} ${c.ghost}`} onClick={() => onNew(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18).toISOString())} aria-label="New post on this day">
+                +
+              </button>
+            </div>
+            {(byDay[k] || []).map((card) => (
+              <Tile key={card.id} card={card} onOpen={onOpen} drag={false} />
+            ))}
+            {(dues[k] || []).map((card) => (
+              <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
+                Due: {card.title}
+              </span>
+            ))}
+            {!(byDay[k] || []).length && !(dues[k] || []).length && <span className={c.muted}>Nothing planned today.</span>}
+          </section>
+        );
+      })}
+      {shown.length === 0 && <p className={c.muted}>Nothing scheduled this month.</p>}
+    </div>
+  );
+}
+
 // ---- month view ---------------------------------------------------------------------------------
 
 function DayCell({ date, month, cards, dues, onOpen, onNew }) {
@@ -299,6 +373,7 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
     const when = new Date(y, m - 1, d, old ? old.getHours() : 18, old ? old.getMinutes() : 0);
     if (!old || when.getTime() !== old.getTime()) onMove(card, { publish_at: when.toISOString() });
   };
+  const narrow = useNarrow();
   const title = anchor.toLocaleString([], { month: "long", year: "numeric" });
   return (
     <DndContext sensors={sensors} onDragStart={(e) => setActive(e.active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
@@ -318,6 +393,12 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
           <input id="show-due" type="checkbox" checked={showDue} onChange={(e) => setShowDue(e.target.checked)} /> Show due dates
         </label>
       </div>
+      {narrow ? (
+        <>
+          <Agenda days={days} month={anchor.getMonth()} byDay={byDay} dues={dueDay} onOpen={onOpen} onNew={onNew} />
+          {unscheduled.length > 0 && <Unscheduled cards={unscheduled} onOpen={onOpen} />}
+        </>
+      ) : (
       <div className={c.calWrap}>
         <Unscheduled cards={unscheduled} onOpen={onOpen} />
         <div className={c.gridScroll}>
@@ -333,6 +414,7 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
           </div>
         </div>
       </div>
+      )}
       <DragOverlay>{active ? <div className={c.mini}>{cards.find((x) => x.id === active)?.title}</div> : null}</DragOverlay>
     </DndContext>
   );
@@ -340,60 +422,65 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
 
 // ---- card editor --------------------------------------------------------------------------------
 
-function CardEditor({ boardId, cardId, board, users, onClose, onChanged, onCompose }) {
+// A card opened, as on Trello: everything saves as you change it (no Save button); title and
+// description save when you leave the field.
+function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onCompose }) {
   const [card, setCard] = useState(null);
-  const [draft, setDraft] = useState(null);
   const [comments, setComments] = useState([]);
-  const [msg, setMsg] = useState({ error: "", ok: "" });
-  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(""); // "" | "saving" | "saved"
+  const [pop, setPop] = useState(""); // labels | members | dates | links | move
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState(null); // null: not editing
+  const [item, setItem] = useState("");
   const [comment, setComment] = useState("");
+  const [links, setLinks] = useState({});
   const load = useCallback(async () => {
     const d = await calApi(`/boards/${boardId}/cards/${cardId}`);
     setCard(d.card);
-    setDraft(d.card);
+    setTitle(d.card.title);
+    setLinks(d.card.links || {});
     setComments(d.comments);
   }, [boardId, cardId]);
   useEffect(() => {
-    load().catch((e) => setMsg({ error: e.message, ok: "" }));
+    load().catch((e) => setError(e.message));
   }, [load]);
-  const dirty = card && draft && JSON.stringify(card) !== JSON.stringify(draft);
-  const close = () => {
-    if (dirty && !window.confirm("Close without saving your changes?")) return;
+  useEffect(() => {
+    const esc = (e) => e.key === "Escape" && (pop ? setPop("") : close());
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  });
+
+  const commit = async (fields) => {
+    setCard((x) => ({ ...x, ...fields }));
+    setSaving("saving");
+    setError("");
+    try {
+      const d = await calApi(`/boards/${boardId}/cards/${cardId}`, { method: "PATCH", body: fields });
+      setCard((x) => ({ ...x, ...d.card }));
+      setSaving("saved");
+      onChanged();
+    } catch (e) {
+      setError(e.message);
+      setSaving("");
+      load().catch(() => {});
+    }
+  };
+  const saveTitle = () => title.trim() && title.trim() !== card.title && commit({ title: title.trim() });
+  const close = async () => {
+    if (card && title.trim() && title.trim() !== card.title) await commit({ title: title.trim() });
+    if (card && desc !== null && desc !== card.description && !window.confirm("Close without saving the description?")) return;
     onClose();
   };
-  const set = (k, v) => setDraft({ ...draft, [k]: v });
-  const save = async () => {
-    setBusy(true);
+  const action = async (a) => {
     try {
-      const fields = ["title", "description", "labels", "members", "start_at", "due_at", "links", "checklist", "list_id"];
-      const body = {};
-      for (const f of fields) if (JSON.stringify(card[f]) !== JSON.stringify(draft[f])) body[f] = draft[f];
-      const d = await calApi(`/boards/${boardId}/cards/${cardId}`, { method: "PATCH", body });
-      setCard({ ...card, ...d.card });
-      setDraft({ ...card, ...d.card });
-      setMsg({ error: "", ok: "Saved." });
+      await calApi(`/boards/${boardId}/cards/${cardId}/action`, { method: "POST", body: { action: a } });
       onChanged();
-    } catch (e) {
-      setMsg({ error: e.message, ok: "" });
-    }
-    setBusy(false);
-  };
-  const action = async (a, extra = {}) => {
-    setBusy(true);
-    try {
-      await calApi(`/boards/${boardId}/cards/${cardId}/action`, { method: "POST", body: { action: a, ...extra } });
-      if (a === "archive") {
-        onChanged();
-        onClose();
-        return;
-      }
+      if (a === "archive") return onClose();
       await load();
-      onChanged();
-      setMsg({ error: "", ok: "Done." });
     } catch (e) {
-      setMsg({ error: e.message, ok: "" });
+      setError(e.message);
     }
-    setBusy(false);
   };
   const addComment = async (e) => {
     e.preventDefault();
@@ -403,182 +490,384 @@ function CardEditor({ boardId, cardId, board, users, onClose, onChanged, onCompo
       setComment("");
       await load();
     } catch (err) {
-      setMsg({ error: err.message, ok: "" });
+      setError(err.message);
     }
   };
-  const nameOf = (id) => (users.find((u) => u.id === id) || {}).name || (id === "scheduler" ? "Scheduler" : "Someone");
+  const person = (id) => users.find((u) => u.id === id) || { id, name: id === "scheduler" ? "Scheduler" : "Someone" };
+  const toggle = (k, id) => commit({ [k]: (card[k] || []).includes(id) ? card[k].filter((x) => x !== id) : [...(card[k] || []), id] });
+  const setCheck = (list) => commit({ checklist: list });
+
+  if (!card)
+    return (
+      <div className={c.modalBg}>
+        <div className={c.modal2} style={{ padding: 24 }}>
+          <p className={c.muted}>{error || "Loading…"}</p>
+          {error && (
+            <button className={c.btn} onClick={onClose}>
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+    );
+
+  const list = board.lists.find((l) => l.id === card.list_id);
+  const labels = (card.labels || []).map((id) => board.labels.find((l) => l.id === id)).filter(Boolean);
+  const people = (card.members || []).map(person);
+  const cover = thumbOf(card.media);
+  const done = (card.checklist || []).filter((i) => i.done).length;
+  const total = (card.checklist || []).length;
+  const due = dueState(card);
+  const SideBtn = ({ k, icon, label, onClick }) => (
+    <button className={`${c.sideBtn} ${pop === k ? c.sideOn : ""}`} onClick={onClick || (() => setPop(pop === k ? "" : k))}>
+      <span aria-hidden>{icon}</span> {label}
+    </button>
+  );
+  const popover = pop && (
+    <div className={c.pop} role="dialog" aria-label={pop}>
+      <div className={c.popHead}>
+        <b>{{ labels: "Labels", members: "Members", dates: "Dates", links: "Links", move: "Move card" }[pop]}</b>
+        <button className={`${c.btn} ${c.ghost}`} onClick={() => setPop("")} aria-label="Close">
+          ✕
+        </button>
+      </div>
+      {pop === "labels" &&
+        board.labels.map((l) => {
+          const on = (card.labels || []).includes(l.id);
+          return (
+            <label key={l.id} className={c.popRow}>
+              <input type="checkbox" checked={on} onChange={() => toggle("labels", l.id)} />
+              <span className={c.popLabel} style={{ background: COLORS[l.color] || COLORS.gray }}>
+                {l.name}
+              </span>
+            </label>
+          );
+        })}
+      {pop === "members" &&
+        users.map((u) => (
+          <label key={u.id} className={c.popRow}>
+            <input type="checkbox" checked={(card.members || []).includes(u.id)} onChange={() => toggle("members", u.id)} />
+            <Avatar user={u} size={26} />
+            <span>{u.name}</span>
+          </label>
+        ))}
+      {pop === "dates" && (
+        <>
+          <label className={c.field}>
+            Start
+            <input id="start-at" type="datetime-local" className={c.input} value={toLocalInput(card.start_at)} onChange={(e) => commit({ start_at: fromLocalInput(e.target.value) })} />
+          </label>
+          <label className={c.field}>
+            Due (ready by)
+            <input id="due-at" type="datetime-local" className={c.input} value={toLocalInput(card.due_at)} onChange={(e) => commit({ due_at: fromLocalInput(e.target.value) })} />
+          </label>
+          <span className={c.muted}>The publish time is set in the post.</span>
+        </>
+      )}
+      {pop === "links" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            commit({ links });
+            setPop("");
+          }}
+          style={{ display: "flex", flexDirection: "column", gap: 8 }}
+        >
+          {LINKS.map(([k, name]) => (
+            <label key={k} className={c.field}>
+              {name}
+              <input id={`link-${k}`} className={c.input} placeholder="https://" value={links[k] || ""} onChange={(e) => setLinks({ ...links, [k]: e.target.value })} />
+            </label>
+          ))}
+          <button className={`${c.btn} ${c.primary}`}>Save links</button>
+        </form>
+      )}
+      {pop === "move" && (
+        <label className={c.field}>
+          List
+          <select id="card-list" className={c.select} value={card.list_id} onChange={(e) => (commit({ list_id: e.target.value }), setPop(""))}>
+            {board.lists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+
   return (
     <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className={c.modal} role="dialog" aria-modal="true" aria-label="Card">
-        {!draft ? (
-          <p className={c.muted}>{msg.error || "Loading…"}</p>
-        ) : (
-          <>
-            <div className={c.titleRow}>
-              <input id="card-title" className={c.titleInput} dir="auto" value={draft.title} onChange={(e) => set("title", e.target.value)} aria-label="Title" />
-              <button className={`${c.btn} ${c.ghost}`} onClick={close} aria-label="Close">
-                ✕
-              </button>
-            </div>
+      <div className={c.modal2} role="dialog" aria-modal="true" aria-label={card.title}>
+        <button className={c.closeX} onClick={close} aria-label="Close">
+          ✕
+        </button>
+        {(cover || card.media?.kind === "video") && (
+          <div className={c.coverBand} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+            {card.media.kind === "video" && <span className={c.coverPlay}>▶</span>}
+            {fileCount(card.media) > 1 && <span className={c.coverCount}>{fileCount(card.media)} files</span>}
+          </div>
+        )}
+        <div className={c.headRow}>
+          <span className={c.headIcon} aria-hidden>
+            🗂
+          </span>
+          <div className={c.grow} style={{ minWidth: 0 }}>
+            <textarea
+              id="card-title"
+              className={c.titleInput}
+              dir="auto"
+              rows={1}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
+              aria-label="Title"
+            />
             <div className={c.muted}>
-              In list{" "}
-              <select id="card-list" className={c.select} value={draft.list_id} onChange={(e) => set("list_id", e.target.value)}>
-                {board.lists.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>{" "}
-              {draft.source && (
+              in list{" "}
+              <button className={c.linkish} onClick={() => setPop(pop === "move" ? "" : "move")}>
+                {list ? list.name : "?"}
+              </button>
+              {card.source && (
                 <span>
-                  · from {draft.source.type === "project" ? "Video Editing" : "the Topic Engine"}: <b dir="auto">{draft.source.title}</b>
-                  {draft.source.url && (
+                  {" "}
+                  · from {card.source.type === "project" ? "Video Editing" : "the Topic Engine"}: <b dir="auto">{card.source.title}</b>
+                  {card.source.url && (
                     <>
                       {" "}
-                      <a href={draft.source.url} target="_blank" rel="noreferrer">
-                        source
+                      <a href={card.source.url} target="_blank" rel="noreferrer">
+                        source ↗
                       </a>
                     </>
                   )}
                 </span>
               )}
             </div>
-            <div className={c.modalGrid}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-                <div className={c.section}>
-                  <h3>Description</h3>
-                  <textarea id="card-desc" className={c.textarea} dir="auto" value={draft.description} onChange={(e) => set("description", e.target.value)} placeholder="Notes, script, brief…" />
-                </div>
-                <div className={c.section}>
-                  <h3>Post</h3>
-                  <div className={c.bar}>
-                    <StatusPill status={card.status} />
-                    {onNetworks(card).map((n) => (
-                      <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
-                    ))}
-                    {card.publish_at && <span className={c.muted}>{shortWhen(card.publish_at)}</span>}
-                  </div>
-                  {captionOf(card) && (
-                    <p dir="auto" className={c.muted} style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                      {captionOf(card).slice(0, 280)}
-                    </p>
-                  )}
-                  <div>
-                    <button className={`${c.btn} ${c.primary}`} onClick={() => (dirty && !window.confirm("Close without saving your changes?") ? null : onCompose(boardId, cardId))}>
-                      {onNetworks(card).length ? "Edit the post" : "Write the post"}
-                    </button>
-                  </div>
-                </div>
-                <div className={c.section}>
-                  <h3>Checklist</h3>
-                  {(draft.checklist || []).map((i, n) => (
-                    <label key={i.id || n} className={c.bar} style={{ fontSize: 14 }}>
-                      <input id={`chk-${n}`} type="checkbox" checked={i.done} onChange={(e) => set("checklist", draft.checklist.map((x, j) => (j === n ? { ...x, done: e.target.checked } : x)))} />
-                      <input id={`chk-t-${n}`} className={`${c.input} ${c.grow}`} dir="auto" value={i.text} onChange={(e) => set("checklist", draft.checklist.map((x, j) => (j === n ? { ...x, text: e.target.value } : x)))} />
-                      <button className={`${c.btn} ${c.ghost}`} onClick={() => set("checklist", draft.checklist.filter((_, j) => j !== n))} aria-label="Remove item">
-                        ✕
+          </div>
+        </div>
+
+        <div className={c.cardGrid}>
+          <div className={c.cardMain}>
+            {(people.length > 0 || labels.length > 0 || card.start_at || card.due_at) && (
+              <div className={c.metaRow}>
+                {people.length > 0 && (
+                  <div className={c.metaBlock}>
+                    <span className={c.metaLabel}>Members</span>
+                    <div className={c.bar} style={{ gap: 4 }}>
+                      {people.map((u) => (
+                        <Avatar key={u.id} user={u} size={30} />
+                      ))}
+                      <button className={c.plus} onClick={() => setPop("members")} aria-label="Add a member">
+                        +
                       </button>
-                    </label>
-                  ))}
-                  <div>
-                    <button className={c.btn} onClick={() => set("checklist", [...(draft.checklist || []), { text: "", done: false }])}>
-                      + Add an item
+                    </div>
+                  </div>
+                )}
+                {labels.length > 0 && (
+                  <div className={c.metaBlock}>
+                    <span className={c.metaLabel}>Labels</span>
+                    <div className={c.bar} style={{ gap: 4 }}>
+                      {labels.map((l) => (
+                        <span key={l.id} className={c.bigLabel} style={{ background: COLORS[l.color] || COLORS.gray }}>
+                          {l.name}
+                        </span>
+                      ))}
+                      <button className={c.plus} onClick={() => setPop("labels")} aria-label="Add a label">
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {(card.start_at || card.due_at) && (
+                  <div className={c.metaBlock}>
+                    <span className={c.metaLabel}>Dates</span>
+                    <button className={`${c.datePill} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} onClick={() => setPop("dates")}>
+                      {card.start_at ? shortWhen(card.start_at) : ""}
+                      {card.start_at && card.due_at ? " – " : ""}
+                      {card.due_at ? shortWhen(card.due_at) : ""}
+                      {due === "late" ? " · late" : due === "soon" ? " · due soon" : ""}
                     </button>
                   </div>
-                </div>
-                <div className={c.section}>
-                  <h3>Comments and history</h3>
-                  <form onSubmit={addComment} className={c.bar}>
-                    <input id="comment" className={`${c.input} ${c.grow}`} dir="auto" placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
-                    <button className={c.btn}>Send</button>
-                  </form>
-                  {[...comments].reverse().map((m) =>
-                    m.type === "comment" ? (
-                      <div key={m.id} className={c.comment}>
-                        <span className={c.muted}>
-                          <b>{nameOf(m.by)}</b> · {shortWhen(new Date(m.at).toISOString())}
-                        </span>
-                        <span dir="auto">{m.text}</span>
-                      </div>
-                    ) : (
-                      <div key={m.id} className={c.event}>
-                        {nameOf(m.by)} {m.text} · {shortWhen(new Date(m.at).toISOString())}
-                      </div>
-                    )
-                  )}
-                </div>
+                )}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-                <div className={c.section}>
-                  <h3>Timeline</h3>
-                  <label className={c.field}>
-                    Start
-                    <input id="start-at" type="datetime-local" className={c.input} value={toLocalInput(draft.start_at)} onChange={(e) => set("start_at", fromLocalInput(e.target.value))} />
-                  </label>
-                  <label className={c.field}>
-                    Due (ready by)
-                    <input id="due-at" type="datetime-local" className={c.input} value={toLocalInput(draft.due_at)} onChange={(e) => set("due_at", fromLocalInput(e.target.value))} />
-                  </label>
+            )}
+
+            <section className={c.block}>
+              <h3>
+                <span aria-hidden>≡</span> Description
+              </h3>
+              {desc === null ? (
+                <div className={`${c.descView} ${card.description ? "" : c.descEmpty}`} dir="auto" onClick={() => setDesc(card.description || "")} role="button" tabIndex={0}>
+                  {card.description || "Add a more detailed description: notes, script, brief…"}
                 </div>
-                <div className={c.section}>
-                  <h3>Labels</h3>
+              ) : (
+                <>
+                  <textarea id="card-desc" className={c.textarea} dir="auto" autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} style={{ minHeight: 140 }} />
                   <div className={c.bar}>
-                    {board.labels.map((l) => {
-                      const on = (draft.labels || []).includes(l.id);
-                      return (
-                        <button key={l.id} className={`${c.chip} ${on ? c.on : ""}`} style={on ? { background: COLORS[l.color] } : undefined} onClick={() => set("labels", on ? draft.labels.filter((x) => x !== l.id) : [...(draft.labels || []), l.id])}>
-                          {l.name}
-                        </button>
-                      );
-                    })}
+                    <button
+                      className={`${c.btn} ${c.primary}`}
+                      onClick={() => {
+                        if (desc !== card.description) commit({ description: desc });
+                        setDesc(null);
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button className={`${c.btn} ${c.ghost}`} onClick={() => setDesc(null)}>
+                      Cancel
+                    </button>
                   </div>
-                </div>
-                <div className={c.section}>
-                  <h3>Members</h3>
-                  <div className={c.bar}>
-                    {users.map((u) => {
-                      const on = (draft.members || []).includes(u.id);
-                      return (
-                        <button key={u.id} className={`${c.chip} ${on ? c.on : ""}`} style={on ? { background: "#121a24" } : undefined} onClick={() => set("members", on ? draft.members.filter((x) => x !== u.id) : [...(draft.members || []), u.id])}>
-                          {u.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className={c.section}>
-                  <h3>Links</h3>
-                  {LINKS.map(([k, name]) => (
-                    <label key={k} className={c.field}>
-                      {name}
-                      {draft.links && draft.links[k] ? (
-                        <a href={draft.links[k]} target="_blank" rel="noreferrer" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                          open
-                        </a>
-                      ) : null}
-                      <input id={`link-${k}`} className={c.input} placeholder="https://" value={(draft.links || {})[k] || ""} onChange={(e) => set("links", { ...(draft.links || {}), [k]: e.target.value })} />
-                    </label>
+                </>
+              )}
+            </section>
+
+            <section className={c.block}>
+              <h3>
+                <span aria-hidden>📣</span> Post
+              </h3>
+              <div className={c.postBox}>
+                <div className={c.bar}>
+                  <StatusPill status={card.status} />
+                  {onNetworks(card).map((n) => (
+                    <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
                   ))}
+                  {card.publish_at && <span className={c.muted}>🗓 {shortWhen(card.publish_at)}</span>}
                 </div>
-                <div className={c.section}>
-                  <button className={`${c.btn} ${c.danger}`} disabled={busy} onClick={() => window.confirm("Archive this card?") && action("archive")}>
-                    Archive card
+                {captionOf(card) ? (
+                  <p dir="auto" className={c.caption}>
+                    {captionOf(card).slice(0, 320)}
+                    {captionOf(card).length > 320 ? "…" : ""}
+                  </p>
+                ) : (
+                  <p className={c.muted} style={{ margin: 0 }}>
+                    No caption yet.
+                  </p>
+                )}
+                {card.media && card.media.items && card.media.items.length > 1 && (
+                  <div className={c.strip}>
+                    {card.media.items.map((m, i) => (
+                      <span key={i} className={c.stripThumb} style={m.kind === "image" ? { backgroundImage: `url(${m.url})` } : undefined}>
+                        {m.kind === "video" ? "▶" : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <button className={`${c.btn} ${c.primary}`} onClick={() => onCompose(boardId, cardId)}>
+                    {onNetworks(card).length ? "✏️ Edit the post, schedule or publish" : "✏️ Write the post"}
                   </button>
                 </div>
               </div>
-            </div>
-            {msg.error && <div className={c.error}>{msg.error}</div>}
-            {msg.ok && <div className={c.note}>{msg.ok}</div>}
-            <div className={c.bar} style={{ position: "sticky", bottom: 0, background: "var(--surface)", paddingTop: 8 }}>
-              <button className={`${c.btn} ${c.primary}`} disabled={!dirty || busy} onClick={save}>
-                {busy ? "Saving…" : dirty ? "Save changes" : "Saved"}
-              </button>
-              <button className={c.btn} onClick={close}>
-                Close
-              </button>
-            </div>
-          </>
-        )}
+            </section>
+
+            <section className={c.block}>
+              <h3>
+                <span aria-hidden>☑</span> Checklist
+              </h3>
+              {total > 0 && (
+                <div className={c.progress}>
+                  <span>{Math.round((done / total) * 100)}%</span>
+                  <div className={c.progressTrack}>
+                    <div className={c.progressBar} style={{ width: `${(done / total) * 100}%`, background: done === total ? "#16a34a" : "#388bff" }} />
+                  </div>
+                </div>
+              )}
+              {(card.checklist || []).map((i, n) => (
+                <label key={i.id || n} className={c.checkRow}>
+                  <input id={`chk-${n}`} type="checkbox" checked={i.done} onChange={(e) => setCheck(card.checklist.map((x, j) => (j === n ? { ...x, done: e.target.checked } : x)))} />
+                  <span dir="auto" className={i.done ? c.struck : ""}>
+                    {i.text}
+                  </span>
+                  <button className={`${c.btn} ${c.ghost} ${c.rowX}`} onClick={() => setCheck(card.checklist.filter((_, j) => j !== n))} aria-label="Remove item">
+                    ✕
+                  </button>
+                </label>
+              ))}
+              <form
+                className={c.bar}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!item.trim()) return;
+                  setCheck([...(card.checklist || []), { text: item.trim(), done: false }]);
+                  setItem("");
+                }}
+              >
+                <input id="chk-new" className={`${c.input} ${c.grow}`} dir="auto" placeholder="Add an item" value={item} onChange={(e) => setItem(e.target.value)} />
+                <button className={c.btn}>Add</button>
+              </form>
+            </section>
+
+            {Object.keys(card.links || {}).length > 0 && (
+              <section className={c.block}>
+                <h3>
+                  <span aria-hidden>🔗</span> Links
+                </h3>
+                <div className={c.bar}>
+                  {LINKS.filter(([k]) => card.links[k]).map(([k, name]) => (
+                    <a key={k} className={c.linkChip} href={card.links[k]} target="_blank" rel="noreferrer">
+                      {name} ↗
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className={c.block}>
+              <h3>
+                <span aria-hidden>💬</span> Activity
+              </h3>
+              <form onSubmit={addComment} className={c.actRow}>
+                <Avatar user={me || { name: "Me" }} size={30} />
+                <input id="comment" className={`${c.input} ${c.grow}`} dir="auto" placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
+                <button className={c.btn} disabled={!comment.trim()}>
+                  Send
+                </button>
+              </form>
+              {[...comments].reverse().map((m) =>
+                m.type === "comment" ? (
+                  <div key={m.id} className={c.actRow}>
+                    <Avatar user={person(m.by)} size={30} />
+                    <div className={c.grow} style={{ minWidth: 0 }}>
+                      <div className={c.muted}>
+                        <b style={{ color: "var(--text)" }}>{person(m.by).name}</b> · {shortWhen(new Date(m.at).toISOString())}
+                      </div>
+                      <div className={c.bubble} dir="auto">
+                        {m.text}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={m.id} className={c.actRow}>
+                    <Avatar user={person(m.by)} size={30} />
+                    <div className={c.event}>
+                      <b>{person(m.by).name}</b> {m.text} · {shortWhen(new Date(m.at).toISOString())}
+                    </div>
+                  </div>
+                )
+              )}
+            </section>
+          </div>
+
+          <aside className={c.cardSide}>
+            <div className={c.sideHead}>Add to card</div>
+            <SideBtn k="members" icon="👤" label="Members" />
+            <SideBtn k="labels" icon="🏷" label="Labels" />
+            <SideBtn k="check" icon="☑" label="Checklist" onClick={() => document.getElementById("chk-new")?.focus()} />
+            <SideBtn k="dates" icon="🕑" label="Dates" />
+            <SideBtn k="links" icon="🔗" label="Links" />
+            <div className={c.sideHead}>Post</div>
+            <SideBtn k="compose" icon="✏️" label={onNetworks(card).length ? "Edit the post" : "Write the post"} onClick={() => onCompose(boardId, cardId)} />
+            <div className={c.sideHead}>Actions</div>
+            <SideBtn k="move" icon="➡" label="Move" />
+            <SideBtn k="archive" icon="🗄" label="Archive" onClick={() => window.confirm("Archive this card?") && action("archive")} />
+            {popover}
+          </aside>
+        </div>
+        <div className={c.saveLine} aria-live="polite">
+          {error ? <span className={c.bad}>{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? "All changes saved" : ""}
+        </div>
       </div>
     </div>
   );
@@ -991,6 +1280,7 @@ function Calendar({ user }) {
         ) : view === "week" ? (
           <WeekView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
         ) : view === "board" ? (
+          <div className={c.boardWrap}>
           <BoardView
             board={planBoard.board}
             users={planBoard.users}
@@ -999,6 +1289,7 @@ function Calendar({ user }) {
             onMove={(id, fields) => move({ id, board_id: planBoard.board.id }, fields)}
             onAdd={(listId, title) => add(planBoard.board.id, listId, title)}
           />
+          </div>
         ) : (
           <>
             <h2 style={{ margin: 0, fontSize: 18 }}>{LIST_TABS.find(([k]) => "list-" + k === view)?.[1]}</h2>
@@ -1008,7 +1299,7 @@ function Calendar({ user }) {
       </div>
 
       {open && data[open.bid] && (
-        <CardEditor key={open.id} boardId={open.bid} cardId={open.id} board={data[open.bid].board} users={data[open.bid].users} onClose={() => setOpen(null)} onChanged={load} onCompose={(bid, id) => {
+        <CardEditor key={open.id} boardId={open.bid} cardId={open.id} board={data[open.bid].board} users={data[open.bid].users} me={data[open.bid].me} onClose={() => setOpen(null)} onChanged={load} onCompose={(bid, id) => {
           setOpen(null);
           setCompose({ bid, id });
         }} />
