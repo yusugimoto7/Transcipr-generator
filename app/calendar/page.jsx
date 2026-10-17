@@ -12,7 +12,8 @@ import { Shell, apiAt, Avatar } from "../editing/ui";
 import c from "./calendar.module.css";
 import p from "./publishing.module.css";
 import Composer, { NetChip, StatusPill } from "./Composer";
-import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf } from "./Publishing";
+import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
+import { whenAll, pickerNote } from "../../lib/tz";
 import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
 
 const CH = [
@@ -98,12 +99,12 @@ function CardFace({ card, board, users, onOpen }) {
         </div>
         <div className={c.badges}>
           {(card.publish_at || nets.length > 0) && (
-            <span className={c.badge} style={{ background: st.color, color: "#fff" }} title={st.name}>
+            <span className={c.badge} style={{ background: st.color, color: "#fff" }} title={`${st.name}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
               {card.status === "published" ? "✓" : "🗓"} {card.publish_at ? shortWhen(card.publish_at) : st.name}
             </span>
           )}
           {card.due_at && (
-            <span className={`${c.badge} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} title="Ready by">
+            <span className={`${c.badge} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} title={`Ready by · ${whenAll(card.due_at)}`}>
               🕑 {shortWhen(card.due_at)}
             </span>
           )}
@@ -561,6 +562,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
             Due (ready by)
             <input id="due-at" type="datetime-local" className={c.input} value={toLocalInput(card.due_at)} onChange={(e) => commit({ due_at: fromLocalInput(e.target.value) })} />
           </label>
+          {(card.start_at || card.due_at) && <span className={c.muted}>🕑 {pickerNote(toLocalInput(card.due_at || card.start_at))}</span>}
           <span className={c.muted}>The publish time is set in the post.</span>
         </>
       )}
@@ -683,7 +685,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                 {(card.start_at || card.due_at) && (
                   <div className={c.metaBlock}>
                     <span className={c.metaLabel}>Dates</span>
-                    <button className={`${c.datePill} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} onClick={() => setPop("dates")}>
+                    <button className={`${c.datePill} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} onClick={() => setPop("dates")} title={card.due_at ? whenAll(card.due_at) : whenAll(card.start_at)}>
                       {card.start_at ? shortWhen(card.start_at) : ""}
                       {card.start_at && card.due_at ? " – " : ""}
                       {card.due_at ? shortWhen(card.due_at) : ""}
@@ -733,7 +735,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   {onNetworks(card).map((n) => (
                     <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
                   ))}
-                  {card.publish_at && <span className={c.muted}>🗓 {shortWhen(card.publish_at)}</span>}
+                  {card.publish_at && <span className={c.muted}>🗓 {whenAll(card.publish_at)}</span>}
                 </div>
                 {captionOf(card) ? (
                   <p dir="auto" className={c.caption}>
@@ -1272,6 +1274,7 @@ function Calendar({ user }) {
             </div>
           )
         )}
+        {view !== "board" && <ZoneBanner />}
         {error && <div className={c.error}>{error}</div>}
         {!ready ? (
           <p className={c.muted}>Loading…</p>
