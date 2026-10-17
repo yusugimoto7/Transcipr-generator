@@ -90,12 +90,13 @@ export function Shell({ children, wide }) {
     await api("/auth/logout", { method: "POST" }).catch(() => {});
     window.location.href = "/editing/login";
   };
+  // Only the parts this person may open (lib/editing/access.js).
+  const ax = (me.user && me.user.ax) || [];
   const nav = [
-    ["/calendar", "Calendar"],
-    ["/editing", "Projects"],
-    ["/editing/new", "New project"],
-    ["/editing/topics", "Topics"],
-    ...(me.user && me.user.role === "admin" ? [["/editing/team", "Team"]] : []),
+    ...(ax.includes("topics") ? [["/", "Topic Engine"]] : []),
+    ...(ax.includes("calendar") ? [["/calendar", "Calendar"]] : []),
+    ...(ax.includes("editing") ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics"]] : []),
+    ...(ax.includes("team") ? [["/editing/team", "Team"]] : []),
     ["/editing/password", "Password"],
   ];
   return (
@@ -106,11 +107,17 @@ export function Shell({ children, wide }) {
         </div>
         {me.user && (
           <nav className={s.nav}>
-            {nav.map(([href, label]) => (
-              <Link key={href} href={href} className={path === href ? s.on : ""}>
-                {label}
-              </Link>
-            ))}
+            {nav.map(([href, label]) =>
+              href === "/" ? (
+                <a key={href} href={href}>
+                  {label}
+                </a>
+              ) : (
+                <Link key={href} href={href} className={path === href ? s.on : ""}>
+                  {label}
+                </Link>
+              )
+            )}
             <button className={s.linkBtn} onClick={logout}>
               Sign out ({me.user.name})
             </button>

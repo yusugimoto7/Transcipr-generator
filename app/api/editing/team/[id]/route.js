@@ -1,11 +1,14 @@
 import { guard, setPassword, publicUser, json } from "../../../../../lib/editing/auth";
+import { cleanAccess } from "../../../../../lib/editing/access";
 import { update } from "../../../../../lib/editing/store";
 import { checkId } from "../../../../../lib/editing/projects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Disable / enable a member, allow them to approve their own cuts, or give a new temporary password.
+// Disable / enable a member, choose which parts of the app they may open, allow them to approve
+// their own cuts, or give a new temporary password. Access changes apply within a few minutes
+// (the access ticket's lifetime, lib/editing/session.js).
 export async function PATCH(request, { params }) {
   const g = await guard(request, { admin: true });
   if (g.res) return g.res;
@@ -18,6 +21,7 @@ export async function PATCH(request, { params }) {
     const fields = {};
     if (typeof body.active === "boolean") fields.active = body.active;
     if (typeof body.may_approve_own === "boolean") fields.may_approve_own = body.may_approve_own;
+    if (body.access && typeof body.access === "object") fields.access = cleanAccess(body.access);
     if (Object.keys(fields).length) user = await update(`users/${id}.json`, (u) => ({ ...u, ...fields }), `app: user ${id}`);
     return json({ user: publicUser(user) });
   } catch (e) {

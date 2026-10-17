@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, s } from "../ui";
+import { homeOf } from "../../../lib/editing/access";
 
 function Login() {
   const q = useSearchParams();
@@ -17,7 +18,7 @@ function Login() {
     try {
       const { user } = await api("/auth/login", { method: "POST", body: { email, password } });
       const next = q.get("next") || "";
-      window.location.href = user.must_change ? "/editing/password" : /^\/(?![\/\\])/.test(next) ? next : "/editing";
+      window.location.href = user.must_change ? "/editing/password" : /^\/(?![\/\\])/.test(next) ? next : homeOf(user.ax || []);
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -26,8 +27,8 @@ function Login() {
   return (
     <div className={s.page}>
       <form className={`${s.card} ${s.narrow}`} onSubmit={submit}>
-        <h1 className={s.title}>Video Editing</h1>
-        <p className={s.muted}>Sign in with the email and password Hamed gave you.</p>
+        <h1 className={s.title}>Sugimoto Visa</h1>
+        <p className={s.muted}>One sign-in for the Topic Engine, the content calendar and Video Editing. Use the email and password Hamed gave you.</p>
         <label className={s.field}>
           <span>Email</span>
           <input id="email" className={s.input} type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />

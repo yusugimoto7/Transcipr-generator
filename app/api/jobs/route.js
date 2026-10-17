@@ -1,4 +1,6 @@
 import { startJob, getJobs, publicJob, topicKeyOf, JOB_KINDS } from "../../../lib/jobs";
+import { currentUser } from "../../../lib/editing/auth";
+import { accessOf, PUBLISH_JOBS } from "../../../lib/editing/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +16,13 @@ export async function POST(request) {
     const kind = String(body?.kind || "");
     if (!JOB_KINDS.includes(kind)) {
       return Response.json({ error: "unknown job kind" }, { status: 400 });
+    }
+    // With one login for the whole app, Telegram and WordPress sends need "publishing".
+    if (process.env.APP_LOGIN === "all" && PUBLISH_JOBS.includes(kind)) {
+      const user = await currentUser(request).catch(() => null);
+      if (!accessOf(user).includes("publishing")) {
+        return Response.json({ error: "your account cannot send to Telegram or WordPress; ask Hamed" }, { status: 403 });
+      }
     }
     const needsArticle = kind === "publish" || kind === "docfile";
     if (needsArticle ? !body.article : !(body.topic && (body.topic.title_fa || body.topic.title_en))) {
