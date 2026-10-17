@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE } from "../../ui";
+import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
 
 const KIND = { reel: "Reel 9:16", youtube: "YouTube 16:9", course: "Course lesson" };
 const LANG = { fa: "Farsi", en: "English" };
@@ -280,31 +280,40 @@ function Project({ id }) {
   const p = d.project;
   return (
     <>
-      <div>
-        <Link href="/editing" className={s.muted}>
-          ← Projects
-        </Link>
-      </div>
-      <div className={s.card}>
-        <h1 className={s.title}>{p.title}</h1>
-        <div className={s.muted}>
-          {d.owner && d.me.role === "admin" ? `${d.owner.name} · ` : ""}
-          {KIND[p.kind]} · {LANG[p.language]}
-          {p.topic ? ` · ${p.topic}` : ""} ·{" "}
-          <a href={p.source_url} target="_blank" rel="noreferrer">
-            raw footage
-          </a>
-        </div>
-        {d.runs.length > 1 && (
-          <div className={s.tabs}>
-            {d.runs.map((r) => (
-              <button key={r.id} className={`${s.tab} ${r.id === run.id ? s.on : ""}`} onClick={() => setSel(r.id)}>
-                v{r.version}
-              </button>
-            ))}
+      <nav className={s.crumbs}>
+        <Link href="/editing">Projects</Link>
+        <span aria-hidden>›</span>
+        <span>{p.title}</span>
+      </nav>
+      <div className={s.head}>
+        <span className={s.headIcon} aria-hidden>🎬</span>
+        <div className={s.grow}>
+          <h1 className={s.title} dir="auto">{p.title}</h1>
+          <div className={s.headMeta}>
+            <span className={`${s.kbLabel} ${s["k_" + p.kind] || ""}`}>{KIND[p.kind]}</span>
+            {latest && <Pill status={latest.status} />}
+            <span className={s.kbBadge}>{LANG[p.language]}</span>
+            {p.topic && <span className={s.kbBadge} dir="auto">{p.topic}</span>}
+            <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
+              🎞 raw footage ↗
+            </a>
+            {d.owner && d.me.role === "admin" && (
+              <span className={s.kbBadge} style={{ background: "none", padding: 0, gap: 6 }}>
+                <Avatar user={d.owner} size={22} /> {d.owner.name}
+              </span>
+            )}
           </div>
-        )}
+        </div>
       </div>
+      {d.runs.length > 1 && (
+        <div className={s.seg} role="tablist" aria-label="Versions">
+          {d.runs.map((r) => (
+            <button key={r.id} role="tab" aria-selected={r.id === run.id} className={r.id === run.id ? s.segOn : ""} onClick={() => setSel(r.id)}>
+              Version {r.version}
+            </button>
+          ))}
+        </div>
+      )}
       {error && <div className={s.error}>{error}</div>}
       {run && <RunView key={run.id} run={run} project={p} isLatest={run.id === latest.id} corrections={run.id === latest.id ? d.corrections : []} canApprove={d.can_approve} me={d.me} reload={load} />}
     </>

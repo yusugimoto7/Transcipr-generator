@@ -78,61 +78,140 @@ export function when(ts) {
   return new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Each person keeps one colour, as on Trello, so cards show at a glance who is on them.
+const AVATAR_COLORS = ["#c9372c", "#e2483d", "#f97316", "#d97706", "#16a34a", "#0d9488", "#0284c7", "#2563eb", "#7c3aed", "#c026d3", "#db2777", "#475569"];
+export function avatarColor(seed) {
+  let h = 0;
+  for (const ch of String(seed || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+export function initialsOf(name) {
+  return String(name || "?").trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase() || "?";
+}
+export function Avatar({ user, size = 28, title }) {
+  const name = (user && user.name) || "?";
+  return (
+    <span className={s.avatar} title={title || name} style={{ width: size, height: size, fontSize: Math.round(size * 0.4), background: avatarColor((user && user.id) || name) }}>
+      {initialsOf(name)}
+    </span>
+  );
+}
+
+const APPS = [
+  ["topics", "/", "Topic Engine", "📰"],
+  ["calendar", "/calendar", "Calendar", "📅"],
+  ["editing", "/editing", "Video Editing", "🎬"],
+];
+
+// One bar for the whole app (one login): the parts this person may open, and their account.
 export function Shell({ children, wide }) {
   const me = useMe();
   const path = usePathname();
   const router = useRouter();
+  const [menu, setMenu] = useState(false);
   useEffect(() => {
     if (!me.loading && me.enabled && !me.user) router.replace("/editing/login?next=" + encodeURIComponent(path));
     if (me.user && me.user.must_change && path !== "/editing/password") router.replace("/editing/password");
   }, [me, path, router]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e) => !e.target.closest("[data-menu]") && setMenu(false);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [menu]);
   const logout = async () => {
     await api("/auth/logout", { method: "POST" }).catch(() => {});
     window.location.href = "/editing/login";
   };
-  // Only the parts this person may open (lib/editing/access.js).
   const ax = (me.user && me.user.ax) || [];
-  const nav = [
-    ...(ax.includes("topics") ? [["/", "Topic Engine"]] : []),
-    ...(ax.includes("calendar") ? [["/calendar", "Calendar"]] : []),
-    ...(ax.includes("editing") ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics"]] : []),
-    ...(ax.includes("team") ? [["/editing/team", "Team"]] : []),
-    ["/editing/password", "Password"],
-  ];
+  const apps = APPS.filter(([k]) => ax.includes(k));
+  const current = path.startsWith("/calendar") ? "calendar" : path.startsWith("/editing") && !path.startsWith("/editing/team") && !path.startsWith("/editing/password") ? "editing" : "";
+  const sub = current === "editing" && ax.includes("editing")
+    ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics to record"]]
+    : [];
+  const appLink = ([k, href, label, icon]) => {
+    const cls = `${s.app} ${current === k ? s.appOn : ""}`;
+    return href === "/" ? (
+      <a key={k} href={href} className={cls}>
+        <span aria-hidden>{icon}</span> {label}
+      </a>
+    ) : (
+      <Link key={k} href={href} className={cls}>
+        <span aria-hidden>{icon}</span> {label}
+      </Link>
+    );
+  };
   return (
-    <div className={s.page} style={wide ? { maxWidth: "none" } : undefined}>
-      <header className={s.top}>
-        <div className={s.brand}>
-          {path.startsWith("/calendar") ? "Content calendar" : "Video Editing"}<small>Sugimoto Visa</small>
-        </div>
+    <div className={s.shell}>
+      <header className={s.bar}>
+        <a href={ax.includes("topics") ? "/" : current ? APPS.find(([k]) => k === current)[1] : "/"} className={s.logo} aria-label="Sugimoto Visa">
+          <span className={s.mark} aria-hidden />
+          <span className={s.logoText}>Sugimoto</span>
+        </a>
+        {me.user && <nav className={s.apps}>{apps.map(appLink)}</nav>}
+        <span className={s.spacer} />
         {me.user && (
-          <nav className={s.nav}>
-            {nav.map(([href, label]) =>
-              href === "/" ? (
-                <a key={href} href={href}>
-                  {label}
-                </a>
-              ) : (
-                <Link key={href} href={href} className={path === href ? s.on : ""}>
-                  {label}
-                </Link>
-              )
+          <div className={s.account} data-menu>
+            {ax.includes("team") && (
+              <Link href="/editing/team" className={`${s.barBtn} ${path === "/editing/team" ? s.appOn : ""}`} title="Team: who can open what">
+                👥 <span className={s.wideOnly}>Team</span>
+              </Link>
             )}
-            <button className={s.linkBtn} onClick={logout}>
-              Sign out ({me.user.name})
+            <button className={s.me} onClick={() => setMenu((m) => !m)} aria-label="Account and apps" aria-expanded={menu}>
+              <Avatar user={me.user} size={30} />
             </button>
-          </nav>
+            {menu && (
+              <div className={s.menu} role="menu">
+                <div className={s.menuHead}>
+                  <Avatar user={me.user} size={36} />
+                  <div style={{ minWidth: 0 }}>
+                    <b>{me.user.name}</b>
+                    <div className={s.muted} style={{ fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis" }}>{me.user.email}</div>
+                  </div>
+                </div>
+                <div className={s.narrowOnly}>
+                  {apps.map(([k, href, label, icon]) => (
+                    <a key={k} href={href} className={s.menuItem} role="menuitem">
+                      <span aria-hidden>{icon}</span> {label}
+                    </a>
+                  ))}
+                  {ax.includes("team") && (
+                    <a href="/editing/team" className={s.menuItem} role="menuitem">
+                      <span aria-hidden>👥</span> Team
+                    </a>
+                  )}
+                </div>
+                <Link href="/editing/password" className={s.menuItem} role="menuitem" onClick={() => setMenu(false)}>
+                  <span aria-hidden>🔑</span> Change password
+                </Link>
+                <button className={`${s.menuItem} ${s.danger}`} onClick={logout} role="menuitem">
+                  <span aria-hidden>↩</span> Sign out
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </header>
-      {!me.enabled ? (
-        <div className={s.card}>
-          <p className={s.muted}>Video Editing is not switched on yet. The admin sets EDITING_SESSION_SECRET and EDITING_GITHUB_TOKEN on the server.</p>
-        </div>
-      ) : me.user ? (
-        typeof children === "function" ? children(me.user) : children
-      ) : (
-        <p className={s.muted}>Loading…</p>
+      {sub.length > 0 && me.user && (
+        <nav className={s.subnav}>
+          {sub.map(([href, label]) => (
+            <Link key={href} href={href} className={path === href ? s.subOn : ""}>
+              {label}
+            </Link>
+          ))}
+        </nav>
       )}
+      <main className={s.page} style={wide ? { maxWidth: "none" } : undefined}>
+        {!me.enabled ? (
+          <div className={s.card}>
+            <p className={s.muted}>Accounts are not switched on yet. The admin sets EDITING_SESSION_SECRET and EDITING_GITHUB_TOKEN on the server.</p>
+          </div>
+        ) : me.user ? (
+          typeof children === "function" ? children(me.user) : children
+        ) : (
+          <p className={s.muted}>Loading…</p>
+        )}
+      </main>
     </div>
   );
 }
