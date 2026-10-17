@@ -3469,7 +3469,11 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
               📢 ارسال به @sugimotovisa
             </button>
           </div>
-          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr" }}>The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID).</div>}
+          {/* The send's outcome right under the button, where the eye is. */}
+          {kind === "telegram_send" && running && <div className="ui-pulse" style={{ fontSize: 12.5, color: C.text2, textAlign: "center" }}>⏳ در حال ارسال به @sugimotovisa…</div>}
+          {kind === "telegram_send" && failed && !running && <div style={{ fontSize: 12.5, color: C.reject, direction: "ltr", textAlign: "center" }}>⚠️ Not sent: {failed}</div>}
+          {kind === "telegram_send" && job.status === "done" && <div style={{ fontSize: 12.5, color: C.success, textAlign: "center" }}>✓ ارسال شد به @sugimotovisa</div>}
+          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr" }}>The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID), or your account has no publishing access.</div>}
 
           <div style={{ background: C.surface, border: `1px solid ${alpha(TG_TONE, 0.3)}`, borderRadius: 14, padding: 12 }}>
             <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>✏️ بازنویسی با یادداشت</div>

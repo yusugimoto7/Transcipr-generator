@@ -91,6 +91,10 @@ as the change**, in the team's own words where possible, with the date.
   note, Save, then "ارسال به @sugimotovisa". One 4:5 picture (1088×1360) in the carousel style
   with the post's headline, logo composited; ↻ redraw and ✏️ edit under it.
 - ≤1000 characters → one photo message with caption; longer → photo, then the text under it.
+- The picture is **uploaded as a file** (multipart), never handed to Telegram as a link: on Oct 17
+  2026 the Send button "did nothing" — Telegram's fetcher can be refused by the site storing the
+  image, and the error was shown at the top of the panel, out of sight. The outcome of a send is
+  now shown right under the button. `telegram_send` needs the "publishing" access.
 
 ## 7. Carousel
 
