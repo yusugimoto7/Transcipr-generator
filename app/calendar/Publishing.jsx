@@ -3,6 +3,7 @@
 // Publishing views: the week planner (posts in their hour, drag to move) and the post lists by
 // status (Drafts, Waiting for approval, Scheduled, Published, Failed), as in Zoho Social.
 
+import { whenAll, myZone, zoneName, zoneAbbr } from "../../lib/tz";
 import { useEffect, useRef, useState } from "react";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
 import { NETWORKS, STATUS, effectiveCaption, onNetworks, thumbOf } from "./channels";
@@ -17,11 +18,27 @@ export function captionOf(card) {
   return card.caption || onNetworks(card).map((n) => effectiveCaption(card, n.key)).find(Boolean) || "";
 }
 
+// Under the calendar's controls: whose clock the grid uses, and what time it is at the other places.
+export function ZoneBanner() {
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  if (!now) return null;
+  return (
+    <div className={c.muted} style={{ lineHeight: 1.5 }}>
+      🕑 Times are in <b>your</b> time zone: {zoneName(myZone())} ({zoneAbbr(now, myZone())}). Right now: {whenAll(now.toISOString(), { withZone: false }).split(" · ").slice(1).join(" · ")}. Hover a post for its time at every place.
+    </div>
+  );
+}
+
 export function Tile({ card, onOpen, drag = true }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id, disabled: !drag || card.status === "published" });
   const st = STATUS[card.status] || STATUS.draft;
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners} className={`${c.tile} ${isDragging ? c.dragging : ""}`} style={{ borderLeftColor: st.color }} onClick={() => onOpen(card)} title={`${st.name}${card.board_name ? " · " + card.board_name : ""}`}>
+    <div ref={setNodeRef} {...attributes} {...listeners} className={`${c.tile} ${isDragging ? c.dragging : ""}`} style={{ borderLeftColor: st.color }} onClick={() => onOpen(card)} title={`${st.name}${card.board_name ? " · " + card.board_name : ""}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
       <b>
         {card.publish_at ? timeOf(card.publish_at) : ""}
         {onNetworks(card).map((n) => (
@@ -174,7 +191,7 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
         return (
           <div key={card.id} className={c.listRow} onClick={() => onOpen(card)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <b style={{ fontSize: 14 }}>{card.publish_at ? new Date(card.publish_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "No date"}</b>
+              <b style={{ fontSize: 14 }}>{card.publish_at ? whenAll(card.publish_at) : "No date"}</b>
               <span className={c.muted}>{card.board_name}</span>
             </div>
             <div className={c.rowThumb} style={thumb ? { backgroundImage: `url(${thumb})` } : { background: "#c9ced6" }}>

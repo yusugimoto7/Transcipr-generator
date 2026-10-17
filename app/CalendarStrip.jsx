@@ -5,6 +5,7 @@
 // it already sits on the calendar. Posting still goes through Hamed's approval in the calendar.
 
 import { useEffect, useState } from "react";
+import { whenAll } from "../lib/tz";
 
 const KINDS = [
   ["carousel", "🖼️", "Carousel"],
@@ -20,7 +21,7 @@ const STATUS = {
 
 function when(iso) {
   if (!iso) return "no date yet";
-  return new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return whenAll(iso);
 }
 
 export default function CalendarStrip({ topic, version, C, FONT }) {

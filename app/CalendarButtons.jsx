@@ -7,16 +7,15 @@
 // goes to him as "Waiting for approval" with the time they asked for.
 
 import { useEffect, useState } from "react";
+import { whenAll, pickerNote } from "../lib/tz";
 
 const STATUS = {
   draft: ["Draft", "#8b95a3"], pending: ["Waiting for Hamed's approval", "#f28c28"], approved: ["Approved", "#2f6fde"],
   scheduled: ["Scheduled", "#2f6fde"], publishing: ["Publishing…", "#7a5af8"], published: ["Published", "#12a150"], failed: ["Failed", "#e5484d"],
 };
 
-function when(iso) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-}
+// The team is in Vancouver and Tehran: every time is shown in the viewer's zone and the other place's.
+const when = whenAll;
 
 // A datetime-local value an hour from now, in the device's time.
 function inAnHour() {
@@ -153,13 +152,14 @@ export default function CalendarButtons({ topic, made, version = "", C, FONT }) 
       ) : (
         <>
           {picking && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4, flexWrap: "wrap" }}>
               <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} style={{ font: "inherit", fontSize: 13.5, padding: "8px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.surface, color: C.text, flex: 1, minWidth: 190 }} />
               <button className="ui-btn" disabled={!!busy || !at} onClick={() => put(at)} style={{ ...btn(C.teal, true), flex: "0 0 auto", minWidth: 0, opacity: busy ? 0.6 : 1 }}>
                 {busy === "schedule" ? "Saving…" : admin ? "Approve & schedule" : "Send for approval"}
               </button>
             </div>
           )}
+          {picking && <div style={{ fontSize: 12, color: C.text2, marginBottom: 8, lineHeight: 1.5 }}>🕑 {pickerNote(at)}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="ui-btn" disabled={!!busy} onClick={() => setPicking((v) => !v)} style={{ ...btn(C.teal, false), opacity: busy ? 0.6 : 1 }}>
               🗓 Schedule

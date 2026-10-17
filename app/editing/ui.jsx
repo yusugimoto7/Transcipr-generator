@@ -75,7 +75,10 @@ export function fmt(sec) {
 
 export function when(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  // With the zone's name, so a time read in Vancouver and in Tehran is never confused.
+  const d = new Date(ts);
+  const abbr = new Intl.DateTimeFormat("en-US", { timeZoneName: "short" }).formatToParts(d).find((p) => p.type === "timeZoneName");
+  return d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) + (abbr ? " " + abbr.value : "");
 }
 
 // Each person keeps one colour, as on Trello, so cards show at a glance who is on them.

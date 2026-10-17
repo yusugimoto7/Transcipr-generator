@@ -5,6 +5,7 @@
 // live preview of every network on the right. Members send posts for approval; only Hamed
 // approves, schedules and publishes.
 
+import { pickerNote } from "../../lib/tz";
 import { useEffect, useMemo, useState } from "react";
 import { apiAt } from "../editing/ui";
 import { NETWORKS, NET, STATUS, effectiveCaption, thumbOf } from "./channels";
@@ -320,7 +321,10 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   </button>
                 ))}
                 {when === "schedule" && (
+                  <>
                   <input id="cmp-when" type="datetime-local" className={c.input} value={toLocal(d.publish_at)} onChange={(e) => setD({ ...d, publish_at: e.target.value ? new Date(e.target.value).toISOString() : null })} />
+                  {d.publish_at && <span className={c.muted} style={{ flexBasis: "100%" }}>🕑 {pickerNote(toLocal(d.publish_at))}</span>}
+                  </>
                 )}
               </div>
             </div>
