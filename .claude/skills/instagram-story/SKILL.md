@@ -31,7 +31,9 @@ A topic's **Story** tile makes 1–4 pages (default **1**). Each page is a short
 - Layout top to bottom: headline as plain bold text → screenshot → body in **white rounded text boxes (Instagram text-background style) BELOW the screenshot, never over it** → optional case name (`ref`) in English. Content stays inside 260px top / 280px bottom (Instagram's own controls cover those).
 - Screenshot = **the whole paragraph** that holds the quote, full column width, cut at the paragraph's own edges, never trimmed on the page (`object-fit: contain`). Long paragraphs keep at most 16 lines around the quote. If the crop logic changes, bump `SHOT_VERSION` so rewrites don't reuse old crops.
 - **No Lexbase masthead** on Lexbase stories.
-- Each page in the app has a small **«⬇ ذخیره تصویر»** button: share sheet (Save Image) on phones, download elsewhere, through `/api/story/image`.
+- Each page has a **✏️** button (`StoryPageSheet`, job `story_page`, `lib/story-page.js`): the team types a new headline/body, or writes an instruction and the model rewrites that page's text from the source text only. The quote and screenshot never change and no image model touches the page; only that page is drawn again.
+- Under the story: **Schedule / Post right away** to the content calendar (`app/CalendarButtons.jsx`), not Telegram buttons.
+- Each page in the app has a small **«⬇ ذخیره»** button: share sheet (Save Image) on phones, download elsewhere, through `/api/story/image`.
 
 ## Voice (from the team's reference stories, Drive folder "Story templates instagram")
 Spoken everyday Persian (میتونه، نشون میده، ایشون), short lines, the striking number/decision first, openers like «یه آمار تکان‌دهنده», «یه سؤال جالب از اداره مهاجرت کانادا», an exclamation mark when surprising, the English term after the Persian one. Naming what the screenshot is («این رأی», «این ایمیل داخلی») is fine; «طبق منبع» and conclusions the source doesn't state are not. No CTA.

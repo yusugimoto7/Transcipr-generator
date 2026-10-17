@@ -52,7 +52,8 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | All LLM prompts + output parsing | `lib/prompts.js` |
 | Model selection per job (env-overridable) | `lib/openai.js`, `lib/anthropic.js` |
 | WordPress draft publishing (redirect-safe auth) | `lib/wordpress.js` |
-| Telegram review flow + webhook | `app/api/telegram/**` |
+| Telegram news post: written, edited in the app (text with `**bold**`, related site link), one 4:5 picture in the carousel style, sent from the app to the public channel (jobs `telegram_write`/`_save`/`_image`/`_send`) | `lib/telegram-post.js`, `app/page.jsx` (`TelegramPanel`) |
+| Old Telegram review flow + webhook (approve/edit/reject buttons in the review chat; no longer started from the topic page) | `app/api/telegram/**` |
 | Durable memory (Google Sheet via Apps Script) | `lib/sheet.js`, `google-apps-script.gs` |
 | Draws auto-poster (separate system) | `lib/draws/**`, `app/api/draws/**` |
 | Keep-awake + deck warm-up (every 10 min, GitHub Actions → `/api/topics?warm=1`) | `.github/workflows/keepwarm.yml` |
@@ -60,7 +61,8 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Lexbase newsletter from Gmail (IMAP, read-only; PDF → items) | `lib/newsletter/lexbase.js`, `/api/lexbase` |
 | Background jobs (script, Telegram, article, draft, Word file, carousel, video run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
 | Shared workspace — every used/archived topic and what was made from it, for the whole team (Sheet "Library" tab, replaces the old Library view) | `lib/workspace.js`, `app/api/workspace/route.js` |
-| Carousel posts: slide text (Wizard's carousel prompt) → gpt-image-2 → WordPress media → Telegram | `lib/carousel.js`, `lib/wordpress.js` (`uploadMedia`) |
+| Carousel posts: slide text (Wizard's carousel prompt) → gpt-image-2 → WordPress media → content calendar (Schedule / Post right away, `app/CalendarButtons.jsx`) | `lib/carousel.js`, `lib/wordpress.js` (`uploadMedia`) |
+| ✏️ under every picture: change only that picture. Carousel slide and Telegram picture: the image model edits the picture itself (`editPicture`, logo composited again). Story page: only its text changes (typed, or rewritten from the source by an instruction) and that page alone is drawn again; the screenshot is never touched | `lib/carousel.js`, `lib/story-page.js` |
 | Instagram fact stories (1-4 pages, default 1): Farsi fact per page over a real screenshot of the source with the proving sentence highlighted — Lexbase from the issue's PDF (pdf.js, fetched again from Gmail only when a story is made), web sources photographed through HCTI; pages drawn through HCTI. Needs `HCTI_USER_ID` + `HCTI_API_KEY` | `lib/story/**` |
 | English video: options sheet on the topic page → n8n workflow "Topic Engine: English video" (HeyGen) → reports back to `/api/video/callback`. Inactive until `VIDEO_WORKFLOW_URL` + `VIDEO_WORKFLOW_SECRET` are set | `lib/video.js`, `app/api/video/callback/route.js` |
 | General ideas: demand signals (Google/YouTube autocomplete EN+FA, IRCC Help Centre, Reddit, site titles, official page text) harvested daily → weekly batch of evergreen ideas grounded on canada.ca pages | `lib/ideas/seeds.js` (subjects, pages), `lib/ideas/signals.js`, `lib/ideas/index.js`, `/api/ideas` |
@@ -105,7 +107,7 @@ Team decisions for specific features live in `.claude/skills/` and load in every
 
 - **Topics stream.** `/api/topics` with `stream: true` sends one card per line as each write batch finishes, and the page also shows the deck saved on the device first. Keep both: never make the page wait for a whole batch.
 - **Grounding is non-negotiable.** Every generated text must be supported by fetched source text. Never let a model see only a headline and write from it; if a source is too thin, drop it. Invented facts are the worst bug this app can have.
-- Nothing goes to Telegram automatically: the news post, the article, the carousel, the story and the English video are each started from their own tile on the topic page.
+- Nothing goes to Telegram automatically: the news post, the article, the carousel, the story and the English video are each started from their own tile on the topic page. The news post reaches @sugimotovisa only from its own Send button, after a confirm. Carousels and stories no longer go to Telegram from the topic page: they go to the content calendar, where Hamed's approval holds as everywhere else (an admin's Schedule / Post right away approves after a confirm; anyone else's goes to him for approval).
 - Stories: every page's quote must be found in the source text before anything is drawn, and the screenshot is a photograph of the original (PDF page or web page), never an image model's drawing. Screenshots are taken only when a story is made.
 - Farsi output is the brand's own voice — never "according to the source", never sales lines or "DM us" in news posts.
 - Express Entry draw results are excluded from topics (the brand covers them elsewhere).

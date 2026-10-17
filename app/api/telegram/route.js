@@ -1,78 +1,8 @@
 import { tgCall, approvalEnabled } from "../../../lib/telegram";
-import { newsPostPrompt } from "../../../lib/prompts";
-import { getRelatedCandidates } from "../../../lib/wordpress";
-import { sourceTextFor } from "../../../lib/grounding";
-import { editorNoteBlock } from "../../../lib/custom-news";
-import { openaiEnabled, openaiRewrite } from "../../../lib/openai";
-import { callClaude } from "../../../lib/anthropic";
+import { generateNewsPost, pickRelatedLink, clamp, escapeHtml } from "../../../lib/telegram-post";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// Telegram messages cap at 4096 chars; keep headroom for the header.
-function clamp(s) {
-  return String(s || "").slice(0, 3800);
-}
-
-function escapeHtml(s) {
-  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// Generate a CLEAN Farsi news post (no hooks / no sales CTA), grounded in the
-// real source article. Falls back to the provided fa script if generation fails.
-async function generateNewsPost(topic, fallback) {
-  const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
-  const prompt = newsPostPrompt(topic, sourceText) + editorNoteBlock(topic, "fa");
-  try {
-    if (openaiEnabled()) {
-      try {
-        return (await openaiRewrite(prompt)).trim();
-      } catch (e) {
-        if (!process.env.ANTHROPIC_API_KEY) throw e;
-        return (await callClaude([{ role: "user", content: prompt }], false, 1500)).trim();
-      }
-    }
-    return (await callClaude([{ role: "user", content: prompt }], false, 1500)).trim();
-  } catch (_) {
-    return escapeHtml(clamp(fallback || topic?.title_fa || ""));
-  }
-}
-
-// Pick the single genuinely-relevant sugimotovisa.com link for a topic. Pulls a
-// shortlist from the site, then lets the model choose the best match — or NONE,
-// so we never attach an unrelated page.
-async function pickRelatedLink(topic) {
-  const candidates = await getRelatedCandidates(topic).catch(() => []);
-  if (!candidates.length) return null;
-  if (candidates.length === 1) return candidates[0];
-
-  const list = candidates.map((c, i) => `${i + 1}. ${c.title} — ${c.url}`).join("\n");
-  const prompt = `موضوع خبر: ${topic?.title_fa || topic?.title_en || ""}
-
-از بین صفحات زیر از سایت سوگیموتوویزا، فقط مرتبط‌ترین صفحه به همین موضوع خبری رو انتخاب کن. فقط شمارهٔ همون یک مورد رو بنویس (مثلاً: 3). اگه هیچ‌کدوم واقعاً به موضوع مربوط نیست، دقیقاً بنویس: NONE
-
-${list}`;
-
-  let ans = "";
-  try {
-    if (openaiEnabled()) {
-      try {
-        ans = await openaiRewrite(prompt);
-      } catch (e) {
-        if (!process.env.ANTHROPIC_API_KEY) throw e;
-        ans = await callClaude([{ role: "user", content: prompt }], false, 30);
-      }
-    } else {
-      ans = await callClaude([{ role: "user", content: prompt }], false, 30);
-    }
-  } catch (_) {
-    return null; // don't attach a link we're unsure about
-  }
-  if (/none/i.test(ans)) return null;
-  const m = String(ans).match(/\d+/);
-  if (!m) return null;
-  return candidates[parseInt(m[0], 10) - 1] || null;
-}
 
 // GET diagnostic: open /api/telegram in a browser to see which bot the token
 // belongs to and whether it can actually reach the configured channel. Exposes

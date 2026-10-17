@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { isUntrusted } from "../lib/trust";
 import { sameTopic } from "../lib/similar";
 import CalendarStrip from "./CalendarStrip";
+import CalendarButtons from "./CalendarButtons";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -276,7 +277,7 @@ export default function App() {
   const [initialArticle, setInitialArticle] = useState(null);
   const [savedCarousel, setSavedCarousel] = useState(null);
   const [savedStory, setSavedStory] = useState(null);
-  const [savedTg, setSavedTg] = useState(0); // when the news post last went to Telegram
+  const [savedTg, setSavedTg] = useState(null); // the news post as saved (text, picture, when sent)
   const [savedVideo, setSavedVideo] = useState(null);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [caps, setCaps] = useState({ carousel: true, story: true, telegram: { review: true, public: true }, video: false });
@@ -415,6 +416,7 @@ export default function App() {
       }
       if (kind === "story") {
         delete entry.story_draw;
+        delete entry.story_page;
         delete entry.story_send;
       }
       entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now(), extra };
@@ -477,14 +479,14 @@ export default function App() {
         const now = Date.now();
         if (remote.kind === "script") patchWs(t, { status: "active", materials: { script: { ts: now } } });
         else if (remote.kind === "article") patchWs(t, { materials: { article: { ts: now } } });
-        else if (remote.kind === "telegram") patchWs(t, { materials: { telegram: { ts: now } } });
+        else if (remote.kind === "telegram" || remote.kind.startsWith("telegram_")) patchWs(t, { materials: { telegram: { ts: now } } });
         else if (remote.kind === "video") patchWs(t, { status: "active", materials: { video: { ts: now, status: r.status || "requested" } } });
         else if (remote.kind === "carousel" || remote.kind === "carousel_slide") {
           patchWs(t, { materials: { carousel: { ts: now, count: (r.slides || []).length, sent: r.sent || {} } } });
         } else if (remote.kind === "carousel_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).carousel || {};
           patchWs(t, { materials: { carousel: { ...cur, sent: r.sent || {} } } });
-        } else if (remote.kind === "story" || remote.kind === "story_draw") {
+        } else if (remote.kind === "story" || remote.kind === "story_draw" || remote.kind === "story_page") {
           patchWs(t, { materials: { story: { ts: now, count: (r.pages || []).length, sent: r.sent || {} } } });
         } else if (remote.kind === "story_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).story || {};
@@ -742,7 +744,7 @@ export default function App() {
     setInitialArticle(null);
     setSavedCarousel(null);
     setSavedStory(null);
-    setSavedTg(0);
+    setSavedTg(null);
     setSavedVideo(null);
     setScriptError(null);
     setScriptTab("fa");
@@ -769,7 +771,7 @@ export default function App() {
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
-          if (m.telegram) setSavedTg(m.telegram.sent || m.telegram.ts || 0);
+          if (m.telegram) setSavedTg(m.telegram);
         }
         if (m.video) setSavedVideo(m.video);
       })
@@ -887,13 +889,19 @@ export default function App() {
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? "نوشتن سناریو با خطا مواجه شد (" + (sj.error || "") + ")"
       : scriptError;
-  // Telegram: this session's send, else when it was last sent (saved).
-  const tj = svJobs.telegram;
-  const viewTg = tj
-    ? { state: tj.status === "running" ? "sending" : tj.status === "done" ? "sent" : "error", msg: tj.error || "", at: (tj.result && tj.result.sent) || 0 }
-    : savedTg
-      ? { state: "sent", msg: "", at: savedTg }
-      : { state: "idle", msg: "", at: 0 };
+  // The Telegram news post on screen: the newest job result this session
+  // (write, save, picture, send), else the saved one.
+  let tgPost = savedTg && (savedTg.text || savedTg.image_url || savedTg.sent) ? savedTg : null;
+  let tgJob = null;
+  for (const kind of ["telegram_write", "telegram_save", "telegram_image", "telegram_send"]) {
+    const j = svJobs[kind];
+    if (!j) continue;
+    if (!tgJob || (j.startedAt || 0) > (tgJob.startedAt || 0)) tgJob = j;
+  }
+  for (const kind of ["telegram_write", "telegram_save", "telegram_image", "telegram_send"]) {
+    const j = svJobs[kind];
+    if (j && j.status === "done" && j.result && (!tgPost || (j.startedAt || 0) >= (tgPost._at || 0))) tgPost = { ...j.result, _at: j.startedAt || 0 };
+  }
 
   // The video: the newest request this session, else the saved record (which
   // the workflow keeps up to date through its callback).
@@ -919,7 +927,7 @@ export default function App() {
   // The story, the same way as the carousel.
   let story = savedStory;
   let storyJob = null;
-  for (const kind of ["story", "story_draw"]) {
+  for (const kind of ["story", "story_draw", "story_page"]) {
     const j = svJobs[kind];
     if (!j) continue;
     if (!storyJob || (j.startedAt || 0) > (storyJob.startedAt || 0)) storyJob = j;
@@ -1109,8 +1117,8 @@ export default function App() {
           enError={(sjResult && sjResult.enError) || ""}
           enJob={enRewrite}
           draftJob={enJob && !enRewrite ? enJob : null}
-          tg={viewTg}
-          onTelegram={() => startJob("telegram", scriptTopic, { topic: scriptTopic, fa: viewScripts.fa, en: viewScripts.en })}
+          tgPost={tgPost}
+          tgJob={tgJob}
           articleJob={svJobs.article || null}
           publishJob={svJobs.publish || null}
           docJob={svJobs.docfile || null}
@@ -2349,7 +2357,7 @@ function Segmented({ value, onChange, items }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tg = { state: "idle", at: 0, msg: "" }, onTelegram, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob }) {
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob }) {
   const f = fieldOf(topic);
   const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -2451,10 +2459,13 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
   const [composer, setComposer] = useState(false);
   const [draft, setDraft] = useState(null); // the video editor's state, kept while the topic is open
 
-  const sendTelegram = () => {
-    if (tg.state === "sending") return;
-    if (tg.state === "sent" && !window.confirm("The news post was already sent to Telegram. Send it again?")) return;
-    onTelegram();
+  const telegramRef = useRef(null);
+  const [tgOpen, setTgOpen] = useState(false);
+  const tgRunning = !!tgJob && tgJob.status === "running";
+  const openTelegram = () => {
+    setTgOpen(true);
+    if (!(tgPost && tgPost.text) && !tgRunning) onJob("telegram_write", {});
+    reveal(telegramRef);
   };
 
   const slides = (carousel && carousel.slides) || [];
@@ -2468,13 +2479,14 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
   const tiles = [
     caps.publishing !== false && {
       k: "telegram", icon: "✈️", title: "Telegram post", tone: C.teal,
-      sub: "پست خبری تمیز برای کانال بررسی تیم",
-      onClick: sendTelegram,
+      sub: "ویرایش همین‌جا، با تصویر، ارسال به @sugimotovisa",
+      onClick: openTelegram,
       status:
-        tg.state === "sending" ? { label: "Sending…", tone: C.orange, running: true }
-        : tg.state === "sent" ? { label: "Sent" + (tg.at ? " · " + when(tg.at) : ""), tone: C.success, done: true }
-        : tg.state === "error" ? { label: "Failed — tap to retry", tone: C.reject }
-        : { label: "Not sent", tone: C.text3 },
+        tgRunning ? { label: tgJob.kind === "telegram_send" ? "Sending…" : tgJob.kind === "telegram_image" ? "Drawing…" : tgJob.kind === "telegram_save" ? "Saving…" : "Writing…", tone: C.orange, running: true }
+        : tgPost && tgPost.sent && tgPost.sent_to === "public" ? { label: "Sent · " + when(tgPost.sent), tone: C.success, done: true }
+        : tgPost && tgPost.text ? { label: "Ready to edit", tone: C.success, done: true }
+        : tgJob && tgJob.status === "error" ? { label: "Failed — tap to retry", tone: C.reject }
+        : { label: "Not made", tone: C.text3 },
     },
     {
       k: "article", icon: "📝", title: "Blog article", tone: "#0e8a99",
@@ -2654,10 +2666,14 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             {tiles.filter(Boolean).map((t) => <ActionTile key={t.k} {...t} />)}
           </div>
-          {tg.state === "error" && tg.msg && (
-            <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, direction: "ltr", textAlign: "center", fontFamily: FONT }}>Telegram: {tg.msg}</div>
-          )}
         </Section>
+      )}
+
+      {/* Telegram news post (nothing until asked for or made) */}
+      {!loading && !error && (tgOpen || tgPost || tgJob) && (
+        <div ref={telegramRef} style={{ scrollMarginTop: 90 }}>
+          <TelegramPanel topic={topic} post={tgPost} job={tgJob} caps={caps} onJob={onJob} />
+        </div>
       )}
 
       {/* Blog article */}
@@ -2852,15 +2868,15 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   const [copiedCap, setCopiedCap] = useState(false);
   const [preview, setPreview] = useState(0); // slide number shown large, 0 = closed
   const [revNotes, setRevNotes] = useState("");
+  const [editing, setEditing] = useState(0); // slide number whose edit sheet is open
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
   const slides = (carousel && carousel.slides) || [];
   const drawn = slides.filter((s) => s.image_url).length;
   const missing = slides.length - drawn;
-  const sending = !!sendJob && sendJob.status === "running";
-  const sendErr = sendJob && sendJob.status === "error" ? sendJob.error : "";
-  const sent = (carousel && carousel.sent) || {};
+  // Which slide a single-slide job is working on, so only that one shows it.
+  const busySlide = running && job.kind === "carousel_slide" ? (job.extra && job.extra.num) || 0 : 0;
   const font = "'Inter', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
 
@@ -2868,10 +2884,6 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
     if (slides.length && !window.confirm("A new carousel replaces the current one. Continue?")) return;
     setForm(false);
     onJob("carousel", { count, notes: notes.trim() });
-  };
-  const send = (target) => {
-    if (target === "public" && !window.confirm("Publish this carousel to the public channel @sugimotovisa?")) return;
-    onJob("carousel_send", { target });
   };
   const btn = (bg, color, border) => ({
     background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5,
@@ -2961,10 +2973,19 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                 )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", fontSize: 11.5, fontFamily: font, color: C.text2 }}>
                   <span title={sl.content} style={{ fontWeight: 700 }}>{sl.num}/{slides.length}</span>
-                  {!running && (
-                    <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: sl.num })} title="Draw this slide again" style={{ background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: C.text2 }}>
-                      ↻ redraw
-                    </button>
+                  {busySlide === sl.num ? (
+                    <span className="ui-pulse" style={{ fontSize: 11.5, color: C.orangeDeep }}>⏳ working…</span>
+                  ) : !running && (
+                    <span style={{ display: "inline-flex", gap: 4 }}>
+                      {sl.image_url && (
+                        <button className="ui-btn" onClick={() => setEditing(sl.num)} title="Change only this slide" aria-label={"Edit slide " + sl.num} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: "#6d5bd0" }}>
+                          ✏️
+                        </button>
+                      )}
+                      <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: sl.num })} title="Draw this slide again from scratch" style={{ background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: C.text2 }}>
+                        ↻
+                      </button>
+                    </span>
                   )}
                 </div>
                 <div dir="rtl" style={{ padding: "0 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-line" }}>
@@ -3003,6 +3024,20 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
             </div>
           )}
           {preview > 0 && <SlidePreview slides={slides.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
+          {editing > 0 && slides.some((x) => x.num === editing) && (
+            <EditPictureSheet
+              title={`Slide ${editing} of ${slides.length}`}
+              item={slides.find((x) => x.num === editing)}
+              text={slides.find((x) => x.num === editing).content}
+              ratio="4 / 5"
+              tone="#6d5bd0"
+              onClose={() => setEditing(0)}
+              onSubmit={(edit) => {
+                onJob("carousel_slide", { num: editing, edit });
+                setEditing(0);
+              }}
+            />
+          )}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: "missing" })} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
               طراحی {missing} اسلاید باقی‌مانده
@@ -3030,23 +3065,8 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
           )}
 
           {drawn > 0 && !running && (
-            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              {caps.telegram?.review !== false && (
-                <button className="ui-btn" disabled={sending} onClick={() => send("review")} style={{ ...btn(alpha(C.teal, 0.12), C.text, `1px solid ${alpha(C.teal, 0.4)}`), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
-                  {sent.review ? "✓ " : "✈ "}کانال بررسی تیم
-                  {sent.review && <div style={{ fontSize: 10.5, fontWeight: 500, color: C.text3 }}>sent {when(sent.review)}</div>}
-                </button>
-              )}
-              {caps.telegram?.public !== false && (
-                <button className="ui-btn" disabled={sending} onClick={() => send("public")} style={{ ...btn(sent.public ? alpha(C.success, 0.12) : C.orange, sent.public ? C.success : "#fff", sent.public ? `1px solid ${alpha(C.success, 0.5)}` : "none"), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
-                  {sent.public ? "✓ " : "📢 "}انتشار در @sugimotovisa
-                  {sent.public && <div style={{ fontSize: 10.5, fontWeight: 500 }}>published {when(sent.public)}</div>}
-                </button>
-              )}
-            </div>
+            <CalendarButtons topic={topic} made="carousel" version={slides.map((x) => x.image_url || "").join("|")} C={C} FONT={font} />
           )}
-          {sending && <div className="ui-pulse" style={{ marginTop: 8, fontSize: 12, color: C.text3, textAlign: "center", fontFamily: fa }}>در حال ارسال به تلگرام…</div>}
-          {sendErr && <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, textAlign: "center", direction: "ltr" }}>⚠️ {sendErr}</div>}
         </div>
       )}
     </Section>
@@ -3119,15 +3139,14 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const [revNotes, setRevNotes] = useState("");
   const [copiedCap, setCopiedCap] = useState(false);
   const [preview, setPreview] = useState(0);
+  const [editing, setEditing] = useState(0); // page number whose edit sheet is open
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
   const pages = (story && story.pages) || [];
   const drawn = pages.filter((p) => p.image_url).length;
   const missing = pages.length - drawn;
-  const sending = !!sendJob && sendJob.status === "running";
-  const sendErr = sendJob && sendJob.status === "error" ? sendJob.error : "";
-  const sent = (story && story.sent) || {};
+  const busyPage = running && job.kind === "story_page" ? (job.extra && job.extra.num) || 0 : 0;
   const font = "'Inter', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
   const isLex = topic && (topic.newsletter === "lexbase" || /\/api\/lexbase\//.test(topic.source_url || ""));
@@ -3136,10 +3155,6 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
     if (pages.length && !window.confirm("A new story replaces the current one. Continue?")) return;
     setForm(false);
     onJob("story", { count, notes: notes.trim(), bg });
-  };
-  const send = (target) => {
-    if (target === "public" && !window.confirm("Publish this story to the public channel @sugimotovisa?")) return;
-    onJob("story_send", { target });
   };
   const btn = (bg, color, border) => ({ background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: font });
 
@@ -3216,14 +3231,23 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   </div>
                 )}
                 <div dir="rtl" style={{ padding: "6px 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2 }}>
-                  {pg.image_url && (
-                    <button
-                      className="ui-btn"
-                      onClick={() => saveStoryImage(pg.image_url, `sugimoto-story-${pg.num}.png`)}
-                      style={{ display: "block", marginBottom: 6, background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: fa }}
-                    >
-                      ⬇ ذخیره تصویر
-                    </button>
+                  {busyPage === pg.num ? (
+                    <div className="ui-pulse" style={{ marginBottom: 6, fontSize: 11.5, color: C.orangeDeep }}>⏳ در حال تغییر…</div>
+                  ) : pg.image_url && (
+                    <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                      <button
+                        className="ui-btn"
+                        onClick={() => saveStoryImage(pg.image_url, `sugimoto-story-${pg.num}.png`)}
+                        style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: fa }}
+                      >
+                        ⬇ ذخیره
+                      </button>
+                      {!running && (
+                        <button className="ui-btn" onClick={() => setEditing(pg.num)} title="Change only this page" aria-label={"Edit page " + pg.num} style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer" }}>
+                          ✏️
+                        </button>
+                      )}
+                    </div>
                   )}
                   <b style={{ color: C.text }}>{pg.headline}</b>
                   {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحه دیگه استفاده شد.</div>}
@@ -3265,6 +3289,17 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             </div>
           )}
           {preview > 0 && <SlidePreview slides={pages.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
+          {editing > 0 && pages.some((x) => x.num === editing) && (
+            <StoryPageSheet
+              page={pages.find((x) => x.num === editing)}
+              total={pages.length}
+              onClose={() => setEditing(0)}
+              onSubmit={(edit) => {
+                onJob("story_page", { num: editing, ...edit });
+                setEditing(0);
+              }}
+            />
+          )}
 
           {story.caption && (
             <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
@@ -3287,26 +3322,311 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           )}
 
           {drawn > 0 && !running && (
-            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-              {caps.telegram?.review !== false && (
-                <button className="ui-btn" disabled={sending} onClick={() => send("review")} style={{ ...btn(alpha(C.teal, 0.12), C.text, `1px solid ${alpha(C.teal, 0.4)}`), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
-                  {sent.review ? "✓ " : "✈ "}کانال بررسی تیم
-                  {sent.review && <div style={{ fontSize: 10.5, fontWeight: 500, color: C.text3 }}>sent {when(sent.review)}</div>}
-                </button>
-              )}
-              {caps.telegram?.public !== false && (
-                <button className="ui-btn" disabled={sending} onClick={() => send("public")} style={{ ...btn(sent.public ? alpha(C.success, 0.12) : C.orange, sent.public ? C.success : "#fff", sent.public ? `1px solid ${alpha(C.success, 0.5)}` : "none"), flex: 1, minWidth: 160, opacity: sending ? 0.6 : 1 }}>
-                  {sent.public ? "✓ " : "📢 "}انتشار در @sugimotovisa
-                  {sent.public && <div style={{ fontSize: 10.5, fontWeight: 500 }}>published {when(sent.public)}</div>}
-                </button>
-              )}
-            </div>
+            <CalendarButtons topic={topic} made="story" version={pages.map((x) => x.image_url || "").join("|")} C={C} FONT={font} />
           )}
-          {sending && <div className="ui-pulse" style={{ marginTop: 8, fontSize: 12, color: C.text3, textAlign: "center", fontFamily: fa }}>در حال ارسال به تلگرام…</div>}
-          {sendErr && <div style={{ marginTop: 8, fontSize: 11.5, color: C.reject, textAlign: "center", direction: "ltr" }}>⚠️ {sendErr}</div>}
         </div>
       )}
     </Section>
+  );
+}
+
+// The Telegram news post, edited here rather than in Telegram: the text
+// (with **bold**), the related sugimotovisa.com page, and one 4:5 picture
+// that can be drawn again or changed with a note. Send puts it on the public
+// channel @sugimotovisa; nothing is sent until that button is pressed.
+const TG_TONE = "#0088cc";
+function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
+  const [text, setText] = useState((post && post.text) || "");
+  const [dirty, setDirty] = useState(false);
+  const [link, setLink] = useState((post && post.link) || null);
+  const [notes, setNotes] = useState("");
+  const [editPic, setEditPic] = useState(false);
+  const [preview, setPreview] = useState(false);
+  const running = !!job && job.status === "running";
+  const failed = !!job && job.status === "error" ? job.error : "";
+  const kind = (job && job.kind) || "";
+  const fa = "'Vazirmatn', sans-serif";
+  const font = "'Inter', 'Vazirmatn', sans-serif";
+  const image = (post && post.image_url) || "";
+  const publicOk = caps.telegram?.public !== false;
+
+  // What the server has, unless someone is typing over it.
+  useEffect(() => {
+    if (!dirty && post) {
+      setText(post.text || "");
+      setLink(post.link || null);
+    }
+  }, [post && post.text, post && post.link && post.link.url]);
+
+  const btn = (bg, color, border) => ({ background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: fa });
+  const small = { background: alpha(TG_TONE, 0.1), color: TG_TONE, border: `1px solid ${alpha(TG_TONE, 0.35)}`, borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: fa };
+
+  const save = () => {
+    setDirty(false);
+    onJob("telegram_save", { text, link });
+  };
+  const send = () => {
+    if (!text.trim()) return;
+    const again = post && post.sent && post.sent_to === "public" ? "\n\nIt was already sent on " + when(post.sent) + "." : "";
+    if (!window.confirm((image ? "Send this post with its picture to @sugimotovisa now?" : "Send this post to @sugimotovisa now, without a picture?") + again)) return;
+    setDirty(false);
+    onJob("telegram_send", { text, link });
+  };
+  const rewrite = () => {
+    if (dirty && !window.confirm("Your edits will be replaced by the rewrite. Continue?")) return;
+    setDirty(false);
+    onJob("telegram_write", { notes: notes.trim(), revise: !!(post && post.text) });
+    setNotes("");
+  };
+  const fullLen = text.length + (link ? (link.title || "").length + 6 : 0);
+  const label = { telegram_write: "در حال نوشتن پست…", telegram_image: "در حال طراحی تصویر…", telegram_send: "در حال ارسال به @sugimotovisa…", telegram_save: "در حال ذخیره…" }[kind] || "…";
+
+  return (
+    <Section title="✈️ پست تلگرام">
+      {running && (
+        <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(TG_TONE, 0.07), border: `1px solid ${alpha(TG_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
+          <span className="ui-pulse">⏳</span> {label}
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+        </div>
+      )}
+      {failed && !running && <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>}
+      {post && post.sent && post.sent_to === "public" && (
+        <div dir="rtl" style={{ fontSize: 12.5, color: C.success, marginBottom: 10, fontFamily: fa }}>✓ ارسال شد به @sugimotovisa · {when(post.sent)}</div>
+      )}
+
+      {!text && !running && !(post && post.text) ? (
+        <div style={{ textAlign: "center" }}>
+          <button className="ui-btn ui-glow-orange" onClick={() => onJob("telegram_write", {})} style={{ ...btn(TG_TONE, "#fff", "none"), padding: "12px 20px" }}>✍️ نوشتن پست تلگرام</button>
+        </div>
+      ) : (
+        <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 12, fontFamily: fa }}>
+          {/* the picture */}
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ width: 170, flexShrink: 0, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.line}`, background: C.surfaceHi }}>
+              {image ? (
+                <button onClick={() => setPreview(true)} aria-label="Preview the picture" style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
+                  <img src={image} alt="Telegram post picture" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover" }} />
+                </button>
+              ) : (
+                <div className={running && kind === "telegram_image" ? "ui-skeleton" : ""} style={{ aspectRatio: "4 / 5", display: "grid", placeItems: "center", color: C.text3, fontSize: 12, padding: 10, textAlign: "center" }}>
+                  {running && kind === "telegram_image" ? "…" : "بدون تصویر"}
+                </div>
+              )}
+            </div>
+            <div style={{ flex: "1 1 160px", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+              <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.7 }}>یک تصویر ۴:۵ با تیتر پست، در سبک کاروسل‌های برند و با لوگو.</div>
+              {!running && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {image ? (
+                    <>
+                      <button className="ui-btn" onClick={() => setEditPic(true)} style={small} title="Change only this picture">✏️ ویرایش تصویر</button>
+                      <button className="ui-btn" onClick={() => onJob("telegram_image", { text })} style={small} title="Draw a new picture">↻ طراحی دوباره</button>
+                      <a className="ui-btn" href={"/api/carousel/download?url=" + encodeURIComponent(image) + "&name=" + encodeURIComponent("sugimoto-telegram.jpg")} style={{ ...small, textDecoration: "none" }}>⬇ دانلود</a>
+                    </>
+                  ) : (
+                    <button className="ui-btn" onClick={() => onJob("telegram_image", { text })} disabled={!caps.carousel} style={{ ...small, opacity: caps.carousel ? 1 : 0.5 }}>🎨 ساخت تصویر</button>
+                  )}
+                </div>
+              )}
+              {post && post.kept === "memory" && <div style={{ fontSize: 11, color: C.orangeDeep }}>⚠️ این تصویر در وردپرس ذخیره نشد و فقط تا ری‌استارت بعدی سرور می‌مونه.</div>}
+            </div>
+          </div>
+
+          {/* the text */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <b style={{ fontSize: 13.5 }}>متن پست</b>
+              <span style={{ fontSize: 11, color: fullLen > 1000 ? C.text3 : C.success, direction: "ltr" }}>
+                {fullLen} chars · {fullLen > 1000 ? "picture, then the text under it" : "one message with the picture"}
+              </span>
+            </div>
+            <textarea
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setDirty(true);
+              }}
+              rows={12}
+              disabled={running && kind === "telegram_write"}
+              style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${dirty ? alpha(TG_TONE, 0.6) : C.line}`, padding: 12, fontFamily: fa, fontSize: 13.5, lineHeight: 1.9, resize: "vertical", direction: "rtl", unicodeBidi: "plaintext" }}
+            />
+            <div style={{ fontSize: 11.5, color: C.text3, marginTop: 4 }}>برای متن پررنگ دو ستاره بذار: **متن**</div>
+          </div>
+
+          {link && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 10px", borderRadius: 10, background: C.surfaceHi, border: `1px solid ${C.line}` }}>
+              <span>📎</span>
+              <a href={link.url} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{link.title || link.url}</a>
+              <button className="ui-btn" onClick={() => { setLink(null); setDirty(true); }} title="Remove the link" style={{ background: "transparent", border: "none", color: C.text3, cursor: "pointer", fontSize: 14 }}>✕</button>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="ui-btn" disabled={!dirty || running} onClick={save} style={{ ...btn("transparent", C.text, `1px solid ${C.line}`), flex: "0 0 auto", opacity: dirty && !running ? 1 : 0.5 }}>
+              💾 ذخیره
+            </button>
+            <button className="ui-btn ui-glow-orange" disabled={running || !text.trim() || !publicOk} onClick={send} style={{ ...btn(TG_TONE, "#fff", "none"), flex: 1, minWidth: 180, opacity: running || !text.trim() || !publicOk ? 0.5 : 1 }}>
+              📢 ارسال به @sugimotovisa
+            </button>
+          </div>
+          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr" }}>The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID).</div>}
+
+          <div style={{ background: C.surface, border: `1px solid ${alpha(TG_TONE, 0.3)}`, borderRadius: 14, padding: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>✏️ بازنویسی با یادداشت</div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              placeholder="مثلاً: کوتاه‌تر، تاریخ رو در تیتر بیار، پاراگراف آخر رو حذف کن…"
+              style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+            />
+            <button className="ui-btn" disabled={running || !notes.trim()} onClick={rewrite} style={{ ...btn(alpha(TG_TONE, 0.1), C.text, `1px solid ${alpha(TG_TONE, 0.4)}`), width: "100%", marginTop: 8, opacity: running || !notes.trim() ? 0.5 : 1 }}>
+              ↻ بازنویسی پست
+            </button>
+          </div>
+        </div>
+      )}
+
+      {preview && image && <SlidePreview slides={[{ num: 1, image_url: image }]} start={1} onClose={() => setPreview(false)} />}
+      {editPic && image && (
+        <EditPictureSheet
+          title="Telegram picture"
+          item={{ image_url: image, edits: (post && post.image_edits) || [] }}
+          ratio="4 / 5"
+          tone={TG_TONE}
+          onClose={() => setEditPic(false)}
+          onSubmit={(edit) => {
+            onJob("telegram_image", { text, edit });
+            setEditPic(false);
+          }}
+        />
+      )}
+    </Section>
+  );
+}
+
+// A sheet over the page for changing ONE picture: the picture, what to
+// change, and the changes asked for before. Only this picture is redone,
+// starting from itself.
+function Sheet({ children, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(10,14,20,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="ui-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "92vh", overflowY: "auto", background: C.surface, borderRadius: "20px 20px 0 0", padding: "16px 16px 22px", boxSizing: "border-box", boxShadow: "0 -8px 30px rgba(0,0,0,0.25)" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.orange, onClose, onSubmit }) {
+  const [ask, setAsk] = useState("");
+  const fa = "'Vazirmatn', sans-serif";
+  const edits = (item && item.edits) || [];
+  return (
+    <Sheet onClose={onClose}>
+      <div dir="rtl" style={{ fontFamily: fa }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <b style={{ fontSize: 15 }}>✏️ ویرایش همین تصویر <span style={{ fontWeight: 500, color: C.text3, fontSize: 12.5, direction: "ltr", unicodeBidi: "isolate" }}>{title}</span></b>
+          <button className="ui-btn" onClick={onClose} aria-label="Close" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <img src={item.image_url} alt="" style={{ width: 150, aspectRatio: ratio, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
+          <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>چه چیزی در این تصویر عوض بشه؟ فقط همین تصویر از روی خودش تغییر می‌کنه؛ بقیه دست نمی‌خورن.</div>
+            <textarea
+              autoFocus
+              value={ask}
+              onChange={(e) => setAsk(e.target.value)}
+              rows={5}
+              placeholder="مثلاً: عکس سمت چپ رو با یک پاسپورت و بلیط هواپیما عوض کن، تیتر بزرگ‌تر بشه، رنگ پس‌زمینه روشن‌تر…"
+              style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.8, resize: "vertical" }}
+            />
+            {edits.length > 0 && (
+              <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>
+                تغییرهای قبلی: {edits.map((e, i) => <div key={i}>• {e}</div>)}
+              </div>
+            )}
+          </div>
+        </div>
+        {text && (
+          <details style={{ marginTop: 10, fontSize: 12, color: C.text2 }}>
+            <summary style={{ cursor: "pointer" }}>متن روی تصویر</summary>
+            <div style={{ whiteSpace: "pre-line", lineHeight: 1.8, marginTop: 6 }}>{text}</div>
+          </details>
+        )}
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <button className="ui-btn ui-glow-orange" disabled={!ask.trim()} onClick={() => onSubmit(ask.trim())} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ask.trim() ? "pointer" : "default", opacity: ask.trim() ? 1 : 0.5, fontFamily: fa }}>
+            اعمال تغییر روی همین تصویر
+          </button>
+          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>انصراف</button>
+        </div>
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 8 }}>حدود ۵ سنت، کمتر از یک دقیقه.</div>
+      </div>
+    </Sheet>
+  );
+}
+
+// A story page's pencil: its screenshot is a photograph of the source and is
+// never redrawn, so what changes is the page's text — typed here, or
+// rewritten from the source text by an instruction — and that page alone is
+// drawn again.
+function StoryPageSheet({ page, total, onClose, onSubmit }) {
+  const [headline, setHeadline] = useState(page.headline || "");
+  const [body, setBody] = useState(page.body || "");
+  const [ask, setAsk] = useState("");
+  const fa = "'Vazirmatn', sans-serif";
+  const typed = headline.trim() !== (page.headline || "").trim() || body.trim() !== (page.body || "").trim();
+  const ready = !!headline.trim() && (typed || !!ask.trim());
+  const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.8, resize: "vertical" };
+  return (
+    <Sheet onClose={onClose}>
+      <div dir="rtl" style={{ fontFamily: fa }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <b style={{ fontSize: 15 }}>✏️ ویرایش صفحه {page.num} از {total}</b>
+          <button className="ui-btn" onClick={onClose} aria-label="Close" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <img src={page.image_url} alt="" style={{ width: 120, aspectRatio: "9 / 16", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
+          <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ fontSize: 12.5, color: C.text2 }}>
+              تیتر
+              <textarea value={headline} onChange={(e) => setHeadline(e.target.value)} rows={2} style={{ ...field, marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12.5, color: C.text2 }}>
+              متن زیر اسکرین‌شات
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} style={{ ...field, marginTop: 4 }} />
+            </label>
+          </div>
+        </div>
+        <label style={{ display: "block", fontSize: 12.5, color: C.text2, marginTop: 10 }}>
+          یا بنویس چه چیزی عوض بشه (از روی متن منبع بازنویسی می‌شه)
+          <textarea value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder="مثلاً: عدد اصلی رو بیار توی تیتر، متن کوتاه‌تر…" style={{ ...field, marginTop: 4 }} />
+        </label>
+        <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>اسکرین‌شات همون عکس واقعی منبع می‌مونه و جمله هایلایت‌شده عوض نمی‌شه؛ فقط متن همین صفحه تغییر می‌کنه و همین صفحه دوباره ساخته می‌شه.</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <button
+            className="ui-btn ui-glow-orange"
+            disabled={!ready}
+            onClick={() => onSubmit({ headline: headline.trim(), body: body.trim(), ...(ask.trim() ? { instruction: ask.trim() } : {}) })}
+            style={{ flex: 1, background: STORY_TONE, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5, fontFamily: fa }}
+          >
+            اعمال روی همین صفحه
+          </button>
+          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>انصراف</button>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 
