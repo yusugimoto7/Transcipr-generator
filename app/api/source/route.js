@@ -25,6 +25,11 @@ export async function POST(request) {
   const { topic, whole } = await request.json().catch(() => ({}));
   if (!topic) return Response.json({ error: "no topic" }, { status: 400 });
 
+  // A topic made from uploaded pictures: the word-for-word transcription.
+  if (topic.image_text) {
+    return Response.json({ kind: "pictures", title: `Text read from ${topic.images_count || ""} uploaded picture(s)`, text: topic.image_text });
+  }
+
   if (topic.newsletter === "lexbase" || /\/api\/lexbase\//.test(topic.source_url || "")) {
     await getLexbaseItems({ waitMs: 8000 });
     const it = findLexbaseItem(topic);

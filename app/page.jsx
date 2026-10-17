@@ -1039,7 +1039,7 @@ export default function App() {
 
               <CustomNewsBox
                 job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
-                onStart={(links, note) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note })}
+                onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
                 onOpen={openTopic}
               />
 
@@ -1772,10 +1772,45 @@ function IdeasSection({ decisions, ...actions }) {
 // the server reads the pages and writes one card from them, which joins the
 // list for everyone. The note sets the angle; facts come only from the pages.
 const CUSTOM_NEWS_KEY = "custom-news";
+// A picture made small enough to send (long edge 1800px, JPEG): enough for
+// the text in a screenshot to stay readable, small enough for a phone upload.
+function shrinkImage(file) {
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, 1800 / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k);
+        c.height = Math.round(img.height * k);
+        const g = c.getContext("2d");
+        g.fillStyle = "#fff";
+        g.fillRect(0, 0, c.width, c.height);
+        g.drawImage(img, 0, 0, c.width, c.height);
+        resolve({ name: file.name || "picture", data: c.toDataURL("image/jpeg", 0.88) });
+      };
+      img.onerror = () => resolve(null);
+      img.src = r.result;
+    };
+    r.onerror = () => resolve(null);
+    r.readAsDataURL(file);
+  });
+}
+
 function CustomNewsBox({ job, onStart, onOpen }) {
   const [open, setOpen] = useState(false);
   const [links, setLinks] = useState("");
   const [note, setNote] = useState("");
+  const [images, setImages] = useState([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileRef = useRef(null);
+  const addFiles = async (files) => {
+    const list = [...(files || [])].filter((f) => /^image\//.test(f.type));
+    if (!list.length) return;
+    const shrunk = (await Promise.all(list.map(shrinkImage))).filter(Boolean);
+    setImages((prev) => [...prev, ...shrunk].slice(0, 5));
+  };
   const running = !!job && job.status === "running";
   const failed = !!job && job.status === "error" ? job.error : "";
   const done = !!job && job.status === "done" && job.result && job.result.topic;
@@ -1788,8 +1823,10 @@ function CustomNewsBox({ job, onStart, onOpen }) {
       lastId.current = job.id;
       setLinks("");
       setNote("");
+      setImages([]);
     }
   }, [done, job]);
+  const ready = count > 0 || images.length > 0;
   const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontSize: 13, lineHeight: 1.7, resize: "vertical", background: C.surface };
 
   return (
@@ -1799,7 +1836,7 @@ function CustomNewsBox({ job, onStart, onOpen }) {
         onClick={() => setOpen((v) => !v)}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 13px", background: "transparent", border: "none", cursor: "pointer", fontFamily: fa, fontSize: 13.5, fontWeight: 800, color: C.text }}
       >
-        <span>🔗 ساخت خبر از لینک‌های خودت</span>
+        <span>🔗 ساخت خبر از لینک‌ها و عکس‌های خودت</span>
         <span style={{ color: C.text3, fontSize: 12 }}>{running ? "⏳ در حال ساخت…" : open ? "▲" : "▼"}</span>
       </button>
       {(open || running || failed || done) && (
@@ -1808,21 +1845,66 @@ function CustomNewsBox({ job, onStart, onOpen }) {
             <>
               <div style={{ fontSize: 12, color: C.text2, marginBottom: 6 }}>لینک‌ها (هر لینک در یک خط، حداکثر ۵)</div>
               <textarea dir="ltr" value={links} onChange={(e) => setLinks(e.target.value)} rows={3} placeholder={"https://www.canada.ca/…\nhttps://www.cicnews.com/…"} style={{ ...field, fontFamily: "'Inter', monospace", fontSize: 12.5 }} />
+              <div style={{ fontSize: 12, color: C.text2, margin: "10px 0 6px" }}>عکس‌ها (اسکرین‌شات خبر، نامه، پست — حداکثر ۵)</div>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  addFiles(e.dataTransfer.files);
+                }}
+                onPaste={(e) => addFiles(e.clipboardData && e.clipboardData.files)}
+                onClick={() => fileRef.current && fileRef.current.click()}
+                role="button"
+                tabIndex={0}
+                style={{ border: `2px dashed ${dragOver ? C.teal : alpha(C.teal, 0.4)}`, background: dragOver ? alpha(C.teal, 0.08) : C.surface, borderRadius: 12, padding: images.length ? 10 : "18px 10px", textAlign: "center", cursor: "pointer", fontSize: 12.5, color: C.text2 }}
+              >
+                {images.length ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start" }}>
+                    {images.map((im, i) => (
+                      <div key={i} style={{ position: "relative", width: 72, height: 72, borderRadius: 9, overflow: "hidden", border: `1px solid ${C.line}` }}>
+                        <img src={im.data} alt={im.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        <button
+                          aria-label="Remove picture"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setImages((prev) => prev.filter((_, j) => j !== i));
+                          }}
+                          style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 99, border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 11, cursor: "pointer", lineHeight: "20px", padding: 0 }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {images.length < 5 && (
+                      <div style={{ width: 72, height: 72, borderRadius: 9, border: `1px dashed ${C.line}`, display: "grid", placeItems: "center", fontSize: 22, color: C.text3 }}>＋</div>
+                    )}
+                  </div>
+                ) : (
+                  <>🖼 عکس‌ها را اینجا بکشید و رها کنید، یا بزنید تا انتخاب کنید</>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+              </div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>متن داخل عکس‌ها کلمه‌به‌کلمه خوانده می‌شود و خبر فقط از همان نوشته می‌شود.</div>
               <div style={{ fontSize: 12, color: C.text2, margin: "8px 0 6px" }}>یادداشت (اختیاری) — زاویه و تأکید؛ فکت‌ها فقط از خود لینک‌ها می‌آیند</div>
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="مثلاً: روی اثرش برای دانشجوهای ایرانی تمرکز کن، تاریخ اجرا را برجسته کن…" style={{ ...field, fontFamily: fa }} />
               <button
                 className="ui-btn ui-glow-orange"
-                disabled={!count}
-                onClick={() => onStart(links, note.trim())}
-                style={{ marginTop: 10, width: "100%", background: count ? C.teal : alpha(C.teal, 0.4), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 14, cursor: count ? "pointer" : "default", fontFamily: fa }}
+                disabled={!ready}
+                onClick={() => onStart(links, note.trim(), images)}
+                style={{ marginTop: 10, width: "100%", background: ready ? C.teal : alpha(C.teal, 0.4), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", fontFamily: fa }}
               >
-                ساخت خبر از {count || ""} لینک
+                ساخت خبر از {[count ? `${count} لینک` : "", images.length ? `${images.length} عکس` : ""].filter(Boolean).join(" و ") || "لینک یا عکس"}
               </button>
             </>
           )}
           {running && (
             <div className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(C.teal, 0.08), fontSize: 13 }}>
-              <span className="ui-pulse">⏳</span> در حال خواندن صفحه‌ها و نوشتن خبر… می‌تونی از این صفحه بری.
+              <span className="ui-pulse">⏳</span> در حال خواندن صفحه‌ها و عکس‌ها و نوشتن خبر… می‌تونی از این صفحه بری.
             </div>
           )}
           {failed && !running && <div dir="ltr" style={{ marginTop: 8, fontSize: 12, color: C.reject, textAlign: "left" }}>⚠️ {failed}</div>}
