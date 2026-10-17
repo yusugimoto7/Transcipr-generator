@@ -964,6 +964,9 @@ export default function App() {
           <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
             ✨ <span className="ui-wide">Wizard</span>
           </a>
+          <a href="/editing" className="ui-btn" aria-label="Video Editing" title="Video Editing" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
+            🎬 <span className="ui-wide">Editing</span>
+          </a>
           <button
             onClick={() => {
               if (view !== "deck") backToList();
