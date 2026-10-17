@@ -1170,6 +1170,36 @@ function Calendar({ user }) {
       setError(e.message);
     }
   };
+  // Right-click (or a long press on a phone) on a board's tab removes it, for the admin.
+  const removeBoard = async (b) => {
+    if (!admin) return;
+    const n = (data[b.id] && data[b.id].board && data[b.id].board.cards.length) || 0;
+    if (!window.confirm(`Remove the board “${b.name}”?${n ? ` Its ${n} card${n > 1 ? "s" : ""} will no longer be shown.` : ""}`)) return;
+    try {
+      await calApi(`/boards/${b.id}`, { method: "DELETE" });
+      setBoards(boards.filter((x) => x.id !== b.id));
+      if (market === b.id) setMarket("all");
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const pressTimer = useRef(null);
+  const tabPress = (b) =>
+    admin
+      ? {
+          onContextMenu: (e) => {
+            e.preventDefault();
+            removeBoard(b);
+          },
+          onTouchStart: () => {
+            clearTimeout(pressTimer.current);
+            pressTimer.current = setTimeout(() => removeBoard(b), 650);
+          },
+          onTouchEnd: () => clearTimeout(pressTimer.current),
+          onTouchMove: () => clearTimeout(pressTimer.current),
+          title: "Right-click (or press and hold) to remove this board",
+        }
+      : {};
   const fromSource = async (source, video) => {
     setPanel("");
     const b = planBoard.board;
@@ -1234,7 +1264,7 @@ function Calendar({ user }) {
               </button>
             )}
             {boards.map((b) => (
-              <button key={b.id} className={`${c.tab} ${(market === b.id || (view === "board" && market === "all" && b.id === boards[0].id)) ? c.on : ""}`} onClick={() => setMarket(b.id)}>
+              <button key={b.id} className={`${c.tab} ${(market === b.id || (view === "board" && market === "all" && b.id === boards[0].id)) ? c.on : ""}`} onClick={() => setMarket(b.id)} {...tabPress(b)}>
                 {b.name}
               </button>
             ))}

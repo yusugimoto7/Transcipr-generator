@@ -1,5 +1,5 @@
 import { guard, json, allUsers } from "../../../../../lib/editing/auth";
-import { getBoard, editBoard, approvalValid, contentHash, postStatus } from "../../../../../lib/calendar/model";
+import { getBoard, editBoard, removeBoard, approvalValid, contentHash, postStatus } from "../../../../../lib/calendar/model";
 import { channelStatus, dryRun, autoPublish } from "../../../../../lib/calendar/publisher";
 
 export const runtime = "nodejs";
@@ -34,6 +34,18 @@ export async function PATCH(request, { params }) {
   if (g.res) return g.res;
   try {
     return json({ board: await editBoard(g.user, params.bid, await request.json().catch(() => ({}))) });
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// Remove the board from every view (admin only; see removeBoard).
+export async function DELETE(request, { params }) {
+  const g = await guard(request);
+  if (g.res) return g.res;
+  try {
+    await removeBoard(g.user, params.bid);
+    return json({ ok: true });
   } catch (e) {
     return fail(e);
   }
