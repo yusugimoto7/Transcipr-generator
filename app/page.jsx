@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { isUntrusted } from "../lib/trust";
 import { sameTopic } from "../lib/similar";
+import CalendarStrip from "./CalendarStrip";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -2719,6 +2720,22 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         <Section title="🎬 ویدیوی انگلیسی" innerRef={videoRef}>
           <VideoPanel job={videoJob} video={video} onRefresh={onRefreshVideo} onOpen={() => setComposer(true)} />
         </Section>
+      )}
+
+      {/* Content calendar: each thing made from this topic can become a post */}
+      {!loading && !error && (
+        <CalendarStrip
+          topic={topic}
+          C={C}
+          FONT={FONT}
+          version={[
+            slides.filter((x) => x.image_url).length,
+            storyPages.filter((x) => x.image_url).length,
+            (video && video.video_url) || "",
+            article ? 1 : 0,
+            hasScripts ? 1 : 0,
+          ].join("|")}
+        />
       )}
 
       {composer && (

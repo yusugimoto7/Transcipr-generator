@@ -5,13 +5,14 @@ import { getEntries } from "../../../../lib/workspace";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// What can become a card: the Topic Engine's topics (admin only; members keep seeing only their
-// own work) and Video Editing projects whose video is approved (members: their own).
+// What can become a card: the Topic Engine's topics (the whole team shares them; a card made by a
+// member is still posted only after Hamed's approval) and Video Editing projects whose video is
+// approved (members: their own).
 export async function GET(request) {
   const g = await guard(request);
   if (g.res) return g.res;
   const out = { topics: [], videos: [] };
-  if (g.user.role === "admin") {
+  {
     const entries = await getEntries().catch(() => []);
     out.topics = entries
       .filter((e) => e.status !== "archived")

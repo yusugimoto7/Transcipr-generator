@@ -10,10 +10,12 @@ const HANDLE = "sugimotovisa";
 function Media({ media, shape }) {
   const thumb = thumbOf(media);
   if (!media || media.kind === "none") return null;
+  const n = (media.items || []).length;
   return (
     <div className={`${c.pvMedia} ${c["pv_" + shape]}`}>
       {thumb ? <img src={thumb} alt="" onError={(e) => (e.currentTarget.style.display = "none")} /> : null}
       {media.kind === "video" && <span className={c.play}>▶</span>}
+      {n > 1 && <span style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,.6)", color: "#fff", borderRadius: 99, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>1/{n}</span>}
     </div>
   );
 }

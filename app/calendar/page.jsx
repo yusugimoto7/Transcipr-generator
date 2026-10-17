@@ -803,6 +803,16 @@ function Calendar({ user }) {
     return () => clearInterval(t);
   }, [load, open, compose]);
 
+  // Opened from a topic ("Open in calendar"): show that post in the composer once its board is in.
+  const deep = useRef(false);
+  useEffect(() => {
+    const bid = q.get("board");
+    const cid = q.get("card");
+    if (deep.current || !bid || !cid || !data[bid]) return;
+    deep.current = true;
+    if (data[bid].board.cards.some((x) => x.id === cid)) setCompose({ bid, id: cid });
+  }, [q, data]);
+
   const first = boards[0] && data[boards[0].id];
   const one = market !== "all" && data[market] ? data[market] : null;
   const planBoard = one || first;

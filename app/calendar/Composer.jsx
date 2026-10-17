@@ -144,7 +144,8 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
   );
   const editing = tab === "original" ? null : d.channels[tab];
   const thumb = thumbOf(d.media);
-  const needsVideo = on.some((n) => n.key === "tiktok" || n.key === "youtube" || (n.key === "instagram" && d.channels.instagram.format !== "post"));
+  const album = (d.media && d.media.items) || [];
+  const needsVideo = on.some((n) => n.key === "tiktok" || n.key === "youtube" || (n.key === "instagram" && d.channels.instagram.format === "reel"));
 
   return (
     <div className={c.bg} onMouseDown={(e) => e.target === e.currentTarget && close()}>
@@ -224,7 +225,8 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   {tab === "instagram" && (
                     <select id="cmp-igformat" className={c.select} value={editing.format || "reel"} disabled={locked} onChange={(e) => setCh("instagram", { format: e.target.value })}>
                       <option value="reel">Reel (video)</option>
-                      <option value="post">Feed post (image)</option>
+                      <option value="post">Feed post (image or carousel)</option>
+                      <option value="story">Stories (each file its own story)</option>
                     </select>
                   )}
                   {tab === "youtube" && <input id="cmp-yttitle" className={`${c.input} ${c.grow}`} dir="auto" placeholder="YouTube title" value={editing.title || ""} disabled={locked} onChange={(e) => setCh("youtube", { title: e.target.value })} />}
@@ -254,6 +256,21 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               <div className={c.label} style={{ marginBottom: 8 }}>
                 Media {needsVideo && <span className={c.muted}>· a video is needed for {on.filter((n) => n.key !== "linkedin" && n.key !== "x").map((n) => n.name).join(", ")}</span>}
               </div>
+              {album.length > 1 ? (
+                <div className={c.mediaBox}>
+                  <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: "1 1 auto", minWidth: 0 }}>
+                    {album.map((m, i) => (
+                      <div key={i} className={c.thumb} style={m.kind === "image" ? { backgroundImage: `url(${m.url})`, flex: "0 0 auto" } : { flex: "0 0 auto" }} title={`${i + 1} of ${album.length}`}>
+                        {m.kind === "video" ? "▶" : ""}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0 0 auto" }}>
+                    <span className={c.muted}>{album.length} files, posted together</span>
+                    {!locked && <button className={c.btn} onClick={() => setD({ ...d, media: { kind: "none", url: "" } })}>Remove the files</button>}
+                  </div>
+                </div>
+              ) : (
               <div className={c.mediaBox}>
                 <div className={c.thumb} style={thumb ? { backgroundImage: `url(${thumb})` } : undefined}>
                   {d.media.kind === "video" ? "▶" : d.media.kind === "image" ? "" : "+"}
@@ -289,6 +306,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   )}
                 </div>
               </div>
+              )}
             </div>
 
             <div>
