@@ -942,6 +942,11 @@ function ChannelsPanel({ channels, settings, onClose }) {
                 )}
               </div>
               <span className={c.muted}>{s.detail}</span>
+              {s.redirect && !s.connected && (
+                <span className={c.muted} style={{ wordBreak: "break-all" }}>
+                  Return address to register in the {name} developer settings, exactly: <code style={{ userSelect: "all", color: "var(--text)" }}>{s.redirect}</code>
+                </span>
+              )}
             </div>
           );
         })}
