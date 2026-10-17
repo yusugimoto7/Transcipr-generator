@@ -926,7 +926,7 @@ function ChannelsPanel({ channels, settings, onClose }) {
             ✕
           </button>
         </div>
-        {settings.dry_run && <div className={c.note}>Test mode is on: publishing only pretends (CALENDAR_DRY_RUN).</div>}
+        {settings.dry_run && <div className={c.note}>Test mode is on: publishing only pretends (CALENDAR_DRY_RUN). The state below is the real one.</div>}
         {!settings.autopublish && <div className={c.muted}>The publishing clock is off (CALENDAR_AUTOPUBLISH): approved cards go out only with “Publish now”.</div>}
         {CH.map(([k, , name]) => {
           const s = channels[k] || {};
