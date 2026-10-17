@@ -66,7 +66,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Instagram fact stories (1-4 pages, default 1): Farsi fact per page over a real screenshot of the source with the proving sentence highlighted — Lexbase from the issue's PDF (pdf.js, fetched again from Gmail only when a story is made), web sources photographed through HCTI; pages drawn through HCTI. Needs `HCTI_USER_ID` + `HCTI_API_KEY` | `lib/story/**` |
 | English video: options sheet on the topic page → n8n workflow "Topic Engine: English video" (HeyGen) → reports back to `/api/video/callback`. Inactive until `VIDEO_WORKFLOW_URL` + `VIDEO_WORKFLOW_SECRET` are set | `lib/video.js`, `app/api/video/callback/route.js` |
 | General ideas: demand signals (Google/YouTube autocomplete EN+FA, IRCC Help Centre, Reddit, site titles, official page text) harvested daily → weekly batch of evergreen ideas grounded on canada.ca pages | `lib/ideas/seeds.js` (subjects, pages), `lib/ideas/signals.js`, `lib/ideas/index.js`, `/api/ideas` |
-| Source text for every writing step (Lexbase item → stored official page → fetched page → excerpt) | `lib/grounding.js` |
+| Source text for every writing step (Lexbase item → stored official page → fetched page → excerpt; a provincial draw puts the province's own results page first) | `lib/grounding.js`, `lib/provinces.js` |
 | Video Editing section (login, team, projects, review, corrections, approval). The editing method is NOT here: it lives in english-sugimotovisa (`scripts/rough_cut.py`, GitHub job `rough_cut`); this app only stores state on that repo's `editing-data` branch and starts the job | `lib/editing/**`, `app/editing/**`, `app/api/editing/**`, `middleware.js` |
 | Content calendar (Trello-style boards per market, month view, cards from topics and approved videos, publishing to Instagram, TikTok, YouTube, LinkedIn page, X after Hamed's approval) | `lib/calendar/**`, `app/calendar/**`, `app/api/calendar/**` |
 | UI (one list: new + used topics, Archive filter; Lexbase and Ideas tabs; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
@@ -100,7 +100,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 ## Project skills
 
-Team decisions for specific features live in `.claude/skills/` and load in every session: `instagram-story`, `carousel-design`, `video-benchmarks`, `lexbase-court-outcome`. Read the matching one before changing that feature, and update it when Hamed decides something new about it.
+Team decisions for specific features live in `.claude/skills/` and load in every session: `content-playbook` (everything learned about making and designing content, all parts — start here), `instagram-story`, `carousel-design`, `video-benchmarks`, `lexbase-court-outcome`. Read the matching one before changing that feature, and update it when Hamed decides something new about it.
 
 ## Conventions that matter here
 
