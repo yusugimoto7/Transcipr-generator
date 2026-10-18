@@ -8,6 +8,7 @@
 import { pickerNote } from "../../lib/tz";
 import { useEffect, useMemo, useState } from "react";
 import { apiAt } from "../editing/ui";
+import DrivePicker from "../DrivePicker";
 import { NETWORKS, NET, STATUS, effectiveCaption, thumbOf } from "./channels";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
@@ -292,6 +293,9 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       <input id="cmp-murl" className={`${c.input} ${c.grow}`} placeholder="Google Drive link (Anyone with the link)" value={d.media.url || ""} disabled={locked} onChange={(e) => setD({ ...d, media: { ...d.media, url: e.target.value } })} />
                     )}
                   </div>
+                  {d.media.kind !== "none" && !locked && (
+                    <DrivePicker kind={d.media.kind} onPick={(file) => setD((x) => ({ ...x, media: { kind: x.media.kind, url: file.url } }))} />
+                  )}
                   {sources.videos.length > 0 && !locked && (
                     <select id="cmp-mpick" className={c.select} value="" onChange={(e) => {
                       const v = sources.videos.find((x) => x.id === e.target.value);

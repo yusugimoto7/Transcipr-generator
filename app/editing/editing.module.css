@@ -44,7 +44,7 @@ h2.h2 { font-size: 16px; margin: 0; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .grow { flex: 1 1 200px; min-width: 0; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-.field span { color: var(--text-2); font-weight: 500; }
+.field span, .field > label { color: var(--text-2); font-weight: 500; }
 .input, .select, .textarea { font: inherit; font-size: 15px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 0; }
 .input:focus, .select:focus, .textarea:focus { outline: 2px solid rgba(50, 81, 93, 0.35); border-color: var(--orange); }
 .btn { font: inherit; font-size: 14px; font-weight: 600; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }

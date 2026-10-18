@@ -5,6 +5,7 @@ import { isUntrusted } from "../lib/trust";
 import { sameTopic } from "../lib/similar";
 import CalendarStrip from "./CalendarStrip";
 import CalendarButtons from "./CalendarButtons";
+import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
 
 /* ============================================================
@@ -4016,7 +4017,10 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
               ratio={d.ratio}
               onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}) })}
             />
-            <div style={{ ...hint, margin: "10px 0 6px" }}>Or paste a link to a new benchmark video:</div>
+            <div style={{ ...hint, margin: "10px 0 6px" }}>Or a new benchmark video from Google Drive, or its link:</div>
+            <div style={{ marginBottom: 8 }}>
+              <DrivePicker kind="video" onPick={(file) => set({ benchmark: file.url })} />
+            </div>
             <div style={{ position: "relative" }}>
               <input
                 value={d.benchmark}

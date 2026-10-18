@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, s, Shell } from "../ui";
+import DrivePicker from "../../DrivePicker";
 
 function NewProject() {
   const router = useRouter();
@@ -32,11 +33,12 @@ function NewProject() {
         <span>Title</span>
         <input id="title" className={s.input} value={f.title} onChange={set("title")} placeholder="Inland vs overseas sponsorship" required />
       </label>
-      <label className={s.field}>
-        <span>Google Drive link to the raw video</span>
-        <input id="source_url" className={s.input} value={f.source_url} onChange={set("source_url")} placeholder="https://drive.google.com/file/d/…/view" required />
-        <small className={s.muted}>In Drive, set sharing to “Anyone with the link”. Up to 20 minutes of footage.</small>
-      </label>
+      <div className={s.field}>
+        <label htmlFor="source_url">Raw video in Google Drive</label>
+        <DrivePicker kind="video" onPick={(file) => setF((x) => ({ ...x, source_url: file.url, title: x.title || file.name.replace(/\.[^.]+$/, "") }))} />
+        <input id="source_url" className={s.input} value={f.source_url} onChange={set("source_url")} placeholder="or paste its link: https://drive.google.com/file/d/…/view" required />
+        <small className={s.muted}>A pasted link must be shared as “Anyone with the link”; a file chosen from Drive is shared that way for you. Up to 20 minutes of footage.</small>
+      </div>
       <div className={s.row}>
         <label className={`${s.field} ${s.grow}`}>
           <span>Kind</span>
