@@ -11,6 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Shell, apiAt, Avatar } from "../editing/ui";
 import c from "./calendar.module.css";
 import p from "./publishing.module.css";
+import PostFiles from "./PostFiles";
 import Composer, { NetChip, StatusPill } from "./Composer";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
 import { whenAll, pickerNote } from "../../lib/tz";
@@ -885,6 +886,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                     <Pencil /> {onNetworks(card).length ? "Edit the post, schedule or publish" : "Write the post"}
                   </Button>
                 </div>
+                <PostFiles boardId={boardId} cardId={cardId} card={card} />
               </div>
             </Section>
 
@@ -1027,7 +1029,11 @@ function ChannelsPanel({ channels, settings, onClose }) {
           </button>
         </div>
         {settings.dry_run && <div className={c.note}>Test mode is on: publishing only pretends (CALENDAR_DRY_RUN). The state below is the real one.</div>}
-        {!settings.autopublish && <div className={c.muted}>The publishing clock is off (CALENDAR_AUTOPUBLISH): approved cards go out only with “Publish now”.</div>}
+        {!settings.platform_posting ? (
+          <div className={c.note}>Posting to the networks is switched off for now. A finished post leaves the app by download or Google Drive. Posting is turned on with CALENDAR_PLATFORM_POSTING after the credentials below are tested.</div>
+        ) : (
+          !settings.autopublish && <div className={c.muted}>The publishing clock is off (CALENDAR_AUTOPUBLISH): approved cards go out only with “Publish now”.</div>
+        )}
         {CH.map(([k, , name]) => {
           const s = channels[k] || {};
           return (
@@ -1408,6 +1414,7 @@ function Calendar({ user }) {
           <h1 className="m-0 text-[22px] font-semibold tracking-tight text-ink">Content calendar</h1>
           <span className={c.grow} />
           {first && first.settings.dry_run && <span className={`${c.badge} ${c.warn}`}>Test mode: nothing is really posted</span>}
+          {first && !first.settings.platform_posting && <span className={`${c.badge} ${c.warn}`}>Posting to networks is off: download or save to Drive</span>}
         </div>
         {view !== "board" ? (
           <div className={c.bar}>
@@ -1493,6 +1500,7 @@ function Calendar({ user }) {
           start={compose.start}
           me={first.me}
           channels={first.channels}
+          settings={first.settings}
           sources={sources}
           onClose={() => {
             setCompose(null);

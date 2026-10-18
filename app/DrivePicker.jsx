@@ -107,6 +107,120 @@ async function shareByLink(token, id) {
   );
 }
 
+// ---- Save to Google Drive: the finished post's files go into a new folder in the person's own Drive.
+// Same sign-in as the picker (drive.file: the app only sees what it creates). The files are read
+// through this app's own download links, then sent to Drive from the browser.
+
+const DRIVE = "https://www.googleapis.com";
+const authHeader = (token) => ({ Authorization: "Bearer " + token });
+
+async function driveError(res, what) {
+  const body = await res.json().catch(() => ({}));
+  const msg = (body.error && body.error.message) || "";
+  if (res.status === 401) g.token = null;
+  throw new Error(`${what}${msg ? ": " + msg : ` (error ${res.status})`}`);
+}
+
+async function makeFolder(token, name) {
+  const res = await fetch(`${DRIVE}/drive/v3/files?supportsAllDrives=true`, {
+    method: "POST",
+    headers: { ...authHeader(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" }),
+  });
+  if (!res.ok) await driveError(res, "could not make the folder in Drive");
+  return (await res.json()).id;
+}
+
+async function uploadFile(token, name, blob, parent) {
+  const type = blob.type || "application/octet-stream";
+  const init = await fetch(`${DRIVE}/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true`, {
+    method: "POST",
+    headers: { ...authHeader(token), "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": type },
+    body: JSON.stringify({ name, parents: [parent] }),
+  });
+  if (!init.ok) await driveError(init, `could not start uploading ${name}`);
+  const where = init.headers.get("Location");
+  if (!where) throw new Error(`Drive gave no upload address for ${name}`);
+  const put = await fetch(where, { method: "PUT", headers: { "Content-Type": type }, body: blob });
+  if (!put.ok) await driveError(put, `could not upload ${name}`);
+}
+
+const fileName = (res, fallback) => {
+  const m = (res.headers.get("Content-Disposition") || "").match(/filename\*=UTF-8''([^;]+)/i);
+  try {
+    return m ? decodeURIComponent(m[1]) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+// `urls` are this app's own download links (they carry the person's sign-in).
+export function DriveSaveButton({ urls, folderName, disabled, label = "Save to Google Drive" }) {
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState({ error: "", ok: "", link: "" });
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    prepare().then((c) => alive.current && setCfg(c)).catch((e) => alive.current && setCfg({ enabled: false, error: e.message }));
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  if (!cfg) return null;
+  if (!cfg.enabled)
+    return <small className="text-muted">Saving to Google Drive needs the Google keys (GOOGLE_PICKER_*) on the server.</small>;
+  const click = () => {
+    setNote({ error: "", ok: "", link: "" });
+    const tokenP = requestToken(cfg); // inside the click, or phones block Google's popup
+    setBusy("Signing in to Google…");
+    tokenP
+      .then(async (token) => {
+        const folder = await makeFolder(token, folderName);
+        let n = 0;
+        for (const u of urls) {
+          setBusy(`Saving ${++n} of ${urls.length}…`);
+          const res = await fetch(u, { cache: "no-store" });
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `could not read a file (error ${res.status})`);
+          await uploadFile(token, fileName(res, `file ${n}`), await res.blob(), folder);
+        }
+        if (alive.current) setNote({ error: "", ok: `Saved ${urls.length} file${urls.length > 1 ? "s" : ""} to the Drive folder “${folderName}”.`, link: `https://drive.google.com/drive/folders/${folder}` });
+      })
+      .catch((e) => alive.current && setNote({ error: e.message, ok: "", link: "" }))
+      .finally(() => alive.current && setBusy(""));
+  };
+  return (
+    <span className="inline-flex min-w-0 flex-col items-start gap-1">
+      <Button type="button" variant="outline" disabled={disabled || !!busy || !urls.length} onClick={click}>
+        <DriveMark />
+        {busy || label}
+      </Button>
+      {note.error && <small className="text-[#b91c1c]">{note.error}</small>}
+      {note.ok && (
+        <small className="text-[#067647]">
+          {note.ok}{" "}
+          <a href={note.link} target="_blank" rel="noreferrer" className="font-semibold underline">
+            Open the folder
+          </a>
+        </small>
+      )}
+    </span>
+  );
+}
+
+function DriveMark() {
+  return (
+    <svg width="18" height="16" viewBox="0 0 87.3 78" aria-hidden="true">
+      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47" />
+      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
+      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
+    </svg>
+  );
+}
+
 export default function DrivePicker({ kind = "any", onPick, disabled, label = "Choose from Google Drive" }) {
   const [cfg, setCfg] = useState(null);
   const [busy, setBusy] = useState(false);

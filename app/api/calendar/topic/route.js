@@ -1,6 +1,7 @@
 import { guard, json } from "../../../../lib/editing/auth";
 import { HttpError } from "../../../../lib/calendar/model";
 import { topicCalendar, addFromTopic } from "../../../../lib/calendar/fromTopic";
+import { platformPosting, dryRun } from "../../../../lib/calendar/publisher";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export async function GET(request) {
   const g = await guard(request);
   if (g.res) return g.res;
   try {
-    return json(await topicCalendar(g.user, new URL(request.url).searchParams.get("key") || ""));
+    return json({ ...(await topicCalendar(g.user, new URL(request.url).searchParams.get("key") || "")), platform_posting: platformPosting() || dryRun() });
   } catch (e) {
     return fail(e);
   }

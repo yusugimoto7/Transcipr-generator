@@ -6,6 +6,7 @@
 // approves, schedules and publishes.
 
 import { Check, Clock, Play, Plus } from "lucide-react";
+import PostFiles from "./PostFiles";
 import { Badge } from "../../components/ui/badge";
 import { pickerNote } from "../../lib/tz";
 import { useEffect, useMemo, useState } from "react";
@@ -44,7 +45,7 @@ export function NetChip({ k, state }) {
   );
 }
 
-export default function Composer({ boards, boardId, cardId, start, me, channels, sources, onClose, onSaved, onOpenCard }) {
+export default function Composer({ boards, boardId, cardId, start, me, channels, sources, onClose, onSaved, onOpenCard, settings = {} }) {
   const admin = me.role === "admin";
   const [bid, setBid] = useState(boardId || (boards[0] && boards[0].id) || "");
   const [id, setId] = useState(cardId || "");
@@ -333,6 +334,14 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               </div>
             </div>
 
+            {saved && saved.id && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div className={c.label}>Take it with you</div>
+                {dirty && <span className={c.muted}>Save the draft first; the files below are the saved version.</span>}
+                <PostFiles boardId={bid} cardId={saved.id} card={saved} />
+              </div>
+            )}
+
             {saved && saved.publish && Object.keys(saved.publish).length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div className={c.label}>Results</div>
@@ -397,9 +406,11 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               <button className={`${c.btn} ${c.blue}`} disabled={busy || !on.length} onClick={() => run(when === "schedule" ? "Approved and scheduled." : "Approved. Give it a time to schedule it.", [{ action: "approve" }])}>
                 {when === "schedule" ? "Approve & schedule" : "Approve"}
               </button>
+              {settings.platform_posting !== false && (
               <button className={`${c.btn} ${c.primary}`} disabled={busy || !on.length} onClick={() => window.confirm(`Publish now on ${on.map((n) => n.name).join(", ")}?`) && run("Publishing started; results appear here.", [{ action: "approve" }, { action: "publish_now" }])}>
                 Publish now
               </button>
+              )}
             </>
           )}
           {admin && saved && saved.approved && !locked && !dirty && (

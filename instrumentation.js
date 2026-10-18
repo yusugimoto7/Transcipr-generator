@@ -5,8 +5,9 @@
 // exactly as before.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  // Content calendar publishing clock: off unless CALENDAR_AUTOPUBLISH=true.
-  if (process.env.CALENDAR_AUTOPUBLISH === "true") {
+  // Content calendar publishing clock: off unless CALENDAR_AUTOPUBLISH=true and the master switch
+  // CALENDAR_PLATFORM_POSTING=true is on (it stays off until the channels' credentials are tested).
+  if (process.env.CALENDAR_AUTOPUBLISH === "true" && process.env.CALENDAR_PLATFORM_POSTING === "true") {
     try {
       const { startCalendarScheduler } = await import("./lib/calendar/scheduler");
       startCalendarScheduler();

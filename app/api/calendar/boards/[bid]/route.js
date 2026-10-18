@@ -1,6 +1,6 @@
 import { guard, json, allUsers } from "../../../../../lib/editing/auth";
 import { getBoard, editBoard, removeBoard, approvalValid, contentHash, postStatus } from "../../../../../lib/calendar/model";
-import { channelStatus, dryRun, autoPublish } from "../../../../../lib/calendar/publisher";
+import { channelStatus, dryRun, autoPublish, platformPosting } from "../../../../../lib/calendar/publisher";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export async function GET(request, { params }) {
       board: { ...b, cards: b.cards.map((c) => ({ ...c, approved: approvalValid(c), stale_approval: !!c.approval && !approvalValid(c), hash: contentHash(c), status: postStatus(c) })) },
       users,
       channels: await channelStatus(),
-      settings: { dry_run: dryRun(), autopublish: autoPublish() },
+      settings: { dry_run: dryRun(), autopublish: autoPublish(), platform_posting: platformPosting() || dryRun() },
       me: { id: g.user.id, name: g.user.name, role: g.user.role },
     });
   } catch (e) {

@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { whenAll, pickerNote } from "../lib/tz";
+import PostFiles from "./calendar/PostFiles";
 
 const STATUS = {
   draft: ["Draft", "#8b95a3"], pending: ["Waiting for Hamed's approval", "#f28c28"], approved: ["Approved", "#2f6fde"],
@@ -98,7 +99,8 @@ export default function CalendarButtons({ topic, made, version = "", C, FONT }) 
     const now = !publishAt;
     const iso = now ? new Date().toISOString() : new Date(publishAt).toISOString();
     if (!now && new Date(iso).getTime() < Date.now() - 60000) return setMsg({ ok: "", err: "Pick a time in the future." });
-    if (admin && !window.confirm(now ? `Approve this ${NAMES[made]} and post it to Instagram now?` : `Approve this ${NAMES[made]} for Instagram on ${when(iso)}?`)) return;
+    const off = state.platform_posting === false;
+    if (admin && !off && !window.confirm(now ? `Approve this ${NAMES[made]} and post it to Instagram now?` : `Approve this ${NAMES[made]} for Instagram on ${when(iso)}?`)) return;
     setBusy(now ? "now" : "schedule");
     setMsg({ ok: "", err: "" });
     let card = null;
@@ -108,7 +110,7 @@ export default function CalendarButtons({ topic, made, version = "", C, FONT }) 
       if (admin) {
         await action({ action: "approve" });
         if (now) await action({ action: "publish_now" });
-        setMsg({ ok: now ? "Approved — posting to Instagram now. The calendar shows the result." : `Approved and scheduled for ${when(iso)}.`, err: "" });
+        setMsg({ ok: off ? "Approved on the calendar. Posting to the networks is off, so download it or save it to Google Drive from here." : now ? "Approved — posting to Instagram now. The calendar shows the result." : `Approved and scheduled for ${when(iso)}.`, err: "" });
       } else {
         await action({ action: "request_review", note: now ? "Please post this right away." : `Please post this on ${when(iso)}.` });
         setMsg({ ok: now ? "Sent to Hamed for approval; it goes out as soon as he approves." : `Sent to Hamed for approval, for ${when(iso)}.`, err: "" });
@@ -138,11 +140,14 @@ export default function CalendarButtons({ topic, made, version = "", C, FONT }) 
       {there.map((c) => {
         const [label, tone] = STATUS[c.status] || STATUS.draft;
         return (
-          <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.text2, marginBottom: 8, flexWrap: "wrap" }}>
+          <div key={c.id} style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.text2, marginBottom: 6, flexWrap: "wrap" }}>
             <span style={{ width: 8, height: 8, borderRadius: 99, background: tone, display: "inline-block" }} />
             <b style={{ color: tone }}>{label}</b>
             <span>· {c.board}{c.publish_at ? " · " + when(c.publish_at) : ""}</span>
             <a href={`/calendar?board=${c.board_id}&card=${c.id}`} style={{ marginLeft: "auto", color: C.orange, fontWeight: 700, textDecoration: "none" }}>Open post ↗</a>
+          </div>
+          <PostFiles boardId={c.board_id} cardId={c.id} />
           </div>
         );
       })}
@@ -164,12 +169,16 @@ export default function CalendarButtons({ topic, made, version = "", C, FONT }) 
             <button className="ui-btn" disabled={!!busy} onClick={() => setPicking((v) => !v)} style={{ ...btn(C.teal, false), opacity: busy ? 0.6 : 1 }}>
               🗓 Schedule
             </button>
-            <button className="ui-btn" disabled={!!busy} onClick={() => put(null)} style={{ ...btn(C.orange, true), opacity: busy ? 0.6 : 1 }}>
-              {busy === "now" ? "Posting…" : "🚀 Post right away"}
-            </button>
+            {state.platform_posting !== false && (
+              <button className="ui-btn" disabled={!!busy} onClick={() => put(null)} style={{ ...btn(C.orange, true), opacity: busy ? 0.6 : 1 }}>
+                {busy === "now" ? "Posting…" : "🚀 Post right away"}
+              </button>
+            )}
           </div>
           <div style={{ marginTop: 6, fontSize: 11.5, color: C.text3 }}>
-            {admin ? "Goes to Instagram through the calendar once you approve." : "Goes to Hamed for approval first; it is posted only after he approves."}
+            {state.platform_posting === false
+              ? "Posting to the networks is switched off for now. Add it to the calendar, then download it or save it to Google Drive."
+              : admin ? "Goes to Instagram through the calendar once you approve." : "Goes to Hamed for approval first; it is posted only after he approves."}
             {there.length > 0 ? " This adds another post." : ""}
           </div>
         </>

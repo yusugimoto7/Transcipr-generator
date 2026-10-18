@@ -157,6 +157,7 @@ Full detail in `instagram-story`. Essentials:
   (`app/CalendarButtons.jsx`), not Telegram buttons (Oct 2026). Hamed's click approves after a
   confirm; anyone else's goes to him as "Waiting for approval".
 - Approval covers captions + media of the switched-on channels; any change needs a new approval.
+- **Posting to the networks is off for now** (Oct 18 2026: "disable the automatic posting on platforms; only we have options to download on computer or upload on Google Drive; after testing credentials we can enable"). `CALENDAR_PLATFORM_POSTING` is the master switch; each post has "Download to this computer" and "Save to Google Drive". Enable only after every channel's credentials are tested.
 
 ## 12. How we learn
 

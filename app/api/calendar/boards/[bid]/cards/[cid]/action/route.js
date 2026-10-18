@@ -1,6 +1,6 @@
 import { guard, json } from "../../../../../../../../lib/editing/auth";
 import { approveCard, archiveCard, approvalValid, getBoard, checkId, addEvent, requestReview, rejectCard } from "../../../../../../../../lib/calendar/model";
-import { publishCard, resetChannel } from "../../../../../../../../lib/calendar/publisher";
+import { publishCard, resetChannel, platformPosting, dryRun, POSTING_OFF } from "../../../../../../../../lib/calendar/publisher";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +31,7 @@ export async function POST(request, { params }) {
         return json({ ok: true });
       case "publish_now": {
         if (!admin) return json({ error: "only Hamed publishes" }, 403);
+        if (!platformPosting() && !dryRun()) return json({ error: POSTING_OFF }, 409);
         const b = await getBoard(params.bid);
         const card = b.cards.find((c) => c.id === checkId(params.cid));
         if (!card) return json({ error: "card not found" }, 404);
