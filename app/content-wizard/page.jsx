@@ -10,8 +10,8 @@ const C = {
   slate: "#c3c9d2",      // inactive dots, disabled and "done" buttons
   cream: "#121a24",      // main text
   creamEdge: "#5b6675",  // secondary text
-  orange: "#0f766e",
-  orangeDeep: "#0d4f4b",
+  orange: "#32515d",
+  orangeDeep: "#243b44",
   ink: "#ffffff",        // text on orange / gray buttons
   inkSoft: "#8b95a3",
   line: "#e6e8ec",
@@ -306,7 +306,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
                   padding: "10px 12px",
                   borderRadius: 10,
                   border: `1.5px solid ${active ? C.orange : C.line}`,
-                  background: active ? "rgba(15,118,110,0.08)" : "transparent",
+                  background: active ? "rgba(50, 81, 93,0.08)" : "transparent",
                   color: active ? C.orange : C.cream,
                   fontSize: 13,
                   fontWeight: active ? 700 : 400,
@@ -338,7 +338,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
             padding: "12px 14px",
             borderRadius: 10,
             border: `1.5px solid ${C.orange}`,
-            background: "rgba(15,118,110,0.06)",
+            background: "rgba(50, 81, 93,0.06)",
           }}
         >
           <FieldLabel>SECOND COUNTRY (Comparison) ✱</FieldLabel>

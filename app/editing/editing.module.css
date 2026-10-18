@@ -1,7 +1,7 @@
 /* Video Editing, the content calendar and the Team page share this shell: one dark bar for the
    whole app (Trello-like), the page below. Same ground, surfaces and accent as the app. */
 .shell { min-height: 100vh; display: flex; flex-direction: column; }
-.bar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 max(12px, env(safe-area-inset-left, 0px)); background: var(--brand-deep, #0d4f4b); color: #fff; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2); }
+.bar { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 6px; height: 52px; padding: 0 max(12px, env(safe-area-inset-left, 0px)); background: var(--brand-deep, #243b44); color: #fff; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2); }
 .logo { display: flex; align-items: center; gap: 8px; color: #fff; text-decoration: none; font-weight: 800; letter-spacing: 0.04em; font-size: 15px; padding: 6px 8px 6px 2px; border-radius: 8px; flex: none; }
 /* The brand's own logo (white lettering for the teal bar); on a phone only its mark. */
 .logoImg { height: 26px; width: auto; display: block; }
@@ -46,7 +46,7 @@ h2.h2 { font-size: 16px; margin: 0; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .field span { color: var(--text-2); font-weight: 500; }
 .input, .select, .textarea { font: inherit; font-size: 15px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 0; }
-.input:focus, .select:focus, .textarea:focus { outline: 2px solid rgba(15, 118, 110, 0.35); border-color: var(--orange); }
+.input:focus, .select:focus, .textarea:focus { outline: 2px solid rgba(50, 81, 93, 0.35); border-color: var(--orange); }
 .btn { font: inherit; font-size: 14px; font-weight: 600; padding: 9px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
 .btn:hover:not(:disabled) { border-color: #c9ced6; }
 .btn:disabled { opacity: 0.5; cursor: default; }

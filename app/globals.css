@@ -1,8 +1,8 @@
 /* Sugimoto design system — shared by every page.
-   Palette B, "Deep Teal & Sand" (chosen Oct 2026): the deep teal and cream of
-   the brand's own carousels, on a sand ground; the logo's orange stays in the
-   logo and small highlights only. --orange keeps its old name but is the
-   action colour (teal) everywhere it is used.
+   Palette B, "Deep Teal & Sand" (chosen Oct 2026), with the main colour set by
+   the team to the logo's slate #32515d: slate actions, a deeper slate bar, cream
+   and a sand ground; the logo's orange stays in the logo and small highlights.
+   --orange keeps its old name but is the action colour (slate) everywhere.
    Inline styles in the pages handle layout; this file holds what inline
    styles cannot: hover/press/focus states, animations and breakpoints. */
 
@@ -12,9 +12,9 @@
   --line: #e5e0d5;
   --text: #14231f;
   --text-2: #52605b;
-  --orange: #0f766e;
-  --brand-deep: #0d4f4b;
-  --mint: #d6efe9;
+  --orange: #32515d;
+  --brand-deep: #243b44;
+  --mint: #e2eaed;
   --cream: #f3e3c3;
   --logo-orange: #ea580c;
   color-scheme: light;
@@ -39,7 +39,7 @@ body {
 }
 
 ::selection {
-  background: rgba(15, 118, 110, 0.18);
+  background: rgba(50, 81, 93, 0.18);
 }
 
 ::-webkit-scrollbar {
@@ -96,7 +96,7 @@ header.ui-glass {
     border-color: #d5d9e0 !important;
   }
   .ui-glow-orange:hover:not(:disabled) {
-    box-shadow: 0 8px 20px -8px rgba(15, 118, 110, 0.5) !important;
+    box-shadow: 0 8px 20px -8px rgba(50, 81, 93, 0.5) !important;
   }
   .ui-glow-danger:hover:not(:disabled) {
     background: rgba(229, 72, 77, 0.06) !important;

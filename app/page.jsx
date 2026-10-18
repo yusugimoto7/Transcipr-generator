@@ -18,8 +18,8 @@ import { AppBar, barStyles } from "./editing/ui";
    ============================================================ */
 
 const C = {
-  // Palette B, "Deep Teal & Sand" (globals.css): orange/orangeDeep keep their
-  // names but are the action teal; the logo's orange is logoOrange.
+  // Palette B (globals.css), main colour the logo's slate #32515d: orange and
+  // orangeDeep keep their names but are the action slate; the logo's orange is logoOrange.
   ground: "#f7f5f0",       // page background (sand)
   surface: "#ffffff",      // cards, rows, panels
   surfaceHi: "#efebe3",    // tracks, hover, subtle fills
@@ -32,8 +32,8 @@ const C = {
   creamEdge: "#e5e0d5",
   slate: "#334155",
   teal: "#0e8a99",         // links, info
-  orange: "#0f766e",       // action colour (teal)
-  orangeDeep: "#0d4f4b",
+  orange: "#32515d",       // action colour (the logo's slate)
+  orangeDeep: "#243b44",
   logoOrange: "#ea580c",
   reject: "#e5484d",       // reject / errors
   success: "#12945e",
