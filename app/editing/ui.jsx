@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import s from "./editing.module.css";
+import { CalendarDays, Clapperboard, KeyRound, LogOut, Newspaper, Users } from "lucide-react";
 
 // The bar's classes, for pages outside this folder that add their own buttons to it.
 export { s as barStyles };
@@ -105,9 +106,9 @@ export function Avatar({ user, size = 28, title }) {
 }
 
 const APPS = [
-  ["topics", "/", "Topic Engine", "📰"],
-  ["calendar", "/calendar", "Calendar", "📅"],
-  ["editing", "/editing", "Video Editing", "🎬"],
+  ["topics", "/", "Topic Engine", Newspaper],
+  ["calendar", "/calendar", "Calendar", CalendarDays],
+  ["editing", "/editing", "Video Editing", Clapperboard],
 ];
 
 // The bar itself, shared by every part of the app (the Topic Engine draws it too, with its own
@@ -130,15 +131,15 @@ export function AppBar({ me: given, actions = null }) {
   const ax = (me.user && me.user.ax) || [];
   const apps = APPS.filter(([k]) => ax.includes(k));
   const current = path === "/" ? "topics" : path.startsWith("/calendar") ? "calendar" : path.startsWith("/editing") && !path.startsWith("/editing/team") && !path.startsWith("/editing/password") ? "editing" : "";
-  const appLink = ([k, href, label, icon]) => {
+  const appLink = ([k, href, label, Icon]) => {
     const cls = `${s.app} ${current === k ? s.appOn : ""}`;
     return href === "/" ? (
       <a key={k} href={href} className={cls}>
-        <span aria-hidden>{icon}</span> {label}
+        <Icon size={16} aria-hidden /> {label}
       </a>
     ) : (
       <Link key={k} href={href} className={cls}>
-        <span aria-hidden>{icon}</span> {label}
+        <Icon size={16} aria-hidden /> {label}
       </Link>
     );
   };
@@ -155,7 +156,7 @@ export function AppBar({ me: given, actions = null }) {
           <div className={s.account} data-menu>
             {ax.includes("team") && (
               <Link href="/editing/team" className={`${s.barBtn} ${path === "/editing/team" ? s.appOn : ""}`} title="Team: who can open what">
-                👥 <span className={s.wideOnly}>Team</span>
+                <Users size={16} aria-hidden /> <span className={s.wideOnly}>Team</span>
               </Link>
             )}
             <button className={s.me} onClick={() => setMenu((m) => !m)} aria-label="Account and apps" aria-expanded={menu}>
@@ -171,22 +172,22 @@ export function AppBar({ me: given, actions = null }) {
                   </div>
                 </div>
                 <div className={s.narrowOnly}>
-                  {apps.map(([k, href, label, icon]) => (
+                  {apps.map(([k, href, label, Icon]) => (
                     <a key={k} href={href} className={s.menuItem} role="menuitem">
-                      <span aria-hidden>{icon}</span> {label}
+                      <Icon size={16} aria-hidden /> {label}
                     </a>
                   ))}
                   {ax.includes("team") && (
                     <a href="/editing/team" className={s.menuItem} role="menuitem">
-                      <span aria-hidden>👥</span> Team
+                      <Users size={16} aria-hidden /> Team
                     </a>
                   )}
                 </div>
                 <Link href="/editing/password" className={s.menuItem} role="menuitem" onClick={() => setMenu(false)}>
-                  <span aria-hidden>🔑</span> Change password
+                  <KeyRound size={16} aria-hidden /> Change password
                 </Link>
                 <button className={`${s.menuItem} ${s.danger}`} onClick={logout} role="menuitem">
-                  <span aria-hidden>↩</span> Sign out
+                  <LogOut size={16} aria-hidden /> Sign out
                 </button>
               </div>
             )}

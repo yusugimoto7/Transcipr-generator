@@ -5,6 +5,8 @@
 // live preview of every network on the right. Members send posts for approval; only Hamed
 // approves, schedules and publishes.
 
+import { Check, Clock, Play, Plus } from "lucide-react";
+import { Badge } from "../../components/ui/badge";
 import { pickerNote } from "../../lib/tz";
 import { useEffect, useMemo, useState } from "react";
 import { apiAt } from "../editing/ui";
@@ -25,13 +27,11 @@ const blank = () => ({
   channels: Object.fromEntries(NETWORKS.map((n) => [n.key, { on: false, custom: false, caption: "", ...(n.key === "instagram" ? { format: "reel" } : {}), ...(n.key === "youtube" ? { title: "" } : {}) }])),
 });
 
+// Soft tint with dark text, the same as the board's badges.
+const PILL = { draft: "draft", pending: "pending", approved: "scheduled", scheduled: "scheduled", publishing: "scheduled", published: "published", failed: "failed" };
 export function StatusPill({ status }) {
   const s = STATUS[status] || STATUS.draft;
-  return (
-    <span className={c.statusPill} style={{ background: s.color }}>
-      {s.name}
-    </span>
-  );
+  return <Badge variant={PILL[status] || "draft"}>{s.name}</Badge>;
 }
 
 export function NetChip({ k, state }) {
@@ -193,7 +193,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   return (
                     <button key={n.key} className={`${c.netBtn} ${sel ? c.on : ""}`} style={{ background: n.color }} onClick={() => toggleNet(n.key)} title={`${n.name}${st && !st.connected ? " (not connected)" : ""}`} aria-pressed={sel} aria-label={n.name}>
                       {n.short}
-                      {sel && <span className={c.tick}>✓</span>}
+                      {sel && <span className={c.tick}><Check size={11} strokeWidth={3} aria-hidden /></span>}
                       {st && !st.connected && <span className={c.warnDot} />}
                     </button>
                   );
@@ -263,7 +263,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: "1 1 auto", minWidth: 0 }}>
                     {album.map((m, i) => (
                       <div key={i} className={c.thumb} style={m.kind === "image" ? { backgroundImage: `url(${m.url})`, flex: "0 0 auto" } : { flex: "0 0 auto" }} title={`${i + 1} of ${album.length}`}>
-                        {m.kind === "video" ? "▶" : ""}
+                        {m.kind === "video" ? <Play size={14} fill="currentColor" aria-hidden /> : ""}
                       </div>
                     ))}
                   </div>
@@ -275,7 +275,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               ) : (
               <div className={c.mediaBox}>
                 <div className={c.thumb} style={thumb ? { backgroundImage: `url(${thumb})` } : undefined}>
-                  {d.media.kind === "video" ? "▶" : d.media.kind === "image" ? "" : "+"}
+                  {d.media.kind === "video" ? <Play size={18} fill="currentColor" aria-hidden /> : d.media.kind === "image" ? "" : <Plus size={20} aria-hidden />}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: "1 1 240px", minWidth: 0 }}>
                   <div className={c.row}>
@@ -327,7 +327,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                 {when === "schedule" && (
                   <>
                   <input id="cmp-when" type="datetime-local" className={c.input} value={toLocal(d.publish_at)} onChange={(e) => setD({ ...d, publish_at: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-                  {d.publish_at && <span className={c.muted} style={{ flexBasis: "100%" }}>🕑 {pickerNote(toLocal(d.publish_at))}</span>}
+                  {d.publish_at && <span className={c.muted} style={{ flexBasis: "100%" }}><Clock size={12} aria-hidden /> {pickerNote(toLocal(d.publish_at))}</span>}
                   </>
                 )}
               </div>

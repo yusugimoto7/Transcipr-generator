@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
@@ -15,7 +15,7 @@ import Composer, { NetChip, StatusPill } from "./Composer";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
 import { whenAll, pickerNote } from "../../lib/tz";
 import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
-import { AlignLeft, Archive, ArrowRight, CalendarDays, Check, Clock, Link2, MessageSquare, Megaphone, Paperclip, Pencil, Play, Plus, SquareCheck, Tag, Users, X } from "lucide-react";
+import { AlertCircle, AlignLeft, Archive, ArrowRight, CalendarCheck, CalendarDays, CheckCircle2, FilePen, FileText, Hourglass, Menu as MenuIcon, Newspaper, Radio, Rocket, Settings2, SlidersHorizontal, Columns3, List as ListIcon, Sparkles, Check, Clock, Link2, MessageSquare, Megaphone, Paperclip, Pencil, Play, Plus, SquareCheck, Tag, Users, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Input, Textarea } from "../../components/ui/input";
@@ -1319,10 +1319,12 @@ function Calendar({ user }) {
   );
   const ready = boards.length > 0 && boards.every((b) => data[b.id]);
 
+  const NAV_ICON = { month: CalendarDays, week: CalendarCheck, "list-draft": FilePen, "list-pending": Hourglass, "list-scheduled": CalendarCheck, "list-published": CheckCircle2, "list-failed": AlertCircle, board: Columns3 };
   const NavItem = ({ v, label, n }) => (
     <button className={`${p.nav} ${view === v ? p.on : ""}`} onClick={() => setView(v)}>
-      <span>{label}</span>
-      {n !== undefined && <span className={p.n}>{n}</span>}
+      {NAV_ICON[v] && React.createElement(NAV_ICON[v], { size: 16, className: p.navIcon, "aria-hidden": true })}
+      <span className={p.navLabel}>{label}</span>
+      {n !== undefined && <span className={`${p.n} ${v === "list-pending" && n > 0 ? p.nWait : ""}`}>{n}</span>}
     </button>
   );
 
@@ -1348,13 +1350,13 @@ function Calendar({ user }) {
       {phone && (
         <>
           <nav className={p.tabBar} aria-label="Content calendar">
-            {tab("month", "📅", "Calendar", view === "month" || view === "week", () => setView("month"))}
-            {tab("posts", "📋", "Posts", view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
+            {tab("month", <CalendarDays size={22} />, "Calendar", view === "month" || view === "week", () => setView("month"))}
+            {tab("posts", <ListIcon size={22} />, "Posts", view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
             <button className={p.tabNew} onClick={() => setSheet("start")} disabled={!ready} aria-label="New post">
-              +
+              <Plus size={26} aria-hidden />
             </button>
-            {tab("board", "🗂", "Board", view === "board", () => setView("board"))}
-            {tab("more", "☰", "More", false, () => setSheet(sheet === "more" ? "" : "more"), !ready)}
+            {tab("board", <Columns3 size={22} />, "Board", view === "board", () => setView("board"))}
+            {tab("more", <MenuIcon size={22} />, "More", false, () => setSheet(sheet === "more" ? "" : "more"), !ready)}
           </nav>
           {sheet && sheet !== "start" && (
             <div className={p.sheetBg} onClick={() => setSheet("")}>
@@ -1387,10 +1389,10 @@ function Calendar({ user }) {
             <div className={p.sheetHandle} aria-hidden />
             <div className={p.startTitle}>How do you want to start?</div>
             {[
-              ["✏️", "New post from scratch", "Write the caption and add the files yourself.", () => newPost()],
-              ["📰", "Use something made in the Topic Engine", "A carousel, story, video, article or script you already made.", () => setPanel("source")],
-              ["🚀", "Make something new in the Topic Engine", "Pick a topic there and make a carousel, story or video, then send it here.", () => (window.location.href = "/")],
-            ].map(([icon, title, sub, go]) => (
+              [Pencil, "New post from scratch", "Write the caption and add the files yourself.", () => newPost()],
+              [Newspaper, "Use something made in the Topic Engine", "A carousel, story, video, article or script you already made.", () => setPanel("source")],
+              [Rocket, "Make something new in the Topic Engine", "Pick a topic there and make a carousel, story or video, then send it here.", () => (window.location.href = "/")],
+            ].map(([Icon, title, sub, go]) => (
               <button
                 key={title}
                 className={p.startItem}
@@ -1399,7 +1401,7 @@ function Calendar({ user }) {
                   go();
                 }}
               >
-                <span className={p.startIcon} aria-hidden>{icon}</span>
+                <span className={p.startIcon} aria-hidden><Icon size={20} /></span>
                 <span className={p.startText}>
                   <b>{title}</b>
                   <span>{sub}</span>
@@ -1412,7 +1414,7 @@ function Calendar({ user }) {
       )}
       <nav className={p.side} aria-label="Content calendar" hidden={phone}>
         <button className={p.newPost} onClick={() => setSheet("start")} disabled={!ready}>
-          + New post
+          <Plus size={16} aria-hidden /> New post
         </button>
         <div className={p.navHead}>Publishing</div>
         {VIEWS.map(([v, label]) => (
@@ -1425,15 +1427,18 @@ function Calendar({ user }) {
         <div className={p.navHead}>Planning</div>
         <NavItem v="board" label="Board" />
         <button className={p.nav} onClick={() => setPanel("source")} disabled={!ready}>
-          <span>From a topic or video</span>
+          <Newspaper size={16} className={p.navIcon} aria-hidden />
+          <span className={p.navLabel}>From a topic or video</span>
         </button>
         <div className={p.navHead}>Settings</div>
         <button className={p.nav} onClick={() => setPanel("channels")} disabled={!ready}>
-          <span>Channels</span>
+          <Radio size={16} className={p.navIcon} aria-hidden />
+          <span className={p.navLabel}>Channels</span>
         </button>
         {admin && (
           <button className={p.nav} onClick={() => setPanel("settings")} disabled={!ready}>
-            <span>Lists and labels</span>
+            <SlidersHorizontal size={16} className={p.navIcon} aria-hidden />
+            <span className={p.navLabel}>Lists and labels</span>
           </button>
         )}
       </nav>

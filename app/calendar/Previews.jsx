@@ -2,6 +2,7 @@
 
 // How the post will look on each network: close enough to judge length, cut-off and media shape.
 
+import { Play } from "lucide-react";
 import { NET, effectiveCaption, thumbOf } from "./channels";
 import c from "./publishing.module.css";
 
@@ -14,7 +15,7 @@ function Media({ media, shape }) {
   return (
     <div className={`${c.pvMedia} ${c["pv_" + shape]}`}>
       {thumb ? <img src={thumb} alt="" onError={(e) => (e.currentTarget.style.display = "none")} /> : null}
-      {media.kind === "video" && <span className={c.play}>▶</span>}
+      {media.kind === "video" && <span className={c.play}><Play size={28} fill="currentColor" aria-hidden /></span>}
       {n > 1 && <span style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,.6)", color: "#fff", borderRadius: 99, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>1/{n}</span>}
     </div>
   );

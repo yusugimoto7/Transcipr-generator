@@ -1,18 +1,22 @@
 /* Content calendar: Trello-style board and month view. Same ground, surfaces and accent as the app. */
 .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .grow { flex: 1 1 auto; }
-.tabs { display: flex; gap: 6px; flex-wrap: wrap; }
-.tab { font: inherit; font-size: 14px; padding: 7px 13px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); cursor: pointer; }
-.tab.on { color: #fff; background: var(--text); border-color: var(--text); font-weight: 600; }
+/* market tabs: a segmented control */
+.tabs { display: flex; gap: 2px; flex-wrap: wrap; padding: 3px; background: #efebe3; border-radius: 10px; width: fit-content; max-width: 100%; }
+.tab { font: inherit; font-size: 13.5px; font-weight: 500; height: 32px; padding: 0 14px; border-radius: 8px; border: 0; background: transparent; color: var(--text-2); cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab.on { color: var(--text); background: var(--surface); box-shadow: 0 1px 2px rgba(20, 35, 31, 0.1); font-weight: 600; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { font: inherit; font-size: 14px; padding: 7px 12px; border: 0; background: var(--surface); color: var(--text-2); cursor: pointer; }
 .seg button.on { background: var(--ground); color: var(--text); font-weight: 600; }
-.btn { font: inherit; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.btn:hover { background: var(--ground); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .primary { background: var(--orange); border-color: var(--orange); color: #fff; }
+.primary:hover { background: var(--brand-deep); }
 .ghost { background: none; border-color: transparent; color: var(--text-2); }
 .danger { color: #b42318; }
-.select, .input, .textarea { font: inherit; font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 0; }
+.select, .input, .textarea { font: inherit; font-size: 14px; padding: 7px 10px; min-height: 36px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 0; }
 .textarea { width: 100%; min-height: 80px; resize: vertical; box-sizing: border-box; }
 .input:focus, .select:focus, .textarea:focus { outline: 2px solid rgba(50, 81, 93, 0.35); border-color: var(--orange); }
 .error { color: #b42318; font-size: 14px; background: #fef3f2; border: 1px solid #fecdca; padding: 8px 10px; border-radius: 8px; }
@@ -62,14 +66,14 @@
 /* month calendar */
 .calWrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 12px; align-items: start; }
 @media (max-width: 900px) { .calWrap { grid-template-columns: minmax(0, 1fr); } }
-.side { background: #ebedf0; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 220px); overflow-y: auto; }
+.side { background: #efebe3; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 220px); overflow-y: auto; }
 .gridScroll { overflow-x: auto; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 770px; }
 .dow { font-size: 12px; font-weight: 600; color: var(--text-2); padding: 6px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); }
 .day { min-height: 116px; padding: 4px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
-.day.other { background: #f9fafb; }
+.day.other { background: var(--ground); }
 .day.today .num { background: var(--orange); color: #fff; }
-.day.over { background: #fff4e5; }
+.day.over { background: var(--mint); }
 .num { font-size: 12px; font-weight: 600; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--text-2); }
 .mini { font-size: 12px; padding: 4px 6px; border-radius: 6px; background: var(--ground); cursor: pointer; display: flex; flex-direction: column; gap: 2px; border-left: 3px solid #8b95a3; user-select: none; touch-action: manipulation; }
 .mini b { font-weight: 600; font-variant-numeric: tabular-nums; }

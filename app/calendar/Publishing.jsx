@@ -9,6 +9,7 @@ import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSens
 import { NETWORKS, STATUS, effectiveCaption, onNetworks, thumbOf } from "./channels";
 import { NetChip, StatusPill } from "./Composer";
 import c from "./publishing.module.css";
+import { Clock, Play } from "lucide-react";
 
 const pad = (n) => String(n).padStart(2, "0");
 const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -29,7 +30,7 @@ export function ZoneBanner() {
   if (!now) return null;
   return (
     <div className={c.muted} style={{ lineHeight: 1.5 }}>
-      🕑 Times are in <b>your</b> time zone: {zoneName(myZone())} ({zoneAbbr(now, myZone())}). Right now: {whenAll(now.toISOString(), { withZone: false }).split(" · ").slice(1).join(" · ")}. Hover a post for its time at every place.
+      <Clock size={12} aria-hidden style={{ verticalAlign: "-1px" }} /> Times are in <b>your</b> time zone: {zoneName(myZone())} ({zoneAbbr(now, myZone())}). Right now: {whenAll(now.toISOString(), { withZone: false }).split(" · ").slice(1).join(" · ")}. Hover a post for its time at every place.
     </div>
   );
 }
@@ -191,11 +192,13 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
         return (
           <div key={card.id} className={c.listRow} onClick={() => onOpen(card)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <b style={{ fontSize: 14 }}>{card.publish_at ? whenAll(card.publish_at) : "No date"}</b>
+              <b style={{ fontSize: 14 }} title={card.publish_at ? whenAll(card.publish_at) : ""}>
+                {card.publish_at ? new Date(card.publish_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "No date"}
+              </b>
               <span className={c.muted}>{card.board_name}</span>
             </div>
             <div className={c.rowThumb} style={thumb ? { backgroundImage: `url(${thumb})` } : { background: "#c9ced6" }}>
-              {card.media && card.media.kind === "video" ? "▶" : ""}
+              {card.media && card.media.kind === "video" ? <Play size={16} fill="currentColor" aria-hidden /> : ""}
             </div>
             <div className={c.rowText}>
               <div className={c.row} style={{ gap: 6 }}>
