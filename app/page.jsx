@@ -7,6 +7,7 @@ import CalendarStrip from "./CalendarStrip";
 import CalendarButtons from "./CalendarButtons";
 import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
+import { Check, Clapperboard, FileText, GalleryHorizontal, Lightbulb, Mail, Newspaper, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -978,7 +979,7 @@ export default function App() {
             actions={
               <>
                 <a href="/content-wizard" className={barStyles.actBtn} title="Content Wizard">
-                  ✨ <span className={barStyles.actLabel}>Wizard</span>
+                  <Sparkles size={16} aria-hidden /> <span className={barStyles.actLabel}>Wizard</span>
                 </a>
                 <button
                   className={barStyles.actBtn}
@@ -990,7 +991,7 @@ export default function App() {
                   disabled={loadingTopics || streaming}
                   title="Get fresh topics"
                 >
-                  <span className={loadingTopics || streaming ? "ui-spin" : ""} style={{ display: "inline-block" }}>⟳</span>
+                  <RefreshCw size={16} className={loadingTopics || streaming ? "ui-spin" : ""} aria-hidden />
                   <span className={barStyles.actLabel}>{loadingTopics || streaming ? "Loading…" : "Refresh"}</span>
                 </button>
               </>
@@ -1163,7 +1164,7 @@ export default function App() {
 }
 
 // List (every topic, new and used) or the Lexbase newsletter section.
-const MODES = [["list", "📰", "News"], ["lexbase", "📬", "Lexbase"], ["ideas", "💡", "Ideas"]];
+const MODES = [["list", Newspaper, "News"], ["lexbase", Mail, "Lexbase"], ["ideas", Lightbulb, "Ideas"]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
@@ -1177,7 +1178,7 @@ function ModeSwitch({ mode, onChange }) {
           transform: `translateX(${idx * 100}%)`, transition: "transform 0.28s cubic-bezier(.2,.8,.2,1)",
         }}
       />
-      {MODES.map(([m, ic, label]) => (
+      {MODES.map(([m, Ic, label]) => (
         <button
           key={m}
           className="ui-btn"
@@ -1189,7 +1190,7 @@ function ModeSwitch({ mode, onChange }) {
             fontFamily: "'Geist', 'Vazirmatn', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
           }}
         >
-          <span aria-hidden>{ic}</span>
+          <Ic size={15} aria-hidden />
           {label}
         </button>
       ))}
@@ -1243,8 +1244,8 @@ const CATEGORIES = [
   ["all", "همه", () => true],
   ["ca", "🇨🇦 کانادا", (t) => t.page !== "EU"],
   ["eu", "🇪🇺 اروپا", (t) => t.page === "EU"],
-  ["social", "📱 شبکه‌های اجتماعی", (t) => isSocialTopic(t)],
-  ["web", "🌐 سایت‌ها", (t) => !isSocialTopic(t)],
+  ["social", "شبکه‌های اجتماعی", (t) => isSocialTopic(t)],
+  ["web", "سایت‌ها", (t) => !isSocialTopic(t)],
 ];
 
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
@@ -1300,7 +1301,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
       aria-label={aria}
       className={"ui-btn" + (kind === "primary" ? " ui-glow-orange" : kind === "danger" ? " ui-glow-danger" : "")}
       style={{
-        minWidth: 36, height: 36, padding: "0 11px", borderRadius: 11, cursor: "pointer",
+        minWidth: 36, height: 36, padding: "0 11px", borderRadius: 8, cursor: "pointer",
         border: kind === "primary" ? "none" : `1px solid ${kind === "danger" ? alpha(C.reject, 0.5) : C.line}`,
         background: kind === "primary" ? C.orange : kind === "success" ? alpha(C.success, 0.16) : "transparent",
         color: kind === "primary" ? "#fff" : kind === "danger" ? C.reject : kind === "success" ? C.success : C.text,
@@ -1416,7 +1417,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 )}
                 <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
-                    {f.emoji} {f.label}
+                    {f.label}
                   </span>
                   {date && <span>{date}</span>}
                   {t.source_url && (
@@ -1470,8 +1471,8 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                 {st === "pending" && (
                   <div style={{ display: "flex", gap: 6 }}>
-                    {smallBtn("✓", () => onApprove(t), "primary", "Approve topic")}
-                    {smallBtn("✕", () => onReject(t), "danger", "Reject topic")}
+                    {smallBtn(<Check size={16} aria-hidden />, () => onApprove(t), "primary", "Approve topic")}
+                    {smallBtn(<X size={16} aria-hidden />, () => onReject(t), "danger", "Reject topic")}
                   </div>
                 )}
                 {st === "approved" && (
@@ -2283,7 +2284,7 @@ function Section({ title, hint, children, innerRef, dir = "rtl" }) {
   );
 }
 
-const card = { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 18, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" };
+const card = { background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, boxShadow: "none" };
 
 // One thing that can be made from the topic: what it is, and where it stands.
 // The other parts of the app (one login): a small menu so the header stays one line on a phone.
@@ -2501,7 +2502,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
   const tiles = [
     caps.publishing !== false && {
-      k: "telegram", icon: "✈️", title: "Telegram post", tone: C.teal,
+      k: "telegram", icon: <Send size={18} />, title: "Telegram post", tone: C.teal,
       sub: "ویرایش همین‌جا، با تصویر، ارسال به @sugimotovisa",
       onClick: openTelegram,
       status:
@@ -2512,7 +2513,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         : { label: "Not made", tone: C.text3 },
     },
     {
-      k: "article", icon: "📝", title: "Blog article", tone: "#0e8a99",
+      k: "article", icon: <FileText size={18} />, title: "Blog article", tone: "#0e8a99",
       sub: "مقاله سئو برای سایت + پیش‌نویس وردپرس",
       onClick: () => {
         if (artState === "idle" || artState === "error") generateArticle();
@@ -2525,7 +2526,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         : { label: "Not made", tone: C.text3 },
     },
     {
-      k: "carousel", icon: "🖼", title: "Carousel post", tone: "#6d5bd0",
+      k: "carousel", icon: <GalleryHorizontal size={18} />, title: "Carousel post", tone: "#6d5bd0",
       sub: "اسلایدهای اینستاگرام با تصویر",
       onClick: () => {
         if (!slides.length && !carRunning) setCarouselOpen((n) => n + 1);
@@ -2538,7 +2539,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         : { label: "Not made", tone: C.text3 },
     },
     {
-      k: "story", icon: "📱", title: "Story", tone: "#c2410c",
+      k: "story", icon: <Smartphone size={18} />, title: "Story", tone: "#c2410c",
       sub: "استوری فکت با اسکرین‌شات از منبع اصلی",
       onClick: () => {
         if (!storyPages.length && !stRunning) setStoryOpen((n) => n + 1);
@@ -2552,7 +2553,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         : { label: "Not made", tone: C.text3 },
     },
     {
-      k: "video", icon: "🎬", title: "English video", tone: C.orangeDeep,
+      k: "video", icon: <Clapperboard size={18} />, title: "English video", tone: C.orangeDeep,
       sub: "ویدیوی آواتار HeyGen از اسکریپت انگلیسی",
       disabled: !hasScripts,
       onClick: () => setComposer(true),
@@ -2580,7 +2581,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {/* The topic */}
       <div className="ui-fade" style={{ ...card, position: "relative", overflow: "hidden", borderRadius: 22, padding: "16px 18px 16px", background: `linear-gradient(165deg, ${alpha(f.color, 0.13)} 0%, ${C.surface} 58%)` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-          <span style={pill(alpha(f.color, 0.16), C.ink)}>{f.emoji} {f.label}</span>
+          <span style={pill(alpha(f.color, 0.16), C.ink)}>{f.label}</span>
           <span style={pill(C.surface, topic.page === "EU" ? C.slate : C.orangeDeep)}>{topic.page === "EU" ? "🇪🇺 Europe" : "🇨🇦 Canada"}</span>
           {formatNewsDate(topic.date) && <span style={pill(C.surface, C.text2)}>📅 {formatNewsDate(topic.date)}</span>}
           {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 Explainer</span>}
@@ -2701,7 +2702,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
       {/* Blog article */}
       {!loading && !error && artState !== "idle" && (
-        <Section title="📝 مقاله وبلاگ" innerRef={articleRef}>
+        <Section title="مقاله وبلاگ" innerRef={articleRef}>
           {artState === "generating" && (
             <div dir="rtl" className="ui-progress" style={{ ...card, padding: "12px 14px", fontFamily: FA_FONT, fontSize: 13 }}>
               <span className="ui-pulse">⏳</span> در حال نوشتن مقاله…
@@ -2811,7 +2812,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
       {/* English video */}
       {!loading && !error && (videoJob || video) && (
-        <Section title="🎬 ویدیوی انگلیسی" innerRef={videoRef}>
+        <Section title="ویدیوی انگلیسی" innerRef={videoRef}>
           <VideoPanel job={videoJob} video={video} onRefresh={onRefreshVideo} onOpen={() => setComposer(true)} />
         </Section>
       )}
@@ -2915,7 +2916,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 
   if (!slides.length && !running && !form && !failed) return null;
   return (
-    <Section title="🖼 پست کاروسل">
+    <Section title="پست کاروسل">
 
       {form && !running && (
         <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
@@ -3183,7 +3184,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
 
   if (!pages.length && !running && !form && !failed) return null;
   return (
-    <Section title="📱 استوری">
+    <Section title="استوری">
       {form && !running && (
         <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
           <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>📱 استوری فکت از این موضوع</div>
@@ -3405,7 +3406,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
   const label = { telegram_write: "در حال نوشتن پست…", telegram_image: "در حال طراحی تصویر…", telegram_send: "در حال ارسال به @sugimotovisa…", telegram_save: "در حال ذخیره…" }[kind] || "…";
 
   return (
-    <Section title="✈️ پست تلگرام">
+    <Section title="پست تلگرام">
       {running && (
         <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(TG_TONE, 0.07), border: `1px solid ${alpha(TG_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span> {label}
