@@ -1147,7 +1147,7 @@ function BoardSettings({ board, onSave, onClose }) {
 // ---- page ---------------------------------------------------------------------------------------
 
 const VIEWS = [
-  ["month", "Calendar"],
+  ["month", "Month"],
   ["week", "Week"],
 ];
 
@@ -1173,7 +1173,6 @@ function Calendar({ user }) {
   useEffect(() => {
     try {
       setView(localStorage.getItem("cal-view2") || "month");
-      setMarket(localStorage.getItem("cal-market") || "all");
     } catch (_) {}
     calApi("/boards").then((d) => setBoards(d.boards)).catch((e) => setError(e.message));
     calApi("/sources").then(setSources).catch(() => {});
@@ -1181,9 +1180,8 @@ function Calendar({ user }) {
   useEffect(() => {
     try {
       localStorage.setItem("cal-view2", view);
-      localStorage.setItem("cal-market", market);
     } catch (_) {}
-  }, [view, market]);
+  }, [view]);
 
   const load = useCallback(async () => {
     if (!boards.length) return;
@@ -1204,11 +1202,12 @@ function Calendar({ user }) {
   // Opened from a topic ("Open in calendar"): show that post in the composer once its board is in.
   const deep = useRef(false);
   useEffect(() => {
-    const bid = q.get("board");
     const cid = q.get("card");
-    if (deep.current || !bid || !cid || !data[bid]) return;
+    if (deep.current || !cid || !Object.keys(data).length) return;
+    const found = Object.values(data).find((d) => d.board.cards.some((x) => x.id === cid));
+    if (!found) return;
     deep.current = true;
-    if (data[bid].board.cards.some((x) => x.id === cid)) setCompose({ bid, id: cid });
+    setCompose({ bid: found.board.id, id: cid });
   }, [q, data]);
 
   const first = boards[0] && data[boards[0].id];
@@ -1219,6 +1218,7 @@ function Calendar({ user }) {
     (x) =>
       (market === "all" || x.board_id === market) &&
       (!nets.length || onNetworks(x).some((n) => nets.includes(n.key))) &&
+      (!labelFilter || (x.labels || []).includes(labelFilter)) &&
       (!mine || (x.members || []).includes(user.id) || x.created_by === user.id)
   );
   const counts = Object.fromEntries(LIST_TABS.map(([k]) => [k, cards.filter((x) => inTab(x, k)).length]));
@@ -1261,47 +1261,6 @@ function Calendar({ user }) {
       setError(e.message);
     }
   };
-  const addBoard = async () => {
-    const name = window.prompt("Name of the new market or page");
-    if (!name) return;
-    try {
-      const { board } = await calApi("/boards", { method: "POST", body: { name } });
-      setBoards([...boards, { id: board.id, name: board.name }]);
-      setMarket(board.id);
-    } catch (e) {
-      setError(e.message);
-    }
-  };
-  // Right-click (or a long press on a phone) on a board's tab removes it, for the admin.
-  const removeBoard = async (b) => {
-    if (!admin) return;
-    const n = (data[b.id] && data[b.id].board && data[b.id].board.cards.length) || 0;
-    if (!window.confirm(`Remove the board “${b.name}”?${n ? ` Its ${n} card${n > 1 ? "s" : ""} will no longer be shown.` : ""}`)) return;
-    try {
-      await calApi(`/boards/${b.id}`, { method: "DELETE" });
-      setBoards(boards.filter((x) => x.id !== b.id));
-      if (market === b.id) setMarket("all");
-    } catch (e) {
-      setError(e.message);
-    }
-  };
-  const pressTimer = useRef(null);
-  const tabPress = (b) =>
-    admin
-      ? {
-          onContextMenu: (e) => {
-            e.preventDefault();
-            removeBoard(b);
-          },
-          onTouchStart: () => {
-            clearTimeout(pressTimer.current);
-            pressTimer.current = setTimeout(() => removeBoard(b), 650);
-          },
-          onTouchEnd: () => clearTimeout(pressTimer.current),
-          onTouchMove: () => clearTimeout(pressTimer.current),
-          title: "Right-click (or press and hold) to remove this board",
-        }
-      : {};
   const fromSource = async (source, video) => {
     setPanel("");
     const b = planBoard.board;
@@ -1350,7 +1309,7 @@ function Calendar({ user }) {
       {phone && (
         <>
           <nav className={p.tabBar} aria-label="Content calendar">
-            {tab("month", <CalendarDays size={22} />, "Calendar", view === "month" || view === "week", () => setView("month"))}
+            {tab("month", <CalendarDays size={22} />, "Month", view === "month" || view === "week", () => setView("month"))}
             {tab("posts", <ListIcon size={22} />, "Posts", view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
             <button className={p.tabNew} onClick={() => setSheet("start")} disabled={!ready} aria-label="New post">
               <Plus size={26} aria-hidden />
@@ -1446,23 +1405,7 @@ function Calendar({ user }) {
       <div className={p.main}>
         {q.get("connected") && <div className={c.note}>{q.get("connected")}</div>}
         <div className={c.bar}>
-          <div className={c.tabs}>
-            {view !== "board" && (
-              <button className={`${c.tab} ${market === "all" ? c.on : ""}`} onClick={() => setMarket("all")}>
-                All markets
-              </button>
-            )}
-            {boards.map((b) => (
-              <button key={b.id} className={`${c.tab} ${(market === b.id || (view === "board" && market === "all" && b.id === boards[0].id)) ? c.on : ""}`} onClick={() => setMarket(b.id)} {...tabPress(b)}>
-                {b.name}
-              </button>
-            ))}
-            {admin && (
-              <button className={c.tab} onClick={addBoard} title="Add a market or page">
-                +
-              </button>
-            )}
-          </div>
+          <h1 className="m-0 text-[22px] font-semibold tracking-tight text-ink">Content calendar</h1>
           <span className={c.grow} />
           {first && first.settings.dry_run && <span className={`${c.badge} ${c.warn}`}>Test mode: nothing is really posted</span>}
         </div>
@@ -1477,6 +1420,16 @@ function Calendar({ user }) {
                 </button>
               );
             })}
+            {planBoard && (
+              <select id="label-filter-cal" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label="Filter by label">
+                <option value="">All labels</option>
+                {planBoard.board.labels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
               <input id="mine" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only mine
             </label>

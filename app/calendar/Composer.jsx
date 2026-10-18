@@ -155,13 +155,13 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
         <div className={c.cHead}>
           <h2>{id ? "Edit post" : "New post"}</h2>
           <StatusPill status={status} />
-          <select id="cmp-board" className={c.select} value={bid} disabled={!!id} onChange={(e) => setBid(e.target.value)} aria-label="Market">
+          {boards.length > 1 && <select id="cmp-board" className={c.select} value={bid} disabled={!!id} onChange={(e) => setBid(e.target.value)} aria-label="Board">
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
               </option>
             ))}
-          </select>
+          </select>}
           {id && onOpenCard && (
             <button className={c.btn} onClick={() => onOpenCard(bid, id)}>
               Planning details

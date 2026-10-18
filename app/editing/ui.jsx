@@ -107,7 +107,7 @@ export function Avatar({ user, size = 28, title }) {
 
 const APPS = [
   ["topics", "/", "Topic Engine", Newspaper],
-  ["calendar", "/calendar", "Calendar", CalendarDays],
+  ["calendar", "/calendar", "Content calendar", CalendarDays],
   ["editing", "/editing", "Video Editing", Clapperboard],
 ];
 

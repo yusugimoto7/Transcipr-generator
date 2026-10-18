@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api, s, Shell, when } from "../ui";
 import { SECTIONS } from "../../../lib/editing/access";
 
-const SHORT = { topics: "Topic Engine", calendar: "Calendar", editing: "Video Editing", publishing: "Publishing" };
+const SHORT = { topics: "Topic Engine", calendar: "Content calendar", editing: "Video Editing", publishing: "Publishing" };
 const HINT = { topics: "topics, scripts, carousels, stories, articles", calendar: "plan and schedule posts (you approve)", editing: "their own video projects", publishing: "send to Telegram and WordPress from the Topic Engine" };
 
 function Team({ user }) {
