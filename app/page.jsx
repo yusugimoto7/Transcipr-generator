@@ -18,20 +18,23 @@ import { AppBar, barStyles } from "./editing/ui";
    ============================================================ */
 
 const C = {
-  ground: "#f6f7f9",       // page background
+  // Palette B, "Deep Teal & Sand" (globals.css): orange/orangeDeep keep their
+  // names but are the action teal; the logo's orange is logoOrange.
+  ground: "#f7f5f0",       // page background (sand)
   surface: "#ffffff",      // cards, rows, panels
-  surfaceHi: "#f1f3f6",    // tracks, hover, subtle fills
-  line: "#e6e8ec",         // hairline borders
-  text: "#121a24",         // primary text
-  text2: "#5b6675",        // secondary text
-  text3: "#8b95a3",        // tertiary text / labels
-  ink: "#121a24",          // text on cards (same as text in the light theme)
-  inkSoft: "#5b6675",
-  creamEdge: "#e6e8ec",
+  surfaceHi: "#efebe3",    // tracks, hover, subtle fills
+  line: "#e5e0d5",         // hairline borders
+  text: "#14231f",         // primary text
+  text2: "#52605b",        // secondary text
+  text3: "#7d8984",        // tertiary text / labels
+  ink: "#14231f",          // text on cards (same as text in the light theme)
+  inkSoft: "#52605b",
+  creamEdge: "#e5e0d5",
   slate: "#334155",
   teal: "#0e8a99",         // links, info
-  orange: "#f26a12",       // brand action orange
-  orangeDeep: "#d9560a",
+  orange: "#0f766e",       // action colour (teal)
+  orangeDeep: "#0d4f4b",
+  logoOrange: "#ea580c",
   reject: "#e5484d",       // reject / errors
   success: "#12945e",
 };
@@ -1004,13 +1007,8 @@ export default function App() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }}>
-          <div aria-hidden style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0, display: "grid", placeItems: "center", background: C.orange }}>
-            <span style={{ width: 11, height: 11, borderRadius: 3, background: "#fff", transform: "rotate(45deg)" }} />
-          </div>
-          <div style={{ minWidth: 0, lineHeight: 1.2, overflow: "hidden" }}>
-            <div style={{ fontWeight: 700, letterSpacing: 1.2, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>SUGIMOTO</div>
-            <div style={{ fontSize: 11.5, color: C.text3, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Topic Engine</div>
-          </div>
+          <img src="/brand/logo-on-light.png" alt="Sugimoto Visa" style={{ height: 28, width: "auto", display: "block", flexShrink: 0 }} />
+          <div style={{ fontSize: 11.5, color: C.text3, fontWeight: 600, whiteSpace: "nowrap", borderLeft: `1px solid ${C.line}`, paddingLeft: 10 }}>Topic Engine</div>
         </div>
         <nav style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.text }}>

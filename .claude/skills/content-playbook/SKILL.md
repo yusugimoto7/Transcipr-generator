@@ -166,3 +166,9 @@ Full detail in `instagram-story`. Essentials:
 - Pictures: look at the image before pushing (render locally with Chromium where the service
   isn't available locally).
 - Never put model names in commits or code comments; never commit secrets.
+
+## 13. The app's own look (Oct 18 2026)
+
+- Palette **B, "Deep Teal & Sand"**, chosen by the team from three samples (design canvas "Sugimoto new look"): action teal `#0F766E`, deep teal bar `#0D4F4B`, mint `#D6EFE9`, cream `#F3E3C3`, sand ground `#F7F5F0`, borders `#E5E0D5`, ink `#14231F`. The logo's orange `#EA580C` stays in the logo and small highlights only. Tokens live in `app/globals.css` (`--orange` keeps its old name but is the teal action colour) and `C` in `app/page.jsx`.
+- The real logo, never a drawn mark: `public/brand/logo-on-dark.png` (white lettering, for the teal bar), `logo-on-light.png` (dark lettering), `mark.png` / `app/icon.png` (the orange square alone, phones and browser tab). Sources: the team's Drive files Sugimoto-06 and Sugimoto-01.
+- Direction agreed: shadcn/ui (MIT) components and Kaneo's (MIT) kanban as code to build on, PLANKA/Trello for ideas only; one design system for every part of the app.

@@ -145,8 +145,8 @@ export function AppBar({ me: given, actions = null }) {
   return (
     <header className={s.bar}>
         <a href={ax.includes("topics") ? "/" : current ? APPS.find(([k]) => k === current)[1] : "/"} className={s.logo} aria-label="Sugimoto Visa">
-          <span className={s.mark} aria-hidden />
-          <span className={s.logoText}>Sugimoto</span>
+          <img src="/brand/logo-on-dark.png" alt="Sugimoto Visa" className={s.logoImg} />
+          <img src="/brand/mark.png" alt="" aria-hidden className={s.logoMark} />
         </a>
         {me.user && <nav className={s.apps}>{apps.map(appLink)}</nav>}
         <span className={s.spacer} />

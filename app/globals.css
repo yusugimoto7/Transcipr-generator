@@ -1,16 +1,22 @@
 /* Sugimoto design system — shared by every page.
-   Light and minimal: near-white ground, white surfaces with hairline borders,
-   one accent (brand orange) for actions, and a color per topic type.
+   Palette B, "Deep Teal & Sand" (chosen Oct 2026): the deep teal and cream of
+   the brand's own carousels, on a sand ground; the logo's orange stays in the
+   logo and small highlights only. --orange keeps its old name but is the
+   action colour (teal) everywhere it is used.
    Inline styles in the pages handle layout; this file holds what inline
    styles cannot: hover/press/focus states, animations and breakpoints. */
 
 :root {
-  --ground: #f6f7f9;
+  --ground: #f7f5f0;
   --surface: #ffffff;
-  --line: #e6e8ec;
-  --text: #121a24;
-  --text-2: #5b6675;
-  --orange: #f26a12;
+  --line: #e5e0d5;
+  --text: #14231f;
+  --text-2: #52605b;
+  --orange: #0f766e;
+  --brand-deep: #0d4f4b;
+  --mint: #d6efe9;
+  --cream: #f3e3c3;
+  --logo-orange: #ea580c;
   color-scheme: light;
 }
 
@@ -33,7 +39,7 @@ body {
 }
 
 ::selection {
-  background: rgba(242, 106, 18, 0.18);
+  background: rgba(15, 118, 110, 0.18);
 }
 
 ::-webkit-scrollbar {
@@ -90,7 +96,7 @@ header.ui-glass {
     border-color: #d5d9e0 !important;
   }
   .ui-glow-orange:hover:not(:disabled) {
-    box-shadow: 0 8px 20px -8px rgba(242, 106, 18, 0.55) !important;
+    box-shadow: 0 8px 20px -8px rgba(15, 118, 110, 0.5) !important;
   }
   .ui-glow-danger:hover:not(:disabled) {
     background: rgba(229, 72, 77, 0.06) !important;
