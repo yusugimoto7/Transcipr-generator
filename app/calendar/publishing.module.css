@@ -129,3 +129,18 @@
 .rowActs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .empty { padding: 30px; text-align: center; color: var(--text-2); font-size: 14px; }
 .rtl { direction: rtl; font-family: "Vazirmatn", system-ui, sans-serif; }
+
+/* "+": where does the post come from */
+.startTitle { font-size: 17px; font-weight: 700; color: var(--text); padding: 2px 10px 10px; }
+.startItem { font: inherit; display: flex; align-items: center; gap: 14px; text-align: left; padding: 14px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); cursor: pointer; margin-bottom: 8px; color: var(--text); }
+.startItem:hover, .startItem:active { border-color: var(--orange); background: #fff8f2; }
+.startIcon { width: 42px; height: 42px; border-radius: 12px; background: var(--ground); display: grid; place-items: center; font-size: 21px; flex: none; }
+.startText { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.startText b { font-size: 15px; }
+.startText span { font-size: 13px; color: var(--text-2); line-height: 1.4; }
+.startGo { font-size: 22px; color: var(--text-2); flex: none; }
+@media (min-width: 901px) {
+  .startBg { align-items: center; justify-content: center; }
+  .startSheet { max-width: 460px; border-radius: 16px; padding: 14px 14px 8px; }
+  .startSheet .sheetHandle { display: none; }
+}

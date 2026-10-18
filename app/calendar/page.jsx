@@ -256,7 +256,7 @@ function BoardView({ board, users, filter, onOpen, onMove, onAdd }) {
   );
 }
 
-// A phone: the month grid becomes an agenda (days with their posts), as Trello does on mobile.
+// Phones get the compact month grid (PhoneMonth) instead of the wide one.
 function useNarrow(px = 700) {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -269,36 +269,64 @@ function useNarrow(px = 700) {
   return narrow;
 }
 
-function Agenda({ days, month, byDay, dues, onOpen, onNew }) {
+// A phone's month, as in a phone's own calendar app: the whole month as a grid of days with a dot
+// per post (coloured by where it stands), and the chosen day's posts listed under it.
+function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
   const today = dayKey(new Date());
-  const shown = days.filter((d) => d.getMonth() === month && ((byDay[dayKey(d)] || []).length || (dues[dayKey(d)] || []).length || dayKey(d) === today));
+  const inMonth = days.filter((d) => d.getMonth() === month);
+  const [picked, setPicked] = useState("");
+  const sel = picked && inMonth.some((d) => dayKey(d) === picked) ? picked : inMonth.some((d) => dayKey(d) === today) ? today : dayKey(inMonth[0]);
+  const selDate = days.find((d) => dayKey(d) === sel) || inMonth[0];
+  const posts = byDay[sel] || [];
+  const due = dues[sel] || [];
   return (
-    <div className={c.agenda}>
-      {shown.map((d) => {
-        const k = dayKey(d);
-        return (
-          <section key={k} className={`${c.agDay} ${k === today ? c.agToday : ""}`}>
-            <div className={c.agHead}>
-              <span className={c.agNum}>{d.getDate()}</span>
-              <span>{d.toLocaleDateString([], { weekday: "long" })} · {d.toLocaleDateString([], { month: "short" })}</span>
-              <span className={c.grow} />
-              <button className={`${c.btn} ${c.ghost}`} onClick={() => onNew(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 18).toISOString())} aria-label="New post on this day">
-                +
-              </button>
-            </div>
-            {(byDay[k] || []).map((card) => (
-              <Tile key={card.id} card={card} onOpen={onOpen} drag={false} />
-            ))}
-            {(dues[k] || []).map((card) => (
-              <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
-                Due: {card.title}
+    <div className={c.pmWrap}>
+      <div className={c.pmGrid}>
+        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+          <div key={i} className={c.pmDow}>
+            {d}
+          </div>
+        ))}
+        {days.map((d) => {
+          const k = dayKey(d);
+          const list = byDay[k] || [];
+          return (
+            <button
+              key={k}
+              className={`${c.pmDay} ${d.getMonth() !== month ? c.pmOther : ""} ${k === today ? c.pmToday : ""} ${k === sel ? c.pmSel : ""}`}
+              onClick={() => setPicked(k)}
+              aria-label={d.toDateString() + (list.length ? `, ${list.length} post${list.length > 1 ? "s" : ""}` : "")}
+            >
+              <span className={c.pmNum}>{d.getDate()}</span>
+              <span className={c.pmDots}>
+                {list.slice(0, 3).map((card) => (
+                  <i key={card.id} style={{ background: (STATUS[card.status] || STATUS.draft).color }} />
+                ))}
+                {(dues[k] || []).length > 0 && list.length < 3 && <i className={c.pmDueDot} />}
               </span>
-            ))}
-            {!(byDay[k] || []).length && !(dues[k] || []).length && <span className={c.muted}>Nothing planned today.</span>}
-          </section>
-        );
-      })}
-      {shown.length === 0 && <p className={c.muted}>Nothing scheduled this month.</p>}
+            </button>
+          );
+        })}
+      </div>
+      <section className={c.pmList}>
+        <div className={c.agHead}>
+          <span className={c.agNum}>{selDate.getDate()}</span>
+          <span>{selDate.toLocaleDateString([], { weekday: "long", month: "long" })}</span>
+          <span className={c.grow} />
+          <button className={`${c.btn}`} onClick={() => onNew(new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate(), 18).toISOString())}>
+            + Post this day
+          </button>
+        </div>
+        {posts.map((card) => (
+          <Tile key={card.id} card={card} onOpen={onOpen} drag={false} />
+        ))}
+        {due.map((card) => (
+          <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
+            Due: {card.title}
+          </span>
+        ))}
+        {!posts.length && !due.length && <span className={c.muted}>Nothing planned on this day.</span>}
+      </section>
     </div>
   );
 }
@@ -396,7 +424,7 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
       </div>
       {narrow ? (
         <>
-          <Agenda days={days} month={anchor.getMonth()} byDay={byDay} dues={dueDay} onOpen={onOpen} onNew={onNew} />
+          <PhoneMonth days={days} month={anchor.getMonth()} byDay={byDay} dues={dueDay} onOpen={onOpen} onNew={onNew} />
           {unscheduled.length > 0 && <Unscheduled cards={unscheduled} onOpen={onOpen} />}
         </>
       ) : (
@@ -1269,13 +1297,13 @@ function Calendar({ user }) {
           <nav className={p.tabBar} aria-label="Content calendar">
             {tab("month", "📅", "Calendar", view === "month" || view === "week", () => setView("month"))}
             {tab("posts", "📋", "Posts", view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
-            <button className={p.tabNew} onClick={() => newPost()} disabled={!ready} aria-label="New post">
+            <button className={p.tabNew} onClick={() => setSheet("start")} disabled={!ready} aria-label="New post">
               +
             </button>
             {tab("board", "🗂", "Board", view === "board", () => setView("board"))}
             {tab("more", "☰", "More", false, () => setSheet(sheet === "more" ? "" : "more"), !ready)}
           </nav>
-          {sheet && (
+          {sheet && sheet !== "start" && (
             <div className={p.sheetBg} onClick={() => setSheet("")}>
               <div className={p.sheet} onClick={(e) => e.stopPropagation()} role="menu">
                 <div className={p.sheetHandle} aria-hidden />
@@ -1299,8 +1327,38 @@ function Calendar({ user }) {
           )}
         </>
       )}
+      {/* "+" first asks where the post comes from: written here, or made in the Topic Engine. */}
+      {sheet === "start" && (
+        <div className={`${p.sheetBg} ${p.startBg}`} onClick={() => setSheet("")}>
+          <div className={`${p.sheet} ${p.startSheet}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Start a post">
+            <div className={p.sheetHandle} aria-hidden />
+            <div className={p.startTitle}>How do you want to start?</div>
+            {[
+              ["✏️", "New post from scratch", "Write the caption and add the files yourself.", () => newPost()],
+              ["📰", "Use something made in the Topic Engine", "A carousel, story, video, article or script you already made.", () => setPanel("source")],
+              ["🚀", "Make something new in the Topic Engine", "Pick a topic there and make a carousel, story or video, then send it here.", () => (window.location.href = "/")],
+            ].map(([icon, title, sub, go]) => (
+              <button
+                key={title}
+                className={p.startItem}
+                onClick={() => {
+                  setSheet("");
+                  go();
+                }}
+              >
+                <span className={p.startIcon} aria-hidden>{icon}</span>
+                <span className={p.startText}>
+                  <b>{title}</b>
+                  <span>{sub}</span>
+                </span>
+                <span className={p.startGo} aria-hidden>›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <nav className={p.side} aria-label="Content calendar" hidden={phone}>
-        <button className={p.newPost} onClick={() => newPost()} disabled={!ready}>
+        <button className={p.newPost} onClick={() => setSheet("start")} disabled={!ready}>
           + New post
         </button>
         <div className={p.navHead}>Publishing</div>
