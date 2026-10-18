@@ -70,6 +70,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Video Editing section (login, team, projects, review, corrections, approval). The editing method is NOT here: it lives in english-sugimotovisa (`scripts/rough_cut.py`, GitHub job `rough_cut`); this app only stores state on that repo's `editing-data` branch and starts the job | `lib/editing/**`, `app/editing/**`, `app/api/editing/**`, `middleware.js` |
 | Content calendar (Trello-style boards per market, month view, cards from topics and approved videos, publishing to Instagram, TikTok, YouTube, LinkedIn page, X after Hamed's approval) | `lib/calendar/**`, `app/calendar/**`, `app/api/calendar/**` |
 | UI (one list: new + used topics, Archive filter; Lexbase and Ideas tabs; topic view with scripts, original text, article, carousel, video) | `app/page.jsx` |
+| Look: palette B with the logo's slate `#32515d` as main colour (tokens in `app/globals.css`), Geist + Vazirmatn (`public/fonts`), the team's logo files (`public/brand/logo-on-dark.png`, `logo-on-light.png`, `mark.png`). Shared building blocks adapted from shadcn/ui (MIT) in `components/ui` (Button, Badge, Input/Textarea, Card, Sheet, DropdownMenu) with Tailwind (`tailwind.config.js`, its global reset off while old screens move over) and Lucide icons. New and reworked screens use these, never hand-styled buttons or emoji icons. Done so far: the calendar board's cards and lists | `components/ui/**`, `app/globals.css`, `tailwind.config.js` |
 
 ## Video Editing section
 

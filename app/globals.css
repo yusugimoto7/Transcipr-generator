@@ -6,7 +6,21 @@
    Inline styles in the pages handle layout; this file holds what inline
    styles cannot: hover/press/focus states, animations and breakpoints. */
 
+/* Geist (SIL Open Font License, public/fonts) for Latin text; Persian stays
+   Vazirmatn, listed after it in every font stack. */
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Variable.woff2") format("woff2-variations"), url("/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@tailwind components;
+@tailwind utilities;
+
 :root {
+  --font-geist-sans: "Geist";
   --ground: #f7f5f0;
   --surface: #ffffff;
   --line: #e5e0d5;
@@ -32,7 +46,7 @@ body {
   margin: 0;
   min-height: 100%;
   color: var(--text);
-  font-family: "Inter", "Vazirmatn", system-ui, -apple-system, sans-serif;
+  font-family: "Geist", "Vazirmatn", system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

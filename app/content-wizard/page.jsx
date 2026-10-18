@@ -1070,7 +1070,7 @@ export default function ContentWizard() {
       style={{
         minHeight: "100vh",
         background: C.ground,
-        fontFamily: "'Vazirmatn', 'Inter', system-ui, sans-serif",
+        fontFamily: "'Vazirmatn', 'Geist', system-ui, sans-serif",
       }}
     >
       {/* Header */}

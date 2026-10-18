@@ -29,7 +29,7 @@
   .list { flex-basis: 86vw; max-height: calc(100dvh - 250px); scroll-snap-align: center; }
   .boardWrap { margin: 0 -16px; border-radius: 0; padding: 12px 12px; min-height: calc(100dvh - 200px); }
 }
-.listHead { display: flex; align-items: center; gap: 6px; padding: 6px 8px 2px; font-weight: 700; font-size: 14px; color: #172b4d; font-family: "Inter", "Vazirmatn", system-ui, sans-serif; }
+.listHead { display: flex; align-items: center; gap: 6px; padding: 6px 8px 2px; font-weight: 700; font-size: 14px; color: #172b4d; font-family: "Geist", "Vazirmatn", system-ui, sans-serif; }
 .count { color: #44546f; font-weight: 600; font-size: 12px; background: rgba(9, 30, 66, 0.08); border-radius: 99px; padding: 1px 8px; }
 .cards { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 24px; padding: 2px; }
 .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31); cursor: pointer; display: flex; flex-direction: column; font-size: 14px; touch-action: manipulation; user-select: none; overflow: hidden; }
@@ -37,7 +37,7 @@
 .card:focus-visible { outline: 2px solid #32515d; }
 .cardBody { padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 6px; }
 .cardTitle { line-height: 1.45; color: #172b4d; word-break: break-word; unicode-bidi: plaintext; text-align: start; }
-.fa { font-family: "Vazirmatn", "Inter", system-ui, sans-serif; }
+.fa { font-family: "Vazirmatn", "Geist", system-ui, sans-serif; }
 .cover { height: 132px; background: #0b0f14 center / cover no-repeat; position: relative; display: grid; place-items: center; }
 .coverPlay { width: 36px; height: 36px; border-radius: 50%; background: rgba(0, 0, 0, 0.55); color: #fff; display: grid; place-items: center; font-size: 13px; }
 .coverCount { position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }

@@ -15,6 +15,10 @@ import Composer, { NetChip, StatusPill } from "./Composer";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
 import { whenAll, pickerNote } from "../../lib/tz";
 import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
+import { AlignLeft, CalendarDays, Check, Clock, Paperclip, Play, Plus, SquareCheck, X } from "lucide-react";
+import { Button } from "../../components/ui/button";
+import { Badge } from "../../components/ui/badge";
+import { Textarea } from "../../components/ui/input";
 
 const CH = [
   ["instagram", "IG", "Instagram"], ["tiktok", "TT", "TikTok"], ["youtube", "YT", "YouTube"],
@@ -67,6 +71,14 @@ function dueState(card) {
   return t < 0 ? "late" : t < 24 * 3600 * 1000 ? "soon" : "";
 }
 
+// Labels as soft tints with dark text (the new look), keyed by the board's colour names.
+const LABEL_TINT = {
+  sky: ["#e0f2fe", "#075985"], orange: ["#ffedd5", "#9a3412"], yellow: ["#fef9c3", "#854d0e"], purple: ["#ede9fe", "#5b21b6"],
+  green: ["#dcfce7", "#166534"], red: ["#fee2e2", "#991b1b"], pink: ["#fce7f3", "#9d174d"], lime: ["#ecfccb", "#3f6212"],
+  gray: ["#f1efe9", "#3f3f46"], navy: ["#dbeafe", "#1e3a8a"],
+};
+const STATUS_BADGE = { draft: "draft", pending: "pending", approved: "scheduled", scheduled: "scheduled", publishing: "scheduled", published: "published", failed: "failed" };
+
 function CardFace({ card, board, users, onOpen }) {
   const labels = (card.labels || []).map((id) => board.labels.find((l) => l.id === id)).filter(Boolean);
   const people = (card.members || []).map((id) => users.find((u) => u.id === id)).filter(Boolean);
@@ -76,51 +88,74 @@ function CardFace({ card, board, users, onOpen }) {
   const due = dueState(card);
   const st = STATUS[card.status] || STATUS.draft;
   const nets = onNetworks(card);
+  const dueTone = due === "late" ? "bg-[#fef2f2] text-[#b91c1c]" : due === "soon" ? "bg-[#fff7ed] text-[#9a3412]" : due === "done" ? "bg-[#f0fdf4] text-[#15803d]" : "text-muted";
   return (
-    <div className={c.card} onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen()}>
+    <div
+      className="flex cursor-pointer select-none flex-col overflow-hidden rounded-[10px] border border-solid border-border bg-surface text-sm text-ink transition-shadow [touch-action:manipulation] hover:shadow-[0_0_0_2px_var(--orange)] focus-visible:shadow-[0_0_0_2px_var(--orange)] focus-visible:outline-none"
+      onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+    >
       {(cover || card.media?.kind === "video") && (
-        <div className={c.cover} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
-          {card.media.kind === "video" && <span className={c.coverPlay}>▶</span>}
-          {files > 1 && <span className={c.coverCount}>1/{files}</span>}
+        <div className="relative grid h-[132px] place-items-center bg-[#1d3038] bg-cover bg-center" style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
+          {card.media.kind === "video" && (
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white">
+              <Play size={14} fill="currentColor" />
+            </span>
+          )}
+          {files > 1 && <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11.5px] font-bold text-white">1/{files}</span>}
         </div>
       )}
-      <div className={c.cardBody}>
+      <div className="flex flex-col gap-2 px-3 py-2.5">
         {labels.length > 0 && (
-          <div className={c.labels}>
-            {labels.map((l) => (
-              <span key={l.id} className={c.label} style={{ background: COLORS[l.color] || COLORS.gray }} title={l.name}>
-                {l.name}
-              </span>
-            ))}
+          <div className="flex flex-wrap gap-1">
+            {labels.map((l) => {
+              const [bg, fg] = LABEL_TINT[l.color] || LABEL_TINT.gray;
+              return (
+                <span key={l.id} className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-[5px] px-1.5 py-px text-[11px] font-semibold" style={{ background: bg, color: fg }} title={l.name}>
+                  {l.name}
+                </span>
+              );
+            })}
           </div>
         )}
-        <div dir="auto" className={`${c.cardTitle} ${hasFarsi(card.title) ? c.fa : ""}`}>
+        <div dir="auto" className={`${c.cardTitle} ${hasFarsi(card.title) ? c.fa : ""} font-medium`}>
           {card.title}
         </div>
-        <div className={c.badges}>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
           {(card.publish_at || nets.length > 0) && (
-            <span className={c.badge} style={{ background: st.color, color: "#fff" }} title={`${st.name}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
-              {card.status === "published" ? "✓" : "🗓"} {card.publish_at ? shortWhen(card.publish_at) : st.name}
-            </span>
+            <Badge variant={STATUS_BADGE[card.status] || "draft"} title={`${st.name}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
+              {card.status === "published" ? <Check size={12} /> : <CalendarDays size={12} />}
+              {card.publish_at ? shortWhen(card.publish_at) : st.name}
+            </Badge>
           )}
           {card.due_at && (
-            <span className={`${c.badge} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} title={`Ready by · ${whenAll(card.due_at)}`}>
-              🕑 {shortWhen(card.due_at)}
+            <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${dueTone}`} title={`Ready by · ${whenAll(card.due_at)}`}>
+              <Clock size={12} /> {shortWhen(card.due_at)}
             </span>
           )}
-          {card.description && <span className={c.icon} title="This card has a description">≡</span>}
+          {card.description && (
+            <span className="inline-flex" title="This card has a description">
+              <AlignLeft size={13} />
+            </span>
+          )}
           {card.checklist && card.checklist.length > 0 && (
-            <span className={`${c.badge} ${done === card.checklist.length ? c.ok : ""}`} title="Checklist">
-              ☑ {done}/{card.checklist.length}
+            <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${done === card.checklist.length ? "bg-[#f0fdf4] text-[#15803d]" : ""}`} title="Checklist">
+              <SquareCheck size={12} /> {done}/{card.checklist.length}
             </span>
           )}
-          {files > 0 && <span className={c.icon} title={`${files} file${files > 1 ? "s" : ""}`}>📎 {files}</span>}
-          {card.stale_approval && <span className={`${c.badge} ${c.warn}`}>changed after approval</span>}
+          {files > 0 && (
+            <span className="inline-flex items-center gap-1" title={`${files} file${files > 1 ? "s" : ""}`}>
+              <Paperclip size={12} /> {files}
+            </span>
+          )}
+          {card.stale_approval && <Badge variant="pending">changed after approval</Badge>}
           {nets.map((n) => (
             <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
           ))}
           {people.length > 0 && (
-            <span className={c.avatars}>
+            <span className="ml-auto flex gap-0.5">
               {people.map((u) => (
                 <Avatar key={u.id} user={u} size={24} />
               ))}
@@ -151,13 +186,17 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
     await onAdd(list.id, title.trim());
     setTitle("");
   };
+  const dot = list.role === "scheduled" ? "#1d4ed8" : list.role === "published" ? "#15803d" : "var(--orange)";
   return (
     <section className={c.list} aria-label={list.name}>
-      <div className={c.listHead}>
-        <span className={c.grow} dir="auto">{list.name}</span>
-        {list.role === "scheduled" && <span title="Approved posts move here">🗓</span>}
-        {list.role === "published" && <span title="Posts move here once published">✓</span>}
-        <span className={c.count}>{cards.length}</span>
+      <div className="flex items-center gap-2 px-1.5 pb-0.5 pt-1">
+        <span className="h-2 w-2 flex-none rounded-full" style={{ background: dot }} aria-hidden />
+        <h2 className="m-0 flex-1 text-sm font-semibold text-ink" dir="auto">
+          {list.name}
+        </h2>
+        {list.role === "scheduled" && <CalendarDays size={14} className="text-muted" aria-label="Approved posts move here" />}
+        {list.role === "published" && <Check size={14} className="text-muted" aria-label="Posts move here once published" />}
+        <span className="text-xs text-muted">{cards.length}</span>
       </div>
       <SortableContext items={cards.map((x) => x.id)} strategy={verticalListSortingStrategy}>
         <div ref={setNodeRef} className={c.cards}>
@@ -167,19 +206,19 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
         </div>
       </SortableContext>
       {adding ? (
-        <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <textarea id={`new-${list.id}`} className={c.textarea} style={{ minHeight: 56 }} autoFocus placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submit(e)} />
-          <div className={c.bar}>
-            <button className={`${c.btn} ${c.primary}`}>Add card</button>
-            <button type="button" className={`${c.btn} ${c.ghost}`} onClick={() => setAdding(false)} aria-label="Cancel">
-              ✕
-            </button>
+        <form onSubmit={submit} className="flex flex-col gap-1.5">
+          <Textarea id={`new-${list.id}`} className="min-h-[56px]" autoFocus placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submit(e)} />
+          <div className="flex gap-1.5">
+            <Button size="sm">Add card</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)} aria-label="Cancel">
+              <X />
+            </Button>
           </div>
         </form>
       ) : (
-        <button className={c.addCard} onClick={() => setAdding(true)}>
-          + Add a card
-        </button>
+        <Button variant="ghost" size="sm" className="justify-start text-muted" onClick={() => setAdding(true)}>
+          <Plus /> Add a card
+        </Button>
       )}
     </section>
   );

@@ -859,13 +859,13 @@ export default function App() {
   const navBtn = {
     height: 38, minWidth: 38, padding: "0 11px", borderRadius: 12, boxSizing: "border-box",
     background: C.surface, color: C.text, border: `1px solid ${C.line}`,
-    fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif",
+    fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Geist', 'Vazirmatn', sans-serif",
     display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, whiteSpace: "nowrap",
   };
 
   const wrap = {
     minHeight: "100vh",
-    fontFamily: "'Inter', 'Vazirmatn', system-ui, sans-serif",
+    fontFamily: "'Geist', 'Vazirmatn', system-ui, sans-serif",
     color: C.text,
     display: "flex",
     flexDirection: "column",
@@ -1185,7 +1185,7 @@ function ModeSwitch({ mode, onChange }) {
           style={{
             position: "relative", zIndex: 1, flex: 1, padding: "8px 10px", border: "none", background: "transparent",
             borderRadius: 9, cursor: "pointer", color: mode === m ? C.text : C.text3, fontWeight: 600, fontSize: 13,
-            fontFamily: "'Inter', 'Vazirmatn', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+            fontFamily: "'Geist', 'Vazirmatn', sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
           }}
         >
           <span aria-hidden>{ic}</span>
@@ -1287,7 +1287,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
         }}
       >
         {label}
-        <span style={{ minWidth: 18, padding: "0 5px", borderRadius: 99, background: alpha(TONE[k], on ? 0.3 : 0.14), color: on ? C.text : TONE[k], fontSize: 11, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+        <span style={{ minWidth: 18, padding: "0 5px", borderRadius: 99, background: alpha(TONE[k], on ? 0.3 : 0.14), color: on ? C.text : TONE[k], fontSize: 11, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
           {counts[k]}
         </span>
       </button>
@@ -1352,7 +1352,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
               }}
             >
               {label}
-              <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Inter', sans-serif" }}>
+              <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>
                 {catCounts[k]}
               </span>
             </button>
@@ -1409,11 +1409,11 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   </div>
                 )}
                 {plain && t.evergreen && t.signals && t.signals.length > 0 && (
-                  <div dir="ltr" style={{ fontFamily: "'Inter', 'Vazirmatn', sans-serif", fontSize: 11, lineHeight: 1.6, color: C.text3, marginTop: 2, textAlign: "right", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div dir="ltr" style={{ fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 11, lineHeight: 1.6, color: C.text3, marginTop: 2, textAlign: "right", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     🔍 {t.signals.join(" · ")}
                   </div>
                 )}
-                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
                     {f.emoji} {f.label}
                   </span>
@@ -1655,7 +1655,7 @@ function LexbaseSection({ decisions, ...actions }) {
             return (
               <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
                 {label}
-                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Inter', sans-serif" }}>{visible.filter(test).length}</span>
+                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{visible.filter(test).length}</span>
               </button>
             );
           })}
@@ -1790,7 +1790,7 @@ function IdeasSection({ decisions, ...actions }) {
             return (
               <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
                 {label}
-                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Inter', sans-serif" }}>{ideas.filter(test).length}</span>
+                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{ideas.filter(test).length}</span>
               </button>
             );
           })}
@@ -1890,7 +1890,7 @@ function CustomNewsBox({ job, onStart, onOpen }) {
           {!running && (
             <>
               <div style={{ fontSize: 12, color: C.text2, marginBottom: 6 }}>لینک‌ها (هر لینک در یک خط، حداکثر ۵)</div>
-              <textarea dir="ltr" value={links} onChange={(e) => setLinks(e.target.value)} rows={3} placeholder={"https://www.canada.ca/…\nhttps://www.cicnews.com/…"} style={{ ...field, fontFamily: "'Inter', monospace", fontSize: 12.5 }} />
+              <textarea dir="ltr" value={links} onChange={(e) => setLinks(e.target.value)} rows={3} placeholder={"https://www.canada.ca/…\nhttps://www.cicnews.com/…"} style={{ ...field, fontFamily: "'Geist', monospace", fontSize: 12.5 }} />
               <div style={{ fontSize: 12, color: C.text2, margin: "10px 0 6px" }}>عکس‌ها (اسکرین‌شات خبر، نامه، پست — حداکثر ۵)</div>
               <div
                 onDragOver={(e) => {
@@ -2075,7 +2075,7 @@ function DeckWhy({ stats }) {
     </div>
   );
   return (
-    <details className="ui-glass" style={{ fontSize: 11.5, color: C.text2, fontFamily: "'Inter', 'Vazirmatn', sans-serif", marginBottom: 12, direction: "ltr", border: `1px solid ${C.line}`, borderRadius: 12, padding: "8px 12px" }}>
+    <details className="ui-glass" style={{ fontSize: 11.5, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif", marginBottom: 12, direction: "ltr", border: `1px solid ${C.line}`, borderRadius: 12, padding: "8px 12px" }}>
       <summary style={{ cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 8 }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: C.success, boxShadow: `0 0 0 3px ${alpha(C.success, 0.2)}`, flexShrink: 0 }} />
         <span style={{ flex: 1 }}>
@@ -2135,7 +2135,7 @@ function formatNewsDate(d) {
 // direction. Each line resolves its own direction from its first strong char
 // and aligns to that direction.
 function ScriptBody({ text, tab }) {
-  const font = tab === "fa" ? "'Vazirmatn', sans-serif" : "'Inter', 'Vazirmatn', sans-serif";
+  const font = tab === "fa" ? "'Vazirmatn', sans-serif" : "'Geist', 'Vazirmatn', sans-serif";
   const lines = (text || " ").split("\n");
   return (
     <div style={{ fontFamily: font, fontSize: 14, lineHeight: 2, color: C.text }}>
@@ -2195,13 +2195,13 @@ function OriginalText({ topic }) {
     } catch (_) {}
   };
   const copyBtn = (k, text) => (
-    <button className="ui-btn" onClick={() => copy(k, text)} style={{ background: copied === k ? C.success : alpha(C.orange, 0.14), color: copied === k ? "#06281c" : C.orange, border: `1px solid ${copied === k ? C.success : alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+    <button className="ui-btn" onClick={() => copy(k, text)} style={{ background: copied === k ? C.success : alpha(C.orange, 0.14), color: copied === k ? "#06281c" : C.orange, border: `1px solid ${copied === k ? C.success : alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Geist', sans-serif" }}>
       {copied === k ? "Copied ✓" : "Copy"}
     </button>
   );
   const label = { lexbase: "Lexbase newsletter — this item", article: "Source article", snippet: "Source excerpt" }[state.kind] || "Source";
   const isLex = state.kind === "lexbase" || topic.newsletter === "lexbase";
-  const body = { fontFamily: "'Inter', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" };
+  const body = { fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" };
 
   if (state.loading) {
     return <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, padding: "30px 0", textAlign: "center" }}>Loading the original text…</div>;
@@ -2226,7 +2226,7 @@ function OriginalText({ topic }) {
       {isLex && (
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
           {!whole ? (
-            <button className="ui-btn" onClick={loadWhole} style={{ width: "100%", padding: "11px", borderRadius: 12, border: `1px solid ${alpha("#6d5bd0", 0.4)}`, background: alpha("#6d5bd0", 0.08), color: "#6d5bd0", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: "'Inter', 'Vazirmatn', sans-serif" }}>
+            <button className="ui-btn" onClick={loadWhole} style={{ width: "100%", padding: "11px", borderRadius: 12, border: `1px solid ${alpha("#6d5bd0", 0.4)}`, background: alpha("#6d5bd0", 0.08), color: "#6d5bd0", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
               📬 Show the whole newsletter
             </button>
           ) : whole.loading ? (
@@ -2264,7 +2264,7 @@ function when(ts) {
   return ts ? new Date(ts).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 }
 
-const FONT = "'Inter', 'Vazirmatn', sans-serif";
+const FONT = "'Geist', 'Vazirmatn', sans-serif";
 const FA_FONT = "'Vazirmatn', sans-serif";
 
 // A titled block on the topic page.
@@ -2899,7 +2899,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   const missing = slides.length - drawn;
   // Which slide a single-slide job is working on, so only that one shows it.
   const busySlide = running && job.kind === "carousel_slide" ? (job.extra && job.extra.num) || 0 : 0;
-  const font = "'Inter', 'Vazirmatn', sans-serif";
+  const font = "'Geist', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
 
   const start = () => {
@@ -3169,7 +3169,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const drawn = pages.filter((p) => p.image_url).length;
   const missing = pages.length - drawn;
   const busyPage = running && job.kind === "story_page" ? (job.extra && job.extra.num) || 0 : 0;
-  const font = "'Inter', 'Vazirmatn', sans-serif";
+  const font = "'Geist', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
   const isLex = topic && (topic.newsletter === "lexbase" || /\/api\/lexbase\//.test(topic.source_url || ""));
 
@@ -3368,7 +3368,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
   const failed = !!job && job.status === "error" ? job.error : "";
   const kind = (job && job.kind) || "";
   const fa = "'Vazirmatn', sans-serif";
-  const font = "'Inter', 'Vazirmatn', sans-serif";
+  const font = "'Geist', 'Vazirmatn', sans-serif";
   const image = (post && post.image_url) || "";
   const publicOk = caps.telegram?.public !== false;
 
@@ -3708,7 +3708,7 @@ function SlidePreview({ slides, start, onClose }) {
         {slides.length > 1 && arrow(-1, "Previous slide")}
         {slides.length > 1 && arrow(1, "Next slide")}
       </div>
-      <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14, color: "#fff", fontSize: 13, fontFamily: "'Inter', sans-serif" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14, color: "#fff", fontSize: 13, fontFamily: "'Geist', sans-serif" }}>
         <span>{i + 1} / {slides.length}</span>
         <a href={s.image_url} target="_blank" rel="noopener noreferrer" style={{ color: "#fff", opacity: 0.85 }}>Open full size ↗</a>
         <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "none", borderRadius: 99, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Close ✕</button>
@@ -4142,7 +4142,7 @@ function VideoPanel({ job, video, onRefresh, onOpen }) {
 
 function BackBtn({ onClick, label = "Deck" }) {
   return (
-    <button className="ui-btn ui-glass" onClick={onClick} style={{ border: `1px solid ${C.line}`, color: C.text, cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Inter', 'Vazirmatn', sans-serif", borderRadius: 99, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+    <button className="ui-btn ui-glass" onClick={onClick} style={{ border: `1px solid ${C.line}`, color: C.text, cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Geist', 'Vazirmatn', sans-serif", borderRadius: 99, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}>
       ← {label}
     </button>
   );
