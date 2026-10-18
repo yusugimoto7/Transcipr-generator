@@ -15,10 +15,10 @@ import Composer, { NetChip, StatusPill } from "./Composer";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
 import { whenAll, pickerNote } from "../../lib/tz";
 import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
-import { AlignLeft, CalendarDays, Check, Clock, Paperclip, Play, Plus, SquareCheck, X } from "lucide-react";
+import { AlignLeft, Archive, ArrowRight, CalendarDays, Check, Clock, Link2, MessageSquare, Megaphone, Paperclip, Pencil, Play, Plus, SquareCheck, Tag, Users, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
-import { Textarea } from "../../components/ui/input";
+import { Input, Textarea } from "../../components/ui/input";
 
 const CH = [
   ["instagram", "IG", "Instagram"], ["tiktok", "TT", "TikTok"], ["youtube", "YT", "YouTube"],
@@ -594,26 +594,36 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   const done = (card.checklist || []).filter((i) => i.done).length;
   const total = (card.checklist || []).length;
   const due = dueState(card);
-  const SideBtn = ({ k, icon, label, onClick }) => (
-    <button className={`${c.sideBtn} ${pop === k ? c.sideOn : ""}`} onClick={onClick || (() => setPop(pop === k ? "" : k))}>
-      <span aria-hidden>{icon}</span> {label}
-    </button>
+  const SideBtn = ({ k, Icon, label, onClick, tone }) => (
+    <Button
+      variant="outline"
+      className={`h-10 justify-start gap-2.5 px-3 max-md:h-12 max-md:rounded-[10px] ${pop === k ? "border-primary bg-primary-soft" : ""} ${tone || ""}`}
+      onClick={onClick || (() => setPop(pop === k ? "" : k))}
+    >
+      <Icon className="text-muted" /> {label}
+    </Button>
   );
+  const popTitle = { labels: "Labels", members: "Members", dates: "Dates", links: "Links", move: "Move card" }[pop];
   const popover = pop && (
-    <div className={c.pop} role="dialog" aria-label={pop}>
-      <div className={c.popHead}>
-        <b>{{ labels: "Labels", members: "Members", dates: "Dates", links: "Links", move: "Move card" }[pop]}</b>
-        <button className={`${c.btn} ${c.ghost}`} onClick={() => setPop("")} aria-label="Close">
-          ✕
-        </button>
+    <div
+      className="z-20 flex flex-col gap-2.5 rounded-[12px] border border-solid border-border bg-surface p-3 shadow-[0_12px_32px_rgba(9,30,66,0.2)] max-md:fixed max-md:inset-x-3 max-md:bottom-3 max-md:max-h-[70dvh] max-md:overflow-y-auto md:absolute md:right-[calc(100%+8px)] md:top-0 md:w-72"
+      role="dialog"
+      aria-label={pop}
+    >
+      <div className="flex items-center justify-between text-sm font-semibold text-ink">
+        {popTitle}
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setPop("")} aria-label="Close">
+          <X />
+        </Button>
       </div>
       {pop === "labels" &&
         board.labels.map((l) => {
           const on = (card.labels || []).includes(l.id);
+          const [bg, fg] = LABEL_TINT[l.color] || LABEL_TINT.gray;
           return (
-            <label key={l.id} className={c.popRow}>
-              <input type="checkbox" checked={on} onChange={() => toggle("labels", l.id)} />
-              <span className={c.popLabel} style={{ background: COLORS[l.color] || COLORS.gray }}>
+            <label key={l.id} className="flex cursor-pointer items-center gap-2.5 text-sm">
+              <input type="checkbox" className="h-4 w-4 accent-[var(--orange)]" checked={on} onChange={() => toggle("labels", l.id)} />
+              <span className="flex-1 rounded-md px-2.5 py-1.5 text-[13px] font-semibold" style={{ background: bg, color: fg }}>
                 {l.name}
               </span>
             </label>
@@ -621,24 +631,24 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
         })}
       {pop === "members" &&
         users.map((u) => (
-          <label key={u.id} className={c.popRow}>
-            <input type="checkbox" checked={(card.members || []).includes(u.id)} onChange={() => toggle("members", u.id)} />
+          <label key={u.id} className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <input type="checkbox" className="h-4 w-4 accent-[var(--orange)]" checked={(card.members || []).includes(u.id)} onChange={() => toggle("members", u.id)} />
             <Avatar user={u} size={26} />
             <span>{u.name}</span>
           </label>
         ))}
       {pop === "dates" && (
         <>
-          <label className={c.field}>
+          <label className="flex flex-col gap-1 text-[13px] text-muted">
             Start
-            <input id="start-at" type="datetime-local" className={c.input} value={toLocalInput(card.start_at)} onChange={(e) => commit({ start_at: fromLocalInput(e.target.value) })} />
+            <Input id="start-at" type="datetime-local" value={toLocalInput(card.start_at)} onChange={(e) => commit({ start_at: fromLocalInput(e.target.value) })} />
           </label>
-          <label className={c.field}>
+          <label className="flex flex-col gap-1 text-[13px] text-muted">
             Due (ready by)
-            <input id="due-at" type="datetime-local" className={c.input} value={toLocalInput(card.due_at)} onChange={(e) => commit({ due_at: fromLocalInput(e.target.value) })} />
+            <Input id="due-at" type="datetime-local" value={toLocalInput(card.due_at)} onChange={(e) => commit({ due_at: fromLocalInput(e.target.value) })} />
           </label>
-          {(card.start_at || card.due_at) && <span className={c.muted}>🕑 {pickerNote(toLocalInput(card.due_at || card.start_at))}</span>}
-          <span className={c.muted}>The publish time is set in the post.</span>
+          {(card.start_at || card.due_at) && <span className="text-[13px] text-muted">{pickerNote(toLocalInput(card.due_at || card.start_at))}</span>}
+          <span className="text-[13px] text-muted">The publish time is set in the post.</span>
         </>
       )}
       {pop === "links" && (
@@ -648,21 +658,21 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
             commit({ links });
             setPop("");
           }}
-          style={{ display: "flex", flexDirection: "column", gap: 8 }}
+          className="flex flex-col gap-2"
         >
           {LINKS.map(([k, name]) => (
-            <label key={k} className={c.field}>
+            <label key={k} className="flex flex-col gap-1 text-[13px] text-muted">
               {name}
-              <input id={`link-${k}`} className={c.input} placeholder="https://" value={links[k] || ""} onChange={(e) => setLinks({ ...links, [k]: e.target.value })} />
+              <Input id={`link-${k}`} placeholder="https://" value={links[k] || ""} onChange={(e) => setLinks({ ...links, [k]: e.target.value })} />
             </label>
           ))}
-          <button className={`${c.btn} ${c.primary}`}>Save links</button>
+          <Button>Save links</Button>
         </form>
       )}
       {pop === "move" && (
-        <label className={c.field}>
+        <label className="flex flex-col gap-1 text-[13px] text-muted">
           List
-          <select id="card-list" className={c.select} value={card.list_id} onChange={(e) => (commit({ list_id: e.target.value }), setPop(""))}>
+          <select id="card-list" className="h-10 rounded-md border border-solid border-border bg-surface px-2 text-sm text-ink" value={card.list_id} onChange={(e) => (commit({ list_id: e.target.value }), setPop(""))}>
             {board.lists.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -673,102 +683,132 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       )}
     </div>
   );
+  const Section = ({ Icon, title, children }) => (
+    <section className="flex flex-col gap-2.5">
+      <h3 className="m-0 flex items-center gap-2 text-[15px] font-semibold text-ink">
+        <Icon size={16} className="text-muted" aria-hidden /> {title}
+      </h3>
+      {children}
+    </section>
+  );
+  const dueTone = due === "late" ? "bg-[#fef2f2] text-[#b91c1c]" : due === "soon" ? "bg-[#fff7ed] text-[#9a3412]" : due === "done" ? "bg-[#f0fdf4] text-[#15803d]" : "bg-[#f1efe9] text-ink";
+  const metaLabel = "text-xs font-medium text-muted";
 
   return (
-    <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className={c.modal2} role="dialog" aria-modal="true" aria-label={card.title}>
-        <button className={c.closeX} onClick={close} aria-label="Close">
-          ✕
-        </button>
-        {cover || card.media?.kind === "video" ? (
-          <div className={c.coverBand} style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
-            {card.media.kind === "video" && <span className={c.coverPlay}>▶</span>}
-            {fileCount(card.media) > 1 && <span className={c.coverCount}>{fileCount(card.media)} files</span>}
-          </div>
-        ) : (
-          // No picture: a band in the card's first label colour, as Trello's card header.
-          <div className={c.colorBand} style={{ background: labels[0] ? COLORS[labels[0].color] || COLORS.gray : undefined }} aria-hidden />
-        )}
-        <div className={c.headRow}>
-          <span className={c.headIcon} aria-hidden>
-            🗂
-          </span>
-          <div className={c.grow} style={{ minWidth: 0 }}>
-            <textarea
-              id="card-title"
-              ref={titleRef}
-              className={`${c.titleInput} ${hasFarsi(title) ? c.fa : ""}`}
-              dir="auto"
-              rows={1}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={saveTitle}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
-              aria-label="Title"
-            />
-            <div className={c.whereRow}>
-              <span className={c.whereText}>
-                <b>{board.name}</b> / <span dir="auto">{list ? list.name : "?"}</span>
-              </span>
-              <button className={c.moveLink} onClick={() => setPop(pop === "move" ? "" : "move")}>
-                Move
-              </button>
-            </div>
-            <div className={c.muted}>
-              {card.source && (
-                <span>
-                  {" "}
-                  · from {card.source.type === "project" ? "Video Editing" : "the Topic Engine"}: <b dir="auto">{card.source.title}</b>
-                  {card.source.url && (
-                    <>
-                      {" "}
-                      <a href={card.source.url} target="_blank" rel="noreferrer">
-                        source ↗
-                      </a>
-                    </>
-                  )}
-                </span>
-              )}
-            </div>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[rgba(9,15,25,0.55)] md:px-3 md:py-10" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <div className="relative flex w-full max-w-[880px] flex-col overflow-hidden bg-[#faf9f6] shadow-[0_24px_60px_rgba(0,0,0,0.3)] max-md:min-h-dvh md:rounded-[14px]" role="dialog" aria-modal="true" aria-label={card.title}>
+        <div
+          className={`relative bg-cover bg-center ${cover || card.media?.kind === "video" ? "h-[170px] bg-[#1d3038] max-md:h-[200px]" : "h-[72px] max-md:h-[120px]"}`}
+          // An inline gradient: Tailwind's gradient utilities need its global reset, which is off.
+          style={cover ? { backgroundImage: `url(${cover})` } : card.media?.kind === "video" ? undefined : { backgroundImage: "linear-gradient(135deg, #243b44, #32515d)" }}
+        >
+          <Button variant="outline" size="icon" className="absolute left-3 top-3 h-9 w-9 rounded-full bg-white/90 md:left-auto md:right-3" onClick={close} aria-label="Close">
+            <X />
+          </Button>
+          {card.media?.kind === "video" && (
+            <span className="absolute inset-0 m-auto grid h-10 w-10 place-items-center rounded-full bg-black/55 text-white">
+              <Play size={16} fill="currentColor" />
+            </span>
+          )}
+          {fileCount(card.media) > 1 && <span className="absolute bottom-2 left-3 rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-bold text-white">{fileCount(card.media)} files</span>}
         </div>
 
-        <div className={c.cardGrid}>
-          <div className={c.cardMain}>
+        <div className="flex flex-col gap-1 px-4 pb-1 pt-4 md:px-7 md:pt-5">
+          <textarea
+            id="card-title"
+            ref={titleRef}
+            className={`m-0 w-full resize-none overflow-hidden rounded-md border-0 bg-transparent p-1 text-[22px] font-bold leading-[1.4] text-ink [unicode-bidi:plaintext] focus:bg-surface focus:outline focus:outline-2 focus:outline-primary md:text-2xl ${hasFarsi(title) ? c.fa : ""}`}
+            dir="auto"
+            rows={1}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
+            aria-label="Title"
+          />
+          <div className="flex items-center gap-2 px-1 text-[13px] text-muted">
+            <span className="min-w-0 flex-1 truncate">
+              <b className="font-semibold text-ink">{board.name}</b> / <span dir="auto">{list ? list.name : "?"}</span>
+            </span>
+            <button className="cursor-pointer border-0 bg-transparent p-1 font-[inherit] text-[15px] font-semibold text-primary hover:underline" onClick={() => setPop(pop === "move" ? "" : "move")}>
+              Move
+            </button>
+            <span className="hidden items-center gap-1.5 text-xs md:inline-flex" aria-live="polite">
+              {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? <><Check size={13} className="text-[#15803d]" /> Saved</> : null}
+            </span>
+          </div>
+          {card.source && (
+            <div className="px-1 text-xs text-muted">
+              From {card.source.type === "project" ? "Video Editing" : "the Topic Engine"}: <b dir="auto">{card.source.title}</b>
+              {card.source.url && (
+                <>
+                  {" "}
+                  <a className="text-primary" href={card.source.url} target="_blank" rel="noreferrer">
+                    source ↗
+                  </a>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-4 px-4 pb-6 pt-3 md:grid md:grid-cols-[minmax(0,1fr)_220px] md:gap-6 md:px-7">
+          <aside className="relative order-first flex flex-col gap-1.5 rounded-[12px] border border-solid border-border bg-surface p-3 md:order-last md:border-0 md:bg-transparent md:p-0">
+            <div className="mb-1 text-[15px] font-semibold text-ink md:text-xs md:font-medium md:text-muted">
+              <span className="md:hidden">Quick actions</span>
+              <span className="hidden md:inline">Add to card</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:flex md:flex-col md:gap-1.5">
+              <SideBtn k="members" Icon={Users} label="Members" />
+              <SideBtn k="labels" Icon={Tag} label="Labels" />
+              <SideBtn k="check" Icon={SquareCheck} label="Checklist" onClick={() => document.getElementById("chk-new")?.focus()} />
+              <SideBtn k="dates" Icon={Clock} label="Dates" />
+              <SideBtn k="links" Icon={Link2} label="Links" />
+              <SideBtn k="compose" Icon={Pencil} label={onNetworks(card).length ? "Edit the post" : "Write the post"} onClick={() => onCompose(boardId, cardId)} />
+              <SideBtn k="move" Icon={ArrowRight} label="Move" />
+              <SideBtn k="archive" Icon={Archive} label="Archive" tone="text-[#b91c1c]" onClick={() => window.confirm("Archive this card?") && action("archive")} />
+            </div>
+            {popover}
+          </aside>
+
+          <div className="flex min-w-0 flex-col gap-6">
             {(people.length > 0 || labels.length > 0 || card.start_at || card.due_at) && (
-              <div className={c.metaRow}>
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
                 {people.length > 0 && (
-                  <div className={c.metaBlock}>
-                    <span className={c.metaLabel}>Members</span>
-                    <div className={c.bar} style={{ gap: 4 }}>
+                  <div className="flex flex-col gap-1.5">
+                    <span className={metaLabel}>Members</span>
+                    <div className="flex items-center gap-1">
                       {people.map((u) => (
                         <Avatar key={u.id} user={u} size={30} />
                       ))}
-                      <button className={c.plus} onClick={() => setPop("members")} aria-label="Add a member">
-                        +
-                      </button>
+                      <Button variant="outline" size="icon" className="h-[30px] w-[30px] rounded-full border-dashed" onClick={() => setPop("members")} aria-label="Add a member">
+                        <Plus />
+                      </Button>
                     </div>
                   </div>
                 )}
                 {labels.length > 0 && (
-                  <div className={c.metaBlock}>
-                    <span className={c.metaLabel}>Labels</span>
-                    <div className={c.bar} style={{ gap: 4 }}>
-                      {labels.map((l) => (
-                        <span key={l.id} className={c.bigLabel} style={{ background: COLORS[l.color] || COLORS.gray }}>
-                          {l.name}
-                        </span>
-                      ))}
-                      <button className={c.plus} onClick={() => setPop("labels")} aria-label="Add a label">
-                        +
-                      </button>
+                  <div className="flex flex-col gap-1.5">
+                    <span className={metaLabel}>Labels</span>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {labels.map((l) => {
+                        const [bg, fg] = LABEL_TINT[l.color] || LABEL_TINT.gray;
+                        return (
+                          <span key={l.id} className="rounded-md px-2.5 py-1 text-[13px] font-semibold" style={{ background: bg, color: fg }}>
+                            {l.name}
+                          </span>
+                        );
+                      })}
+                      <Button variant="secondary" size="icon" className="h-7 w-7" onClick={() => setPop("labels")} aria-label="Add a label">
+                        <Plus />
+                      </Button>
                     </div>
                   </div>
                 )}
                 {(card.start_at || card.due_at) && (
-                  <div className={c.metaBlock}>
-                    <span className={c.metaLabel}>Dates</span>
-                    <button className={`${c.datePill} ${due === "late" ? c.bad : due === "soon" ? c.warn : due === "done" ? c.ok : ""}`} onClick={() => setPop("dates")} title={card.due_at ? whenAll(card.due_at) : whenAll(card.start_at)}>
+                  <div className="flex flex-col gap-1.5">
+                    <span className={metaLabel}>Dates</span>
+                    <button className={`cursor-pointer rounded-md border-0 px-3 py-1.5 font-[inherit] text-[13px] font-medium ${dueTone}`} onClick={() => setPop("dates")} title={card.due_at ? whenAll(card.due_at) : whenAll(card.start_at)}>
                       {card.start_at ? shortWhen(card.start_at) : ""}
                       {card.start_at && card.due_at ? " – " : ""}
                       {card.due_at ? shortWhen(card.due_at) : ""}
@@ -779,99 +819,97 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               </div>
             )}
 
-            <section className={c.block}>
-              <h3>
-                <span aria-hidden>≡</span> Description
-              </h3>
+            <Section Icon={AlignLeft} title="Description">
               {desc === null ? (
-                <div className={`${c.descView} ${card.description ? "" : c.descEmpty}`} dir="auto" onClick={() => setDesc(card.description || "")} role="button" tabIndex={0}>
+                <div
+                  className={`cursor-pointer whitespace-pre-wrap rounded-[10px] border border-solid px-3.5 py-3 text-sm leading-relaxed ${card.description ? "border-border bg-surface text-ink" : "min-h-[52px] border-transparent bg-[#efebe3] text-muted"}`}
+                  dir="auto"
+                  onClick={() => setDesc(card.description || "")}
+                  role="button"
+                  tabIndex={0}
+                >
                   {card.description || "Add a more detailed description: notes, script, brief…"}
                 </div>
               ) : (
                 <>
-                  <textarea id="card-desc" className={c.textarea} dir="auto" autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} style={{ minHeight: 140 }} />
-                  <div className={c.bar}>
-                    <button
-                      className={`${c.btn} ${c.primary}`}
+                  <Textarea id="card-desc" dir="auto" autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} className="min-h-[140px]" />
+                  <div className="flex gap-2">
+                    <Button
                       onClick={() => {
                         if (desc !== card.description) commit({ description: desc });
                         setDesc(null);
                       }}
                     >
                       Save
-                    </button>
-                    <button className={`${c.btn} ${c.ghost}`} onClick={() => setDesc(null)}>
+                    </Button>
+                    <Button variant="ghost" onClick={() => setDesc(null)}>
                       Cancel
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}
-            </section>
+            </Section>
 
-            <section className={c.block}>
-              <h3>
-                <span aria-hidden>📣</span> Post
-              </h3>
-              <div className={c.postBox}>
-                <div className={c.bar}>
+            <Section Icon={Megaphone} title="Post">
+              <div className="flex flex-col gap-2.5 rounded-[12px] border border-solid border-border bg-surface p-3.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <StatusPill status={card.status} />
                   {onNetworks(card).map((n) => (
                     <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
                   ))}
-                  {card.publish_at && <span className={c.muted}>🗓 {whenAll(card.publish_at)}</span>}
+                  {card.publish_at && (
+                    <span className="inline-flex items-center gap-1 text-[13px] text-muted">
+                      <CalendarDays size={13} /> {whenAll(card.publish_at)}
+                    </span>
+                  )}
                 </div>
                 {captionOf(card) ? (
-                  <p dir="auto" className={c.caption}>
+                  <p dir="auto" className="m-0 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                     {captionOf(card).slice(0, 320)}
                     {captionOf(card).length > 320 ? "…" : ""}
                   </p>
                 ) : (
-                  <p className={c.muted} style={{ margin: 0 }}>
-                    No caption yet.
-                  </p>
+                  <p className="m-0 text-sm text-muted">No caption yet.</p>
                 )}
                 {card.media && card.media.items && card.media.items.length > 1 && (
-                  <div className={c.strip}>
+                  <div className="flex gap-1.5 overflow-x-auto">
                     {card.media.items.map((m, i) => (
-                      <span key={i} className={c.stripThumb} style={m.kind === "image" ? { backgroundImage: `url(${m.url})` } : undefined}>
-                        {m.kind === "video" ? "▶" : ""}
+                      <span key={i} className="grid h-[70px] w-14 flex-none place-items-center rounded-md bg-[#1d3038] bg-cover bg-center text-white" style={m.kind === "image" ? { backgroundImage: `url(${m.url})` } : undefined}>
+                        {m.kind === "video" ? <Play size={14} fill="currentColor" /> : null}
                       </span>
                     ))}
                   </div>
                 )}
                 <div>
-                  <button className={`${c.btn} ${c.primary}`} onClick={() => onCompose(boardId, cardId)}>
-                    {onNetworks(card).length ? "✏️ Edit the post, schedule or publish" : "✏️ Write the post"}
-                  </button>
+                  <Button onClick={() => onCompose(boardId, cardId)}>
+                    <Pencil /> {onNetworks(card).length ? "Edit the post, schedule or publish" : "Write the post"}
+                  </Button>
                 </div>
               </div>
-            </section>
+            </Section>
 
-            <section className={c.block}>
-              <h3>
-                <span aria-hidden>☑</span> Checklist
-              </h3>
+            <Section Icon={SquareCheck} title="Checklist">
               {total > 0 && (
-                <div className={c.progress}>
-                  <span>{Math.round((done / total) * 100)}%</span>
-                  <div className={c.progressTrack}>
-                    <div className={c.progressBar} style={{ width: `${(done / total) * 100}%`, background: done === total ? "#16a34a" : "#388bff" }} />
+                <div className="flex items-center gap-2.5 text-xs text-muted">
+                  <span className="w-8">{Math.round((done / total) * 100)}%</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#e5e0d5]">
+                    <div className="h-full rounded-full transition-[width]" style={{ width: `${(done / total) * 100}%`, background: done === total ? "#16a34a" : "var(--orange)" }} />
                   </div>
                 </div>
               )}
               {(card.checklist || []).map((i, n) => (
-                <label key={i.id || n} className={c.checkRow}>
-                  <input id={`chk-${n}`} type="checkbox" checked={i.done} onChange={(e) => setCheck(card.checklist.map((x, j) => (j === n ? { ...x, done: e.target.checked } : x)))} />
-                  <span dir="auto" className={i.done ? c.struck : ""}>
+                <label key={i.id || n} className="group -mx-1.5 flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1 text-sm hover:bg-black/[0.04]">
+                  <input id={`chk-${n}`} type="checkbox" className="h-4 w-4 flex-none accent-[var(--orange)]" checked={i.done} onChange={(e) => setCheck(card.checklist.map((x, j) => (j === n ? { ...x, done: e.target.checked } : x)))} />
+                  <span dir="auto" className={`min-w-0 flex-1 ${i.done ? "text-muted line-through" : ""}`}>
                     {i.text}
                   </span>
-                  <button className={`${c.btn} ${c.ghost} ${c.rowX}`} onClick={() => setCheck(card.checklist.filter((_, j) => j !== n))} aria-label="Remove item">
-                    ✕
-                  </button>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 max-md:opacity-100" onClick={(e) => (e.preventDefault(), setCheck(card.checklist.filter((_, j) => j !== n)))} aria-label="Remove item">
+                    <X />
+                  </Button>
                 </label>
               ))}
               <form
-                className={c.bar}
+                className="flex gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (!item.trim()) return;
@@ -879,82 +917,58 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   setItem("");
                 }}
               >
-                <input id="chk-new" className={`${c.input} ${c.grow}`} dir="auto" placeholder="Add an item" value={item} onChange={(e) => setItem(e.target.value)} />
-                <button className={c.btn}>Add</button>
+                <Input id="chk-new" className="flex-1" dir="auto" placeholder="Add an item" value={item} onChange={(e) => setItem(e.target.value)} />
+                <Button variant="outline">Add</Button>
               </form>
-            </section>
+            </Section>
 
             {Object.keys(card.links || {}).length > 0 && (
-              <section className={c.block}>
-                <h3>
-                  <span aria-hidden>🔗</span> Links
-                </h3>
-                <div className={c.bar}>
+              <Section Icon={Link2} title="Links">
+                <div className="flex flex-wrap gap-2">
                   {LINKS.filter(([k]) => card.links[k]).map(([k, name]) => (
-                    <a key={k} className={c.linkChip} href={card.links[k]} target="_blank" rel="noreferrer">
+                    <a key={k} className="rounded-md bg-primary-soft px-3 py-1.5 text-[13px] font-semibold text-primary-deep no-underline" href={card.links[k]} target="_blank" rel="noreferrer">
                       {name} ↗
                     </a>
                   ))}
                 </div>
-              </section>
+              </Section>
             )}
 
-            <section className={c.block}>
-              <h3>
-                <span aria-hidden>💬</span> Activity
-              </h3>
-              <form onSubmit={addComment} className={c.actRow}>
+            <Section Icon={MessageSquare} title="Activity">
+              <form onSubmit={addComment} className="flex items-center gap-2.5">
                 <Avatar user={me || { name: "Me" }} size={30} />
-                <input id="comment" className={`${c.input} ${c.grow}`} dir="auto" placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
-                <button className={c.btn} disabled={!comment.trim()}>
+                <Input id="comment" className="flex-1" dir="auto" placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
+                <Button variant="outline" disabled={!comment.trim()}>
                   Send
-                </button>
+                </Button>
               </form>
               {[...comments].reverse().map((m) =>
                 m.type === "comment" ? (
-                  <div key={m.id} className={c.actRow}>
+                  <div key={m.id} className="flex items-start gap-2.5">
                     <Avatar user={person(m.by)} size={30} />
-                    <div className={c.grow} style={{ minWidth: 0 }}>
-                      <div className={c.muted}>
-                        <b style={{ color: "var(--text)" }}>{person(m.by).name}</b> · {shortWhen(new Date(m.at).toISOString())}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs text-muted">
+                        <b className="text-ink">{person(m.by).name}</b> · {shortWhen(new Date(m.at).toISOString())}
                       </div>
-                      <div className={c.bubble} dir="auto">
+                      <div className="mt-1 whitespace-pre-wrap break-words rounded-lg border border-solid border-border bg-surface px-3 py-2 text-sm" dir="auto">
                         {m.text}
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <div key={m.id} className={c.actRow}>
+                  <div key={m.id} className="flex items-start gap-2.5">
                     <Avatar user={person(m.by)} size={30} />
-                    <div className={c.event}>
-                      <b>{person(m.by).name}</b> {m.text} · {shortWhen(new Date(m.at).toISOString())}
+                    <div className="pt-1.5 text-[13px] leading-snug text-muted">
+                      <b className="text-ink">{person(m.by).name}</b> {m.text} · {shortWhen(new Date(m.at).toISOString())}
                     </div>
                   </div>
                 )
               )}
-            </section>
-          </div>
-
-          <aside className={c.cardSide}>
-            <div className={c.sideHead}>
-              <span className={c.deskOnly}>Add to card</span>
-              <span className={c.phoneOnly}>Quick actions</span>
+            </Section>
+            <div className="text-xs text-muted md:hidden" aria-live="polite">
+              {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? "All changes saved" : ""}
             </div>
-            <SideBtn k="members" icon="👤" label="Members" />
-            <SideBtn k="labels" icon="🏷" label="Labels" />
-            <SideBtn k="check" icon="☑" label="Checklist" onClick={() => document.getElementById("chk-new")?.focus()} />
-            <SideBtn k="dates" icon="🕑" label="Dates" />
-            <SideBtn k="links" icon="🔗" label="Links" />
-            <div className={c.sideHead}>Post</div>
-            <SideBtn k="compose" icon="✏️" label={onNetworks(card).length ? "Edit the post" : "Write the post"} onClick={() => onCompose(boardId, cardId)} />
-            <div className={c.sideHead}>Actions</div>
-            <SideBtn k="move" icon="➡" label="Move" />
-            <SideBtn k="archive" icon="🗄" label="Archive" onClick={() => window.confirm("Archive this card?") && action("archive")} />
-            {popover}
-          </aside>
-        </div>
-        <div className={c.saveLine} aria-live="polite">
-          {error ? <span className={c.bad}>{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? "All changes saved" : ""}
+          </div>
         </div>
       </div>
     </div>
