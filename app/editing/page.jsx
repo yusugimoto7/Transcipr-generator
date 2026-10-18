@@ -1,5 +1,6 @@
 "use client";
 
+import { Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, when, ACTIVE, Avatar } from "./ui";
@@ -93,7 +94,7 @@ function Projects({ user }) {
                       <span className={s.kbBadges}>
                         {st && <Pill status={st} />}
                         <span className={s.kbBadge}>v{p.latest_version}</span>
-                        <span className={s.kbBadge}>🕑 {when(p.latest?.updated_at || p.created_at)}</span>
+                        <span className={s.kbBadge}><Clock size={12} aria-hidden /> {when(p.latest?.updated_at || p.created_at)}</span>
                         {ACTIVE.includes(st) && <span className={`${s.kbBadge} ${s.pulse}`}>working…</span>}
                         <span className={s.grow} />
                         {admin && <Avatar user={owner} size={24} />}

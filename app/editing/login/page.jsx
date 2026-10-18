@@ -27,7 +27,8 @@ function Login() {
   return (
     <div className={s.page}>
       <form className={`${s.card} ${s.narrow}`} onSubmit={submit}>
-        <h1 className={s.title}>Sugimoto Visa</h1>
+        <img src="/brand/logo-on-light.png" alt="Sugimoto Visa" style={{ height: 40, width: "auto", alignSelf: "flex-start" }} />
+        <h1 className={s.title} style={{ fontSize: 18 }}>Sign in</h1>
         <p className={s.muted}>One sign-in for the Topic Engine, the content calendar and Video Editing. Use the email and password Hamed gave you.</p>
         <label className={s.field}>
           <span>Email</span>

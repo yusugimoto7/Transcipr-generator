@@ -1,5 +1,6 @@
 "use client";
 
+import { Clapperboard, Film } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
@@ -340,7 +341,7 @@ function Project({ id }) {
         <span>{p.title}</span>
       </nav>
       <div className={s.head}>
-        <span className={s.headIcon} aria-hidden>🎬</span>
+        <span className={s.headIcon} aria-hidden><Clapperboard size={22} /></span>
         <div className={s.grow}>
           <h1 className={s.title} dir="auto">{p.title}</h1>
           <div className={s.headMeta}>
@@ -349,7 +350,7 @@ function Project({ id }) {
             <span className={s.kbBadge}>{LANG[p.language]}</span>
             {p.topic && <span className={s.kbBadge} dir="auto">{p.topic}</span>}
             <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
-              🎞 raw footage ↗
+              <Film size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> raw footage ↗
             </a>
             {d.owner && d.me.role === "admin" && (
               <span className={s.kbBadge} style={{ background: "none", padding: 0, gap: 6 }}>
