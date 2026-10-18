@@ -78,6 +78,12 @@ h2.h2 { font-size: 16px; margin: 0; }
 .list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .pre { white-space: pre-wrap; font-size: 13px; background: var(--ground); padding: 10px; border-radius: 8px; margin: 0; overflow-x: auto; }
 .rule { font-size: 13px; color: var(--text-2); border-left: 3px solid var(--orange); padding-left: 10px; }
+.diff { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.diffOld { border-left: 3px solid #f04438; background: #fef3f2; }
+.diffNew { border-left: 3px solid #12b76a; background: #ecfdf3; }
+.flags { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.flags li { display: flex; gap: 10px; align-items: baseline; }
+.flags b { font-variant-numeric: tabular-nums; min-width: 48px; }
 .narrow { max-width: 420px; margin: 40px auto; width: 100%; }
 .retake td { background: #fffaf5; }
 

@@ -15,7 +15,7 @@ export const STATUS = {
   preparing: "Transcribing",
   deciding: "Choosing takes",
   rendering: "Cutting",
-  verifying: "Checking joins",
+  verifying: "Checking the cut",
   review: "Ready for review",
   delivering: "Copying to Drive",
   approved: "Approved",
@@ -208,7 +208,7 @@ export function Shell({ children, wide }) {
   const ax = (me.user && me.user.ax) || [];
   const current = path.startsWith("/editing") && !path.startsWith("/editing/team") && !path.startsWith("/editing/password") ? "editing" : "";
   const sub = current === "editing" && ax.includes("editing")
-    ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics to record"]]
+    ? [["/editing", "Projects"], ["/editing/new", "New project"], ["/editing/topics", "Topics to record"], ...(me.user.role === "admin" ? [["/editing/lessons", "Lessons"]] : [])]
     : [];
   return (
     <div className={s.shell}>

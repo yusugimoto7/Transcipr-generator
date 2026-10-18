@@ -52,6 +52,59 @@ function CutTable({ rows }) {
   );
 }
 
+// What the worker checked before review (english-sugimotovisa, scripts/rough_cut_qa.py): moments to
+// look at, never changes to the cut.
+function Checks({ qa, lessons, me }) {
+  const flags = (qa && qa.flags) || [];
+  const av = (qa && qa.av) || {};
+  return (
+    <div className={s.card}>
+      <h2 className={s.h2}>Checked before review</h2>
+      {qa && qa.error ? (
+        <p className={s.muted}>The checks did not run: {qa.error}</p>
+      ) : flags.length ? (
+        <>
+          <p className={s.muted}>Watch these moments first:</p>
+          <ul className={s.flags}>
+            {flags.map((f, i) => (
+              <li key={i}>
+                <b>{f.kind === "av" ? "whole" : fmt(f.out)}</b>
+                <span>
+                  <Mixed text={f.text} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className={s.muted}>No flash cuts and no word said twice across a join.</p>
+      )}
+      {av.verdict && <p className={s.muted}>Lips and sound: {av.verdict}.</p>}
+      {lessons && (lessons.lessons || []).length > 0 && (
+        <p className={s.muted}>
+          {lessons.lessons.length === 1 ? "One rule change was" : `${lessons.lessons.length} rule changes were`} proposed from these corrections.{" "}
+          {me.role === "admin" ? <Link href="/editing/lessons">Decide in Lessons</Link> : "Hamed decides whether the rules change."}
+        </p>
+      )}
+      {me.role === "admin" && lessons && lessons.error && <p className={s.muted}>Lessons did not run: {lessons.error}</p>}
+      {me.role === "admin" && lessons && (lessons.no_rule || []).length > 0 && (
+        <details>
+          <summary className={s.muted} style={{ cursor: "pointer" }}>
+            Corrections that did not need a rule change
+          </summary>
+          <ul className={s.list}>
+            {lessons.no_rule.map((n, i) => (
+              <li key={i}>
+                <Mixed text={n.why} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 function RunView({ run, project, isLatest, corrections, canApprove, me, reload }) {
   const [out, setOut] = useState("");
   const [note, setNote] = useState("");
@@ -150,6 +203,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+            {(r.qa || r.lessons) && <Checks qa={r.qa} lessons={r.lessons} me={me} />}
             {r.judgement_calls && r.judgement_calls.length > 0 && (
               <div className={s.card}>
                 <h2 className={s.h2}>Judgement calls to check</h2>
