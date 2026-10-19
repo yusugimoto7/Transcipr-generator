@@ -13,6 +13,7 @@ import c from "./calendar.module.css";
 import p from "./publishing.module.css";
 import PostFiles from "./PostFiles";
 import Composer, { NetChip, StatusPill } from "./Composer";
+import ListMenu, { LIST_COLORS } from "./ListMenu";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
 import { whenAll, pickerNote } from "../../lib/tz";
 import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
@@ -177,19 +178,21 @@ function SortableCard({ card, ...rest }) {
   );
 }
 
-function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
+function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp }) {
   const { setNodeRef } = useDroppable({ id: list.id, data: { type: "list" } });
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
+  const [atTop, setAtTop] = useState(false);
   const submit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
-    await onAdd(list.id, title.trim());
+    await onAdd(list.id, title.trim(), atTop ? { top: true } : {});
     setTitle("");
   };
-  const dot = list.role === "scheduled" ? "#1d4ed8" : list.role === "published" ? "#15803d" : "var(--orange)";
+  const tint = list.color && LIST_COLORS[list.color] ? LIST_COLORS[list.color][1] : "";
+  const dot = tint || (list.role === "scheduled" ? "#1d4ed8" : list.role === "published" ? "#15803d" : "var(--orange)");
   return (
-    <section className={c.list} aria-label={list.name}>
+    <section className={c.list} aria-label={list.name} style={tint ? { boxShadow: `inset 0 3px 0 ${tint}` } : undefined}>
       <div className="flex items-center gap-2 px-1.5 pb-0.5 pt-1">
         <span className="h-2 w-2 flex-none rounded-full" style={{ background: dot }} aria-hidden />
         <h2 className="m-0 flex-1 text-sm font-semibold text-ink" dir="auto">
@@ -198,6 +201,7 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
         {list.role === "scheduled" && <CalendarDays size={14} className="text-muted" aria-label="Approved posts move here" />}
         {list.role === "published" && <Check size={14} className="text-muted" aria-label="Posts move here once published" />}
         <span className="text-xs text-muted">{cards.length}</span>
+        <ListMenu list={list} lists={board.lists} cards={cards} admin={admin} onOp={onListOp} onAddTop={() => (setAtTop(true), setAdding(true))} />
       </div>
       <SortableContext items={cards.map((x) => x.id)} strategy={verticalListSortingStrategy}>
         <div ref={setNodeRef} className={c.cards}>
@@ -217,7 +221,7 @@ function ListColumn({ list, cards, board, users, onOpen, onAdd }) {
           </div>
         </form>
       ) : (
-        <Button variant="ghost" size="sm" className="justify-start text-muted" onClick={() => setAdding(true)}>
+        <Button variant="ghost" size="sm" className="justify-start text-muted" onClick={() => (setAtTop(false), setAdding(true))}>
           <Plus /> Add a card
         </Button>
       )}
@@ -233,7 +237,7 @@ function posBetween(prev, next) {
   return 1000;
 }
 
-function BoardView({ board, users, filter, onOpen, onMove, onAdd }) {
+function BoardView({ board, users, admin, filter, onOpen, onMove, onAdd, onListOp }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }),
@@ -288,7 +292,7 @@ function BoardView({ board, users, filter, onOpen, onMove, onAdd }) {
     <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={(e) => setActive(e.active.id)} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       <div className={c.board}>
         {board.lists.map((l) => (
-          <ListColumn key={l.id} list={l} cards={(cols[l.id] || []).map((id) => byId[id]).filter(Boolean)} board={board} users={users} onOpen={onOpen} onAdd={onAdd} />
+          <ListColumn key={l.id} list={l} cards={(cols[l.id] || []).map((id) => byId[id]).filter(Boolean)} board={board} users={users} admin={admin} onOpen={onOpen} onAdd={onAdd} onListOp={onListOp} />
         ))}
       </div>
       <DragOverlay>{active && byId[active] ? <div className={c.overlay}><CardFace card={byId[active]} board={board} users={users} onOpen={() => {}} /></div> : null}</DragOverlay>
@@ -1254,6 +1258,12 @@ function Calendar({ user }) {
       setError(e.message);
     }
   };
+  // Throws on a refusal so the list menu can show the reason where the person is looking.
+  const listOp = async (body) => {
+    const r = await calApi(`/boards/${planBoard.board.id}/lists`, { method: "POST", body });
+    await load();
+    return r;
+  };
   const quick = async (card, action) => {
     let note = "";
     if (action === "reject") {
@@ -1471,10 +1481,12 @@ function Calendar({ user }) {
           <BoardView
             board={planBoard.board}
             users={planBoard.users}
+            admin={admin}
             filter={planFilter}
             onOpen={(id) => setOpen({ bid: planBoard.board.id, id })}
             onMove={(id, fields) => move({ id, board_id: planBoard.board.id }, fields)}
-            onAdd={(listId, title) => add(planBoard.board.id, listId, title)}
+            onAdd={(listId, title, extra) => add(planBoard.board.id, listId, title, extra)}
+            onListOp={listOp}
           />
           </div>
         ) : (
