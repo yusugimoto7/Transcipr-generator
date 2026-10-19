@@ -36,7 +36,7 @@ function NewProject() {
       </label>
       <div className={s.field}>
         <label htmlFor="source_url">Raw video in Google Drive</label>
-        <div className={s.row} style={{ alignItems: "flex-start" }}>
+        <div className={s.row} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
           <DrivePicker kind="video" mode="upload" onPick={picked} />
           <DrivePicker kind="video" onPick={picked} />
         </div>

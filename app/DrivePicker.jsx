@@ -8,6 +8,7 @@
 // the link field next to it works as before.
 
 import { useEffect, useRef, useState } from "react";
+import { Upload } from "lucide-react";
 import { Button } from "../components/ui/button";
 
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -267,7 +268,17 @@ export default function DrivePicker({ kind = "any", mode = "pick", onPick, disab
     };
   }, []);
   if (!cfg) return null;
-  if (!cfg.enabled) return upload ? null : <small className="text-muted">The Google Drive buttons need the Google keys (GOOGLE_PICKER_*) on the server. Until then, paste a link below.</small>;
+  // Without the keys the buttons stay visible but off, so it is clear what is missing.
+  if (!cfg.enabled)
+    return (
+      <span className="inline-flex min-w-0 flex-col items-start gap-1">
+        <Button type="button" variant="outline" disabled>
+          {upload ? <Upload size={16} aria-hidden /> : <DriveMark />}
+          {label}
+        </Button>
+        {!upload && <small className="max-w-[260px] text-muted">Both buttons need the Google keys (GOOGLE_PICKER_*) on the server. Until then, paste a link below.</small>}
+      </span>
+    );
   const click = () => {
     setNote({ error: "", ok: "" });
     const tokenP = requestToken(cfg);
