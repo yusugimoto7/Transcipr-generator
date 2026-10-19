@@ -11,6 +11,7 @@ function NewProject() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const picked = (file) => setF((x) => ({ ...x, source_url: file.url, title: x.title || file.name.replace(/\.[^.]+$/, "") }));
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -35,9 +36,12 @@ function NewProject() {
       </label>
       <div className={s.field}>
         <label htmlFor="source_url">Raw video in Google Drive</label>
-        <DrivePicker kind="video" onPick={(file) => setF((x) => ({ ...x, source_url: file.url, title: x.title || file.name.replace(/\.[^.]+$/, "") }))} />
+        <div className={s.row} style={{ alignItems: "flex-start" }}>
+          <DrivePicker kind="video" mode="upload" onPick={picked} />
+          <DrivePicker kind="video" onPick={picked} />
+        </div>
         <input id="source_url" className={s.input} value={f.source_url} onChange={set("source_url")} placeholder="or paste its link: https://drive.google.com/file/d/…/view" required />
-        <small className={s.muted}>A pasted link must be shared as “Anyone with the link”; a file chosen from Drive is shared that way for you. Up to 20 minutes of footage.</small>
+        <small className={s.muted}>Upload from this phone sends the video to your Google Drive (folder “Sugimoto video uploads”) and shares it for you; a file chosen from Drive is shared that way too. A pasted link must be shared as “Anyone with the link”. Up to 20 minutes of footage.</small>
       </div>
       <div className={s.row}>
         <label className={`${s.field} ${s.grow}`}>

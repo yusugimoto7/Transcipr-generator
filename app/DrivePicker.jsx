@@ -64,9 +64,40 @@ function requestToken(cfg) {
   });
 }
 
-function openPicker(cfg, token, kind) {
+// The folder phone uploads land in (found again by name, so every upload goes to the same place).
+async function uploadFolder(token) {
+  const name = "Sugimoto video uploads";
+  const q = `name = '${name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const res = await fetch(`${DRIVE}/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`, { headers: authHeader(token) });
+  if (res.ok) {
+    const found = (await res.json()).files || [];
+    if (found[0]) return found[0].id;
+  }
+  return makeFolder(token, name);
+}
+
+function openPicker(cfg, token, kind, mode, parent) {
   const p = window.google.picker;
   return new Promise((resolve) => {
+    if (mode === "upload") {
+      // Google's own upload page: it sends the file from the phone to Drive in pieces and keeps going
+      // on a weak connection, so a long video does not have to pass through this app.
+      const up = new p.DocsUploadView().setIncludeFolders(false);
+      if (parent) up.setParent(parent);
+      new p.PickerBuilder()
+        .setAppId(cfg.appId)
+        .setDeveloperKey(cfg.apiKey)
+        .setOAuthToken(token)
+        .addView(up)
+        .setCallback((data) => {
+          const action = data[p.Response.ACTION];
+          if (action === p.Action.PICKED) resolve(data[p.Response.DOCUMENTS][0]);
+          else if (action === p.Action.CANCEL) resolve(null);
+        })
+        .build()
+        .setVisible(true);
+      return;
+    }
     const view = (shared) => {
       const v = new p.DocsView(p.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(false);
       if (shared) v.setEnableDrives(true);
@@ -221,7 +252,9 @@ function DriveMark() {
   );
 }
 
-export default function DrivePicker({ kind = "any", onPick, disabled, label = "Choose from Google Drive" }) {
+export default function DrivePicker({ kind = "any", mode = "pick", onPick, disabled, label }) {
+  const upload = mode === "upload";
+  label = label || (upload ? "Upload from this phone" : "Choose from Google Drive");
   const [cfg, setCfg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState({ error: "", ok: "" });
@@ -233,14 +266,15 @@ export default function DrivePicker({ kind = "any", onPick, disabled, label = "C
       alive.current = false;
     };
   }, []);
-  if (!cfg || !cfg.enabled) return null;
+  if (!cfg) return null;
+  if (!cfg.enabled) return upload ? null : <small className="text-muted">The Google Drive buttons need the Google keys (GOOGLE_PICKER_*) on the server. Until then, paste a link below.</small>;
   const click = () => {
     setNote({ error: "", ok: "" });
     const tokenP = requestToken(cfg);
     setBusy(true);
     tokenP
       .then(async (token) => {
-        const doc = await openPicker(cfg, token, kind);
+        const doc = await openPicker(cfg, token, kind, mode, upload ? await uploadFolder(token) : "");
         if (!doc) return;
         await shareByLink(token, doc.id);
         const file = { id: doc.id, name: doc.name, mimeType: doc.mimeType, url: `https://drive.google.com/file/d/${doc.id}/view` };
