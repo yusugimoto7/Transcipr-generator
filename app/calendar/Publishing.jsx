@@ -161,7 +161,12 @@ export const LIST_TABS = [
   ["failed", "Failed"],
 ];
 
+// Cards brought over from Trello are planning cards: they join the Posts lists once a network is
+// switched on or a time is set, so 1,000 old cards do not bury the real drafts.
+const planningOnly = (card) => !!card.trello && !card.publish_at && !card.review && !Object.values(card.channels || {}).some((x) => x && x.on);
+
 export function inTab(card, tab) {
+  if (planningOnly(card)) return false;
   if (tab === "scheduled") return ["scheduled", "approved", "publishing"].includes(card.status);
   return card.status === tab;
 }

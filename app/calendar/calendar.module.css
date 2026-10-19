@@ -37,6 +37,12 @@
 }
 .listHead { display: flex; align-items: center; gap: 6px; padding: 6px 8px 2px; font-weight: 700; font-size: 14px; color: #172b4d; font-family: "Geist", "Vazirmatn", system-ui, sans-serif; }
 .count { color: #44546f; font-weight: 600; font-size: 12px; background: rgba(9, 30, 66, 0.08); border-radius: 99px; padding: 1px 8px; }
+/* a list the team filled with a colour in Trello: light text on the list itself, cards stay white */
+.listFill { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); }
+.listFill > div:first-child h2, .listFill > div:first-child button { color: #fff; }
+.listFill > div:first-child :global(.text-muted) { color: rgba(255, 255, 255, 0.72); }
+.listFill > button, .listFill > form button { color: rgba(255, 255, 255, 0.85); }
+.listFill > button:hover { background: rgba(255, 255, 255, 0.12); }
 .cards { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 24px; padding: 2px; }
 .card { background: var(--surface); border-radius: 10px; box-shadow: 0 1px 1px rgba(9, 30, 66, 0.25), 0 0 1px rgba(9, 30, 66, 0.31); cursor: pointer; display: flex; flex-direction: column; font-size: 14px; touch-action: manipulation; user-select: none; overflow: hidden; }
 .card:hover { box-shadow: 0 0 0 2px #32515d; }
