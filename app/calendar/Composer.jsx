@@ -257,7 +257,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
 
             <div>
               <div className={c.label} style={{ marginBottom: 8 }}>
-                Media {needsVideo && <span className={c.muted}>· a video is needed for {on.filter((n) => n.key !== "linkedin" && n.key !== "x").map((n) => n.name).join(", ")}</span>}
+                Media {needsVideo && <span className={c.muted}>· optional while it is an idea; a video is needed on {on.filter((n) => n.key !== "linkedin" && n.key !== "x").map((n) => n.name).join(", ")} before it can go out</span>}
               </div>
               {album.length > 1 ? (
                 <div className={c.mediaBox}>
