@@ -4,7 +4,7 @@ import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from "next/navigation";
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
-  closestCorners, useDroppable, useDraggable,
+  closestCenter, pointerWithin, rectIntersection, getFirstCollision, useDroppable, useDraggable,
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -192,7 +192,7 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
   const tint = list.color && LIST_COLORS[list.color] ? LIST_COLORS[list.color][1] : "";
   const dot = tint || (list.role === "scheduled" ? "#1d4ed8" : list.role === "published" ? "#15803d" : "var(--orange)");
   return (
-    <section className={c.list} aria-label={list.name} style={tint ? { boxShadow: `inset 0 3px 0 ${tint}` } : undefined}>
+    <section ref={setNodeRef} className={c.list} aria-label={list.name} style={tint ? { boxShadow: `inset 0 3px 0 ${tint}` } : undefined}>
       <div className="flex items-center gap-2 px-1.5 pb-0.5 pt-1">
         <span className="h-2 w-2 flex-none rounded-full" style={{ background: dot }} aria-hidden />
         <h2 className="m-0 flex-1 text-sm font-semibold text-ink" dir="auto">
@@ -204,7 +204,7 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
         <ListMenu list={list} lists={board.lists} cards={cards} admin={admin} onOp={onListOp} onAddTop={() => (setAtTop(true), setAdding(true))} />
       </div>
       <SortableContext items={cards.map((x) => x.id)} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className={c.cards}>
+        <div className={c.cards}>
           {cards.map((card) => (
             <SortableCard key={card.id} card={card} board={board} users={users} onOpen={() => onOpen(card.id)} />
           ))}
@@ -257,6 +257,25 @@ function BoardView({ board, users, admin, filter, onOpen, onMove, onAdd, onListO
   }, [build, active]);
   const findCol = (id) => (cols[id] ? id : Object.keys(cols).find((k) => cols[k].includes(id)));
 
+  // What the finger is over, as in dnd-kit's own board example: the list under the pointer (any
+  // part of it, so an empty list takes a drop too), then the nearest card inside that list. The
+  // default "closest corners" picked a far list once the board had scrolled sideways.
+  const collision = useCallback(
+    (args) => {
+      const hits = pointerWithin(args);
+      const found = hits.length ? hits : rectIntersection(args);
+      let over = getFirstCollision(found, "id");
+      if (over == null) return [];
+      const ids = cols[over];
+      if (ids && ids.length) {
+        const inside = closestCenter({ ...args, droppableContainers: args.droppableContainers.filter((d) => d.id !== over && ids.includes(d.id)) });
+        if (inside[0]) over = inside[0].id;
+      }
+      return [{ id: over }];
+    },
+    [cols]
+  );
+
   const onDragOver = ({ active: a, over }) => {
     if (!over) return;
     const from = findCol(a.id);
@@ -289,8 +308,8 @@ function BoardView({ board, users, admin, filter, onOpen, onMove, onAdd, onListO
     onMove(a.id, { list_id: col, pos: posBetween(prev, next) });
   };
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={(e) => setActive(e.active.id)} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
-      <div className={c.board}>
+    <DndContext sensors={sensors} collisionDetection={collision} autoScroll={{ threshold: { x: 0.18, y: 0.15 }, acceleration: 12 }} onDragStart={(e) => setActive(e.active.id)} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
+      <div className={`${c.board} ${active ? c.dragging : ""}`}>
         {board.lists.map((l) => (
           <ListColumn key={l.id} list={l} cards={(cols[l.id] || []).map((id) => byId[id]).filter(Boolean)} board={board} users={users} admin={admin} onOpen={onOpen} onAdd={onAdd} onListOp={onListOp} />
         ))}

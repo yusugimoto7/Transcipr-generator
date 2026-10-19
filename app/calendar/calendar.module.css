@@ -27,9 +27,11 @@
 .boardWrap { position: relative; isolation: isolate; background: linear-gradient(160deg, #243b44 0%, #32515d 55%, #1d3038 100%); border-radius: 14px; padding: 12px; min-height: calc(100vh - 210px); overflow: hidden; }
 .boardWrap::after { content: ""; position: absolute; z-index: -1; right: 4%; bottom: 4%; width: min(320px, 46%); aspect-ratio: 6 / 1; background: url(/brand/logo-on-dark.png) center / contain no-repeat; opacity: 0.14; pointer-events: none; }
 .board { display: flex; gap: 12px; overflow-x: auto; align-items: flex-start; padding-bottom: 8px; scroll-snap-type: x proximity; }
+.board.dragging { scroll-snap-type: none; }
 .list { flex: 0 0 272px; background: #f3f0ea; border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 230px); box-shadow: 0 1px 1px rgba(9, 30, 66, 0.25); scroll-snap-align: start; }
 @media (max-width: 600px) {
   .board { scroll-snap-type: x mandatory; scroll-padding: 0 12px; gap: 10px; }
+  .board.dragging { scroll-snap-type: none; }
   .list { flex-basis: 86vw; max-height: calc(100dvh - 250px); scroll-snap-align: center; }
   .boardWrap { margin: 0 -16px; border-radius: 0; padding: 12px 12px; min-height: calc(100dvh - 200px); }
 }
