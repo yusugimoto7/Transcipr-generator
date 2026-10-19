@@ -21,6 +21,7 @@ import { AlertCircle, AlignLeft, Archive, ArrowRight, CalendarCheck, CalendarDay
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Input, Textarea } from "../../components/ui/input";
+import { TRELLO_LABELS, COVER_COLORS, FILLED_LIST_COLORS, textOn } from "../../lib/calendar/palette";
 
 const CH = [
   ["instagram", "IG", "Instagram"], ["tiktok", "TT", "TikTok"], ["youtube", "YT", "YouTube"],
@@ -30,6 +31,7 @@ const CAPTION_MAX = { instagram: 2200, tiktok: 2200, youtube: 5000, linkedin: 30
 const COLORS = {
   sky: "#5aa9e6", orange: "#f28c28", yellow: "#d9a923", purple: "#9b7fd4", green: "#4caf7a",
   red: "#e5484d", pink: "#e86fa8", lime: "#7fb236", gray: "#8b95a3", navy: "#2f5d9b",
+  ...TRELLO_LABELS,
 };
 const LINKS = [["docs", "Google Docs"], ["canva", "Canva"], ["final", "Final work"], ["other", "Other link"]];
 
@@ -57,6 +59,13 @@ function initials(name) {
   return String(name || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 const hasFarsi = (t) => /[؀-ۿ]/.test(t || "");
+const hostOf = (u) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+};
 
 // ---- card face ----------------------------------------------------------------------------------
 
@@ -68,7 +77,7 @@ function fileCount(media) {
 // When a date is: Trello colours a due date red when late and yellow when close.
 function dueState(card) {
   if (!card.due_at) return "";
-  if (card.status === "published") return "done";
+  if (card.status === "published" || card.due_complete) return "done";
   const t = new Date(card.due_at).getTime() - Date.now();
   return t < 0 ? "late" : t < 24 * 3600 * 1000 ? "soon" : "";
 }
@@ -78,6 +87,8 @@ const LABEL_TINT = {
   sky: ["#e0f2fe", "#075985"], orange: ["#ffedd5", "#9a3412"], yellow: ["#fef9c3", "#854d0e"], purple: ["#ede9fe", "#5b21b6"],
   green: ["#dcfce7", "#166534"], red: ["#fee2e2", "#991b1b"], pink: ["#fce7f3", "#9d174d"], lime: ["#ecfccb", "#3f6212"],
   gray: ["#f1efe9", "#3f3f46"], navy: ["#dbeafe", "#1e3a8a"],
+  // Labels brought over from Trello keep their own solid colours.
+  ...Object.fromEntries(Object.entries(TRELLO_LABELS).map(([k, hex]) => [k, [hex, textOn(hex)]])),
 };
 const STATUS_BADGE = { draft: "draft", pending: "pending", approved: "scheduled", scheduled: "scheduled", publishing: "scheduled", published: "published", failed: "failed" };
 
@@ -99,6 +110,7 @@ function CardFace({ card, board, users, onOpen }) {
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
     >
+      {card.cover && COVER_COLORS[card.cover.color] && <div className="h-9 w-full flex-none" style={{ background: COVER_COLORS[card.cover.color] }} aria-hidden />}
       {(cover || card.media?.kind === "video") && (
         <div className="relative grid h-[132px] place-items-center bg-[#1d3038] bg-cover bg-center" style={cover ? { backgroundImage: `url(${cover})` } : undefined}>
           {card.media.kind === "video" && (
@@ -134,7 +146,7 @@ function CardFace({ card, board, users, onOpen }) {
           )}
           {card.due_at && (
             <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${dueTone}`} title={`Ready by · ${whenAll(card.due_at)}`}>
-              <Clock size={12} /> {shortWhen(card.due_at)}
+              {card.due_complete ? <Check size={12} /> : <Clock size={12} />} {shortWhen(card.due_at)}
             </span>
           )}
           {card.description && (
@@ -147,19 +159,24 @@ function CardFace({ card, board, users, onOpen }) {
               <SquareCheck size={12} /> {done}/{card.checklist.length}
             </span>
           )}
-          {files > 0 && (
-            <span className="inline-flex items-center gap-1" title={`${files} file${files > 1 ? "s" : ""}`}>
-              <Paperclip size={12} /> {files}
+          {files + (card.attachments || []).length > 0 && (
+            <span className="inline-flex items-center gap-1" title={`${files + (card.attachments || []).length} file${files + (card.attachments || []).length > 1 ? "s" : ""} and links`}>
+              <Paperclip size={12} /> {files + (card.attachments || []).length}
             </span>
           )}
           {card.stale_approval && <Badge variant="pending">changed after approval</Badge>}
           {nets.map((n) => (
             <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
           ))}
-          {people.length > 0 && (
+          {(people.length > 0 || ((card.trello && card.trello.unmapped) || []).length > 0) && (
             <span className="ml-auto flex gap-0.5">
               {people.map((u) => (
                 <Avatar key={u.id} user={u} size={24} />
+              ))}
+              {((card.trello && card.trello.unmapped) || []).map((name) => (
+                <span key={name} title={name} className="grid h-6 w-6 place-items-center rounded-full bg-[#5b6675] text-[10px] font-bold text-white">
+                  {initials(name)}
+                </span>
               ))}
             </span>
           )}
@@ -183,6 +200,8 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [atTop, setAtTop] = useState(false);
+  // A list of hundreds (the Trello "Completed" lists) draws a page at a time, so a phone stays quick.
+  const [shown, setShown] = useState(60);
   const submit = async (e) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -190,9 +209,11 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
     setTitle("");
   };
   const tint = list.color && LIST_COLORS[list.color] ? LIST_COLORS[list.color][1] : "";
-  const dot = tint || (list.role === "scheduled" ? "#1d4ed8" : list.role === "published" ? "#15803d" : "var(--orange)");
+  const fill = list.color && FILLED_LIST_COLORS[list.color] ? FILLED_LIST_COLORS[list.color] : "";
+  const visible = cards.slice(0, shown);
+  const dot = fill ? "rgba(255,255,255,0.6)" : tint || (list.role === "scheduled" ? "#1d4ed8" : list.role === "published" ? "#15803d" : "var(--orange)");
   return (
-    <section ref={setNodeRef} className={c.list} aria-label={list.name} style={tint ? { boxShadow: `inset 0 3px 0 ${tint}` } : undefined}>
+    <section ref={setNodeRef} className={`${c.list} ${fill ? c.listFill : ""}`} aria-label={list.name} style={fill ? { background: fill } : tint ? { boxShadow: `inset 0 3px 0 ${tint}` } : undefined}>
       <div className="flex items-center gap-2 px-1.5 pb-0.5 pt-1">
         <span className="h-2 w-2 flex-none rounded-full" style={{ background: dot }} aria-hidden />
         <h2 className="m-0 flex-1 text-sm font-semibold text-ink" dir="auto">
@@ -203,11 +224,16 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
         <span className="text-xs text-muted">{cards.length}</span>
         <ListMenu list={list} lists={board.lists} cards={cards} admin={admin} onOp={onListOp} onAddTop={() => (setAtTop(true), setAdding(true))} />
       </div>
-      <SortableContext items={cards.map((x) => x.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={visible.map((x) => x.id)} strategy={verticalListSortingStrategy}>
         <div className={c.cards}>
-          {cards.map((card) => (
+          {visible.map((card) => (
             <SortableCard key={card.id} card={card} board={board} users={users} onOpen={() => onOpen(card.id)} />
           ))}
+          {cards.length > shown && (
+            <Button variant="outline" size="sm" onClick={() => setShown(shown + 100)}>
+              Show {Math.min(100, cards.length - shown)} more ({cards.length - shown} left)
+            </Button>
+          )}
         </div>
       </SortableContext>
       {adding ? (
@@ -593,7 +619,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       setError(err.message);
     }
   };
-  const person = (id) => users.find((u) => u.id === id) || { id, name: id === "scheduler" ? "Scheduler" : "Someone" };
+  const person = (id) => users.find((u) => u.id === id) || { id, name: id === "scheduler" ? "Scheduler" : String(id).startsWith("trello:") ? String(id).slice(7) : "Someone" };
   const toggle = (k, id) => commit({ [k]: (card[k] || []).includes(id) ? card[k].filter((x) => x !== id) : [...(card[k] || []), id] });
   const setCheck = (list) => commit({ checklist: list });
 
@@ -615,6 +641,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   const labels = (card.labels || []).map((id) => board.labels.find((l) => l.id === id)).filter(Boolean);
   const people = (card.members || []).map(person);
   const cover = thumbOf(card.media);
+  const coverHex = card.cover && COVER_COLORS[card.cover.color];
   const done = (card.checklist || []).filter((i) => i.done).length;
   const total = (card.checklist || []).length;
   const due = dueState(card);
@@ -671,6 +698,12 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
             Due (ready by)
             <Input id="due-at" type="datetime-local" value={toLocalInput(card.due_at)} onChange={(e) => commit({ due_at: fromLocalInput(e.target.value) })} />
           </label>
+          {card.due_at && (
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4 accent-[var(--orange)]" checked={!!card.due_complete} onChange={(e) => commit({ due_complete: e.target.checked })} />
+              Mark as done
+            </label>
+          )}
           {(card.start_at || card.due_at) && <span className="text-[13px] text-muted">{pickerNote(toLocalInput(card.due_at || card.start_at))}</span>}
           <span className="text-[13px] text-muted">The publish time is set in the post.</span>
         </>
@@ -724,7 +757,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
         <div
           className={`relative bg-cover bg-center ${cover || card.media?.kind === "video" ? "h-[170px] bg-[#1d3038] max-md:h-[200px]" : "h-[72px] max-md:h-[120px]"}`}
           // An inline gradient: Tailwind's gradient utilities need its global reset, which is off.
-          style={cover ? { backgroundImage: `url(${cover})` } : card.media?.kind === "video" ? undefined : { backgroundImage: "linear-gradient(135deg, #243b44, #32515d)" }}
+          style={cover ? { backgroundImage: `url(${cover})` } : card.media?.kind === "video" ? undefined : coverHex ? { background: coverHex } : { backgroundImage: "linear-gradient(135deg, #243b44, #32515d)" }}
         >
           <Button variant="outline" size="icon" className="absolute left-3 top-3 h-9 w-9 rounded-full bg-white/90 md:left-auto md:right-3" onClick={close} aria-label="Close">
             <X />
@@ -761,6 +794,15 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? <><Check size={13} className="text-[#15803d]" /> Saved</> : null}
             </span>
           </div>
+          {card.trello && (
+            <div className="px-1 text-xs text-muted">
+              From Trello card #{card.trello.number}:{" "}
+              <a className="text-primary" href={card.trello.url} target="_blank" rel="noreferrer">
+                open in Trello ↗
+              </a>
+              {(card.trello.unmapped || []).length > 0 && <span dir="auto"> · members there: {card.trello.unmapped.join(", ")}</span>}
+            </div>
+          )}
           {card.source && (
             <div className="px-1 text-xs text-muted">
               From {card.source.type === "project" ? "Video Editing" : "the Topic Engine"}: <b dir="auto">{card.source.title}</b>
@@ -836,7 +878,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                       {card.start_at ? shortWhen(card.start_at) : ""}
                       {card.start_at && card.due_at ? " – " : ""}
                       {card.due_at ? shortWhen(card.due_at) : ""}
-                      {due === "late" ? " · late" : due === "soon" ? " · due soon" : ""}
+                      {card.due_complete ? " · done" : due === "late" ? " · late" : due === "soon" ? " · due soon" : ""}
                     </button>
                   </div>
                 )}
@@ -953,6 +995,27 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   {LINKS.filter(([k]) => card.links[k]).map(([k, name]) => (
                     <a key={k} className="rounded-md bg-primary-soft px-3 py-1.5 text-[13px] font-semibold text-primary-deep no-underline" href={card.links[k]} target="_blank" rel="noreferrer">
                       {name} ↗
+                    </a>
+                  ))}
+                </div>
+              </Section>
+            )}
+
+            {(card.attachments || []).length > 0 && (
+              <Section Icon={Paperclip} title={`Attachments (${card.attachments.length})`}>
+                <div className="flex flex-col gap-1.5">
+                  {card.attachments.map((a) => (
+                    <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 rounded-lg border border-solid border-border bg-surface px-3 py-2 text-sm text-ink no-underline hover:border-primary">
+                      <span className="grid h-8 w-8 flex-none place-items-center rounded-md bg-[#efebe3] text-[10px] font-bold uppercase text-muted">{a.kind === "file" ? "file" : "link"}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium" dir="auto">
+                          {a.name}
+                        </span>
+                        <span className="block truncate text-xs text-muted">
+                          {hostOf(a.url)}
+                          {a.kind === "file" ? " · stored on Trello" : ""}
+                        </span>
+                      </span>
                     </a>
                   ))}
                 </div>

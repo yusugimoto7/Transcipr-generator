@@ -11,10 +11,13 @@ import { ArrowDownAZ, ArrowLeft, ArrowRightLeft, Archive, ChevronRight, Copy, Mo
 import { Sheet, SheetContent } from "../../components/ui/sheet";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { FILLED_LIST_COLORS } from "../../lib/calendar/palette";
 
 export const LIST_COLORS = {
   slate: ["Slate", "#32515d"], blue: ["Blue", "#2563eb"], green: ["Green", "#16a34a"], amber: ["Amber", "#d97706"],
   red: ["Red", "#dc2626"], purple: ["Purple", "#7c3aed"], pink: ["Pink", "#db2777"], gray: ["Gray", "#6b7280"],
+  // the colours the team's Trello lists had; these fill the whole list
+  ...Object.fromEntries(Object.entries(FILLED_LIST_COLORS).map(([k, hex]) => [k, [k[0].toUpperCase() + k.slice(1) + " (filled)", hex]])),
 };
 const SORTS = [["newest", "Date created (newest first)"], ["oldest", "Date created (oldest first)"], ["title", "Card name (alphabetically)"], ["date", "Publish date (soonest first)"]];
 
