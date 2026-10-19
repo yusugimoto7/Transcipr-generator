@@ -78,6 +78,7 @@ async function streamTopics(exclude, force, { onTopic, onStats }) {
   });
   if (!res.ok) throw new Error("API " + res.status);
   let error = "";
+  let generating = false;
   const handle = (line) => {
     if (!line.trim()) return;
     let ev;
@@ -87,7 +88,10 @@ async function streamTopics(exclude, force, { onTopic, onStats }) {
       return;
     }
     if (ev.type === "topic" && ev.topic) onTopic(ev.topic);
-    else if (ev.type === "stats") onStats(ev.stats || null);
+    else if (ev.type === "stats") {
+      onStats(ev.stats || null);
+      if (ev.generating) generating = true; // the server is still writing a newer batch
+    }
     else if (ev.type === "error") error = ev.message || ev.error || "error";
   };
   if (res.body && res.body.getReader) {
@@ -108,7 +112,7 @@ async function streamTopics(exclude, force, { onTopic, onStats }) {
   } else {
     (await res.text()).split("\n").forEach(handle);
   }
-  return { error };
+  return { error, generating };
 }
 
 // The last deck shown on this device, so reopening the app shows cards
@@ -574,6 +578,15 @@ export default function App() {
   // keeps every idea not archived and adds the new ones.
   const topicsRef = useRef(topics);
   topicsRef.current = topics;
+  // The server writes a batch whether or not this page is open; this page only watches it. Leaving
+  // stops the watching, never the writing, and coming back picks up whatever was written meanwhile.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   const loadTopics = useCallback(async (force = false) => {
     setTopicError(null);
@@ -618,6 +631,20 @@ export default function App() {
         onStats: (st) => st && setDeckStats(st),
       });
       if (!shown && r.error) throw new Error(r.error);
+      // A newer batch is still being written on the server: keep adding its cards as they appear.
+      for (let n = 0; r.generating && n < 100 && aliveRef.current; n++) {
+        await new Promise((ok) => setTimeout(ok, 4000));
+        if (!aliveRef.current) break;
+        const d = await fetch("/api/topics?deck=1", { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        if (!d) continue;
+        for (const t of d.topics || []) {
+          if (!fresh(t)) continue;
+          setTopics((prev) => (prev.some((x) => same(x, t)) ? prev : [...prev, t]));
+          shown++;
+        }
+        if (d.stats) setDeckStats(d.stats);
+        if (!d.generating) break;
+      }
     } catch (e) {
       // Ideas already on screen stay; only an empty list shows the error.
       if (!shown) {

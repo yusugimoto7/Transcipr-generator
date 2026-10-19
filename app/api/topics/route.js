@@ -40,7 +40,7 @@ export const dynamic = "force-dynamic";
 // 3. Hard cost ceilings (below): a cooldown on forced refreshes, and a
 //    rolling per-hour cap on ALL live generations (forced or automatic).
 //    These cannot be bypassed by any client — including a broken pinger.
-const FRESH_MS = 20 * 60 * 1000; // serve as-is, no refresh needed
+const FRESH_MS = 10 * 60 * 1000; // serve as-is, no refresh needed
 const SERVE_MAX_MS = 3 * 60 * 60 * 1000; // serve stale + background-refresh up to this age
 // Cost guardrails. These were tight when generation ran on (expensive) Claude
 // web-search. On OpenAI's cheap search model a generation costs ~$0.02, so the
@@ -598,7 +598,7 @@ export async function POST(request) {
       }
       if (pl.cached) {
         for (const t of pl.cached) send({ type: "topic", topic: t });
-        send({ type: "stats", stats: lastStats, cached: true, stale: !!pl.stale, throttled: !!pl.throttled });
+        send({ type: "stats", stats: lastStats, cached: true, stale: !!pl.stale, throttled: !!pl.throttled, generating: !!run });
         send({ type: "done" });
         return;
       }
@@ -627,8 +627,27 @@ export async function POST(request) {
 // waiting for a generation. Regenerates only when the deck is older than
 // WARM_MAX_MS, so it costs one generation every couple of hours at most.
 const WARM_MAX_MS = 2 * 60 * 60 * 1000;
+// ?deck=1: what the server has right now, including cards of a run still being written. The page
+// polls this while a run goes on, so a person who left and came back (or was never waiting) sees
+// the new ideas without starting anything again; the run itself never depended on the page.
+function deckNow() {
+  const seen = new Set();
+  const out = [];
+  for (const t of [...(run ? run.topics : []), ...(cache.topics || [])]) {
+    const k = String(t.title_fa || t.title_en || "").trim().toLowerCase();
+    if (k && seen.has(k)) continue;
+    if (k) seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
 export async function GET(request) {
-  const warm = new URL(request.url).searchParams.get("warm") === "1";
+  const q = new URL(request.url).searchParams;
+  if (q.get("deck") === "1") {
+    return Response.json({ topics: deckNow(), generating: !!run, stats: lastStats }, { headers: { "Cache-Control": "no-store" } });
+  }
+  const warm = q.get("warm") === "1";
   const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
   let started = false;
   if (warm && !run && age > WARM_MAX_MS && underHourlyCap()) {
