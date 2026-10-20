@@ -3,7 +3,7 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  DndContext, DragOverlay, PointerSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
+  DndContext, DragOverlay, PointerSensor, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
   closestCenter, pointerWithin, rectIntersection, getFirstCollision, useDroppable, useDraggable,
 } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -265,8 +265,12 @@ function posBetween(prev, next) {
 
 function BoardView({ board, users, admin, filter, onOpen, onMove, onAdd, onListOp }) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }),
+    // The mouse picks a card up by moving; a finger only by holding (below), never by swiping, so a
+    // swipe along the board cannot start a drag.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    // A finger resting on a card while a swipe starts (or while a fling is stopped) must not pick the
+    // card up: the board then stopped between two lists with snapping off.
+    useSensor(TouchSensor, { activationConstraint: { delay: 400, tolerance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const byId = useMemo(() => Object.fromEntries(board.cards.map((x) => [x.id, x])), [board]);
@@ -281,6 +285,43 @@ function BoardView({ board, users, admin, filter, onOpen, onMove, onAdd, onListO
   useEffect(() => {
     if (!active) setCols(build());
   }, [build, active]);
+  // Snapping is off while a card is dragged, so after a drag settle on the nearest list by hand
+  // (phones show one list at a time). If the browser never reports the end of a touch drag, a
+  // lifted finger ends it here, so the board never stays dimmed.
+  const boardRef = useRef(null);
+  useEffect(() => {
+    if (active || typeof window === "undefined" || !window.matchMedia("(max-width: 600px)").matches) return;
+    const t = setTimeout(() => {
+      const el = boardRef.current;
+      if (!el) return;
+      const box = el.getBoundingClientRect();
+      const mid = box.left + box.width / 2;
+      let off = 0;
+      let best = Infinity;
+      for (const l of el.children) {
+        const r = l.getBoundingClientRect();
+        const d = r.left + r.width / 2 - mid;
+        if (Math.abs(d) < best) (best = Math.abs(d)), (off = d);
+      }
+      if (best > 2 && best < box.width) el.scrollBy({ left: off, behavior: "smooth" });
+    }, 80);
+    return () => clearTimeout(t);
+  }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    let t;
+    const lifted = () => {
+      clearTimeout(t);
+      t = setTimeout(() => setActive(null), 250);
+    };
+    window.addEventListener("touchend", lifted);
+    window.addEventListener("touchcancel", lifted);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("touchend", lifted);
+      window.removeEventListener("touchcancel", lifted);
+    };
+  }, [active]);
   const findCol = (id) => (cols[id] ? id : Object.keys(cols).find((k) => cols[k].includes(id)));
 
   // What the finger is over, as in dnd-kit's own board example: the list under the pointer (any
@@ -335,7 +376,7 @@ function BoardView({ board, users, admin, filter, onOpen, onMove, onAdd, onListO
   };
   return (
     <DndContext sensors={sensors} collisionDetection={collision} autoScroll={{ threshold: { x: 0.18, y: 0.15 }, acceleration: 12 }} onDragStart={(e) => setActive(e.active.id)} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
-      <div className={`${c.board} ${active ? c.dragging : ""}`}>
+      <div ref={boardRef} className={`${c.board} ${active ? c.boardDragging : ""}`}>
         {board.lists.map((l) => (
           <ListColumn key={l.id} list={l} cards={(cols[l.id] || []).map((id) => byId[id]).filter(Boolean)} board={board} users={users} admin={admin} onOpen={onOpen} onAdd={onAdd} onListOp={onListOp} />
         ))}
