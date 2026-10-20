@@ -51,6 +51,31 @@ const MAX_GENERATIONS_PER_HOUR = 60; // hard ceiling on live generations, any tr
 const MAX_GENERATIONS_PER_DAY = 300; // second ceiling — catches a slow-burn runaway an hourly cap alone would miss over 24h
 
 let cache = { topics: null, timestamp: 0, provider: null };
+
+// Stories already turned into a card (in any earlier run, or still on a person's list) are not
+// written again: without this every run picked the same top stories, the page dropped them as
+// duplicates, and opening the app showed nothing new for hours. Keys are article links and the
+// English headline; the page sends what is on its list, so this survives a restart.
+const SHOWN_DAYS = 30;
+const shownMem = new Map(); // key -> last time seen
+const titleKey = (t) => String(t || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function remember(url, title, at = Date.now()) {
+  const u = articleKey(url);
+  if (u) shownMem.set("u:" + u, at);
+  const t = titleKey(title);
+  if (t.length > 12) shownMem.set("t:" + t, at);
+}
+function wasShown(c) {
+  const cut = Date.now() - SHOWN_DAYS * 86400000;
+  for (const k of [articleKey(c.source_url), articleKey(c.resolved_url)]) {
+    if (k && (shownMem.get("u:" + k) || 0) > cut) return true;
+  }
+  const t = titleKey(c.title);
+  return t.length > 12 && (shownMem.get("t:" + t) || 0) > cut;
+}
+function shownTitles(n) {
+  return [...shownMem.entries()].filter(([k]) => k.startsWith("t:")).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k.slice(2));
+}
 let lastForceAt = 0;
 let generationTimestamps = []; // sliding window backing both caps
 
@@ -160,6 +185,13 @@ async function generate(clientExclude, run) {
     console.log("[topics] feed path failed:", String(e?.message || e));
   }
 
+  const prev = cache.topics || [];
+  // Feeds were read but every story in them already has a card: that is "no news yet", not a
+  // failure. Keep the deck and do not fall back to the costlier search path.
+  if (!run.topics.length && prev.length && lastStats && lastStats.pool > 0) {
+    cache = { topics: prev, timestamp: Date.now(), provider };
+    return prev;
+  }
   // Fallback to the LLM web-search path only if the feeds produced nothing.
   if (!run.topics.length) {
     const seen = await seenP;
@@ -174,7 +206,12 @@ async function generate(clientExclude, run) {
   // only recorded once the user actually acts on it — an APPROVED topic is sent
   // to /api/seen by the client. This way topics you never reached stay
   // available next run, and the Sheet holds only what you approved.
-  cache = { topics: run.topics.slice(), timestamp: Date.now(), provider };
+  // New cards first, then the earlier ones still within the window, so the deck grows instead of
+  // being replaced by a batch the page has mostly seen.
+  const keyOf = (t) => articleKey(t.source_url) || titleKey(t.title_en || t.title_fa);
+  const have = new Set(run.topics.map(keyOf));
+  const older = prev.filter((t) => !have.has(keyOf(t)) && recentEnough(t, today));
+  cache = { topics: [...run.topics, ...older].slice(0, 80), timestamp: Date.now(), provider };
   return cache.topics;
 }
 
@@ -253,7 +290,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
   const ownTitles = [...((harvest && harvest.own_titles) || []), ...((live && live.ownTitles) || [])];
   const cutoff = nowMs - NEWS_WINDOW_DAYS * 86400000;
 
-  const counts = { alreadyUsed: 0, offTopic: 0, untrusted: 0 };
+  const counts = { alreadyUsed: 0, alreadyShown: 0, offTopic: 0, untrusted: 0 };
   const eligible = [];
   for (const c of merged) {
     const t = c.published_ms || Date.parse(c.first_seen || "") || 0;
@@ -261,6 +298,10 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     const keys = [articleKey(c.source_url), articleKey(c.resolved_url)].filter(Boolean);
     if (seenUrlSet && keys.some((k) => seenUrlSet.has(k))) {
       counts.alreadyUsed++;
+      continue;
+    }
+    if (wasShown(c)) {
+      counts.alreadyShown++;
       continue;
     }
     if (isDrawResult(c) || (!c.newsletter && relevance(c) === 0)) {
@@ -350,7 +391,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         : "") +
       (body ? body.slice(0, 160).replace(/\s+/g, " ") : "");
   }
-  const excludeAll = [...exclude, ...ownTitles].slice(-120);
+  const excludeAll = [...exclude, ...ownTitles, ...shownTitles(40)].slice(-160);
   let picks = [];
   try {
     const sel = parseTopics(await rewrite(selectTopicsPrompt(ranked, today, excludeAll, MAX_CARDS + 4), 2000)) || [];
@@ -432,6 +473,8 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           // the script/article steps fetch their source text from this link.
           source_url: src.resolved_url || src.source_url,
           source_name: src.source_name,
+          // the headline as published, so the page can say "already have this" after a restart
+          source_title: src.title || "",
           snippet: (p.groundText || src.snippet || "").slice(0, 1500),
           grounding: grounded ? "full" : "headline",
           score: p.score,
@@ -442,6 +485,8 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         if (!accept(topic, seenUrlSet)) continue;
         if (!emitted) lastStats.timings.firstCardMs = Date.now() - t0;
         emitted++;
+        remember(src.source_url, src.title);
+        if (src.resolved_url) remember(src.resolved_url, "");
         lastStats.written = emitted;
         if (!grounded) lastStats.headlineOnly++;
         emit(topic);
@@ -578,6 +623,9 @@ export async function POST(request) {
     }
     force = !!body?.force;
     stream = !!body?.stream;
+    if (Array.isArray(body?.shown)) {
+      for (const x of body.shown.slice(0, 200)) remember(x && x.u, x && x.t);
+    }
   } catch (_) {
     // no/invalid body — fine, just use defaults
   }
@@ -650,7 +698,9 @@ export async function GET(request) {
   const warm = q.get("warm") === "1";
   const age = cache.topics ? Date.now() - cache.timestamp : Infinity;
   let started = false;
-  if (warm && !run && age > WARM_MAX_MS && underHourlyCap()) {
+  // Right after a restart the server does not yet know which stories already have cards; a warm
+  // run then would rewrite the same ones. The first page that opens tells it, and starts the run.
+  if (warm && !run && age > WARM_MAX_MS && shownMem.size && underHourlyCap()) {
     startRun([]);
     started = true;
   }

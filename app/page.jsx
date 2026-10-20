@@ -70,11 +70,11 @@ function fieldOf(t) {
 // Topics arrive as a stream, one card per line, so the first card can be
 // shown while the rest are still being written. Falls back to reading the
 // whole body at once where a browser cannot read a stream.
-async function streamTopics(exclude, force, { onTopic, onStats }) {
+async function streamTopics(exclude, force, { onTopic, onStats }, shown = []) {
   const res = await fetch("/api/topics", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ exclude, force, stream: true }),
+    body: JSON.stringify({ exclude, force, stream: true, shown }),
   });
   if (!res.ok) throw new Error("API " + res.status);
   let error = "";
@@ -619,6 +619,10 @@ export default function App() {
       shown = topicsRef.current.length;
     }
 
+    // Everything already on this list, so the server writes only stories that are not here yet.
+    const listed = [...topicsRef.current, ...loadDeckCache()];
+    const shownList = listed.slice(-200).flatMap((t) => [{ u: t.source_url, t: t.source_title || "" }]);
+
     setStreaming(true);
     try {
       const r = await streamTopics(exclude, force, {
@@ -629,7 +633,7 @@ export default function App() {
           setLoadingTopics(false);
         },
         onStats: (st) => st && setDeckStats(st),
-      });
+      }, shownList);
       if (!shown && r.error) throw new Error(r.error);
       // A newer batch is still being written on the server: keep adding its cards as they appear.
       for (let n = 0; r.generating && n < 100 && aliveRef.current; n++) {
@@ -2117,6 +2121,7 @@ function DeckWhy({ stats }) {
         {row("…of which Instagram posts", stats.socialPosts ?? 0)}
         {row("…of which Lexbase items", stats.newsletterItems ?? 0)}
         {row("Already approved or rejected", stats.alreadyUsed ?? 0)}
+        {row("Already has a card (not written again)", stats.alreadyShown ?? 0)}
         {row("Off-topic or draw results", stats.offTopic ?? 0)}
         {row("Untrusted sources dropped", stats.untrusted ?? 0)}
         {row("Same story, other outlet", stats.duplicateStories ?? 0)}
