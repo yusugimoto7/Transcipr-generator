@@ -40,7 +40,7 @@ function NewProject() {
           <DrivePicker kind="video" mode="upload" onPick={picked} />
           <DrivePicker kind="video" onPick={picked} />
         </div>
-        <input id="source_url" className={s.input} value={f.source_url} onChange={set("source_url")} placeholder="or paste its link: https://drive.google.com/file/d/…/view" required />
+        <input id="source_url" data-no-voice className={s.input} value={f.source_url} onChange={set("source_url")} placeholder="or paste its link: https://drive.google.com/file/d/…/view" required />
         <small className={s.muted}>Upload from this phone sends the video to your Google Drive (folder “Sugimoto video uploads”) and shares it for you; a file chosen from Drive is shared that way too. A pasted link must be shared as “Anyone with the link”. Up to 20 minutes of footage.</small>
       </div>
       <div className={s.row}>

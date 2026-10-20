@@ -291,7 +291,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       <option value="image">Image</option>
                     </select>
                     {d.media.kind !== "none" && (
-                      <input id="cmp-murl" className={`${c.input} ${c.grow}`} placeholder="Google Drive link (Anyone with the link)" value={d.media.url || ""} disabled={locked} onChange={(e) => setD({ ...d, media: { ...d.media, url: e.target.value } })} />
+                      <input id="cmp-murl" data-no-voice className={`${c.input} ${c.grow}`} placeholder="Google Drive link (Anyone with the link)" value={d.media.url || ""} disabled={locked} onChange={(e) => setD({ ...d, media: { ...d.media, url: e.target.value } })} />
                     )}
                   </div>
                   {d.media.kind !== "none" && !locked && (

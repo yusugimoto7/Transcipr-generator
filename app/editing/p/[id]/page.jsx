@@ -4,6 +4,7 @@ import { Clapperboard, Film } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
+import VoiceCorrections from "./VoiceCorrections";
 
 const KIND = { reel: "Reel 9:16", youtube: "YouTube 16:9", course: "Course lesson" };
 const LANG = { fa: "Farsi", en: "English" };
@@ -221,7 +222,8 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             {reviewing && (
               <div className={s.card}>
                 <h2 className={s.h2}>Corrections</h2>
-                <p className={s.muted}>Watch the preview. For anything wrong, write the second in the new video and what is wrong, as you would tell Hamed.</p>
+                <p className={s.muted}>Watch the preview. For anything wrong, say or write the second in the new video and what is wrong, as you would tell Hamed.</p>
+                <VoiceCorrections project={project} run={run} disabled={!!busy} onAdded={reload} />
                 {corrections.length > 0 && (
                   <ul className={s.list}>
                     {corrections.map((c) => (
@@ -245,7 +247,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                     });
                   }}
                 >
-                  <input id="corr-out" className={s.input} style={{ width: 90 }} placeholder="1:49" value={out} onChange={(e) => setOut(e.target.value)} required aria-label="Second in the new video" />
+                  <input id="corr-out" data-no-voice className={s.input} style={{ width: 90 }} placeholder="1:49" value={out} onChange={(e) => setOut(e.target.value)} required aria-label="Second in the new video" />
                   <input id="corr-note" className={`${s.input} ${s.grow}`} placeholder="I said it twice" value={note} onChange={(e) => setNote(e.target.value)} required aria-label="What is wrong" />
                   <button className={s.btn} disabled={!!busy}>
                     Add

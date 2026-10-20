@@ -1,4 +1,5 @@
 import "./globals.css";
+import VoiceDictation from "./VoiceDictation";
 
 export const metadata = {
   title: "Sugimoto · Topic Engine",
@@ -17,7 +18,10 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <VoiceDictation />
+      </body>
     </html>
   );
 }

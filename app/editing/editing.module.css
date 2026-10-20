@@ -130,3 +130,4 @@ h2.h2 { font-size: 16px; margin: 0; }
 .seg { display: inline-flex; background: #efebe3; border-radius: 10px; padding: 3px; gap: 2px; align-self: flex-start; flex-wrap: wrap; }
 .seg button { font: inherit; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border: 0; border-radius: 8px; background: none; color: var(--text-2); cursor: pointer; }
 .seg button.segOn { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12); }
+.voiceBox { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px dashed var(--line); border-radius: 10px; }
