@@ -48,6 +48,9 @@ jobs:
       - name: Harvest
         env:
           SIGNALS: ${{ inputs.signals && '1' || '' }}
+          # Extra sources set without a code change (same names as in Render): repository variables.
+          NEWS_FEED_URLS: ${{ vars.NEWS_FEED_URLS }}
+          X_FEED_URLS: ${{ vars.X_FEED_URLS }}
         run: node scripts/harvest.mjs harvest-data
 
       - name: Publish pool
