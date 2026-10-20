@@ -66,6 +66,16 @@ as the change**, in the team's own words where possible, with the date.
 - Court items carry Allowed/Dismissed from the decision text (see `lexbase-court-outcome`).
 - The Original text tab shows the whole issue on request.
 
+- **Lexbase scripts are informative reports, not news** (Oct 20 2026, with 16 of the team's own
+  stories as samples: «دادگاه فدرال کانادا فلان حکم را صادر کرد… نه اینکه بگیم اگر برای مجوز کار
+  اقدام می‌کنید این خبر برات مهمه»). `lexbaseScriptPrompt` in `lib/prompts.js`: open with the ruling or
+  the document («دادگاه فدرال کانادا درخواست … را رد کرد»، «محتوای آموزشی افسران اداره مهاجرت…»،
+  «سؤال از اداره مهاجرت: … پاسخ: …»), then the case, IRCC's argument, the judge's answer, the case
+  name. No "if you are applying", no "this matters to you", no advice, no consultation line; the
+  court outcome label is never contradicted.
+- A card was once scripted from another case with the same issue + number (two issues in one month
+  share the month key); `findLexbaseItem` now checks the CanLII link or the stored text.
+
 ## 4. Ideas (evergreen explainers)
 
 - Not news: grounded on the official canada.ca page stored by the harvester (`page_id`); every
@@ -77,6 +87,10 @@ as the change**, in the team's own words where possible, with the date.
 ## 5. Scripts (Farsi + English)
 
 - Farsi script: spoken, specific, the fact first; English terms in parentheses; glossary names.
+- Voice reference for news scripts: the team's own on-camera Farsi (corrected subtitles of the
+  "Inland vs overseas" video, `VOICE_SAMPLE_FA` in `lib/prompts.js`): short spoken sentences, the
+  Persian term then its English name, step-by-step explanation. Style only, never facts. Add more
+  of the team's real transcripts there when they exist.
 - English script: must really be English (a Persian "English" script is detected and rewritten).
 - "Change the script" note + Regenerate (e.g. "more details", "shorter") rewrites from the same
   source text, keeping what the note does not ask to change.
