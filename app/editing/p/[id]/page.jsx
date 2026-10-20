@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, Clapperboard, Film } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Film, Sparkles, Subtitles } from "lucide-react";
+import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
@@ -25,6 +26,126 @@ function Fold({ title, count, children, extra = null }) {
       </div>
       {open && children}
     </div>
+  );
+}
+
+// Stages after the cut (english-sugimotovisa: video-transcribe, video-motion-graphics skills).
+const STAGE = { cut: "Cut", subtitles: "Subtitles", graphics: "Motion graphics" };
+const stageOf = (r) => (r && r.stage) || "cut";
+const runName = (r) => (stageOf(r) === "cut" ? "Version " : stageOf(r) === "graphics" ? (r.step === "plan" ? "Graphics plan " : "Graphics ") : "Subtitles ") + r.version;
+const STAGE_STATUS = {
+  subtitles: { deciding: "Writing subtitles", rendering: "Burning subtitles", preparing: "Getting the cut" },
+  graphics: { deciding: "Reading the words", rendering: "Rendering graphics", preparing: "Getting the cut" },
+};
+const statusLabel = (r) => (STAGE_STATUS[stageOf(r)] || {})[r.status] || (r.step === "plan" && r.status === "review" ? "Plan ready" : undefined);
+const LANG_NAME = { fa: "Farsi", en: "English" };
+
+function Steps({ runs }) {
+  const state = (st) => {
+    const rs = runs.filter((r) => stageOf(r) === st);
+    // an approved graphics plan is not the end of its stage: the render still has to be approved
+    if (rs.some((r) => r.status === "approved" && r.delivery)) return "done";
+    return rs.length ? "on" : "off";
+  };
+  return (
+    <ol className={s.steps}>
+      {Object.entries(STAGE).map(([k, label], i) => {
+        const st = state(k);
+        return (
+          <li key={k} className={st === "done" ? s.stepDone : st === "on" ? s.stepOn : ""}>
+            <span className={s.stepDot}>{st === "done" ? <Check size={13} /> : i + 1}</span>
+            {label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function NextSteps({ project, stages, reload }) {
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  if (!stages.length) return null;
+  const go = async (stage) => {
+    setBusy(stage);
+    setError("");
+    try {
+      await api(`/projects/${project.id}/stage`, { method: "POST", body: { stage } });
+      await reload();
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy("");
+  };
+  return (
+    <div className={s.card}>
+      <h2 className={s.h2}>Next step</h2>
+      <p className={s.muted}>The approved video is ready. Add subtitles, motion graphics, or both (subtitles first, so the graphics keep them).</p>
+      <div className={s.row}>
+        {stages.includes("subtitles") && (
+          <Button type="button" disabled={!!busy} onClick={() => go("subtitles")}>
+            <Subtitles /> {busy === "subtitles" ? "Starting…" : "Add subtitles"}
+          </Button>
+        )}
+        {stages.includes("graphics") && (
+          <Button type="button" variant={stages.includes("subtitles") ? "outline" : "default"} disabled={!!busy} onClick={() => go("graphics")}>
+            <Sparkles /> {busy === "graphics" ? "Starting…" : stages.includes("subtitles") ? "Motion graphics without subtitles" : "Add motion graphics"}
+          </Button>
+        )}
+      </div>
+      <p className={s.rule}>Subtitles: the language is heard from the video (Farsi right to left, English left to right), in the approved style. Motion graphics: you approve a plan with still frames first; only then is it rendered.</p>
+      {error && <div className={s.error}>{error}</div>}
+    </div>
+  );
+}
+
+function PlanView({ r }) {
+  return (
+    <div className={s.card}>
+      <h2 className={s.h2}>The plan</h2>
+      <p className={s.muted}>Where the graphics cover the video and what appears, each on the word that names it. The round bubble keeps the speaker on screen.</p>
+      <div className={s.stills}>
+        {(r.stills || []).map((x) => (
+          <a key={x.id} href={`https://drive.google.com/file/d/${x.id}/view`} target="_blank" rel="noreferrer">
+            <img src={`https://drive.google.com/thumbnail?id=${x.id}&sz=w600`} alt={`Graphics at ${fmt(x.t)}`} loading="lazy" />
+            <span>{fmt(x.t)}</span>
+          </a>
+        ))}
+      </div>
+      <ul className={s.list}>
+        {(r.plan || []).map((w, i) => (
+          <li key={i}>
+            <b>
+              {fmt(w.start)}–{fmt(w.end)}
+            </b>{" "}
+            {w.overlay ? "(over the video) " : ""}
+            <Mixed text={w.items.join(" → ")} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Spelling({ sp }) {
+  const changes = (sp && sp.changes) || [];
+  const kept = (sp && sp.kept) || [];
+  if (!changes.length && !kept.length) return null;
+  return (
+    <Fold title="Spelling fixed in the subtitles" count={changes.length}>
+      <ul className={s.list}>
+        {changes.map((c, i) => (
+          <li key={i}>
+            <b>{fmt(c.at)}</b> <span dir="auto">{c.before}</span> → <span dir="auto">{c.after}</span> <span className={s.muted}>({c.why})</span>
+          </li>
+        ))}
+        {kept.map((c, i) => (
+          <li key={"k" + i} className={s.muted}>
+            line {c.line}: kept as heard (the proposed change was more than spelling)
+          </li>
+        ))}
+      </ul>
+    </Fold>
   );
 }
 
@@ -152,14 +273,14 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
       <div className={s.card}>
         <div className={s.row}>
           <h2 className={`${s.h2} ${s.grow}`}>
-            Version {run.version} <Pill status={run.status} />
+            {runName(run)} <Pill status={run.status} label={statusLabel(run)} />
           </h2>
           <span className={s.muted}>started {when(run.created_at)}</span>
         </div>
         {run.stage_note && ACTIVE.includes(run.status) && <p className={s.muted}>{run.stage_note}… This page updates by itself.</p>}
         {run.corrections && run.corrections.length > 0 && (
           <div>
-            <p className={s.muted}>Made from these corrections on version {run.version - 1}:</p>
+            <p className={s.muted}>Made from these corrections on the version before:</p>
             <ul className={s.list}>
               {run.corrections.map((c) => (
                 <li key={c.id}>
@@ -199,6 +320,9 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
 
       {run.result && (
         <div className={s.split}>
+          {r.step === "plan" ? (
+            <PlanView r={r} />
+          ) : (
           <div className={s.card}>
             {r.preview ? (
               <iframe className={`${s.player} ${project.kind === "reel" ? "" : s.playerWide}`} src={r.preview.embed} allow="autoplay" title={`Preview of version ${run.version}`} />
@@ -206,18 +330,35 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
               <p className={s.muted}>{r.note || "No preview for this version."}</p>
             )}
             <div className={s.stats}>
-              <div>
-                <b>{fmt(r.source && r.source.duration)}</b>
-                <span className={s.muted}>raw</span>
-              </div>
-              <div>
-                <b>{fmt(r.output_s)}</b>
-                <span className={s.muted}>after the cut</span>
-              </div>
-              <div>
-                <b>{(r.cut_rows || []).filter((x) => x.type === "retake").length}</b>
-                <span className={s.muted}>takes removed</span>
-              </div>
+              {stageOf(run) === "cut" ? (
+                <>
+                  <div>
+                    <b>{fmt(r.source && r.source.duration)}</b>
+                    <span className={s.muted}>raw</span>
+                  </div>
+                  <div>
+                    <b>{fmt(r.output_s)}</b>
+                    <span className={s.muted}>after the cut</span>
+                  </div>
+                  <div>
+                    <b>{(r.cut_rows || []).filter((x) => x.type === "retake").length}</b>
+                    <span className={s.muted}>takes removed</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <b>{fmt(r.output_s)}</b>
+                    <span className={s.muted}>long</span>
+                  </div>
+                  {r.language && (
+                    <div>
+                      <b>{LANG_NAME[r.language] || r.language}</b>
+                      <span className={s.muted}>{r.detected ? "heard in the video" : "language"}</span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             {r.preview && (
               <a className={s.muted} href={r.preview.view} target="_blank" rel="noreferrer">
@@ -225,7 +366,9 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
               </a>
             )}
           </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+            {r.spelling && <Spelling sp={r.spelling} />}
             {(r.qa || r.lessons) && <Checks qa={r.qa} lessons={r.lessons} me={me} />}
             {r.judgement_calls && r.judgement_calls.length > 0 && (
               <Fold title="Judgement calls to check" count={r.judgement_calls.length}>
@@ -242,7 +385,11 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             {reviewing && (
               <div className={s.card}>
                 <h2 className={s.h2}>Corrections</h2>
-                <p className={s.muted}>Watch the preview. For anything wrong, say or write the second in the new video and what is wrong, as you would tell Hamed.</p>
+                <p className={s.muted}>
+                  {r.step === "plan"
+                    ? "Look at the plan and the stills. For anything to change, say or write the second and what you want there; a new plan is drawn."
+                    : "Watch the preview. For anything wrong, say or write the second in the new video and what is wrong, as you would tell Hamed."}
+                </p>
                 <VoiceCorrections project={project} run={run} disabled={!!busy} onAdded={reload} />
                 {corrections.length > 0 && (
                   <ul className={s.list}>
@@ -275,7 +422,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                 </form>
                 <div className={s.row}>
                   <button className={`${s.btn} ${s.primary}`} disabled={!!busy || !corrections.length} onClick={() => act("rerun", () => api(`/projects/${project.id}/rerun`, { method: "POST" }))}>
-                    {busy === "rerun" ? "Starting…" : `Apply corrections: make version ${run.version + 1}`}
+                    {busy === "rerun" ? "Starting…" : r.step === "plan" || stageOf(run) === "graphics" ? "Apply corrections: draw a new plan" : `Apply corrections: make version ${run.version + 1}`}
                   </button>
                 </div>
               </div>
@@ -288,13 +435,17 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                   !confirm ? (
                     <div>
                       <button className={s.btn} disabled={!!busy || corrections.length > 0} onClick={() => setConfirm(true)}>
-                        Approve version {run.version}
+                        {r.step === "plan" ? "Approve the plan and render it" : `Approve ${runName(run).toLowerCase()}`}
                       </button>
                       {corrections.length > 0 && <p className={s.muted}>Remove or apply the open corrections before approving.</p>}
                     </div>
                   ) : (
                     <div className={s.row}>
-                      <span className={s.grow}>Approve version {run.version} and copy the full-quality file to Drive?</span>
+                      <span className={s.grow}>
+                        {r.step === "plan"
+                          ? "Render the graphics as planned? It takes about 10 minutes per minute of video."
+                          : `Approve ${runName(run).toLowerCase()} and copy the full-quality file to Drive?`}
+                      </span>
                       <button className={`${s.btn} ${s.primary}`} disabled={!!busy} onClick={() => act("approve", () => api(`/projects/${project.id}/approve`, { method: "POST", body: { run_id: run.id } }))}>
                         Yes, approve
                       </button>
@@ -306,7 +457,9 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                 ) : (
                   <p className={s.muted}>Hamed approves this video. When there is nothing left to correct, tell him it is ready.</p>
                 )}
-                <p className={s.rule}>Approval only puts the clean video in Drive. Nothing is posted to Instagram or TikTok from here.</p>
+                <p className={s.rule}>
+                  {r.step === "plan" ? "Approving the plan only starts the render; the rendered video comes back here for review." : "Approval only puts the clean video in Drive."} Nothing is posted to Instagram or TikTok from here.
+                </p>
               </div>
             )}
             {error && <div className={s.error}>{error}</div>}
@@ -368,7 +521,7 @@ function Project({ id }) {
           <h1 className={s.title} dir="auto">{p.title}</h1>
           <div className={s.headMeta}>
             <span className={`${s.kbLabel} ${s["k_" + p.kind] || ""}`}>{KIND[p.kind]}</span>
-            {latest && <Pill status={latest.status} />}
+            {latest && <Pill status={latest.status} label={statusLabel(latest)} />}
             <span className={s.kbBadge}>{LANG[p.language]}</span>
             {p.topic && <span className={s.kbBadge} dir="auto">{p.topic}</span>}
             <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
@@ -382,15 +535,17 @@ function Project({ id }) {
           </div>
         </div>
       </div>
+      <Steps runs={d.runs} />
       {d.runs.length > 1 && (
         <div className={s.seg} role="tablist" aria-label="Versions">
           {d.runs.map((r) => (
             <button key={r.id} role="tab" aria-selected={r.id === run.id} className={r.id === run.id ? s.segOn : ""} onClick={() => setSel(r.id)}>
-              Version {r.version}
+              {runName(r)}
             </button>
           ))}
         </div>
       )}
+      {run.id === latest.id && <NextSteps project={p} stages={d.next_stages || []} reload={load} />}
       {error && <div className={s.error}>{error}</div>}
       {run && <RunView key={run.id} run={run} project={p} isLatest={run.id === latest.id} corrections={run.id === latest.id ? d.corrections : []} canApprove={d.can_approve} me={d.me} reload={load} />}
     </>

@@ -134,3 +134,13 @@ h2.h2 { font-size: 16px; margin: 0; }
 .foldHead { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: start; min-width: 0; }
 .foldShut { transform: rotate(-90deg); transition: transform 0.15s; color: var(--text-2); flex: none; }
 .foldOpen { transition: transform 0.15s; color: var(--text-2); flex: none; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; font-size: 13.5px; color: var(--text-2); }
+.steps li { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); }
+.stepDot { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; background: var(--ground); font-weight: 600; font-size: 12px; }
+.stepOn { color: var(--text); border-color: var(--text-2) !important; }
+.stepDone { color: var(--text); }
+.stepDone .stepDot { background: #067647; color: #fff; }
+.stills { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.stills a { position: relative; display: block; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--ground); aspect-ratio: 9 / 16; }
+.stills img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.stills span { position: absolute; left: 6px; bottom: 6px; font-size: 12px; font-weight: 600; background: rgba(0,0,0,.6); color: #fff; padding: 1px 6px; border-radius: 6px; }

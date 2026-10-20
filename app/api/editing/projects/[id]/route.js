@@ -1,6 +1,6 @@
 import { guard, json, publicUser } from "../../../../../lib/editing/auth";
 import { get } from "../../../../../lib/editing/store";
-import { loadProject, runsOf, correctionsOf, canApprove, isAdmin } from "../../../../../lib/editing/projects";
+import { loadProject, runsOf, correctionsOf, canApprove, isAdmin, nextStages } from "../../../../../lib/editing/projects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +23,7 @@ export async function GET(request, { params }) {
       runs: runs.map(strip),
       corrections,
       can_approve: canApprove(g.user, project, owner && publicUser(owner)),
+      next_stages: nextStages(runs, project),
       me: { id: g.user.id, role: g.user.role },
     });
   } catch (e) {

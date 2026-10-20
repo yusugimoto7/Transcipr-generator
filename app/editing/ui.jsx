@@ -68,8 +68,8 @@ export function Mixed({ text }) {
   );
 }
 
-export function Pill({ status }) {
-  return <span className={`${s.pill} ${s["s_" + status] || ""}`}>{STATUS[status] || status}</span>;
+export function Pill({ status, label }) {
+  return <span className={`${s.pill} ${s["s_" + status] || ""}`}>{label || STATUS[status] || status}</span>;
 }
 
 export function fmt(sec) {
