@@ -1,6 +1,6 @@
 "use client";
 
-import { Clapperboard, Film } from "lucide-react";
+import { ChevronDown, Clapperboard, Film } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
@@ -9,19 +9,40 @@ import VoiceCorrections from "./VoiceCorrections";
 const KIND = { reel: "Reel 9:16", youtube: "YouTube 16:9", course: "Course lesson" };
 const LANG = { fa: "Farsi", en: "English" };
 
+// A section that stays closed until it is opened: the details of a cut are there when wanted,
+// out of the way otherwise.
+function Fold({ title, count, children, extra = null }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={s.card}>
+      <div className={s.row}>
+        <button type="button" className={`${s.foldHead} ${s.grow}`} aria-expanded={open} onClick={() => setOpen(!open)}>
+          <ChevronDown size={18} className={open ? s.foldOpen : s.foldShut} aria-hidden />
+          <span className={s.h2}>{title}</span>
+          {count !== undefined && <span className={s.kbBadge}>{count}</span>}
+        </button>
+        {open && extra}
+      </div>
+      {open && children}
+    </div>
+  );
+}
+
 function CutTable({ rows }) {
   const [showPauses, setShowPauses] = useState(false);
   const retakes = rows.filter((r) => r.type === "retake");
   const pauses = rows.filter((r) => r.type !== "retake");
   const list = showPauses ? rows : retakes;
   return (
-    <div className={s.card}>
-      <div className={s.row}>
-        <h2 className={`${s.h2} ${s.grow}`}>What was removed</h2>
+    <Fold
+      title="What was removed"
+      count={retakes.length}
+      extra={
         <button className={s.linkBtn} onClick={() => setShowPauses(!showPauses)}>
           {showPauses ? "Hide pauses" : `Show ${pauses.length} shortened pauses`}
         </button>
-      </div>
+      }
+    >
       <div className={s.tableWrap}>
         <table className={s.table}>
           <thead>
@@ -50,7 +71,7 @@ function CutTable({ rows }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </Fold>
   );
 }
 
@@ -207,8 +228,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             {(r.qa || r.lessons) && <Checks qa={r.qa} lessons={r.lessons} me={me} />}
             {r.judgement_calls && r.judgement_calls.length > 0 && (
-              <div className={s.card}>
-                <h2 className={s.h2}>Judgement calls to check</h2>
+              <Fold title="Judgement calls to check" count={r.judgement_calls.length}>
                 <ul className={s.list}>
                   {r.judgement_calls.map((j, i) => (
                     <li key={i}>
@@ -216,7 +236,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                     </li>
                   ))}
                 </ul>
-              </div>
+              </Fold>
             )}
 
             {reviewing && (
