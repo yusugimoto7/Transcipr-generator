@@ -98,9 +98,17 @@ as the change**, in the team's own words where possible, with the date.
 
 ## 6. Telegram news post
 
-- A clean news post: bold short title, 2–4 short paragraphs (what happened, from when, for whom).
-  No hook lines, no sales lines, no source line; only the genuinely related sugimotovisa.com page
-  (or none).
+- **Voice (Oct 21 2026, replaces the neutral "clean news" tone):** a friendly lawyer posting himself,
+  first person and colloquial, like the Persian channel the team showed as the model («نکته اینجاست»،
+  «قسمت جالبش اینه که…»، «این سؤال داره زیاد پرسیده میشه»، «فکر کنم…»). Short: 2–5 short paragraphs,
+  the point first, a bold first line optional, at most one emoji. Terms as Persian speakers in Canada
+  say them (CEC، ناک کد، ال‌ام‌آی‌ای) with a short explanation when unfamiliar. An opinion may only follow
+  from the source's facts and never adds a number, date or claim. A short English line from the source
+  may be quoted word for word. Still no sales lines, no "according to the source", no hashtags.
+  `TG_VOICE` / `TG_RULES` in `lib/prompts.js`.
+- Written by the strongest model (`OPENAI_POST_MODEL`, default gpt-5.6-sol), because short + colloquial
+  + exact needs it; picking the related link stays on the cheap model.
+- Only the genuinely related sugimotovisa.com page (or none).
 - Edited **in the app, not in Telegram** (Oct 2026): text box with `**bold**`, rewrite with a
   note, Save, then "ارسال به @sugimotovisa". One 4:5 picture (1088×1360) in the carousel style
   with the post's headline, logo composited; ↻ redraw and ✏️ edit under it.
