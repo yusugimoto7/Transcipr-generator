@@ -3349,16 +3349,20 @@ function splitSlide(content) {
 
 function TemplatePicker({ value, onChange, font }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))", gap: 8, marginBottom: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8, marginBottom: 12 }}>
       {TEMPLATES.map((t) => {
         const on = Number(value) === t.id;
         return (
           <button key={t.id} type="button" className="ui-btn" onClick={() => onChange(t.id)} aria-pressed={on} style={{ textAlign: "right", padding: 8, borderRadius: 12, cursor: "pointer", border: `${on ? 2 : 1}px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.08) : C.surface, fontFamily: font }}>
-            <div style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.line}`, marginBottom: 6 }}>
-              {t.swatch.map((c, i) => (
-                <span key={i} style={{ flex: i === 0 ? 2 : 1, background: c }} />
-              ))}
-            </div>
+            {t.cover ? (
+              <img src={t.cover} alt="" loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}`, marginBottom: 6, background: t.swatch[0] }} />
+            ) : (
+              <div style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.line}`, marginBottom: 6 }}>
+                {t.swatch.map((c, i) => (
+                  <span key={i} style={{ flex: i === 0 ? 2 : 1, background: c }} />
+                ))}
+              </div>
+            )}
             <div style={{ fontSize: 12, fontWeight: 800, color: on ? "#6d5bd0" : C.text }}>{t.id}. {t.fa}</div>
             <div style={{ fontSize: 10.5, color: C.text3, direction: "ltr", textAlign: "right" }}>{t.name}</div>
           </button>
