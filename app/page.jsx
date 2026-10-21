@@ -765,6 +765,20 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customJob && customJob.status, customJob && customJob.id]);
 
+  // Cards from research (one idea, or several ideas on a subject) join the list the same way.
+  const researchJob = (bg[RESEARCH_KEY] || {}).research;
+  const researchDoneRef = useRef("");
+  useEffect(() => {
+    if (!researchJob || researchJob.status !== "done" || !researchJob.result || !(researchJob.result.topics || []).length) return;
+    if (researchDoneRef.current === researchJob.id) return;
+    researchDoneRef.current = researchJob.id;
+    const ts = researchJob.result.topics;
+    const keys = new Set(ts.map(topicKey));
+    setTopics((prev) => [...ts, ...prev.filter((x) => !keys.has(topicKey(x)))]);
+    for (const t of ts) patchWs(t, { status: "new" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchJob && researchJob.status, researchJob && researchJob.id]);
+
   const openTopic = (topic, { push = true } = {}) => {
     const key = topicKey(topic);
     if (view === "deck") listScrollRef.current = window.scrollY || 0;
@@ -1123,6 +1137,11 @@ export default function App() {
               <CustomNewsBox
                 job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
                 onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
+                onOpen={openTopic}
+              />
+              <ResearchBox
+                job={(bg[RESEARCH_KEY] || {}).research || null}
+                onStart={(mode, query) => startJob("research", { title_fa: RESEARCH_KEY }, { mode, query, count: 6 })}
                 onOpen={openTopic}
               />
 
@@ -1889,6 +1908,7 @@ function IdeasSection({ decisions, ...actions }) {
 // the server reads the pages and writes one card from them, which joins the
 // list for everyone. The note sets the angle; facts come only from the pages.
 const CUSTOM_NEWS_KEY = "custom-news";
+const RESEARCH_KEY = "idea-research";
 // A picture made small enough to send (long edge 1800px, JPEG): enough for
 // the text in a screenshot to stay readable, small enough for a phone upload.
 function shrinkImage(file) {
@@ -2034,6 +2054,89 @@ function CustomNewsBox({ job, onStart, onOpen }) {
               {(job.result.skipped || []).length > 0 && (
                 <div dir="ltr" style={{ marginTop: 6, fontSize: 11.5, color: C.orangeDeep, textAlign: "left" }}>
                   Not used: {job.result.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Research beyond the daily news: an idea the editor had (found pages -> one card), or a subject
+// (or the default subjects) searched for several post ideas (one card each). The search only finds
+// pages; each card is written from the text of its own page (lib/idea-research.js).
+function ResearchBox({ job, onStart, onOpen }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const running = !!job && job.status === "running";
+  const failed = !!job && job.status === "error" ? job.error : "";
+  const done = !!job && job.status === "done" && job.result && (job.result.topics || []).length > 0;
+  const fa = "'Vazirmatn', sans-serif";
+  const tone = "#7c5cd6";
+  const lastId = useRef("");
+  useEffect(() => {
+    if (done && job.id !== lastId.current) {
+      lastId.current = job.id;
+      setQ("");
+    }
+  }, [done, job]);
+  const btn = (on) => ({ flex: 1, minWidth: 150, background: on ? tone : alpha(tone, 0.35), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 13.5, cursor: on ? "pointer" : "default", fontFamily: fa });
+  const ideas = job && job.status === "running" ? null : job && job.result;
+  return (
+    <div dir="rtl" className="ui-glass" style={{ marginBottom: 12, borderRadius: 14, border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.05), fontFamily: fa }}>
+      <button
+        className="ui-btn"
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 13px", background: "transparent", border: "none", cursor: "pointer", fontFamily: fa, fontSize: 13.5, fontWeight: 800, color: C.text }}
+      >
+        <span>🔎 تحقیق روی ایده یا موضوع</span>
+        <span style={{ color: C.text3, fontSize: 12 }}>{running ? "⏳ در حال تحقیق…" : open ? "▲" : "▼"}</span>
+      </button>
+      {(open || running || failed || done) && (
+        <div style={{ padding: "0 13px 13px" }}>
+          {!running && (
+            <>
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>ایده‌ای که به ذهنت رسیده، یا موضوعی که می‌خوای براش ایده‌ی پست پیدا بشه. خالی بذاری، از موضوع‌های همیشگی ما می‌گرده.</div>
+              <textarea
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                rows={3}
+                placeholder="مثلاً: ویزای همراه برای همسر دانشجو هنوز ممکنه؟ — یا: اسپانسرشیپ والدین"
+                style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontSize: 13, lineHeight: 1.7, resize: "vertical", background: C.surface, fontFamily: fa }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <button className="ui-btn" disabled={q.trim().length < 4} onClick={() => onStart("idea", q.trim())} style={btn(q.trim().length >= 4)}>
+                  تحقیق روی این ایده
+                </button>
+                <button className="ui-btn" onClick={() => onStart("ideas", q.trim())} style={btn(true)}>
+                  {q.trim() ? "ایده‌های تازه در این موضوع" : "ایده‌های تازه (موضوع‌های همیشگی)"}
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>جستجو فقط صفحه‌ها رو پیدا می‌کنه؛ هر کارت فقط از متن همون صفحه‌ها نوشته می‌شه. ایده‌های تازه: تا ۶ کارت.</div>
+            </>
+          )}
+          {running && (
+            <div className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(tone, 0.08), fontSize: 13 }}>
+              <span className="ui-pulse">⏳</span> در حال جستجو، خواندن صفحه‌ها و نوشتن کارت… می‌تونی از این صفحه بری.
+            </div>
+          )}
+          {failed && !running && <div dir="ltr" style={{ marginTop: 8, fontSize: 12, color: C.reject, textAlign: "left" }}>⚠️ {failed}</div>}
+          {done && !running && ideas && (
+            <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: alpha(C.success, 0.08), border: `1px solid ${alpha(C.success, 0.3)}`, fontSize: 13, lineHeight: 1.8 }}>
+              ✓ {ideas.topics.length > 1 ? `${ideas.topics.length} کارت ساخته شد و به فهرست اضافه شد:` : "کارت ساخته شد و به فهرست اضافه شد:"}
+              {ideas.topics.map((t) => (
+                <div key={topicKey(t)}>
+                  •{" "}
+                  <a href={"/?t=" + encodeURIComponent(topicKey(t))} onClick={(e) => { e.preventDefault(); onOpen(t); }} style={{ color: C.teal, fontWeight: 700 }}>
+                    {t.title_fa}
+                  </a>
+                </div>
+              ))}
+              {(ideas.skipped || []).length > 0 && (
+                <div dir="ltr" style={{ marginTop: 6, fontSize: 11.5, color: C.orangeDeep, textAlign: "left" }}>
+                  Not used: {ideas.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
                 </div>
               )}
             </div>
