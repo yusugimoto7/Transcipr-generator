@@ -7,7 +7,7 @@ import CalendarStrip from "./CalendarStrip";
 import CalendarButtons from "./CalendarButtons";
 import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
-import { Check, Clapperboard, FileText, GalleryHorizontal, Lightbulb, Mail, Newspaper, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
+import { Check, Clapperboard, FileText, GalleryHorizontal, Lightbulb, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -684,20 +684,20 @@ export default function App() {
     const cands = [];
     const keys = new Set();
     const urls = new Set();
-    const add = (t, ts, used) => {
+    const add = (t, ts, used, made = 0) => {
       const k = topicKey(t);
       const u = urlKey(t);
       if (!k || keys.has(k) || (u && urls.has(u))) return;
       keys.add(k);
       if (u) urls.add(u);
-      cands.push({ t: ts ? { ...t, _ts: ts } : t, used });
+      cands.push({ t: ts || made ? { ...t, ...(ts ? { _ts: ts } : {}), ...(made ? { _made: made } : {}) } : t, used });
     };
     for (const t of topics) {
       const e = ws[topicKey(t)] || byUrl.get(urlKey(t));
-      if (e) add({ ...t, ...e.topic }, e.updatedAt, true);
+      if (e) add({ ...t, ...e.topic }, e.updatedAt, true, e.createdAt);
       else add(t, 0, false);
     }
-    for (const e of Object.values(ws)) add(e.topic, e.updatedAt, true);
+    for (const e of Object.values(ws)) add(e.topic, e.updatedAt, true, e.createdAt);
 
     // The row is shown under its best card: the one with material, else the
     // one written from full text, else the higher-scored.
@@ -1285,6 +1285,25 @@ const CATEGORIES = [
 
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
+  // Pinned topics stay on top while they are being worked on. Kept on this device.
+  const [pins, setPins] = useState({});
+  useEffect(() => {
+    try {
+      setPins(JSON.parse(localStorage.getItem("sugimoto_pins_v1") || "{}") || {});
+    } catch (_) {}
+  }, []);
+  const togglePin = (t) => {
+    const k = topicKey(t);
+    setPins((prev) => {
+      const next = { ...prev };
+      if (next[k]) delete next[k];
+      else next[k] = Date.now();
+      try {
+        localStorage.setItem("sugimoto_pins_v1", JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
   const [cat, setCat] = useState("all"); // see CATEGORIES
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
   const inCat = CATEGORIES.find((c) => c[0] === cat)[2];
@@ -1302,10 +1321,14 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   const rows = topics
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t));
-  // Newest first: the news date, or for a saved topic without one, when it was
-  // last worked on.
-  const when = (t) => t.date || (t._ts ? new Date(t._ts).toISOString().slice(0, 10) : "");
-  if (!plain) rows.sort((a, b) => when(b.t).localeCompare(when(a.t)) || a.i - b.i);
+  // Newest first by the news date, whether or not someone is working on the topic. A date still to
+  // come (a rule "from November 3") counts as the day the topic appeared, else it would sit on top
+  // for weeks. Pinned topics come first, newest pin first, until they are unpinned.
+  const today = new Date().toISOString().slice(0, 10);
+  const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : "");
+  const when = (t) => (t.date && t.date <= today ? t.date : day(t._made) || (t.date ? today : day(t._ts)));
+  const pinAt = (t) => pins[topicKey(t)] || 0;
+  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || when(b.t).localeCompare(when(a.t)) || a.i - b.i);
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -1420,7 +1443,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 position: "relative", overflow: "hidden", animationDelay: `${Math.min(n, 14) * 28}ms`,
                 display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
                 background: st === "approved" ? alpha(C.success, 0.07) : C.surface,
-                border: `1px solid ${st === "approved" ? alpha(C.success, 0.35) : C.line}`,
+                border: `1px solid ${pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
                 opacity: st === "rejected" ? 0.45 : 1,
               }}
             >
@@ -1504,6 +1527,17 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                {!plain && (
+                  <button
+                    className="ui-btn"
+                    onClick={() => togglePin(t)}
+                    aria-label={pins[topicKey(t)] ? "Unpin topic" : "Pin topic to the top"}
+                    title={pins[topicKey(t)] ? "برداشتن سنجاق" : "سنجاق به بالای فهرست"}
+                    style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${pins[topicKey(t)] ? alpha(C.orange, 0.6) : C.line}`, background: pins[topicKey(t)] ? alpha(C.orange, 0.12) : "transparent", color: pins[topicKey(t)] ? C.orange : C.text3, display: "grid", placeItems: "center", cursor: "pointer", padding: 0 }}
+                  >
+                    {pins[topicKey(t)] ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />}
+                  </button>
+                )}
                 {st === "pending" && (
                   <div style={{ display: "flex", gap: 6 }}>
                     {smallBtn(<Check size={16} aria-hidden />, () => onApprove(t), "primary", "Approve topic")}
