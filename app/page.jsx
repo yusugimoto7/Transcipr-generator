@@ -3654,9 +3654,7 @@ function LearnToggle({ on, setOn }) {
   return (
     <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, fontSize: 12.5, color: C.text2, lineHeight: 1.7, cursor: "pointer" }}>
       <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} style={{ marginTop: 4 }} />
-      <span>
-        <b style={{ color: C.text }}>🧠 از این یادداشت یاد بگیر</b> — اگر قانونی کلی در آن باشد، برای محتواهای بعدی از همین نوع ذخیره می‌شود (فقط برای تو).
-      </span>
+      <b style={{ color: C.text }}>🧠 از این یادداشت یاد بگیر</b>
     </label>
   );
 }
