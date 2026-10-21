@@ -69,10 +69,24 @@ async function checkTelegram() {
         10000,
         name
       );
+      // Reading a public channel works for any bot; posting needs it to be an admin there. The
+      // bot's own id is the token's first part.
+      let rights = "";
+      let canPost = true;
+      if (chat.ok && chat.result.type === "channel") {
+        const m = await withTimeout(
+          fetch(`https://api.telegram.org/bot${token}/getChatMember?chat_id=${encodeURIComponent(id)}&user_id=${token.split(":")[0]}`).then((r) => r.json()),
+          10000,
+          name + " admin check"
+        ).catch(() => null);
+        const st = m && m.ok ? m.result : null;
+        canPost = !!(st && (st.status === "creator" || (st.status === "administrator" && st.can_post_messages !== false)));
+        rights = canPost ? " · bot is admin, can post" : " · bot is NOT an admin with “Post messages” here";
+      }
       rows.push({
         name,
-        ok: !!chat.ok,
-        detail: chat.ok ? chat.result.title || id : chat.description || "unreachable",
+        ok: !!chat.ok && canPost,
+        detail: (chat.ok ? chat.result.title || id : chat.description || "unreachable") + rights,
       });
     } catch (e) {
       rows.push({ name, ok: false, detail: String(e.message || e) });
