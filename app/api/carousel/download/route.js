@@ -13,6 +13,8 @@ function allowed(u) {
     const url = new URL(u);
     const wp = new URL(process.env.WP_BASE_URL || "https://sugimotovisa.com");
     const bare = (h) => h.replace(/^www\./, "");
+    // Visa-result and story pictures are drawn by HCTI and stay there.
+    if (url.protocol === "https:" && url.hostname === "hcti.io" && /^\/v1\/image\/[A-Za-z0-9-]+(\.(png|jpg))?$/.test(url.pathname)) return true;
     return url.protocol === "https:" && bare(url.hostname) === bare(wp.hostname) && url.pathname.startsWith("/wp-content/uploads/");
   } catch (_) {
     return false;

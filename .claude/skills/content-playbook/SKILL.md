@@ -210,3 +210,19 @@ Full detail in `instagram-story`. Essentials:
 - Palette **B, "Deep Teal & Sand"**, chosen by the team from three samples (design canvas "Sugimoto new look"), then the main colour changed by the team to the logo's slate `#32515D` (Oct 18 2026): action slate `#32515D`, deep bar `#243B44`, light slate tint `#E2EAED`, cream `#F3E3C3`, sand ground `#F7F5F0`, borders `#E5E0D5`, ink `#14231F`. The logo's orange `#EA580C` stays in the logo and small highlights only. Tokens live in `app/globals.css` (`--orange` keeps its old name but is the teal action colour) and `C` in `app/page.jsx`.
 - The real logo, never a drawn mark: `public/brand/logo-on-dark.png` (white lettering, for the teal bar), `logo-on-light.png` (dark lettering), `mark.png` / `app/icon.png` (the orange square alone, phones and browser tab). Sources: the team's Drive files Sugimoto-06 and Sugimoto-01.
 - Direction agreed: shadcn/ui (MIT) components and Kaneo's (MIT) kanban as code to build on, PLANKA/Trello for ideas only; one design system for every part of the app.
+
+
+## Visa results stories (Studio, Oct 21 2026)
+
+Hamed's format for client approvals: one or two pictures per 9:16 story (the approval letter, and a
+screenshot of the application timeline), the Sugimoto logo large over them, the dates circled, and
+the client's lines under them: «سرکار خانم … / جناب آقای …», «⬅️ نوع ویزا», «⬅️ اقدام از», «⬅️ سن»,
+«⬅️ تاریخ سابمیت ویزا», «⬅️ مدت زمان انتظار ویزا», «⬅️ تاریخ اپرووال ویزا», sometimes a last ✅ line.
+- **Privacy is the rule that never bends:** the family name, UCI, application / passport / document
+  numbers, address, email, phone and barcodes are always covered; only the first name stays. The
+  letter's date stays and is marked. Covering is burned into the pixels before anything leaves the
+  server, a person checks every box before drawing, and the uploads are never stored.
+- Only the first name, visa type and dates are read from the pictures; the title (خانم / آقا), the age
+  and "applied from" are typed by the team (left as «…» until then). Nothing else is invented.
+- Marks: red circle (default), red underline or yellow highlighter; backgrounds: light (lilac),
+  navy, Sugimoto slate. Samples Hamed sent are in the Oct 21 2026 session; more may follow.

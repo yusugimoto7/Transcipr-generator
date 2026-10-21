@@ -7,7 +7,7 @@ const nextConfig = {
     instrumentationHook: true,
     // Node-only libraries (mailbox, mail parsing, PDF text and drawing) are loaded at
     // runtime rather than bundled; bundling them breaks their internals.
-    serverComponentsExternalPackages: ["imapflow", "mailparser", "pdf-parse", "sharp", "pdfjs-dist", "@napi-rs/canvas"],
+    serverComponentsExternalPackages: ["imapflow", "mailparser", "pdf-parse", "sharp", "pdfjs-dist", "@napi-rs/canvas", "tesseract.js"],
   },
 };
 

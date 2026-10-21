@@ -8,7 +8,8 @@ import CalendarButtons from "./CalendarButtons";
 import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
 import { TEMPLATES } from "../lib/carousel-templates";
-import { Check, Clapperboard, FileText, GalleryHorizontal, Lightbulb, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
+import VisaResults from "./VisaResults";
+import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -567,7 +568,7 @@ export default function App() {
   useEffect(() => {
     try {
       const m = localStorage.getItem("sugimoto_deck_mode_v2");
-      if (m === "lexbase" || m === "ideas") setDeckModeState(m);
+      if (m === "lexbase" || m === "ideas" || m === "studio") setDeckModeState(m);
     } catch (_) {}
   }, []);
   const setDeckMode = (m) => {
@@ -721,6 +722,9 @@ export default function App() {
       return { ...lead, _also: also, coverage: Math.max(Number(lead.coverage) || 1, 1) + also.length };
     });
   }, [topics, ws]);
+  // Topics made from the editor's own links and pictures live in Studio, not in the news list.
+  const studioTopics = useMemo(() => listTopics.filter((t) => t.custom), [listTopics]);
+  const newsTopics = useMemo(() => listTopics.filter((t) => !t.custom), [listTopics]);
 
   // ---- decisions ----------------------------------------------------------
   // Approve: the server writes the scripts as a job, and the topic becomes
@@ -1112,6 +1116,35 @@ export default function App() {
               onOpen={openTopic}
               onRetry={(t) => startJob("script", t, { topic: t })}
             />
+          ) : deckMode === "studio" ? (
+            <>
+              <div dir="rtl" style={{ fontSize: 12.5, color: C.text2, marginBottom: 10, fontFamily: "'Vazirmatn', sans-serif", lineHeight: 1.8 }}>
+                استودیو: محتوا از منابع خودت — لینک‌ها و عکس‌هایی که خودت می‌دی، و استوری نتایج ویزای مشتری‌ها.
+              </div>
+              <CustomNewsBox
+                defaultOpen
+                job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
+                onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
+                onOpen={openTopic}
+              />
+              <VisaResults C={C} />
+              {studioTopics.length > 0 && (
+                <>
+                  <div dir="rtl" style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: "'Vazirmatn', sans-serif" }}>خبرهایی که از منابع خودت ساخته شدن</div>
+                  <IdeasList
+                    topics={studioTopics}
+                    decisions={decisions}
+                    jobs={bg}
+                    ws={ws}
+                    onApprove={approveTopic}
+                    onReject={rejectTopic}
+                    onRestore={restoreTopic}
+                    onOpen={openTopic}
+                    onRetry={(t) => startJob("script", t, { topic: t })}
+                  />
+                </>
+              )}
+            </>
           ) : deckMode === "lexbase" ? (
             <LexbaseSection
               decisions={decisions}
@@ -1135,11 +1168,6 @@ export default function App() {
                 </div>
               )}
 
-              <CustomNewsBox
-                job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
-                onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
-                onOpen={openTopic}
-              />
               <ResearchBox
                 job={(bg[RESEARCH_KEY] || {}).research || null}
                 onStart={(mode, query) => startJob("research", { title_fa: RESEARCH_KEY }, { mode, query, count: 6 })}
@@ -1162,7 +1190,7 @@ export default function App() {
                 </div>
               ) : (
                 <IdeasList
-                  topics={listTopics}
+                  topics={newsTopics}
                   decisions={decisions}
                   jobs={bg}
                   ws={ws}
@@ -1219,7 +1247,7 @@ export default function App() {
 }
 
 // List (every topic, new and used) or the Lexbase newsletter section.
-const MODES = [["list", Newspaper, "News"], ["lexbase", Mail, "Lexbase"], ["ideas", Lightbulb, "Ideas"]];
+const MODES = [["list", Newspaper, "News"], ["lexbase", Mail, "Lexbase"], ["ideas", Lightbulb, "Ideas"], ["studio", Images, "Studio"]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
@@ -1936,8 +1964,8 @@ function shrinkImage(file) {
   });
 }
 
-function CustomNewsBox({ job, onStart, onOpen }) {
-  const [open, setOpen] = useState(false);
+function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [links, setLinks] = useState("");
   const [note, setNote] = useState("");
   const [images, setImages] = useState([]);
