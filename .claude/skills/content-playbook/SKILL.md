@@ -224,5 +224,8 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
   server, a person checks every box before drawing, and the uploads are never stored.
 - Only the first name, visa type and dates are read from the pictures; the title (خانم / آقا), the age
   and "applied from" are typed by the team (left as «…» until then). Nothing else is invented.
+- The «اطلاعات پرونده» box takes the team's own lines (timeline, visa type, age, applied from, an extra
+  ✅ line); a model only sorts what they wrote into the fields (`readVisaNotes`), and what they wrote wins
+  over what the pictures say. Several clients: one per story, in order.
 - Marks: red circle (default), red underline or yellow highlighter; backgrounds: light (lilac),
   navy, Sugimoto slate. Samples Hamed sent are in the Oct 21 2026 session; more may follow.

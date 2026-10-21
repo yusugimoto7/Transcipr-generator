@@ -70,23 +70,25 @@ function day(s) {
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
 }
 
-// The lines under the pictures, in the team's format; what the pictures do not say is left as
-// «…» for the person to fill in or delete (the age and the title never come from a picture).
-function draftText(fields) {
+// The lines under the pictures, in the team's format. What the team typed (`noted`) wins over what
+// the pictures say; anything neither gives is left as «…» to fill in or delete.
+function draftText(fields, noted) {
   const f = fields || {};
-  const sub = f.submitted || "";
-  const app = f.approved || f.letter_date || "";
+  const n = noted || {};
+  const sub = n.submitted || f.submitted || "";
+  const app = n.approved || f.approved || f.letter_date || "";
   const a = day(sub);
   const b = day(app);
-  const wait = a && b && b >= a ? Math.round((b - a) / 86400000) : null;
+  const wait = n.wait_days ? Number(String(n.wait_days).replace(/[^0-9]/g, "")) || null : a && b && b >= a ? Math.round((b - a) / 86400000) : null;
   return [
-    `سرکار خانم / جناب آقای ${f.first_name_fa || f.first_name || "…"}`,
-    `⬅️ نوع ویزا: ${f.visa_type_fa || f.visa_type || "…"}`,
-    `⬅️ اقدام از: …`,
-    `⬅️ سن: …`,
+    `${n.title || "سرکار خانم / جناب آقای"} ${n.first_name_fa || f.first_name_fa || f.first_name || "…"}`,
+    `⬅️ نوع ویزا: ${n.visa_type_fa || f.visa_type_fa || f.visa_type || "…"}`,
+    `⬅️ اقدام از: ${n.applied_from || "…"}`,
+    `⬅️ سن: ${n.age || "…"}`,
     `⬅️ تاریخ سابمیت ویزا: ${sub || "…"}`,
     `⬅️ مدت زمان انتظار ویزا: ${wait != null ? wait + " روز" : "…"}`,
     `⬅️ تاریخ اپرووال ویزا: ${app || "…"}`,
+    ...(n.extra ? [`✅ ${String(n.extra).replace(/^✅\s*/, "")}`] : []),
   ].join("\n");
 }
 
@@ -165,6 +167,8 @@ function Picture({ image, scan, tool, onToggle, onAdd }) {
 
 export default function VisaResults({ C }) {
   const [images, setImages] = useState([]);
+  const [notes, setNotes] = useState(""); // the team's own lines: timeline, visa type, age…
+  const [clients, setClients] = useState([]);
   const [scans, setScans] = useState(null);
   const [groups, setGroups] = useState([]); // story number per picture
   const [texts, setTexts] = useState({}); // story number -> text
@@ -192,13 +196,17 @@ export default function VisaResults({ C }) {
     setError("");
     setChecked(false);
     try {
-      const r = await runJob("visa_scan", { images: images.map(({ name, data }) => ({ name, data })) }, (p) => p && setProgress(`${p.done || 0} از ${p.total || images.length}`));
+      const r = await runJob("visa_scan", { images: images.map(({ name, data }) => ({ name, data })), notes: notes.trim() }, (p) => p && setProgress(`${p.done || 0} از ${p.total || images.length}`));
       const sc = r.scans || [];
       setScans(sc);
       const g = defaultGroups(sc);
       setGroups(g);
       const t = {};
-      for (const n of [...new Set(g)]) t[n] = draftText(mergeFields(sc.filter((_, i) => g[i] === n).map((s) => s.fields)));
+      const clients = r.clients || [];
+      setClients(clients);
+      [...new Set(g)].forEach((n, k) => {
+        t[n] = draftText(mergeFields(sc.filter((_, i) => g[i] === n).map((s) => s.fields)), clients[k] || clients[0]);
+      });
       setTexts(t);
     } catch (e) {
       setError(String(e.message || e));
@@ -318,6 +326,21 @@ export default function VisaResults({ C }) {
         </div>
       )}
       {!scans && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>اطلاعات پرونده (اختیاری)</div>
+          <Textarea
+            rows={4}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={"مثلاً: خانم مریم، ورک پرمیت همسر worker، اقدام از خارج از کانادا، سن ۲۸، سابمیت 2025/05/14، اپروال 2025/06/18، با سابقه یکبار ریجکتی"}
+            style={{ fontFamily: FA, lineHeight: 1.8 }}
+          />
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 3, lineHeight: 1.7 }}>
+            هر چی اینجا بنویسی (تایم‌لاین، نوع ویزا، سن، از کجا اقدام کرده) توی متن استوری میاد و بر چیزی که از عکس خونده می‌شه مقدمه. برای چند نفر، به ترتیب استوری‌ها بنویس.
+          </div>
+        </div>
+      )}
+      {!scans && (
         <Button className="mt-2.5 w-full" disabled={!images.length || !!busy} onClick={scan}>
           {busy === "scan" ? <Loader2 className="animate-spin" aria-hidden /> : <ScanSearch aria-hidden />}
           {busy === "scan" ? `در حال خواندن عکس‌ها… ${progress}` : `پیدا کردن اطلاعات شخصی و تاریخ‌ها (${images.length} عکس)`}
@@ -356,7 +379,7 @@ export default function VisaResults({ C }) {
                     <select value={groups[i]} onChange={(e) => {
                       const n = Number(e.target.value);
                       setGroups((g) => g.map((x, j) => (j === i ? n : x)));
-                      setTexts((t) => (t[n] != null ? t : { ...t, [n]: draftText(sc.fields) }));
+                      setTexts((t) => (t[n] != null ? t : { ...t, [n]: draftText(sc.fields, clients[0]) }));
                     }} style={{ fontFamily: FA, borderRadius: 8, border: `1px solid ${C.line}`, padding: "3px 6px" }}>
                       {Array.from({ length: images.length }, (_, n) => (
                         <option key={n} value={n}>{n + 1}</option>
