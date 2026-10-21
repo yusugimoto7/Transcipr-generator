@@ -20,7 +20,7 @@ export async function GET(request) {
     {
       carousel: !!process.env.OPENAI_API_KEY,
       story: storyEnabled(),
-      telegram: publishing ? { review: !!telegramTarget("review"), public: !!telegramTarget("public") } : { review: false, public: false },
+      telegram: publishing ? { review: false, public: !!telegramTarget("public") } : { review: false, public: false },
       video: videoWorkflowEnabled(),
       publishing,
     },

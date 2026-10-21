@@ -2500,13 +2500,6 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
     }
   };
 
-  // Send the Word file to the Telegram review channel (uses the existing bot).
-  // A server job, like the rest, so it survives leaving the page.
-  const sendDocToTelegram = () => {
-    if (!article || docState === "sending") return;
-    setDocLocal("idle");
-    onJob("docfile", { article });
-  };
 
   // ---- what to make from the topic ----------------------------------------
   const articleRef = useRef(null);
@@ -2816,9 +2809,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                 <button className="ui-btn" onClick={downloadDoc} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text }}>
                   {docState === "downloaded" ? "دانلود شد ✓" : "📄 دانلود فایل Word"}
                 </button>
-                {caps.publishing !== false && <button className="ui-btn" onClick={sendDocToTelegram} disabled={docState === "sending"} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text, opacity: docState === "sending" ? 0.6 : 1 }}>
-                  {docState === "sending" ? "در حال ارسال…" : docState === "sent" ? "ارسال شد ✓" : "✈ فایل به تلگرام"}
-                </button>}
+
               </div>
               {docState === "error" && (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: C.orange, direction: "ltr", textAlign: "center", fontFamily: FONT }}>{docMsg}</div>

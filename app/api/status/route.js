@@ -53,7 +53,6 @@ async function checkTelegram() {
     rows.push({ name: "Telegram bot", ok: false, detail: String(e.message || e) });
   }
   const targets = {
-    "Review channel": process.env.TELEGRAM_REVIEW_CHAT_ID,
     "Public channel": process.env.TELEGRAM_PUBLIC_CHANNEL_ID,
   };
   for (const [name, id] of Object.entries(targets)) {

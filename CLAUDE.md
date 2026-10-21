@@ -21,7 +21,6 @@ discipline is about not stepping on each other and not shipping a broken build:
 Every integration in this app is optional and degrades gracefully when its env vars are blank. Use that.
 
 - **Local `.env.local` = `USE_OPENAI=true` + `OPENAI_API_KEY` only.** Leave everything else blank. Production Telegram, WordPress, and Google Sheet credentials live in Render; do not copy them into a local file.
-- **Never open `/api/telegram/setup` locally.** It re-registers the bot webhook to whatever URL you are on and silently breaks the production approve/reject buttons.
 - **Never set `DRAWS_AUTORUN=true` locally.** The draws poster publishes straight to the public channel with no review step.
 - Never commit secrets. `.env*.local` is gitignored; keep it that way.
 - Any credential pasted into a chat is exposed — rotate it.
@@ -53,7 +52,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Model selection per job (env-overridable) | `lib/openai.js`, `lib/anthropic.js` |
 | WordPress draft publishing (redirect-safe auth) | `lib/wordpress.js` |
 | Telegram news post: written, edited in the app (text with `**bold**`, related site link), one 4:5 picture in the carousel style, sent from the app to the public channel (jobs `telegram_write`/`_save`/`_image`/`_send`) | `lib/telegram-post.js`, `app/page.jsx` (`TelegramPanel`) |
-| Old Telegram review flow + webhook (approve/edit/reject buttons in the review chat; no longer started from the topic page) | `app/api/telegram/**` |
+| Telegram review chat: removed (Oct 2026). Nothing is sent to a review chat; everything is edited and approved in the app. `/api/telegram/webhook` only answers Telegram with 200 in case the old webhook is still registered | `app/api/telegram/webhook` |
 | Durable memory (Google Sheet via Apps Script) | `lib/sheet.js`, `google-apps-script.gs` |
 | Draws auto-poster (separate system) | `lib/draws/**`, `app/api/draws/**` |
 | Keep-awake + deck warm-up (every 10 min, GitHub Actions → `/api/topics?warm=1`) | `.github/workflows/keepwarm.yml` |
@@ -83,7 +82,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 - Accounts are the Video Editing accounts (`lib/editing/auth.js`, users on the `editing-data` branch). Hamed (admin) has everything; each member has what he ticks on the Team page: `topics`, `calendar`, `editing`, `publishing` (Telegram and WordPress sends from the Topic Engine). Accounts from before access existed have `calendar` + `editing`. Rules in `lib/editing/access.js`.
 - `middleware.js` maps every path to a part (`sectionOf`) and checks a 5-minute access ticket (`ve_access`, signed like the session) that it renews from the stored account through `/api/editing/auth/ticket` on this server (`http://127.0.0.1:$PORT`). `guard()` re-checks calendar/editing/team access against the stored account on every API call, so taking those away applies at once; for the Topic Engine it applies when the ticket renews.
 - Machine callers stay open in `access.js` (Telegram webhook and file fetches, `/api/video/callback`, `/api/draws/*` with its key, `/api/calendar/tick`, `/api/calendar/media/*`, `/api/topics?warm=1`). A new machine endpoint must be added there or it will start answering 401 once `APP_LOGIN=all` is on.
-- Without `publishing`, `/api/capabilities` reports Telegram off (the send buttons hide) and `/api/jobs` refuses the send kinds (`PUBLISH_JOBS`); `/api/telegram`, `/api/publish`, `/api/docfile`, `/api/gdoc` refuse POST. `/api/telegram/setup` and `/updates` are admin only.
+- Without `publishing`, `/api/capabilities` reports Telegram off (the send buttons hide) and `/api/jobs` refuses the send kinds (`PUBLISH_JOBS`); `/api/publish` and `/api/gdoc` refuse POST.
 - Locally use `EDITING_STORE_DIR=/some/folder` instead of the GitHub token: data stays in that folder and no worker is started.
 - Checks and lessons come from the worker too: each version's result carries `qa` (flash cuts, a word said twice across a join, lips against sound; shown as "Checked before review") and, after corrections, `lessons`. Lessons are rule changes stored as `lessons/<id>.json` on `editing-data`; only the admin sees them (Video Editing → Lessons, `lib/editing/lessons.js`) and an approval dispatches the worker's `lesson` action, which commits the edits to english-sugimotovisa as shown. This app never edits the rules itself.
 - Stages after the cut (`STAGES` in `lib/editing/projects.js`): once a version is approved, "Next step" offers Subtitles and Motion graphics (`POST /api/editing/projects/<id>/stage`). Each stage has its own versions, corrections and approval; runs carry `stage` (cut | subtitles | graphics) and graphics runs a `step`: a `plan` (storyboard summary + still frames from Drive) is approved first, which starts a `render` run; corrections on a render draw a new plan. The worker does the work with the team's skills (video-transcribe for subtitles, the language heard from the video; video-motion-graphics for graphics), never this app. Hidden until `EDITING_STAGES=on`, which is set only after that worker change is merged in english-sugimotovisa.
