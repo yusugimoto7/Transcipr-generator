@@ -227,5 +227,12 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
 - The «اطلاعات پرونده» box takes the team's own lines (timeline, visa type, age, applied from, an extra
   ✅ line); a model only sorts what they wrote into the fields (`readVisaNotes`), and what they wrote wins
   over what the pictures say. Several clients: one per story, in order.
+- **Never covered** (Hamed, Oct 21 2026): «Canada» anywhere (Government of Canada / Gouvernement du
+  Canada, "remain in Canada", "Citizenship Canada"), IRCC's names, the form number at the foot (IMM 0277…).
+  An application number keeps its letters and first digit (W3…, VWS2…); the rest is covered.
+- **One client by default:** the pictures of one upload are nearly always one client's. They open under
+  one heading «خبر ویزا · <title and first name>», with the story tools inside; up to two pictures make
+  one story. Another client is added by hand («مشتری دیگر»), or by the notes naming several clients.
+- The waiting time is written as the team writes it («۷ ماه و ۱۶ روز»); counted from the dates only if not given.
 - Marks: red circle (default), red underline or yellow highlighter; backgrounds: light (lilac),
   navy, Sugimoto slate. Samples Hamed sent are in the Oct 21 2026 session; more may follow.

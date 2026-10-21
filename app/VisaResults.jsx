@@ -6,8 +6,8 @@
 // here a person checks each box on the picture, adds what was missed, and only then are the
 // stories drawn. The pictures stay in this page's memory: nothing unredacted is saved anywhere.
 
-import { useEffect, useRef, useState } from "react";
-import { CalendarPlus, Download, EyeOff, ImagePlus, Loader2, RotateCcw, ScanSearch, Sparkles, Trash2, CircleDashed, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { CalendarPlus, ChevronDown, ChevronUp, CircleDashed, Download, EyeOff, ImagePlus, Loader2, Megaphone, RotateCcw, ScanSearch, Sparkles, Trash2, UserPlus, X } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/input";
 import { Card } from "../components/ui/card";
@@ -79,14 +79,16 @@ function draftText(fields, noted) {
   const app = n.approved || f.approved || f.letter_date || "";
   const a = day(sub);
   const b = day(app);
-  const wait = n.wait_days ? Number(String(n.wait_days).replace(/[^0-9]/g, "")) || null : a && b && b >= a ? Math.round((b - a) / 86400000) : null;
+  // The team's own wording of the wait wins («۷ ماه و ۱۶ روز»); otherwise it is counted from the dates.
+  const counted = a && b && b >= a ? Math.round((b - a) / 86400000) + " روز" : "";
+  const waitText = String(n.wait || n.wait_days || "").trim() || counted;
   return [
     `${n.title || "سرکار خانم / جناب آقای"} ${n.first_name_fa || f.first_name_fa || f.first_name || "…"}`,
     `⬅️ نوع ویزا: ${n.visa_type_fa || f.visa_type_fa || f.visa_type || "…"}`,
     `⬅️ اقدام از: ${n.applied_from || "…"}`,
     `⬅️ سن: ${n.age || "…"}`,
     `⬅️ تاریخ سابمیت ویزا: ${sub || "…"}`,
-    `⬅️ مدت زمان انتظار ویزا: ${wait != null ? wait + " روز" : "…"}`,
+    `⬅️ مدت زمان انتظار ویزا: ${waitText || "…"}`,
     `⬅️ تاریخ اپرووال ویزا: ${app || "…"}`,
     ...(n.extra ? [`✅ ${String(n.extra).replace(/^✅\s*/, "")}`] : []),
   ].join("\n");
@@ -113,6 +115,10 @@ function defaultGroups(scans) {
     story++;
   }
   return g;
+}
+
+function newCase(open) {
+  return { open, opts: { mark: "circle", background: "light", congrats: true, watermark: true }, checked: false, stories: null, calendar: "", busy: false, progress: "", error: "" };
 }
 
 function Picture({ image, scan, tool, onToggle, onAdd }) {
@@ -171,15 +177,13 @@ export default function VisaResults({ C }) {
   const [clients, setClients] = useState([]);
   const [scans, setScans] = useState(null);
   const [groups, setGroups] = useState([]); // story number per picture
+  const [owner, setOwner] = useState([]); // client (case) number per picture
+  const [cases, setCases] = useState([]); // per client: { open, opts, checked, stories, calendar, busy, progress, error }
   const [texts, setTexts] = useState({}); // story number -> text
-  const [opts, setOpts] = useState({ mark: "circle", background: "light", congrats: true, watermark: true });
   const [busy, setBusy] = useState("");
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [tool, setTool] = useState(null); // "hide" | "date" | null
-  const [checked, setChecked] = useState(false);
-  const [stories, setStories] = useState(null);
-  const [calendar, setCalendar] = useState("");
   const fileRef = useRef(null);
 
   const addFiles = async (files) => {
@@ -188,26 +192,39 @@ export default function VisaResults({ C }) {
     const shrunk = (await Promise.all(list.map(shrink))).filter(Boolean);
     setImages((prev) => [...prev, ...shrunk].slice(0, MAX));
     setScans(null);
-    setStories(null);
   };
 
   const scan = async () => {
     setBusy("scan");
     setError("");
-    setChecked(false);
     try {
       const r = await runJob("visa_scan", { images: images.map(({ name, data }) => ({ name, data })), notes: notes.trim() }, (p) => p && setProgress(`${p.done || 0} از ${p.total || images.length}`));
       const sc = r.scans || [];
+      const clients = r.clients || [];
       setScans(sc);
-      const g = defaultGroups(sc);
+      setClients(clients);
+      // Almost always every picture is one client's (Hamed, Oct 2026): one case, unless the notes
+      // name several clients, then the pictures are shared out in order.
+      const n = Math.max(1, Math.min(clients.length, sc.length));
+      const own = sc.map((_, i) => Math.min(n - 1, Math.floor((i * n) / sc.length)));
+      // Within a case: up to two pictures make one story; more are paired letter-with-timeline.
+      const g = [];
+      let next = 0;
+      for (let c = 0; c < n; c++) {
+        const idx = own.map((o, i) => (o === c ? i : -1)).filter((i) => i >= 0);
+        const local = idx.length <= 2 ? idx.map(() => 0) : defaultGroups(idx.map((i) => sc[i]));
+        idx.forEach((i, k) => (g[i] = next + local[k]));
+        next += Math.max(...local) + 1;
+      }
+      setOwner(own);
       setGroups(g);
       const t = {};
-      const clients = r.clients || [];
-      setClients(clients);
-      [...new Set(g)].forEach((n, k) => {
-        t[n] = draftText(mergeFields(sc.filter((_, i) => g[i] === n).map((s) => s.fields)), clients[k] || clients[0]);
-      });
+      for (const sn of [...new Set(g)]) {
+        const c = own[g.indexOf(sn)];
+        t[sn] = draftText(mergeFields(sc.filter((_, i) => g[i] === sn).map((x) => x.fields)), clients[c] || clients[0]);
+      }
       setTexts(t);
+      setCases(Array.from({ length: n }, (_, c) => newCase(c === 0)));
     } catch (e) {
       setError(String(e.message || e));
     } finally {
@@ -216,28 +233,34 @@ export default function VisaResults({ C }) {
     }
   };
 
-  const storyNums = [...new Set(groups)].sort((a, b) => a - b);
-  const draw = async () => {
-    const left = storyNums.filter((n) => /…/.test(texts[n] || ""));
-    if (left.length && !window.confirm("بعضی خط‌ها هنوز «…» دارن (مثلاً سن). همین‌طور ساخته بشه؟")) return;
-    setBusy("draw");
-    setError("");
+  const setCase = (c, patch) => setCases((prev) => prev.map((x, k) => (k === c ? { ...x, ...(typeof patch === "function" ? patch(x) : patch) } : x)));
+  const picsOf = (c) => owner.map((o, i) => (o === c ? i : -1)).filter((i) => i >= 0);
+  const storiesOf = (c) => [...new Set(picsOf(c).map((i) => groups[i]))].sort((a, b) => a - b);
+  const caseTitle = (c) => {
+    const first = (texts[storiesOf(c)[0]] || "").split("\n")[0].trim();
+    return first && !/^سرکار خانم \/ جناب آقای\s*…?$/.test(first) ? first : `مشتری ${c + 1}`;
+  };
+
+  const draw = async (c) => {
+    const nums = storiesOf(c);
+    if (nums.some((n) => /…/.test(texts[n] || "")) && !window.confirm("بعضی خط‌ها هنوز «…» دارن (مثلاً سن). همین‌طور ساخته بشه؟")) return;
+    const cs = cases[c];
+    setCase(c, { busy: true, error: "", progress: "" });
     try {
       const r = await runJob(
         "visa_story",
         {
           images: images.map((im, i) => ({ name: im.name, data: im.data, boxes: (scans[i] && scans[i].boxes) || [] })),
-          stories: storyNums.map((n) => ({ images: groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0), text: texts[n] || "" })),
-          ...opts,
+          stories: nums.map((n) => ({ images: groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0), text: texts[n] || "" })),
+          ...cs.opts,
         },
-        (p) => p && setProgress(`${p.done || 0} از ${p.total || storyNums.length}`)
+        (p) => p && setCase(c, { progress: `${p.done || 0} از ${p.total || nums.length}` })
       );
-      setStories(r.stories || []);
+      setCase(c, { stories: r.stories || [], calendar: "" });
     } catch (e) {
-      setError(String(e.message || e));
+      setCase(c, { error: String(e.message || e) });
     } finally {
-      setBusy("");
-      setProgress("");
+      setCase(c, { busy: false, progress: "" });
     }
   };
 
@@ -248,12 +271,22 @@ export default function VisaResults({ C }) {
     setImages((prev) => prev.filter((_, j) => j !== i));
     setScans((prev) => (prev ? prev.filter((_, j) => j !== i) : prev));
     setGroups((prev) => prev.filter((_, j) => j !== i));
-    setStories(null);
+    setOwner((prev) => prev.filter((_, j) => j !== i));
   };
-  const download = async () => {
-    for (const [k, s] of (stories || []).filter((x) => x.url).entries()) {
+  const moveTo = (i, c) => {
+    // A picture moved to another client starts a story of its own there, unless that client has
+    // a story with room for one more.
+    const room = storiesOf(c).find((n) => groups.filter((g, j) => g === n && j !== i).length < 2);
+    const n = room != null ? room : Math.max(-1, ...groups) + 1;
+    setOwner((o) => o.map((x, j) => (j === i ? c : x)));
+    setGroups((g) => g.map((x, j) => (j === i ? n : x)));
+    setTexts((t) => (t[n] != null ? t : { ...t, [n]: draftText(scans[i].fields, clients[c] || clients[0]) }));
+  };
+  const addCase = () => setCases((prev) => [...prev, newCase(false)]);
+  const download = async (c) => {
+    for (const [k, s] of (cases[c].stories || []).filter((x) => x.url).entries()) {
       const a = document.createElement("a");
-      a.href = "/api/carousel/download?url=" + encodeURIComponent(s.url) + "&name=" + encodeURIComponent(`visa-result-${k + 1}.png`);
+      a.href = "/api/carousel/download?url=" + encodeURIComponent(s.url) + "&name=" + encodeURIComponent(`visa-result-${c + 1}-${k + 1}.png`);
       a.download = "";
       document.body.appendChild(a);
       a.click();
@@ -261,20 +294,20 @@ export default function VisaResults({ C }) {
       await new Promise((r) => setTimeout(r, 700));
     }
   };
-  const toCalendar = async () => {
-    setCalendar("…");
+  const toCalendar = async (c) => {
+    setCase(c, { calendar: "…" });
     try {
-      const names = storyNums.map((n) => (texts[n] || "").split("\n")[0].replace(/^(سرکار خانم|جناب آقای|سرکار خانم \/ جناب آقای)\s*/, "")).filter(Boolean);
-      const r = await fetch("/api/calendar/visa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: stories.filter((s) => s.url).map((s) => s.url), title: names.join("، ") }) });
+      const name = caseTitle(c).replace(/^(سرکار خانم|جناب آقای)\s*/, "");
+      const r = await fetch("/api/calendar/visa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: cases[c].stories.filter((s) => s.url).map((s) => s.url), title: name }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || "failed");
-      setCalendar(`/calendar?board=${j.card.board_id}&card=${j.card.id}`);
+      setCase(c, { calendar: `/calendar?board=${j.card.board_id}&card=${j.card.id}` });
     } catch (e) {
-      setCalendar("error:" + String(e.message || e));
+      setCase(c, { calendar: "error:" + String(e.message || e) });
     }
   };
 
-  const hidden = scans ? scans.reduce((n, s) => n + (s.boxes || []).filter((b) => b.kind === "hide" && b.on).length, 0) : 0;
+  const hiddenIn = (c) => (scans ? picsOf(c).reduce((n, i) => n + ((scans[i] && scans[i].boxes) || []).filter((b) => b.kind === "hide" && b.on).length, 0) : 0);
   const unchecked = scans ? scans.filter((s) => !s.checked).length : 0;
   const pill = (on) => ({ padding: "6px 10px", borderRadius: 999, border: `1px solid ${on ? C.orange : C.line}`, background: on ? "rgba(50,81,93,0.10)" : C.surface, color: on ? C.orange : C.text2, fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: FA });
 
@@ -347,148 +380,196 @@ export default function VisaResults({ C }) {
         </Button>
       )}
 
-      {/* review */}
-      {scans && !stories && (
+      {/* one heading per client: "خبر ویزا · <name>", opened to check, write and draw */}
+      {scans && (
         <div>
           {unchecked > 0 && (
             <div style={{ background: "rgba(229,72,77,0.1)", border: "1px solid rgba(229,72,77,0.4)", borderRadius: 10, padding: "8px 10px", fontSize: 12.5, marginBottom: 10, lineHeight: 1.8 }}>
               ⚠️ بررسی هوشمند روی {unchecked} عکس انجام نشد؛ فقط قانون‌های ثابت (شماره‌ها، ایمیل، کدپستی) اجرا شد. نام خانوادگی و آدرس رو خودت با «پوشاندن» بپوشون.
             </div>
           )}
-          <div style={{ position: "sticky", top: 64, zIndex: 5, background: C.surface, padding: "8px 0", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", borderBottom: `1px solid ${C.line}`, marginBottom: 10 }}>
-            <button type="button" onClick={() => setTool(tool === "hide" ? null : "hide")} style={pill(tool === "hide")}>
-              <EyeOff size={13} aria-hidden style={{ verticalAlign: -2 }} /> پوشاندن یک قسمت
-            </button>
-            <button type="button" onClick={() => setTool(tool === "date" ? null : "date")} style={pill(tool === "date")}>
-              <CircleDashed size={13} aria-hidden style={{ verticalAlign: -2 }} /> علامت تاریخ
-            </button>
-            <span style={{ fontSize: 11.5, color: C.text3 }}>{tool ? "روی عکس بکش تا کادر اضافه بشه" : "روی هر کادر بزن تا برداشته یا دوباره گذاشته بشه"}</span>
-          </div>
-
-          {images.map((im, i) => {
-            const sc = scans[i];
-            if (!sc) return null;
+          {cases.map((cs, c) => {
+            const pics = picsOf(c);
+            const nums = storiesOf(c);
+            const tooMany = nums.some((n) => groups.filter((g) => g === n).length > 2);
             return (
-              <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, marginBottom: 10, background: C.ground }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-                  <b style={{ fontSize: 13 }}>
-                    عکس {i + 1} · {sc.kind === "letter" ? "نامه" : sc.kind === "timeline" ? "تایم‌لاین" : "عکس"}
-                  </b>
-                  <span style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
-                    استوری
-                    <select value={groups[i]} onChange={(e) => {
-                      const n = Number(e.target.value);
-                      setGroups((g) => g.map((x, j) => (j === i ? n : x)));
-                      setTexts((t) => (t[n] != null ? t : { ...t, [n]: draftText(sc.fields, clients[0]) }));
-                    }} style={{ fontFamily: FA, borderRadius: 8, border: `1px solid ${C.line}`, padding: "3px 6px" }}>
-                      {Array.from({ length: images.length }, (_, n) => (
-                        <option key={n} value={n}>{n + 1}</option>
-                      ))}
-                    </select>
-                    <Button variant="ghost" size="sm" onClick={() => removeImage(i)} aria-label="Remove picture">
-                      <Trash2 aria-hidden />
-                    </Button>
+              <div key={c} style={{ border: `1px solid ${C.line}`, borderRadius: 14, marginBottom: 10, background: C.surface, overflow: "hidden" }}>
+                <button
+                  type="button"
+                  onClick={() => setCase(c, { open: !cs.open })}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 13px", background: cs.open ? "rgba(50,81,93,0.06)" : "transparent", border: "none", cursor: "pointer", fontFamily: FA, textAlign: "right" }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 14 }}>
+                    <Megaphone size={16} aria-hidden /> خبر ویزا · {caseTitle(c)}
                   </span>
-                </div>
-                {sc.error ? (
-                  <div style={{ fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {sc.error}</div>
-                ) : (
-                  <Picture image={im} scan={sc} tool={tool} onToggle={(id) => toggle(i, id)} onAdd={(b) => addBox(i, b)} />
+                  <span style={{ fontSize: 12, color: C.text3, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {pics.length} عکس · {(cs.stories || []).filter((x) => x.url).length ? "✓ ساخته شد" : `${nums.length} استوری`}
+                    {cs.open ? <ChevronUp size={15} aria-hidden /> : <ChevronDown size={15} aria-hidden />}
+                  </span>
+                </button>
+                {cs.open && (
+                  <div style={{ padding: "4px 12px 12px" }}>
+                    {!cs.stories && (
+                      <>
+                        <div style={{ position: "sticky", top: 64, zIndex: 5, background: C.surface, padding: "8px 0", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", borderBottom: `1px solid ${C.line}`, marginBottom: 10 }}>
+                          <button type="button" onClick={() => setTool(tool === "hide" ? null : "hide")} style={pill(tool === "hide")}>
+                            <EyeOff size={13} aria-hidden style={{ verticalAlign: -2 }} /> پوشاندن یک قسمت
+                          </button>
+                          <button type="button" onClick={() => setTool(tool === "date" ? null : "date")} style={pill(tool === "date")}>
+                            <CircleDashed size={13} aria-hidden style={{ verticalAlign: -2 }} /> علامت تاریخ
+                          </button>
+                          <span style={{ fontSize: 11.5, color: C.text3 }}>{tool ? "روی عکس بکش تا کادر اضافه بشه" : "روی هر کادر بزن تا برداشته یا دوباره گذاشته بشه"}</span>
+                        </div>
+
+                        {pics.length === 0 && <div style={{ fontSize: 12.5, color: C.text3, marginBottom: 10 }}>هنوز عکسی برای این مشتری نیست؛ از منوی «مشتری» زیر هر عکس، عکس رو اینجا بیار.</div>}
+                        {pics.map((i) => {
+                          const sc = scans[i];
+                          if (!sc) return null;
+                          return (
+                            <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, marginBottom: 10, background: C.ground }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+                                <b style={{ fontSize: 13 }}>
+                                  عکس {i + 1} · {sc.kind === "letter" ? "نامه" : sc.kind === "timeline" ? "تایم‌لاین" : "عکس"}
+                                </b>
+                                <span style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12, flexWrap: "wrap" }}>
+                                  {cases.length > 1 && (
+                                    <>
+                                      مشتری
+                                      <select value={owner[i]} onChange={(e) => moveTo(i, Number(e.target.value))} style={{ fontFamily: FA, borderRadius: 8, border: `1px solid ${C.line}`, padding: "3px 6px" }}>
+                                        {cases.map((_, k) => (
+                                          <option key={k} value={k}>{caseTitle(k)}</option>
+                                        ))}
+                                      </select>
+                                    </>
+                                  )}
+                                  {pics.length > 1 && (
+                                    <>
+                                      استوری
+                                      <select value={groups[i]} onChange={(e) => {
+                                        const n = Number(e.target.value);
+                                        setGroups((g) => g.map((x, j) => (j === i ? n : x)));
+                                        setTexts((t) => (t[n] != null ? t : { ...t, [n]: draftText(sc.fields, clients[c] || clients[0]) }));
+                                      }} style={{ fontFamily: FA, borderRadius: 8, border: `1px solid ${C.line}`, padding: "3px 6px" }}>
+                                        {[...nums, Math.max(-1, ...groups) + 1].map((n, k) => (
+                                          <option key={n} value={n}>{k < nums.length ? k + 1 : "جدید"}</option>
+                                        ))}
+                                      </select>
+                                    </>
+                                  )}
+                                  <Button variant="ghost" size="sm" onClick={() => removeImage(i)} aria-label="Remove picture">
+                                    <Trash2 aria-hidden />
+                                  </Button>
+                                </span>
+                              </div>
+                              {sc.error ? (
+                                <div style={{ fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {sc.error}</div>
+                              ) : (
+                                <Picture image={images[i]} scan={sc} tool={tool} onToggle={(id) => toggle(i, id)} onAdd={(b) => addBox(i, b)} />
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {nums.map((n, k) => {
+                          const inStory = groups.map((g, i) => (g === n ? i + 1 : 0)).filter(Boolean);
+                          if (inStory.length > 2) {
+                            return (
+                              <div key={n} style={{ fontSize: 12.5, color: C.reject, marginBottom: 8 }}>
+                                ⚠️ استوری {k + 1}: هر استوری حداکثر ۲ عکس داره (الان: {inStory.join("، ")}).
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={n} style={{ marginBottom: 10 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>
+                                متن استوری {nums.length > 1 ? k + 1 : ""} (عکس {inStory.join(" و ")})
+                              </div>
+                              <Textarea rows={7} value={texts[n] || ""} onChange={(e) => setTexts((t) => ({ ...t, [n]: e.target.value }))} style={{ fontFamily: FA, lineHeight: 1.8 }} />
+                            </div>
+                          );
+                        })}
+
+                        <div style={{ fontSize: 12.5, fontWeight: 700, margin: "6px 0 6px" }}>علامت تاریخ‌ها</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                          {MARKS.map(([k, label]) => (
+                            <button key={k} type="button" onClick={() => setCase(c, (x) => ({ opts: { ...x.opts, mark: k } }))} style={pill(cs.opts.mark === k)}>{label}</button>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: 12.5, fontWeight: 700, margin: "6px 0 6px" }}>پس‌زمینه</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                          {BACKS.map(([k, label, color]) => (
+                            <button key={k} type="button" onClick={() => setCase(c, (x) => ({ opts: { ...x.opts, background: k } }))} style={pill(cs.opts.background === k)}>
+                              <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 99, background: color, marginLeft: 5, border: "1px solid rgba(0,0,0,0.15)" }} />
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, marginBottom: 10 }}>
+                          <label><input type="checkbox" checked={cs.opts.congrats} onChange={(e) => setCase(c, (x) => ({ opts: { ...x.opts, congrats: e.target.checked } }))} /> برچسب Congrats</label>
+                          <label><input type="checkbox" checked={cs.opts.watermark} onChange={(e) => setCase(c, (x) => ({ opts: { ...x.opts, watermark: e.target.checked } }))} /> لوگوی بزرگ روی عکس‌ها</label>
+                        </div>
+                        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.8, background: "rgba(18,148,94,0.07)", border: "1px solid rgba(18,148,94,0.3)", borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
+                          <input type="checkbox" checked={cs.checked} onChange={(e) => setCase(c, { checked: e.target.checked })} style={{ marginTop: 6 }} />
+                          همهٔ عکس‌های این مشتری رو چک کردم: نام خانوادگی، UCI، شماره پرونده و پاسپورت، آدرس، ایمیل و بارکدها پوشونده شدن ({hiddenIn(c)} کادر) و فقط اسم کوچیک دیده می‌شه.
+                        </label>
+                        <Button className="w-full" disabled={!cs.checked || cs.busy || !pics.length || tooMany} onClick={() => draw(c)}>
+                          {cs.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+                          {cs.busy ? `در حال ساخت استوری‌ها… ${cs.progress}` : `ساخت ${nums.length} استوری`}
+                        </Button>
+                      </>
+                    )}
+
+                    {cs.stories && (
+                      <div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, marginBottom: 10 }}>
+                          {cs.stories.map((st, k) => (
+                            <div key={k} style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", background: C.surface }}>
+                              {st.url ? (
+                                <a href={st.url} target="_blank" rel="noreferrer">
+                                  <img src={st.url} alt={"Story " + (k + 1)} style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover" }} />
+                                </a>
+                              ) : (
+                                <div style={{ aspectRatio: "9 / 16", display: "grid", placeItems: "center", padding: 8, fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {st.error}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <Button variant="outline" onClick={() => download(c)} disabled={!cs.stories.some((x) => x.url)}>
+                            <Download aria-hidden /> دانلود
+                          </Button>
+                          <Button variant="outline" onClick={() => toCalendar(c)} disabled={!cs.stories.some((x) => x.url) || cs.calendar === "…" || /^\/calendar/.test(cs.calendar)}>
+                            {cs.calendar === "…" ? <Loader2 className="animate-spin" aria-hidden /> : <CalendarPlus aria-hidden />} به تقویم محتوا
+                          </Button>
+                          <Button variant="ghost" onClick={() => setCase(c, { stories: null, checked: false })}>
+                            <RotateCcw aria-hidden /> تغییر و ساخت دوباره
+                          </Button>
+                        </div>
+                        {/^\/calendar/.test(cs.calendar) && (
+                          <div style={{ marginTop: 8, fontSize: 12.5 }}>
+                            ✓ به‌عنوان پیش‌نویس به تقویم اضافه شد (بعد از تأیید حامد منتشر می‌شه): <a href={cs.calendar} style={{ color: C.teal, fontWeight: 700 }}>باز کردن</a>
+                          </div>
+                        )}
+                        {/^error:/.test(cs.calendar || "") && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {cs.calendar.slice(6)}</div>}
+                      </div>
+                    )}
+                    {cs.error && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr", textAlign: "left" }}>⚠️ {cs.error}</div>}
+                  </div>
                 )}
               </div>
             );
           })}
-
-          {storyNums.map((n) => {
-            const pics = groups.map((g, i) => (g === n ? i + 1 : 0)).filter(Boolean);
-            if (pics.length > 2) {
-              return (
-                <div key={n} style={{ fontSize: 12.5, color: C.reject, marginBottom: 8 }}>
-                  ⚠️ استوری {storyNums.indexOf(n) + 1}: هر استوری حداکثر ۲ عکس داره (الان: {pics.join("، ")}).
-                </div>
-              );
-            }
-            return (
-              <div key={n} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>
-                  متن استوری {storyNums.indexOf(n) + 1} (عکس {pics.join(" و ")})
-                </div>
-                <Textarea rows={7} value={texts[n] || ""} onChange={(e) => setTexts((t) => ({ ...t, [n]: e.target.value }))} style={{ fontFamily: FA, lineHeight: 1.8 }} />
-              </div>
-            );
-          })}
-
-          <div style={{ fontSize: 12.5, fontWeight: 700, margin: "6px 0 6px" }}>علامت تاریخ‌ها</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {MARKS.map(([k, label]) => (
-              <button key={k} type="button" onClick={() => setOpts({ ...opts, mark: k })} style={pill(opts.mark === k)}>{label}</button>
-            ))}
-          </div>
-          <div style={{ fontSize: 12.5, fontWeight: 700, margin: "6px 0 6px" }}>پس‌زمینه</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {BACKS.map(([k, label, color]) => (
-              <button key={k} type="button" onClick={() => setOpts({ ...opts, background: k })} style={pill(opts.background === k)}>
-                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 99, background: color, marginLeft: 5, border: "1px solid rgba(0,0,0,0.15)" }} />
-                {label}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, marginBottom: 10 }}>
-            <label><input type="checkbox" checked={opts.congrats} onChange={(e) => setOpts({ ...opts, congrats: e.target.checked })} /> برچسب Congrats</label>
-            <label><input type="checkbox" checked={opts.watermark} onChange={(e) => setOpts({ ...opts, watermark: e.target.checked })} /> لوگوی بزرگ روی عکس‌ها</label>
-          </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.8, background: "rgba(18,148,94,0.07)", border: "1px solid rgba(18,148,94,0.3)", borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
-            <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} style={{ marginTop: 6 }} />
-            همهٔ عکس‌ها رو چک کردم: نام خانوادگی، UCI، شماره پرونده و پاسپورت، آدرس، ایمیل و بارکدها پوشونده شدن ({hidden} کادر) و فقط اسم کوچیک دیده می‌شه.
-          </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button className="flex-1" disabled={!checked || !!busy || storyNums.some((n) => groups.filter((g) => g === n).length > 2)} onClick={draw}>
-              {busy === "draw" ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-              {busy === "draw" ? `در حال ساخت استوری‌ها… ${progress}` : `ساخت ${storyNums.length} استوری`}
+            <Button variant="outline" size="sm" onClick={addCase}>
+              <UserPlus aria-hidden /> مشتری دیگر
             </Button>
-            <Button variant="outline" disabled={!!busy} onClick={() => { setScans(null); setStories(null); }}>
-              <RotateCcw aria-hidden /> عکس‌ها
+            <Button variant="ghost" size="sm" onClick={() => setScans(null)}>
+              <RotateCcw aria-hidden /> برگشت به عکس‌ها
             </Button>
-          </div>
-        </div>
-      )}
-
-      {/* stories */}
-      {stories && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, marginBottom: 10 }}>
-            {stories.map((s, k) => (
-              <div key={k} style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", background: C.surface }}>
-                {s.url ? (
-                  <a href={s.url} target="_blank" rel="noreferrer">
-                    <img src={s.url} alt={"Story " + (k + 1)} style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover" }} />
-                  </a>
-                ) : (
-                  <div style={{ aspectRatio: "9 / 16", display: "grid", placeItems: "center", padding: 8, fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {s.error}</div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button variant="outline" onClick={download} disabled={!stories.some((s) => s.url)}>
-              <Download aria-hidden /> دانلود همه
-            </Button>
-            <Button variant="outline" onClick={toCalendar} disabled={!stories.some((s) => s.url) || calendar === "…" || /^\/calendar/.test(calendar)}>
-              {calendar === "…" ? <Loader2 className="animate-spin" aria-hidden /> : <CalendarPlus aria-hidden />} به تقویم محتوا
-            </Button>
-            <Button variant="ghost" onClick={() => setStories(null)}>
-              <RotateCcw aria-hidden /> تغییر و ساخت دوباره
-            </Button>
-            <Button variant="ghost" onClick={() => { setImages([]); setScans(null); setStories(null); setCalendar(""); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setImages([]); setScans(null); setCases([]); setNotes(""); }}>
               شروع از اول
             </Button>
           </div>
-          {/^\/calendar/.test(calendar) && (
-            <div style={{ marginTop: 8, fontSize: 12.5 }}>
-              ✓ به‌عنوان پیش‌نویس به تقویم اضافه شد (بعد از تأیید حامد منتشر می‌شه): <a href={calendar} style={{ color: C.teal, fontWeight: 700 }}>باز کردن</a>
-            </div>
-          )}
-          {/^error:/.test(calendar) && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {calendar.slice(6)}</div>}
         </div>
       )}
 
