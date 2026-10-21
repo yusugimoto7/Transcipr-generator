@@ -230,6 +230,7 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
 - **Never covered** (Hamed, Oct 21 2026): «Canada» anywhere (Government of Canada / Gouvernement du
   Canada, "remain in Canada", "Citizenship Canada"), IRCC's names, the form number at the foot (IMM 0277…).
   An application number keeps its letters and first digit (W3…, VWS2…); the rest is covered.
+- **Listed like topics** (Hamed, Oct 21 2026): «ساخت خبر ویزا» puts a row «خبر ویزا · <name>» in the «خبرهای ویزا» list; opened, it is a page with the story tools (pictures and boxes, text, design, make, download, calendar). Saved for the team once its stories are made.
 - **One client by default:** the pictures of one upload are nearly always one client's. They open under
   one heading «خبر ویزا · <title and first name>», with the story tools inside; up to two pictures make
   one story. Another client is added by hand («مشتری دیگر»), or by the notes naming several clients.
