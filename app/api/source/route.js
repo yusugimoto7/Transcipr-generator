@@ -47,6 +47,8 @@ export async function POST(request) {
         issue: { key: it.issue, subject: (getLexbaseIssueText(it.issue) || {}).subject || "" },
       });
     }
+    // The item's text as stored on the card, rather than whatever page the link points at.
+    if (String(topic.snippet || "").length >= 200) return Response.json({ kind: "lexbase", title: "Lexbase newsletter — this item (as stored on the card)", text: topic.snippet });
   }
 
   let text = "";

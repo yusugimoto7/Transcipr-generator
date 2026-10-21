@@ -75,6 +75,12 @@ as the change**, in the team's own words where possible, with the date.
   court outcome label is never contradicted.
 - A card was once scripted from another case with the same issue + number (two issues in one month
   share the month key); `findLexbaseItem` now checks the CanLII link or the stored text.
+- **A court item's case comes from its own text, never from the split model** (Oct 21 2026). The
+  split had given Kumar's summary (2026 FC 1138) the citation 2026 FC 1109, an Iranian applicant's
+  case, and Raeisi Ardali's card then showed Kumar's text as its original. Now: the citation is the
+  first one in the item's excerpt (`citationOf`), a court card finds its item only by that case or
+  its stored text (never issue + number alone), stored deck cards are re-keyed (`lexdeck2`), and when
+  no item is found the card's stored Lexbase text is used, not the CanLII page.
 
 ## 4. Ideas (evergreen explainers)
 
