@@ -236,6 +236,7 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
 - **Story look (Hamed, Oct 21 2026):** a letter shows only its printed part — the white page margins
   are trimmed (`trimMargins`); a line with no information is left out (never «…»); the title comes from
   the first name («زینت» → «سرکار خانم», «علی» → «جناب آقای»), and is left off when the name could be either.
+- No stickers or GIFs (Congrats…) are drawn into the story: the team adds those inside Instagram / TikTok (Hamed, Oct 21 2026).
 - The waiting time is written as the team writes it («۷ ماه و ۱۶ روز»); counted from the dates only if not given.
 - **Only two dates are marked** (Hamed, Oct 21 2026): the submission date and the answer date. In a
   timeline, the "Date sent" of the «Submission Confirmation» row and of the approval / decision row

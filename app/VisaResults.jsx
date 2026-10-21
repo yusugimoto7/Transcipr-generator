@@ -122,7 +122,7 @@ function defaultGroups(scans) {
 }
 
 function newCase(open) {
-  return { open, opts: { mark: "marker", background: "light", congrats: true, watermark: true }, checked: false, stories: null, calendar: "", busy: false, progress: "", error: "" };
+  return { open, opts: { mark: "marker", background: "light", watermark: true }, checked: false, stories: null, calendar: "", busy: false, progress: "", error: "" };
 }
 
 function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
@@ -511,7 +511,6 @@ export default function VisaResults({ C }) {
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12.5, marginBottom: 10 }}>
-                          <label><input type="checkbox" checked={cs.opts.congrats} onChange={(e) => setCase(c, (x) => ({ opts: { ...x.opts, congrats: e.target.checked } }))} /> برچسب Congrats</label>
                           <label><input type="checkbox" checked={cs.opts.watermark} onChange={(e) => setCase(c, (x) => ({ opts: { ...x.opts, watermark: e.target.checked } }))} /> لوگوی بزرگ روی عکس‌ها</label>
                         </div>
                         <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.8, background: "rgba(18,148,94,0.07)", border: "1px solid rgba(18,148,94,0.3)", borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
