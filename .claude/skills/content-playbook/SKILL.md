@@ -233,6 +233,9 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
 - **One client by default:** the pictures of one upload are nearly always one client's. They open under
   one heading «خبر ویزا · <title and first name>», with the story tools inside; up to two pictures make
   one story. Another client is added by hand («مشتری دیگر»), or by the notes naming several clients.
+- **Story look (Hamed, Oct 21 2026):** a letter shows only its printed part — the white page margins
+  are trimmed (`trimMargins`); a line with no information is left out (never «…»); the title comes from
+  the first name («زینت» → «سرکار خانم», «علی» → «جناب آقای»), and is left off when the name could be either.
 - The waiting time is written as the team writes it («۷ ماه و ۱۶ روز»); counted from the dates only if not given.
 - **Only two dates are marked** (Hamed, Oct 21 2026): the submission date and the answer date. In a
   timeline, the "Date sent" of the «Submission Confirmation» row and of the approval / decision row

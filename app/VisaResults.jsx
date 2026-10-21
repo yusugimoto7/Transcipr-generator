@@ -82,14 +82,18 @@ function draftText(fields, noted) {
   // The team's own wording of the wait wins («۷ ماه و ۱۶ روز»); otherwise it is counted from the dates.
   const counted = a && b && b >= a ? Math.round((b - a) / 86400000) + " روز" : "";
   const waitText = String(n.wait || n.wait_days || "").trim() || counted;
+  // A line the team or the pictures cannot fill is left out (Hamed, Oct 2026), not shown as «…».
+  const name = n.first_name_fa || f.first_name_fa || f.first_name || "";
+  const title = n.title || f.title_fa || "";
+  const line = (label, v) => (v ? [`⬅️ ${label}: ${v}`] : []);
   return [
-    `${n.title || "سرکار خانم / جناب آقای"} ${n.first_name_fa || f.first_name_fa || f.first_name || "…"}`,
-    `⬅️ نوع ویزا: ${n.visa_type_fa || f.visa_type_fa || f.visa_type || "…"}`,
-    `⬅️ اقدام از: ${n.applied_from || "…"}`,
-    `⬅️ سن: ${n.age || "…"}`,
-    `⬅️ تاریخ سابمیت ویزا: ${sub || "…"}`,
-    `⬅️ مدت زمان انتظار ویزا: ${waitText || "…"}`,
-    `⬅️ تاریخ اپرووال ویزا: ${app || "…"}`,
+    ...(title || name ? [[title, name].filter(Boolean).join(" ")] : []),
+    ...line("نوع ویزا", n.visa_type_fa || f.visa_type_fa || f.visa_type),
+    ...line("اقدام از", n.applied_from),
+    ...line("سن", n.age),
+    ...line("تاریخ سابمیت ویزا", sub),
+    ...line("مدت زمان انتظار ویزا", waitText),
+    ...line("تاریخ اپرووال ویزا", app),
     ...(n.extra ? [`✅ ${String(n.extra).replace(/^✅\s*/, "")}`] : []),
   ].join("\n");
 }
@@ -241,12 +245,11 @@ export default function VisaResults({ C }) {
   const storiesOf = (c) => [...new Set(picsOf(c).map((i) => groups[i]))].sort((a, b) => a - b);
   const caseTitle = (c) => {
     const first = (texts[storiesOf(c)[0]] || "").split("\n")[0].trim();
-    return first && !/^سرکار خانم \/ جناب آقای\s*…?$/.test(first) ? first : `مشتری ${c + 1}`;
+    return first && !/^⬅️/.test(first) ? first : `مشتری ${c + 1}`;
   };
 
   const draw = async (c) => {
     const nums = storiesOf(c);
-    if (nums.some((n) => /…/.test(texts[n] || "")) && !window.confirm("بعضی خط‌ها هنوز «…» دارن (مثلاً سن). همین‌طور ساخته بشه؟")) return;
     const cs = cases[c];
     setCase(c, { busy: true, error: "", progress: "" });
     try {
