@@ -2023,7 +2023,6 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
                   setDragOver(false);
                   addFiles(e.dataTransfer.files);
                 }}
-                onPaste={(e) => addFiles(e.clipboardData && e.clipboardData.files)}
                 onClick={() => fileRef.current && fileRef.current.click()}
                 role="button"
                 tabIndex={0}
@@ -2051,7 +2050,7 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
                     )}
                   </div>
                 ) : (
-                  <>🖼 عکس‌ها را اینجا بکشید و رها کنید، یا بزنید تا انتخاب کنید</>
+                  <>🖼 عکس‌ها را اینجا بکشید و رها کنید، بزنید تا انتخاب کنید، یا Ctrl+V</>
                 )}
                 <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
               </div>

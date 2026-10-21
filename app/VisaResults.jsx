@@ -319,7 +319,7 @@ export default function VisaResults({ C }) {
             </div>
           ) : (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <ImagePlus size={16} aria-hidden /> عکس‌ها رو اینجا بکش یا بزن تا انتخاب کنی (حداکثر ۱۰)
+              <ImagePlus size={16} aria-hidden /> عکس‌ها رو اینجا بکش، بزن تا انتخاب کنی، یا Ctrl+V (حداکثر ۱۰)
             </span>
           )}
           <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
