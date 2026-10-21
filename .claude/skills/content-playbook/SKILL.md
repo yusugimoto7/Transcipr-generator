@@ -188,6 +188,8 @@ Full detail in `instagram-story`. Essentials:
   every later prompt of that kind. When working on a part, copy its active rules into this file or the
   feature skill, with the date, so the written record keeps up with what the app already follows.
 
+**Dates and tense (Oct 21 2026).** A source is often written before the change it reports ("from January 2025 the rules will change"). Every writing prompt (carousel, Telegram, story, script, article, story-page and picture-text rewrites) now carries today's date and the rule to set the tense from it (`lib/today.js`, through `lessonsBlock`). The learned rule had been filed under pictures only, because the note came from a picture's ✏️, so it never reached the text prompts: the learn job now also picks every kind of content a rule applies to (`scopes`), and old picture rules also reach the slide text.
+
 - Treat every screenshot or complaint from the team as a rule: write it here with the date and the
   team's words, and change the prompt or code in the same commit.
 - Before changing a prompt, check the result on a real topic (one that triggered the feedback).
