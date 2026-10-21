@@ -1,5 +1,6 @@
 import "./globals.css";
 import VoiceDictation from "./VoiceDictation";
+import CopyCorners from "./CopyCorners";
 
 export const metadata = {
   title: "Sugimoto · Topic Engine",
@@ -21,6 +22,7 @@ export default function RootLayout({ children }) {
       <body>
         {children}
         <VoiceDictation />
+        <CopyCorners />
       </body>
     </html>
   );
