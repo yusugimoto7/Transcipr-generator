@@ -7,6 +7,7 @@ import CalendarStrip from "./CalendarStrip";
 import CalendarButtons from "./CalendarButtons";
 import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
+import { TEMPLATES } from "../lib/carousel-templates";
 import { Check, Clapperboard, FileText, GalleryHorizontal, Lightbulb, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
@@ -3058,6 +3059,12 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   const [revNotes, setRevNotes] = useState("");
   const [learnRev, setLearnRev] = useState(false);
   const [editing, setEditing] = useState(0); // slide number whose edit sheet is open
+  const [template, setTemplate] = useState((carousel && carousel.template) || 1);
+  const [textOpen, setTextOpen] = useState(false); // the slide-text editor over a drawn carousel
+  const [draft, setDraft] = useState([]); // [{ title, body }] being edited
+  const [capOpen, setCapOpen] = useState(false);
+  const [capText, setCapText] = useState("");
+  const [draftCaption, setDraftCaption] = useState("");
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
@@ -3069,11 +3076,32 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   const font = "'Geist', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
 
-  const start = () => {
+  const isDraft = !!(carousel && carousel.draft) && !slides.some((x) => x.image_url);
+  const mode = (job && job.extra && job.extra.mode) || "";
+  // The editor follows the saved text whenever a new version arrives, never while it is typed in.
+  const version = slides.map((x) => x.content).join("\u0001") + "|" + ((carousel && carousel.template) || 1) + "|" + ((carousel && carousel.caption) || "");
+  useEffect(() => {
+    setDraft(slides.map((x) => splitSlide(x.content)));
+    setDraftCaption((carousel && carousel.caption) || "");
+    if (carousel && carousel.template) setTemplate(carousel.template);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
+  const start = (textOnly) => {
     if (slides.length && !window.confirm("A new carousel replaces the current one. Continue?")) return;
     setForm(false);
-    onJob("carousel", { count, notes: notes.trim() });
+    onJob("carousel", { count, notes: notes.trim(), template, ...(textOnly ? { mode: "text" } : {}) });
   };
+  const editedSlides = () => draft.map((d) => ({ title: d.title, body: d.body })).filter((d) => d.title.trim() || d.body.trim());
+  const saveText = () => onJob("carousel", { mode: "save", slides: editedSlides(), caption: draftCaption, template });
+  const drawText = () => {
+    setTextOpen(false);
+    onJob("carousel", { mode: "draw", slides: editedSlides(), caption: draftCaption, template });
+  };
+  const saveCaption = () => {
+    setCapOpen(false);
+    onJob("carousel", { mode: "save", slides: slides.map((x) => ({ content: x.content })), caption: capText, template: (carousel && carousel.template) || 1 });
+  };
+  const changed = draft.some((d, i) => !slides[i] || [d.title.trim(), d.body.trim()].filter(Boolean).join("\n") !== slides[i].content) || draft.length !== slides.length || template !== ((carousel && carousel.template) || 1) || draftCaption !== ((carousel && carousel.caption) || "");
   const btn = (bg, color, border) => ({
     background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5,
     cursor: "pointer", fontFamily: font,
@@ -3103,10 +3131,15 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
             style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
           />
           <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px" }}>
-            متن اسلایدها فقط از متن خبر نوشته می‌شه و هر اسلاید با GPT Image 2 طراحی می‌شه (حدود ۵ سنت برای هر اسلاید، چند دقیقه طول می‌کشه).
+            متن اسلایدها فقط از متن خبر نوشته می‌شه و هر اسلاید با GPT Image 2 طراحی می‌شه (حدود ۵ سنت برای هر اسلاید، چند دقیقه طول می‌کشه). «نوشتن متن» اول فقط متن رو می‌نویسه تا تیتر و بدنهٔ هر اسلاید رو عوض کنی، بعد طراحی می‌شه.
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="ui-btn ui-glow-orange" onClick={start} disabled={!caps.carousel} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, opacity: caps.carousel ? 1 : 0.5 }}>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تمپلت اسلایدها</div>
+          <TemplatePicker value={template} onChange={setTemplate} font={fa} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="ui-btn" onClick={() => start(true)} disabled={!caps.carousel} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
+              ✍️ نوشتن متن {count} اسلاید
+            </button>
+            <button className="ui-btn ui-glow-orange" onClick={() => start(false)} disabled={!caps.carousel} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
               ساخت {count} اسلاید
             </button>
             <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
@@ -3119,7 +3152,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
       {running && (
         <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha("#6d5bd0", 0.08), border: `1px solid ${alpha("#6d5bd0", 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span>{" "}
-          {stage === "writing"
+          {mode === "save"
+            ? "در حال ذخیره…"
+            : stage === "writing"
             ? "در حال نوشتن متن اسلایدها…"
             : slides.length
               ? `در حال طراحی اسلایدها… ${drawn} از ${slides.length}`
@@ -3131,7 +3166,25 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
         <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>
       )}
 
-      {slides.length > 0 && (
+      {slides.length > 0 && !running && (isDraft || textOpen) && (
+        <SlideTextEditor
+          draft={draft}
+          setDraft={setDraft}
+          template={template}
+          setTemplate={setTemplate}
+          caption={draftCaption}
+          setCaption={setDraftCaption}
+          drawnBefore={!isDraft}
+          changed={changed}
+          onSave={saveText}
+          onDraw={drawText}
+          onClose={isDraft ? null : () => setTextOpen(false)}
+          btn={btn}
+          fa={fa}
+        />
+      )}
+
+      {slides.length > 0 && !(isDraft && !running) && !textOpen && (
         <div>
           <div dir="rtl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
             <b style={{ fontSize: 14.5 }}>🖼 کاروسل · {slides.length} اسلاید</b>
@@ -3142,6 +3195,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                     ⬇ دانلود همه ({drawn})
                   </button>
                 )}
+                <button className="ui-btn" onClick={() => setTextOpen(true)} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 9, padding: "5px 10px", color: "#6d5bd0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
+                  ✍️ متن اسلایدها
+                </button>
                 <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
                   ↻ از نو (بدون نسخه قبلی)
                 </button>
@@ -3242,6 +3298,12 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
             <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>CAPTION</span>
+                <span style={{ display: "inline-flex", gap: 6 }}>
+                {!running && !capOpen && (
+                  <button className="ui-btn" onClick={() => { setCapText(carousel.caption); setCapOpen(true); }} title="Edit the caption" aria-label="Edit the caption" style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", fontSize: 11.5, color: "#6d5bd0" }}>
+                    ✏️
+                  </button>
+                )}
                 <button
                   className="ui-btn"
                   onClick={() => {
@@ -3253,8 +3315,20 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                 >
                   {copiedCap ? "Copied ✓" : "Copy"}
                 </button>
+                </span>
               </div>
-              <div dir="rtl" style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 180, overflowY: "auto" }}>{carousel.caption}</div>
+              {capOpen ? (
+                <div dir="rtl">
+                  <textarea value={capText} onChange={(e) => setCapText(e.target.value)} rows={8} style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, resize: "vertical" }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <button className="ui-btn" onClick={saveCaption} disabled={!capText.trim()} style={{ ...btn("#6d5bd0", "#fff", "none"), padding: "7px 14px", opacity: capText.trim() ? 1 : 0.5 }}>ذخیره کپشن</button>
+                    <button className="ui-btn" onClick={() => setCapOpen(false)} style={{ ...btn("transparent", C.text2, `1px solid ${C.line}`), padding: "7px 14px" }}>انصراف</button>
+                    <span style={{ fontSize: 11.5, color: C.text3, fontFamily: fa }}>حداکثر ۳ هشتگ نگه داشته می‌شه.</span>
+                  </div>
+                </div>
+              ) : (
+                <div dir="rtl" style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 180, overflowY: "auto" }}>{carousel.caption}</div>
+              )}
             </div>
           )}
 
@@ -3264,6 +3338,76 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
         </div>
       )}
     </Section>
+  );
+}
+
+// A slide's text as the editor sees it: the first line is the heading, the rest the body.
+function splitSlide(content) {
+  const lines = String(content || "").split("\n");
+  return { title: (lines[0] || "").trim(), body: lines.slice(1).join("\n").trim() };
+}
+
+function TemplatePicker({ value, onChange, font }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(118px, 1fr))", gap: 8, marginBottom: 12 }}>
+      {TEMPLATES.map((t) => {
+        const on = Number(value) === t.id;
+        return (
+          <button key={t.id} type="button" className="ui-btn" onClick={() => onChange(t.id)} aria-pressed={on} style={{ textAlign: "right", padding: 8, borderRadius: 12, cursor: "pointer", border: `${on ? 2 : 1}px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.08) : C.surface, fontFamily: font }}>
+            <div style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", border: `1px solid ${C.line}`, marginBottom: 6 }}>
+              {t.swatch.map((c, i) => (
+                <span key={i} style={{ flex: i === 0 ? 2 : 1, background: c }} />
+              ))}
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: on ? "#6d5bd0" : C.text }}>{t.id}. {t.fa}</div>
+            <div style={{ fontSize: 10.5, color: C.text3, direction: "ltr", textAlign: "right" }}>{t.name}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// The slides' words before (or instead of) drawing them again: a heading and a body per slide,
+// the caption, and the template. Drawing again keeps the picture of every slide whose words and
+// template did not change.
+function SlideTextEditor({ draft, setDraft, template, setTemplate, caption, setCaption, drawnBefore, changed, onSave, onDraw, onClose, btn, fa }) {
+  const set = (i, k, v) => setDraft(draft.map((d, j) => (j === i ? { ...d, [k]: v } : d)));
+  const field = { width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${C.line}`, padding: 9, fontFamily: fa, fontSize: 13, lineHeight: 1.7, background: C.surface, color: C.text };
+  const any = draft.some((d) => d.title.trim() || d.body.trim());
+  return (
+    <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa, marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+        <b style={{ fontSize: 14.5 }}>✍️ متن اسلایدها · {draft.length} اسلاید</b>
+        {onClose && (
+          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
+            بستن
+          </button>
+        )}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10 }}>تیتر و بدنهٔ هر اسلاید رو عوض کن؛ بعد «طراحی» بزن. {drawnBefore ? "فقط اسلایدهایی که متنشون عوض شده دوباره طراحی می‌شن (با تمپلت جدید، همه)." : ""}</div>
+      {draft.map((d, i) => (
+        <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, marginBottom: 8, background: C.surfaceHi }}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: "#6d5bd0", marginBottom: 6 }}>اسلاید {i + 1}{i === 0 ? " (کاور)" : i === draft.length - 1 ? " (آخر)" : ""}</div>
+          <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>تیتر</div>
+          <input value={d.title} onChange={(e) => set(i, "title", e.target.value)} style={{ ...field, fontWeight: 700, marginBottom: 6 }} />
+          <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>بدنه</div>
+          <textarea value={d.body} onChange={(e) => set(i, "body", e.target.value)} rows={Math.min(8, Math.max(3, d.body.split("\n").length + 1))} style={{ ...field, resize: "vertical" }} />
+        </div>
+      ))}
+      <div style={{ fontSize: 12.5, color: C.text2, margin: "10px 0 4px" }}>کپشن (حداکثر ۳ هشتگ)</div>
+      <textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={6} style={{ ...field, resize: "vertical", marginBottom: 12 }} />
+      <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تمپلت اسلایدها</div>
+      <TemplatePicker value={template} onChange={setTemplate} font={fa} />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="ui-btn ui-glow-orange" onClick={onDraw} disabled={!any || (drawnBefore && !changed)} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, minWidth: 150, opacity: any && (!drawnBefore || changed) ? 1 : 0.5 }}>
+          🎨 طراحی اسلایدها
+        </button>
+        <button className="ui-btn" onClick={onSave} disabled={!any || !changed} style={{ ...btn("transparent", C.text, `1px solid ${C.line}`), opacity: any && changed ? 1 : 0.5 }}>
+          💾 ذخیره متن
+        </button>
+      </div>
+    </div>
   );
 }
 
