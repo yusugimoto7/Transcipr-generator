@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { api, s, Shell, when } from "../ui";
 import { SECTIONS } from "../../../lib/editing/access";
 
-const SHORT = { topics: "Topic Engine", calendar: "Content calendar", editing: "Video Editing", publishing: "Publishing" };
-const HINT = { topics: "topics, scripts, carousels, stories, articles", calendar: "plan and schedule posts (you approve)", editing: "their own video projects", publishing: "send to Telegram and WordPress from the Topic Engine" };
+const SHORT = { topics: "Topic Engine", calendar: "Content calendar", editing: "Video Editing", publishing: "Publishing", learn: "Teach the app" };
+const HINT = { topics: "topics, scripts, carousels, stories, articles", calendar: "plan and schedule posts (you approve)", editing: "their own video projects", publishing: "send to Telegram and WordPress from the Topic Engine", learn: "\"learn from this note\" under edit notes" };
 
 function Team({ user }) {
   const [users, setUsers] = useState(null);
-  const blank = { name: "", email: "", temp_password: "", may_approve_own: false, access: { topics: true, calendar: true, editing: true, publishing: false } };
+  const blank = { name: "", email: "", temp_password: "", may_approve_own: false, access: { topics: true, calendar: true, editing: true, publishing: false, learn: false } };
   const [f, setF] = useState(blank);
   const [msg, setMsg] = useState({ error: "", ok: "" });
   const [reset, setReset] = useState({});

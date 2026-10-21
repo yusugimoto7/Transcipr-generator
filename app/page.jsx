@@ -299,7 +299,7 @@ export default function App() {
       .then((r) => r.json())
       .then((d) => {
         setMe(d && d.enabled ? d.user : null);
-        setAdminFlag(!!(d && d.enabled && d.user && d.user.role === "admin"));
+        setTeachFlag(!!(d && d.enabled && d.user && (d.user.role === "admin" || (d.user.ax || []).includes("learn"))));
       })
       .catch(() => {});
   }, []);
@@ -3737,21 +3737,21 @@ function Sheet({ children, onClose }) {
   );
 }
 
-// ---- Teaching the app (admin only) ---------------------------------------------------------
-// Hamed's "learn from this note": the note goes to a server job that decides whether it holds a
+// ---- Teaching the app (Hamed, and whoever he ticks "Teach the app" for) --------------------
+// "Learn from this note": the note goes to a server job that decides whether it holds a
 // rule for future content of that kind (lib/learning.js). The click never waits for it; the
 // outcome appears as a notice at the bottom of the page.
-const adminFlag = { on: false, subs: new Set() };
-function setAdminFlag(on) {
-  adminFlag.on = !!on;
-  for (const f of adminFlag.subs) f(adminFlag.on);
+const teachFlag = { on: false, subs: new Set() };
+function setTeachFlag(on) {
+  teachFlag.on = !!on;
+  for (const f of teachFlag.subs) f(teachFlag.on);
 }
-function useIsAdmin() {
-  const [on, setOn] = useState(adminFlag.on);
+function useCanTeach() {
+  const [on, setOn] = useState(teachFlag.on);
   useEffect(() => {
-    adminFlag.subs.add(setOn);
-    setOn(adminFlag.on);
-    return () => adminFlag.subs.delete(setOn);
+    teachFlag.subs.add(setOn);
+    setOn(teachFlag.on);
+    return () => teachFlag.subs.delete(setOn);
   }, []);
   return on;
 }
@@ -3778,7 +3778,7 @@ function teach({ topic, scope, note, context = "" }) {
   })();
 }
 function LearnToggle({ on, setOn }) {
-  if (!useIsAdmin()) return null;
+  if (!useCanTeach()) return null;
   return (
     <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, fontSize: 12.5, color: C.text2, lineHeight: 1.7, cursor: "pointer" }}>
       <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} style={{ marginTop: 4 }} />

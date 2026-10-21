@@ -27,7 +27,7 @@ export async function POST(request) {
     // Teaching the app a rule changes what everyone's content is made with: the admin's alone.
     if (kind === "learn") {
       const user = await currentUser(request).catch(() => null);
-      if (!user || user.role !== "admin") return Response.json({ error: "only Hamed can teach the app a rule" }, { status: 403 });
+      if (!user || !accessOf(user).includes("learn")) return Response.json({ error: "teaching the app a rule needs \"Teach the app\" on the Team page" }, { status: 403 });
       body.by = user.id;
     }
     const needsArticle = kind === "publish" || kind === "docfile";
