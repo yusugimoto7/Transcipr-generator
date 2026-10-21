@@ -297,7 +297,10 @@ export default function App() {
   useEffect(() => {
     fetch("/api/editing/me", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => setMe(d && d.enabled ? d.user : null))
+      .then((d) => {
+        setMe(d && d.enabled ? d.user : null);
+        setAdminFlag(!!(d && d.enabled && d.user && d.user.role === "admin"));
+      })
       .catch(() => {});
   }, []);
   const ax = (me && me.ax) || [];
@@ -1001,6 +1004,7 @@ export default function App() {
 
   return (
     <div style={wrap}>
+      <LearnNotice />
       {/* Signed in: the same dark bar as the calendar and Video Editing, so the app reads as one.
           Without accounts the Topic Engine keeps its own frosted header. */}
       {me ? (
@@ -2924,6 +2928,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   const [copiedCap, setCopiedCap] = useState(false);
   const [preview, setPreview] = useState(0); // slide number shown large, 0 = closed
   const [revNotes, setRevNotes] = useState("");
+  const [learnRev, setLearnRev] = useState(false);
   const [editing, setEditing] = useState(0); // slide number whose edit sheet is open
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
@@ -3070,13 +3075,17 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                 <button
                   className="ui-btn ui-glow-orange"
                   disabled={!revNotes.trim()}
-                  onClick={() => onJob("carousel", { count: slides.length, notes: revNotes.trim(), revise: true })}
+                  onClick={() => {
+                    onJob("carousel", { count: slides.length, notes: revNotes.trim(), revise: true });
+                    if (learnRev) teach({ topic, scope: "carousel", note: revNotes.trim(), context: slides.map((x) => x.content).join("\n---\n") });
+                  }}
                   style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
                 >
                   ↻ ساخت دوباره با این یادداشت
                 </button>
                 <span style={{ fontSize: 11.5, color: C.text3 }}>نسخه فعلی پایه کار می‌مونه؛ فقط چیزهایی که نوشتی عوض می‌شه.</span>
               </div>
+              <LearnToggle on={learnRev} setOn={setLearnRev} />
             </div>
           )}
           {preview > 0 && <SlidePreview slides={slides.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
@@ -3088,8 +3097,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
               ratio="4 / 5"
               tone="#6d5bd0"
               onClose={() => setEditing(0)}
-              onSubmit={(edit) => {
+              onSubmit={(edit, learn) => {
                 onJob("carousel_slide", { num: editing, edit });
+                if (learn) teach({ topic, scope: "design", note: edit, context: (slides.find((x) => x.num === editing) || {}).content || "" });
                 setEditing(0);
               }}
             />
@@ -3193,6 +3203,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const [bg, setBg] = useState("purple");
   const [notes, setNotes] = useState("");
   const [revNotes, setRevNotes] = useState("");
+  const [learnRev, setLearnRev] = useState(false);
   const [copiedCap, setCopiedCap] = useState(false);
   const [preview, setPreview] = useState(0);
   const [editing, setEditing] = useState(0); // page number whose edit sheet is open
@@ -3337,11 +3348,15 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               <button
                 className="ui-btn ui-glow-orange"
                 disabled={!revNotes.trim()}
-                onClick={() => onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "purple" })}
+                onClick={() => {
+                  onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "purple" });
+                  if (learnRev) teach({ topic, scope: "story", note: revNotes.trim(), context: pages.map((x) => `${x.headline || ""}\n${x.body || ""}`).join("\n---\n") });
+                }}
                 style={{ ...btn(STORY_TONE, "#fff", "none"), width: "100%", marginTop: 8, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
               >
                 ↻ ساخت دوباره با این یادداشت
               </button>
+              <LearnToggle on={learnRev} setOn={setLearnRev} />
             </div>
           )}
           {preview > 0 && <SlidePreview slides={pages.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
@@ -3350,8 +3365,9 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               page={pages.find((x) => x.num === editing)}
               total={pages.length}
               onClose={() => setEditing(0)}
-              onSubmit={(edit) => {
+              onSubmit={(edit, learn) => {
                 onJob("story_page", { num: editing, ...edit });
+                if (learn && edit.instruction) teach({ topic, scope: "story", note: edit.instruction, context: `${edit.headline}\n${edit.body}` });
                 setEditing(0);
               }}
             />
@@ -3396,6 +3412,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
   const [dirty, setDirty] = useState(false);
   const [link, setLink] = useState((post && post.link) || null);
   const [notes, setNotes] = useState("");
+  const [learnRev, setLearnRev] = useState(false);
   const [editPic, setEditPic] = useState(false);
   const [preview, setPreview] = useState(false);
   const running = !!job && job.status === "running";
@@ -3432,6 +3449,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
     if (dirty && !window.confirm("Your edits will be replaced by the rewrite. Continue?")) return;
     setDirty(false);
     onJob("telegram_write", { notes: notes.trim(), revise: !!(post && post.text) });
+    if (learnRev) teach({ topic, scope: "telegram", note: notes.trim(), context: text });
     setNotes("");
   };
   const fullLen = text.length + (link ? (link.title || "").length + 6 : 0);
@@ -3543,6 +3561,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
             <button className="ui-btn" disabled={running || !notes.trim()} onClick={rewrite} style={{ ...btn(alpha(TG_TONE, 0.1), C.text, `1px solid ${alpha(TG_TONE, 0.4)}`), width: "100%", marginTop: 8, opacity: running || !notes.trim() ? 0.5 : 1 }}>
               ↻ بازنویسی پست
             </button>
+            <LearnToggle on={learnRev} setOn={setLearnRev} />
           </div>
         </div>
       )}
@@ -3555,8 +3574,9 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
           ratio="4 / 5"
           tone={TG_TONE}
           onClose={() => setEditPic(false)}
-          onSubmit={(edit) => {
+          onSubmit={(edit, learn) => {
             onJob("telegram_image", { text, edit });
+            if (learn) teach({ topic, scope: "design", note: edit, context: text });
             setEditPic(false);
           }}
         />
@@ -3589,8 +3609,85 @@ function Sheet({ children, onClose }) {
   );
 }
 
+// ---- Teaching the app (admin only) ---------------------------------------------------------
+// Hamed's "learn from this note": the note goes to a server job that decides whether it holds a
+// rule for future content of that kind (lib/learning.js). The click never waits for it; the
+// outcome appears as a notice at the bottom of the page.
+const adminFlag = { on: false, subs: new Set() };
+function setAdminFlag(on) {
+  adminFlag.on = !!on;
+  for (const f of adminFlag.subs) f(adminFlag.on);
+}
+function useIsAdmin() {
+  const [on, setOn] = useState(adminFlag.on);
+  useEffect(() => {
+    adminFlag.subs.add(setOn);
+    setOn(adminFlag.on);
+    return () => adminFlag.subs.delete(setOn);
+  }, []);
+  return on;
+}
+function teach({ topic, scope, note, context = "" }) {
+  const say = (detail) => window.dispatchEvent(new CustomEvent("sv-learn", { detail }));
+  say({ state: "working" });
+  (async () => {
+    try {
+      const r = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "learn", topic, scope, note, context }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.job) throw new Error(d.error || "could not start");
+      for (let i = 0; i < 60; i++) {
+        await new Promise((ok) => setTimeout(ok, 2500));
+        const q = await fetch(`/api/jobs?ids=${d.job.id}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
+        const j = q && q.jobs && q.jobs[0];
+        if (!j) continue;
+        if (j.status === "done") return say({ state: "done", ...(j.result || {}) });
+        if (j.status === "error") throw new Error(j.error || "failed");
+      }
+      throw new Error("no answer yet; it may still finish");
+    } catch (e) {
+      say({ state: "error", error: String(e.message || e) });
+    }
+  })();
+}
+function LearnToggle({ on, setOn }) {
+  if (!useIsAdmin()) return null;
+  return (
+    <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, fontSize: 12.5, color: C.text2, lineHeight: 1.7, cursor: "pointer" }}>
+      <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} style={{ marginTop: 4 }} />
+      <span>
+        <b style={{ color: C.text }}>🧠 از این یادداشت یاد بگیر</b> — اگر قانونی کلی در آن باشد، برای محتواهای بعدی از همین نوع ذخیره می‌شود (فقط برای تو).
+      </span>
+    </label>
+  );
+}
+function LearnNotice() {
+  const [n, setN] = useState(null);
+  useEffect(() => {
+    const on = (e) => setN(e.detail);
+    window.addEventListener("sv-learn", on);
+    return () => window.removeEventListener("sv-learn", on);
+  }, []);
+  useEffect(() => {
+    if (!n || n.state === "working") return;
+    const t = setTimeout(() => setN(null), 12000);
+    return () => clearTimeout(t);
+  }, [n]);
+  if (!n) return null;
+  const text =
+    n.state === "working" ? "🧠 دارم یادداشت رو بررسی می‌کنم…"
+    : n.state === "error" ? `🧠 یاد گرفتن انجام نشد: ${n.error}`
+    : n.learned ? `🧠 یاد گرفتم: ${(n.lesson && (n.lesson.rule_fa || n.lesson.rule_en)) || ""}`
+    : `🧠 قانون تازه‌ای ثبت نشد: ${n.why || ""}`;
+  return (
+    <div dir="rtl" role="status" onClick={() => setN(null)} style={{ position: "fixed", left: 16, right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 90, maxWidth: 560, margin: "0 auto", background: "#1f2a30", color: "#fff", borderRadius: 14, padding: "12px 14px", fontSize: 13, lineHeight: 1.8, fontFamily: "'Vazirmatn', sans-serif", boxShadow: "0 10px 30px rgba(0,0,0,.25)", cursor: "pointer" }}>
+      {text}
+    </div>
+  );
+}
+
 function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.orange, onClose, onSubmit }) {
   const [ask, setAsk] = useState("");
+  const [learn, setLearn] = useState(false);
   const fa = "'Vazirmatn', sans-serif";
   const edits = (item && item.edits) || [];
   return (
@@ -3619,6 +3716,7 @@ function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.or
             )}
           </div>
         </div>
+        <LearnToggle on={learn} setOn={setLearn} />
         {text && (
           <details style={{ marginTop: 10, fontSize: 12, color: C.text2 }}>
             <summary style={{ cursor: "pointer" }}>متن روی تصویر</summary>
@@ -3626,7 +3724,7 @@ function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.or
           </details>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button className="ui-btn ui-glow-orange" disabled={!ask.trim()} onClick={() => onSubmit(ask.trim())} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ask.trim() ? "pointer" : "default", opacity: ask.trim() ? 1 : 0.5, fontFamily: fa }}>
+          <button className="ui-btn ui-glow-orange" disabled={!ask.trim()} onClick={() => onSubmit(ask.trim(), learn)} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ask.trim() ? "pointer" : "default", opacity: ask.trim() ? 1 : 0.5, fontFamily: fa }}>
             اعمال تغییر روی همین تصویر
           </button>
           <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>انصراف</button>
@@ -3645,6 +3743,7 @@ function StoryPageSheet({ page, total, onClose, onSubmit }) {
   const [headline, setHeadline] = useState(page.headline || "");
   const [body, setBody] = useState(page.body || "");
   const [ask, setAsk] = useState("");
+  const [learn, setLearn] = useState(false);
   const fa = "'Vazirmatn', sans-serif";
   const typed = headline.trim() !== (page.headline || "").trim() || body.trim() !== (page.body || "").trim();
   const ready = !!headline.trim() && (typed || !!ask.trim());
@@ -3673,12 +3772,13 @@ function StoryPageSheet({ page, total, onClose, onSubmit }) {
           یا بنویس چه چیزی عوض بشه (از روی متن منبع بازنویسی می‌شه)
           <textarea value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder="مثلاً: عدد اصلی رو بیار توی تیتر، متن کوتاه‌تر…" style={{ ...field, marginTop: 4 }} />
         </label>
+        {ask.trim() && <LearnToggle on={learn} setOn={setLearn} />}
         <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>اسکرین‌شات همون عکس واقعی منبع می‌مونه و جمله هایلایت‌شده عوض نمی‌شه؛ فقط متن همین صفحه تغییر می‌کنه و همین صفحه دوباره ساخته می‌شه.</div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button
             className="ui-btn ui-glow-orange"
             disabled={!ready}
-            onClick={() => onSubmit({ headline: headline.trim(), body: body.trim(), ...(ask.trim() ? { instruction: ask.trim() } : {}) })}
+            onClick={() => onSubmit({ headline: headline.trim(), body: body.trim(), ...(ask.trim() ? { instruction: ask.trim() } : {}) }, learn && !!ask.trim())}
             style={{ flex: 1, background: STORY_TONE, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5, fontFamily: fa }}
           >
             اعمال روی همین صفحه

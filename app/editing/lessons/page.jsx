@@ -112,6 +112,54 @@ function Lesson({ l, reload }) {
   );
 }
 
+// Rules taught to the Topic Engine's prompts from Hamed's notes ("learn from this note").
+function ContentRules() {
+  const [d, setD] = useState(null);
+  const [error, setError] = useState("");
+  const load = useCallback(() => api("/content-lessons").then(setD).catch((e) => setError(e.message)), []);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const toggle = async (l) => {
+    try {
+      await api("/content-lessons", { method: "POST", body: { id: l.id, active: l.active === false } });
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  return (
+    <>
+      <h2 className={s.h2} style={{ marginTop: 28 }}>Content rules</h2>
+      <p className={s.rule}>
+        Learned from your notes in the Topic Engine (ticked “از این یادداشت یاد بگیر”). Each rule goes into every later prompt of that kind of content. Switch one off and it stops being used. The matching skill file ({`.claude/skills/…`}) is updated from this list by the next development session.
+      </p>
+      {error && <div className={s.error}>{error}</div>}
+      {!d && !error && <p className={s.muted}>Loading…</p>}
+      {d && d.lessons.length === 0 && <p className={s.muted}>No rules yet.</p>}
+      {d &&
+        d.lessons.map((l) => (
+          <div key={l.id} className={s.card} style={{ opacity: l.active === false ? 0.55 : 1 }}>
+            <div className={s.row}>
+              <b className={s.grow}>{(d.scopes[l.scope] || {}).name || l.scope}</b>
+              <span className={s.muted}>{when(l.at)}</span>
+              <button className={s.linkBtn} onClick={() => toggle(l)}>
+                {l.active === false ? "Use again" : "Switch off"}
+              </button>
+            </div>
+            <div dir="rtl">
+              <Mixed text={l.rule_fa || l.rule_en} />
+            </div>
+            <div className={s.muted}>{l.rule_en}</div>
+            <div className={s.muted} dir="auto">
+              From the note: “{l.note}”{l.topic ? ` · ${l.topic}` : ""}
+            </div>
+          </div>
+        ))}
+    </>
+  );
+}
+
 function Lessons({ user }) {
   const [d, setD] = useState(null);
   const [error, setError] = useState("");
@@ -157,6 +205,7 @@ function Lessons({ user }) {
       {shown.map((l) => (
         <Lesson key={l.id} l={l} reload={load} />
       ))}
+      <ContentRules />
     </>
   );
 }

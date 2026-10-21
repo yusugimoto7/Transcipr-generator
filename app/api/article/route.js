@@ -1,4 +1,5 @@
 import { callClaude } from "../../../lib/anthropic";
+import { lessonsBlock } from "../../../lib/learning";
 import { openaiEnabled, openaiArticle } from "../../../lib/openai";
 import { getArticleLinks } from "../../../lib/wordpress";
 import { sourceTextFor } from "../../../lib/grounding";
@@ -36,7 +37,7 @@ export async function POST(request) {
     const today = new Date().toLocaleDateString("en-CA");
     // Ground the article in the REAL source article text (never fabricate).
     const sourceText = await sourceTextFor(topic, { maxChars: 5000 });
-    const prompt = articlePrompt(topic, links, today, sourceText) + editorNoteBlock(topic, "en");
+    const prompt = articlePrompt(topic, links, today, sourceText) + editorNoteBlock(topic, "en") + (await lessonsBlock("article"));
 
     async function generate(p) {
       if (openaiEnabled()) {

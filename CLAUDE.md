@@ -111,6 +111,12 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 Team decisions for specific features live in `.claude/skills/` and load in every session: `content-playbook` (everything learned about making and designing content, all parts — start here), `instagram-story`, `carousel-design`, `video-benchmarks`, `lexbase-court-outcome`. Read the matching one before changing that feature, and update it when Hamed decides something new about it.
 
+## The app learns from Hamed's notes
+
+- Under every edit note in the Topic Engine (✏️ on a carousel slide or the Telegram picture, a story page's instruction, the carousel / story "note for the next version", the Telegram rewrite note) Hamed, and only he, sees "🧠 از این یادداشت یاد بگیر". Ticked, the note goes to the `learn` job (`lib/learning.js`, admin checked in `/api/jobs`): a model decides whether it holds a general rule (not a one-off fix, no facts of that story, not a duplicate) and stores it as `learned/<id>.json` on `editing-data`. A notice at the bottom of the page says what was learned or why not.
+- Rules go into every later prompt of their kind through `lessonsBlock(scope)`: `design` (carousel and Telegram pictures, drawing and ✏️ edits), `carousel` (slide text), `telegram`, `story`, `script`, `article`. They are never a source of facts. Hamed sees and switches them off under Video Editing → Lessons → Content rules.
+- **Skill files:** each rule names its skill (`carousel-design`, `instagram-story`, `content-playbook`). A development session that works on that part reads the active rules (`/api/editing/content-lessons`, or the `learned/` folder on `editing-data`) and writes the ones still missing into the skill, dated, in the same commit as any related change.
+
 ## Conventions that matter here
 
 - **Slow steps run as server jobs, not page fetches.** A phone freezes a page when you switch apps, so anything slow must be started with `startJob` in `app/page.jsx` (POST `/api/jobs`) and read back by polling. Never `await` a model call inside a click handler. Jobs are in memory: a deploy or restart mid-job loses it, and the page offers a retry.

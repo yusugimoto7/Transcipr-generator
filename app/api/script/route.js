@@ -3,6 +3,7 @@ import { openaiEnabled, openaiScript } from "../../../lib/openai";
 import { scriptPrompt, englishScriptRewritePrompt, persianShare } from "../../../lib/prompts";
 import { sourceTextFor } from "../../../lib/grounding";
 import { editorNoteBlock } from "../../../lib/custom-news";
+import { lessonsBlock } from "../../../lib/learning";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export async function POST(request) {
           seconds: Math.max(0, Math.min(600, Number(rewrite.seconds) || 0)),
           notes: String(rewrite.notes || "").slice(0, 1500),
         })
-      : scriptPrompt(topic, lang, sourceText) + editorNoteBlock(topic, lang);
+      : scriptPrompt(topic, lang, sourceText) + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang));
 
     let { text, provider } = await write(prompt);
 

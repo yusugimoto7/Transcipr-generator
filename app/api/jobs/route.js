@@ -24,6 +24,12 @@ export async function POST(request) {
         return Response.json({ error: "your account cannot send to Telegram or WordPress; ask Hamed" }, { status: 403 });
       }
     }
+    // Teaching the app a rule changes what everyone's content is made with: the admin's alone.
+    if (kind === "learn") {
+      const user = await currentUser(request).catch(() => null);
+      if (!user || user.role !== "admin") return Response.json({ error: "only Hamed can teach the app a rule" }, { status: 403 });
+      body.by = user.id;
+    }
     const needsArticle = kind === "publish" || kind === "docfile";
     if (needsArticle ? !body.article : !(body.topic && (body.topic.title_fa || body.topic.title_en))) {
       return Response.json({ error: "bad request" }, { status: 400 });

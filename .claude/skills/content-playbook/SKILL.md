@@ -175,6 +175,11 @@ Full detail in `instagram-story`. Essentials:
 
 ## 12. How we learn
 
+- Since Oct 21 2026 Hamed teaches the app directly: "🧠 از این یادداشت یاد بگیر" under his edit notes keeps
+  a general rule (`learned/` on editing-data, Video Editing → Lessons → Content rules) that goes into
+  every later prompt of that kind. When working on a part, copy its active rules into this file or the
+  feature skill, with the date, so the written record keeps up with what the app already follows.
+
 - Treat every screenshot or complaint from the team as a rule: write it here with the date and the
   team's words, and change the prompt or code in the same commit.
 - Before changing a prompt, check the result on a real topic (one that triggered the feedback).
