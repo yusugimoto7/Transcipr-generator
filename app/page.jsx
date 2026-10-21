@@ -9,7 +9,7 @@ import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
 import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
-import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
+import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -1117,34 +1117,26 @@ export default function App() {
               onRetry={(t) => startJob("script", t, { topic: t })}
             />
           ) : deckMode === "studio" ? (
-            <>
-              <div dir="rtl" style={{ fontSize: 12.5, color: C.text2, marginBottom: 10, fontFamily: "'Vazirmatn', sans-serif", lineHeight: 1.8 }}>
-                استودیو: محتوا از منابع خودت — لینک‌ها و عکس‌هایی که خودت می‌دی، و استوری نتایج ویزای مشتری‌ها.
-              </div>
-              <CustomNewsBox
-                defaultOpen
-                job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
-                onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
-                onOpen={openTopic}
-              />
-              <VisaResults C={C} />
-              {studioTopics.length > 0 && (
-                <>
-                  <div dir="rtl" style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: "'Vazirmatn', sans-serif" }}>خبرهایی که از منابع خودت ساخته شدن</div>
-                  <IdeasList
-                    topics={studioTopics}
-                    decisions={decisions}
-                    jobs={bg}
-                    ws={ws}
-                    onApprove={approveTopic}
-                    onReject={rejectTopic}
-                    onRestore={restoreTopic}
-                    onOpen={openTopic}
-                    onRetry={(t) => startJob("script", t, { topic: t })}
-                  />
-                </>
-              )}
-            </>
+            <StudioSection
+              topics={studioTopics}
+              listProps={{ decisions, jobs: bg, ws, onApprove: approveTopic, onReject: rejectTopic, onRestore: restoreTopic, onOpen: openTopic, onRetry: (t) => startJob("script", t, { topic: t }) }}
+              research={
+                <ResearchBox
+                  defaultOpen
+                  job={(bg[RESEARCH_KEY] || {}).research || null}
+                  onStart={(mode, query) => startJob("research", { title_fa: RESEARCH_KEY }, { mode, query, count: 6 })}
+                  onOpen={openTopic}
+                />
+              }
+              own={
+                <CustomNewsBox
+                  defaultOpen
+                  job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
+                  onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
+                  onOpen={openTopic}
+                />
+              }
+            />
           ) : deckMode === "lexbase" ? (
             <LexbaseSection
               decisions={decisions}
@@ -1168,11 +1160,6 @@ export default function App() {
                 </div>
               )}
 
-              <ResearchBox
-                job={(bg[RESEARCH_KEY] || {}).research || null}
-                onStart={(mode, query) => startJob("research", { title_fa: RESEARCH_KEY }, { mode, query, count: 6 })}
-                onOpen={openTopic}
-              />
 
               {!loadingTopics && <DeckWhy stats={deckStats} />}
 
@@ -1242,6 +1229,75 @@ export default function App() {
           onJob={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
+    </div>
+  );
+}
+
+// Studio: what the team brings in itself, as three tabs, one shown at a time: research on an idea
+// or subject, news from their own links and pictures, and clients' visa results. Each tab lists
+// the topics it made (research topics carry `researched`).
+const STUDIO_TABS = [
+  ["research", Search, "تحقیق", "روی ایده یا موضوع"],
+  ["own", Link2, "منابع خودم", "از لینک و عکس"],
+  ["visa", Megaphone, "خبر ویزا", "نتایج ویزای مشتری‌ها"],
+];
+function StudioSection({ topics, listProps, research, own }) {
+  const [tab, setTabState] = useState("research");
+  useEffect(() => {
+    try {
+      const t = localStorage.getItem("sugimoto_studio_tab_v1");
+      if (STUDIO_TABS.some((x) => x[0] === t)) setTabState(t);
+    } catch (_) {}
+  }, []);
+  const setTab = (t) => {
+    setTabState(t);
+    try {
+      localStorage.setItem("sugimoto_studio_tab_v1", t);
+    } catch (_) {}
+  };
+  const fa = "'Vazirmatn', sans-serif";
+  const listed = tab === "research" ? topics.filter((t) => t.researched) : tab === "own" ? topics.filter((t) => !t.researched) : [];
+  return (
+    <div>
+      <div dir="rtl" role="tablist" style={{ display: "grid", gridTemplateColumns: `repeat(${STUDIO_TABS.length}, 1fr)`, gap: 8, marginBottom: 14 }}>
+        {STUDIO_TABS.map(([k, Ic, label, hint]) => {
+          const on = tab === k;
+          return (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              className="ui-btn"
+              onClick={() => setTab(k)}
+              style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "12px 6px", borderRadius: 14, cursor: "pointer",
+                border: `1px solid ${on ? C.orange : C.line}`, background: on ? C.orange : C.surface, color: on ? "#fff" : C.text,
+                boxShadow: on ? "0 6px 16px rgba(50,81,93,0.25)" : "0 1px 2px rgba(16,24,40,0.05)", transition: "all 0.2s", fontFamily: fa,
+              }}
+            >
+              <span style={{ width: 34, height: 34, borderRadius: 11, display: "grid", placeItems: "center", background: on ? "rgba(255,255,255,0.16)" : alpha(C.orange, 0.08) }}>
+                <Ic size={18} aria-hidden />
+              </span>
+              <span style={{ fontWeight: 800, fontSize: 13.5 }}>{label}</span>
+              <span style={{ fontSize: 11, opacity: on ? 0.85 : 0.6 }}>{hint}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="ui-fade" key={tab}>
+        {tab === "research" && research}
+        {tab === "own" && own}
+        {tab === "visa" && <VisaResults C={C} />}
+        {listed.length > 0 && (
+          <>
+            <div dir="rtl" style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: fa }}>
+              {tab === "research" ? "موضوع‌هایی که از تحقیق ساخته شدن" : "خبرهایی که از منابع خودت ساخته شدن"}
+            </div>
+            <IdeasList topics={listed} {...listProps} />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -2095,8 +2151,8 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
 // Research beyond the daily news: an idea the editor had (found pages -> one card), or a subject
 // (or the default subjects) searched for several post ideas (one card each). The search only finds
 // pages; each card is written from the text of its own page (lib/idea-research.js).
-function ResearchBox({ job, onStart, onOpen }) {
-  const [open, setOpen] = useState(false);
+function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [q, setQ] = useState("");
   const running = !!job && job.status === "running";
   const failed = !!job && job.status === "error" ? job.error : "";
