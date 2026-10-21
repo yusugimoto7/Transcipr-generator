@@ -14,7 +14,7 @@ import { Card } from "../components/ui/card";
 
 const MAX = 10;
 const FA = "'Vazirmatn', sans-serif";
-const MARKS = [["circle", "دایره قرمز"], ["underline", "خط زیر قرمز"], ["marker", "هایلایت زرد"]];
+const MARKS = [["marker", "هایلایت زرد"], ["circle", "دایره قرمز"], ["underline", "خط زیر قرمز"]];
 const BACKS = [["light", "روشن", "#f1eaf7"], ["dark", "سرمه‌ای", "#1d2b45"], ["brand", "سبز سوگیموتو", "#32515d"]];
 
 function shrink(file) {
@@ -118,10 +118,10 @@ function defaultGroups(scans) {
 }
 
 function newCase(open) {
-  return { open, opts: { mark: "circle", background: "light", congrats: true, watermark: true }, checked: false, stories: null, calendar: "", busy: false, progress: "", error: "" };
+  return { open, opts: { mark: "marker", background: "light", congrats: true, watermark: true }, checked: false, stories: null, calendar: "", busy: false, progress: "", error: "" };
 }
 
-function Picture({ image, scan, tool, onToggle, onAdd }) {
+function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
   const ref = useRef(null);
   const [drag, setDrag] = useState(null);
   const W = scan.width || 1;
@@ -162,7 +162,10 @@ function Picture({ image, scan, tool, onToggle, onAdd }) {
             position: "absolute", ...pct(b), padding: 0, cursor: tool ? "crosshair" : "pointer",
             ...(b.kind === "hide"
               ? b.on ? { background: "#111", border: "none", borderRadius: 4 } : { background: "rgba(225,29,46,0.08)", border: "2px dashed #e11d2e", borderRadius: 4 }
-              : b.on ? { background: "transparent", border: "3px solid #e11d2e", borderRadius: "50%", transform: "scale(1.15, 1.6)" } : { background: "transparent", border: "2px dashed #9ca3af", borderRadius: "50%", transform: "scale(1.15, 1.6)" }),
+              : !b.on ? { background: "transparent", border: "2px dashed #9ca3af", borderRadius: 4 }
+              : mark === "marker" ? { background: "rgba(255,225,77,0.5)", border: "none", borderRadius: 4 }
+              : mark === "underline" ? { background: "transparent", border: "none", borderBottom: "3px solid #e11d2e", borderRadius: 0 }
+              : { background: "transparent", border: "3px solid #e11d2e", borderRadius: "50%", transform: "scale(1.15, 1.6)" }),
           }}
         />
       ))}
@@ -464,7 +467,7 @@ export default function VisaResults({ C }) {
                               {sc.error ? (
                                 <div style={{ fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {sc.error}</div>
                               ) : (
-                                <Picture image={images[i]} scan={sc} tool={tool} onToggle={(id) => toggle(i, id)} onAdd={(b) => addBox(i, b)} />
+                                <Picture image={images[i]} scan={sc} tool={tool} mark={cs.opts.mark} onToggle={(id) => toggle(i, id)} onAdd={(b) => addBox(i, b)} />
                               )}
                             </div>
                           );

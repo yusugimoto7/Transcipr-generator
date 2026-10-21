@@ -234,5 +234,9 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
   one heading «خبر ویزا · <title and first name>», with the story tools inside; up to two pictures make
   one story. Another client is added by hand («مشتری دیگر»), or by the notes naming several clients.
 - The waiting time is written as the team writes it («۷ ماه و ۱۶ روز»); counted from the dates only if not given.
-- Marks: red circle (default), red underline or yellow highlighter; backgrounds: light (lilac),
+- **Only two dates are marked** (Hamed, Oct 21 2026): the submission date and the answer date. In a
+  timeline, the "Date sent" of the «Submission Confirmation» row and of the approval / decision row
+  (never "Date read", never other rows); on a letter, its own date only (not validity). Decided by a
+  fixed rule (`markedDates` in `lib/visa-news/scan.js`), the model's choice only when the rule finds none.
+- Marks: **yellow highlighter (default, Hamed's choice)**, red circle or red underline; backgrounds: light (lilac),
   navy, Sugimoto slate. Samples Hamed sent are in the Oct 21 2026 session; more may follow.
