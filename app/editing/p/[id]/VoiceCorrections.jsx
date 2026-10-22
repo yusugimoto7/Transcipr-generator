@@ -41,7 +41,8 @@ export default function VoiceCorrections({ project, run, disabled, onAdded }) {
 
   const edit = (list, i, patch) => setFound({ ...found, [list]: found[list].map((c, j) => (j === i ? { ...c, ...patch } : c)) });
   const drop = (list, i) => setFound({ ...found, [list]: found[list].filter((_, j) => j !== i) });
-  const ready = found ? [...found.corrections, ...found.unclear.filter((u) => u.out.trim())] : [];
+  // a note said without a second is added as a note on the whole video, unless a second is typed in
+  const ready = found ? [...found.corrections, ...found.unclear.filter((u) => u.note.trim())] : [];
 
   const addAll = async () => {
     setStage("adding");
@@ -49,7 +50,7 @@ export default function VoiceCorrections({ project, run, disabled, onAdded }) {
     const done = new Set();
     try {
       for (const c of ready) {
-        await api(`/projects/${project.id}/corrections`, { method: "POST", body: { run_id: run.id, out: c.out, note: c.note } });
+        await api(`/projects/${project.id}/corrections`, { method: "POST", body: { run_id: run.id, out: c.out, note: c.note, general: !c.out.trim() } });
         done.add(c);
       }
       setFound(null);
@@ -103,7 +104,7 @@ export default function VoiceCorrections({ project, run, disabled, onAdded }) {
           )}
           {found.unclear.length > 0 && (
             <>
-              <p className={s.muted}>No time was said for these: type the second, or leave them out.</p>
+              <p className={s.muted}>No second was said for these: type one, or they are added as notes on the whole video.</p>
               {found.unclear.map((c, i) => row("unclear", c, i))}
             </>
           )}

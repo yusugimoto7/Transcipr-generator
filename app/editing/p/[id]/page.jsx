@@ -186,7 +186,7 @@ function Shots({ projectId, paths }) {
   );
 }
 
-function CorrectionForm({ project, run, busy, act }) {
+function CorrectionForm({ project, run, busy, act, general = false }) {
   const [out, setOut] = useState("");
   const [note, setNote] = useState("");
   const [shots, setShots] = useState([]);
@@ -210,17 +210,31 @@ function CorrectionForm({ project, run, busy, act }) {
       onSubmit={(e) => {
         e.preventDefault();
         act("add", async () => {
-          await api(`/projects/${project.id}/corrections`, { method: "POST", body: { run_id: run.id, out, note, images: shots } });
+          await api(`/projects/${project.id}/corrections`, { method: "POST", body: { run_id: run.id, out: general ? "" : out, note, images: shots, general } });
           setOut("");
           setNote("");
           setShots([]);
         });
       }}
     >
-      <div className={s.row}>
-        <input id="corr-out" data-no-voice className={s.input} style={{ width: 90 }} placeholder="1:49" value={out} onChange={(e) => setOut(e.target.value)} required={!shots.length} aria-label="Second in the new video" />
-        <input id="corr-note" className={`${s.input} ${s.grow}`} placeholder="I said it twice" value={note} onChange={(e) => setNote(e.target.value)} required={!shots.length} aria-label="What is wrong" />
-      </div>
+      {general ? (
+        <textarea
+          id="corr-general"
+          className={s.textarea}
+          rows={3}
+          dir="auto"
+          placeholder="Anything about the whole video: the subtitles are too small, the pauses feel rushed, the graphics are too busy…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          required={!shots.length}
+          aria-label="Note on the whole video"
+        />
+      ) : (
+        <div className={s.row}>
+          <input id="corr-out" data-no-voice className={s.input} style={{ width: 90 }} placeholder="1:49" value={out} onChange={(e) => setOut(e.target.value)} required={!shots.length} aria-label="Second in the new video" />
+          <input id="corr-note" className={`${s.input} ${s.grow}`} placeholder="I said it twice" value={note} onChange={(e) => setNote(e.target.value)} required={!shots.length} aria-label="What is wrong" />
+        </div>
+      )}
       <div className={s.row}>
         <label className={`${s.btn} ${s.shotBtn}`} aria-disabled={shots.length >= 3}>
           <ImagePlus size={16} aria-hidden /> {shots.length ? `Screenshot (${shots.length}/3)` : "Add screenshot"}
@@ -238,7 +252,7 @@ function CorrectionForm({ project, run, busy, act }) {
           Add
         </button>
       </div>
-      {shots.length > 0 && !out.trim() && <p className={s.muted}>No time written: it is read from the player in the screenshot.</p>}
+      {!general && shots.length > 0 && !out.trim() && <p className={s.muted}>No time written: it is read from the player in the screenshot.</p>}
       {err && <div className={s.error}>{err}</div>}
     </form>
   );
@@ -377,7 +391,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             <ul className={s.list}>
               {run.corrections.map((c) => (
                 <li key={c.id}>
-                  {c.out}
+                  {c.general ? "Whole video" : c.out}
                   {c.time_from_screenshot ? " (read from the screenshot)" : ""}: <Mixed text={c.note} /> <Shots projectId={project.id} paths={c.images} />
                 </li>
               ))}
@@ -492,7 +506,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                   <ul className={s.list}>
                     {corrections.map((c) => (
                       <li key={c.id}>
-                        <b>{c.out || "time from screenshot"}</b> <Mixed text={c.note} /> <Shots projectId={project.id} paths={c.images} />{" "}
+                        <b>{c.general ? "Whole video" : c.out || "time from screenshot"}</b> <Mixed text={c.note} /> <Shots projectId={project.id} paths={c.images} />{" "}
                         <button className={`${s.linkBtn} ${s.danger}`} disabled={!!busy} onClick={() => act("del", () => api(`/projects/${project.id}/corrections?run_id=${run.id}&cid=${c.id}`, { method: "DELETE" }))}>
                           remove
                         </button>
@@ -501,6 +515,11 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                   </ul>
                 )}
                 <CorrectionForm project={project} run={run} busy={busy} act={act} />
+                <div className={s.generalBox}>
+                  <h3 className={s.h3}>General notes</h3>
+                  <p className={s.muted}>For problems across the whole video, not at one second.</p>
+                  <CorrectionForm project={project} run={run} busy={busy} act={act} general />
+                </div>
                 <div className={s.row}>
                   <button className={`${s.btn} ${s.primary}`} disabled={!!busy || !corrections.length} onClick={() => act("rerun", () => api(`/projects/${project.id}/rerun`, { method: "POST" }))}>
                     {busy === "rerun" ? "Starting…" : r.step === "plan" || stageOf(run) === "graphics" ? "Apply corrections: draw a new plan" : `Apply corrections: make version ${run.version + 1}`}
