@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Film, Sparkles, Subtitles } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Film, ImagePlus, Sparkles, Subtitles, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -149,6 +149,101 @@ function Spelling({ sp }) {
   );
 }
 
+// Screenshots on a correction: shrunk here to 1600 px JPEG, stored with the correction; the worker
+// reads the player's time and what is wrong from them (english-sugimotovisa scripts/correction_shots.py).
+async function shrink(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, bad) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = () => bad(new Error("this file is not a picture"));
+      i.src = url;
+    });
+    const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k);
+    c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL("image/jpeg", 0.85);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+const shotUrl = (projectId, path) => `/api/editing/projects/${projectId}/shots/${String(path).replace(/^shots\//, "")}`;
+
+function Shots({ projectId, paths }) {
+  if (!paths || !paths.length) return null;
+  return (
+    <span className={s.shotRow}>
+      {paths.map((p) => (
+        <a key={p} href={shotUrl(projectId, p)} target="_blank" rel="noreferrer">
+          <img src={shotUrl(projectId, p)} alt="Screenshot" loading="lazy" />
+        </a>
+      ))}
+    </span>
+  );
+}
+
+function CorrectionForm({ project, run, busy, act }) {
+  const [out, setOut] = useState("");
+  const [note, setNote] = useState("");
+  const [shots, setShots] = useState([]);
+  const [err, setErr] = useState("");
+  const add = async (files) => {
+    setErr("");
+    try {
+      const next = [...shots];
+      for (const f of files) {
+        if (next.length >= 3) break;
+        next.push(await shrink(f));
+      }
+      setShots(next);
+    } catch (e) {
+      setErr(e.message);
+    }
+  };
+  return (
+    <form
+      className={s.corrForm}
+      onSubmit={(e) => {
+        e.preventDefault();
+        act("add", async () => {
+          await api(`/projects/${project.id}/corrections`, { method: "POST", body: { run_id: run.id, out, note, images: shots } });
+          setOut("");
+          setNote("");
+          setShots([]);
+        });
+      }}
+    >
+      <div className={s.row}>
+        <input id="corr-out" data-no-voice className={s.input} style={{ width: 90 }} placeholder="1:49" value={out} onChange={(e) => setOut(e.target.value)} required={!shots.length} aria-label="Second in the new video" />
+        <input id="corr-note" className={`${s.input} ${s.grow}`} placeholder="I said it twice" value={note} onChange={(e) => setNote(e.target.value)} required={!shots.length} aria-label="What is wrong" />
+      </div>
+      <div className={s.row}>
+        <label className={`${s.btn} ${s.shotBtn}`} aria-disabled={shots.length >= 3}>
+          <ImagePlus size={16} aria-hidden /> {shots.length ? `Screenshot (${shots.length}/3)` : "Add screenshot"}
+          <input type="file" accept="image/*" multiple hidden disabled={shots.length >= 3} onChange={(e) => add([...e.target.files]).then(() => (e.target.value = ""))} />
+        </label>
+        {shots.map((u, i) => (
+          <span key={i} className={s.shotThumb}>
+            <img src={u} alt={`Screenshot ${i + 1}`} />
+            <button type="button" aria-label="Remove this screenshot" onClick={() => setShots(shots.filter((_, j) => j !== i))}>
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+        <button className={`${s.btn} ${s.grow}`} style={{ flexGrow: 0 }} disabled={!!busy}>
+          Add
+        </button>
+      </div>
+      {shots.length > 0 && !out.trim() && <p className={s.muted}>No time written: it is read from the player in the screenshot.</p>}
+      {err && <div className={s.error}>{err}</div>}
+    </form>
+  );
+}
+
 function CutTable({ rows }) {
   const [showPauses, setShowPauses] = useState(false);
   const retakes = rows.filter((r) => r.type === "retake");
@@ -250,8 +345,6 @@ function Checks({ qa, lessons, me }) {
 }
 
 function RunView({ run, project, isLatest, corrections, canApprove, me, reload }) {
-  const [out, setOut] = useState("");
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -284,10 +377,14 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             <ul className={s.list}>
               {run.corrections.map((c) => (
                 <li key={c.id}>
-                  {c.out}: <Mixed text={c.note} />
+                  {c.out}
+                  {c.time_from_screenshot ? " (read from the screenshot)" : ""}: <Mixed text={c.note} /> <Shots projectId={project.id} paths={c.images} />
                 </li>
               ))}
             </ul>
+            {(run.corrections_unplaced || []).length > 0 && (
+              <p className={s.muted}>Left out, no time could be read: {run.corrections_unplaced.map((c) => c.note).join(" · ")}</p>
+            )}
           </div>
         )}
         {run.error && <div className={s.error}>{run.error}</div>}
@@ -395,7 +492,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                   <ul className={s.list}>
                     {corrections.map((c) => (
                       <li key={c.id}>
-                        <b>{c.out}</b> <Mixed text={c.note} />{" "}
+                        <b>{c.out || "time from screenshot"}</b> <Mixed text={c.note} /> <Shots projectId={project.id} paths={c.images} />{" "}
                         <button className={`${s.linkBtn} ${s.danger}`} disabled={!!busy} onClick={() => act("del", () => api(`/projects/${project.id}/corrections?run_id=${run.id}&cid=${c.id}`, { method: "DELETE" }))}>
                           remove
                         </button>
@@ -403,23 +500,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                     ))}
                   </ul>
                 )}
-                <form
-                  className={s.row}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    act("add", async () => {
-                      await api(`/projects/${project.id}/corrections`, { method: "POST", body: { run_id: run.id, out, note } });
-                      setOut("");
-                      setNote("");
-                    });
-                  }}
-                >
-                  <input id="corr-out" data-no-voice className={s.input} style={{ width: 90 }} placeholder="1:49" value={out} onChange={(e) => setOut(e.target.value)} required aria-label="Second in the new video" />
-                  <input id="corr-note" className={`${s.input} ${s.grow}`} placeholder="I said it twice" value={note} onChange={(e) => setNote(e.target.value)} required aria-label="What is wrong" />
-                  <button className={s.btn} disabled={!!busy}>
-                    Add
-                  </button>
-                </form>
+                <CorrectionForm project={project} run={run} busy={busy} act={act} />
                 <div className={s.row}>
                   <button className={`${s.btn} ${s.primary}`} disabled={!!busy || !corrections.length} onClick={() => act("rerun", () => api(`/projects/${project.id}/rerun`, { method: "POST" }))}>
                     {busy === "rerun" ? "Starting…" : r.step === "plan" || stageOf(run) === "graphics" ? "Apply corrections: draw a new plan" : `Apply corrections: make version ${run.version + 1}`}
