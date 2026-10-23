@@ -237,6 +237,7 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
 - **Story look (Hamed, Oct 21 2026):** a letter shows only its printed part — the white page margins
   are trimmed (`trimMargins`); a line with no information is left out (never «…»); the title comes from
   the first name («زینت» → «سرکار خانم», «علی» → «جناب آقای»), and is left off when the name could be either.
+- **Layout (Hamed, Oct 23 2026): the approval letter much bigger, the writing on top of it without hiding the important information.** Default `layout`: big "letter" (about 72% of the height, ~3x the old size), letter on top, text "over" the letter in its emptiest spot — never on the marked dates or the lines the reading marks to keep (decision sentence, permit type and validity, first name); falls back to under the pictures when no spot fits. Laid out in pixels on the server (`planStory` in `lib/visa-news/compose.js`); the story note and the design panel can change big / first / text / size.
 - **The logo never sits on the dates** (Hamed, Oct 23 2026): it is burned into the picture of the story where it covers the least ink, never over a marked date; a picture with no free place gets none.
 - **Notes and learning** (Oct 23 2026): a note under a picture reads it again with that note; a note under the stories changes text and look and draws again; both can teach a rule (scope `visa`).
 - **The work never stops with the page** (Oct 23 2026): a case is held in the server's memory while it is read and checked; switching tab or closing the page loses nothing.

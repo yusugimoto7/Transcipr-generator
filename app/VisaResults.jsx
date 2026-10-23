@@ -94,7 +94,7 @@ function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
       }}
     >
       <img src={image.data} alt="" draggable={false} style={{ display: "block", width: "100%", borderRadius: 8 }} />
-      {scan.boxes.map((b) => (
+      {scan.boxes.filter((b) => b.kind !== "keep").map((b) => (
         <button
           key={b.id}
           type="button"
@@ -120,7 +120,14 @@ function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
 }
 
 const newId = () => "vc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const OPTS = { mark: "marker", background: "light", watermark: true };
+const LAYOUT = { big: "letter", first: "letter", text: "over", size: "normal" };
+const OPTS = { mark: "marker", background: "light", watermark: true, layout: LAYOUT };
+const LAYOUT_CHOICES = [
+  ["big", "عکس بزرگ‌تر", [["letter", "نامه"], ["timeline", "تایم‌لاین"], ["none", "هم‌اندازه"]]],
+  ["first", "بالا", [["letter", "نامه"], ["timeline", "تایم‌لاین"]]],
+  ["text", "جای متن", [["over", "روی نامه"], ["below", "زیر عکس‌ها"]]],
+  ["size", "اندازه متن", [["small", "کوچک"], ["normal", "معمولی"], ["large", "بزرگ"]]],
+];
 
 // The heading a case is listed under: «خبر ویزا · <title and first name>».
 function caseName(c) {
@@ -218,7 +225,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
     if (learnOn.story) teachFrom(note, Object.values(c.texts || {}).join("\n---\n"));
     try {
       const r = await runJob("visa_restyle", { texts: c.texts, note, opts: c.opts }, () => {});
-      update({ texts: r.texts, opts: r.opts });
+      update({ texts: r.texts, opts: r.opts, notDone: r.not_done || "" });
       setStoryNote("");
       setRestyling(false);
       await draw({ texts: r.texts, opts: r.opts });
@@ -394,6 +401,21 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                   </button>
                 ))}
               </div>
+              {LAYOUT_CHOICES.map(([key, label, choices]) => (
+                <div key={key} style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {choices.map(([v, l]) => {
+                      const on = ({ ...LAYOUT, ...(c.opts.layout || {}) })[key] === v;
+                      return (
+                        <button key={v} type="button" onClick={() => update((x) => ({ opts: { ...x.opts, layout: { ...LAYOUT, ...(x.opts.layout || {}), [key]: v } } }))} style={pill(on)}>
+                          {l}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
               <label style={{ fontSize: 12.5 }}>
                 <input type="checkbox" checked={c.opts.watermark} onChange={(e) => update((x) => ({ opts: { ...x.opts, watermark: e.target.checked } }))} /> لوگوی بزرگ روی عکس‌ها
               </label>
@@ -439,6 +461,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                     </Button>
                   </div>
                   <div style={{ marginTop: 12 }}>
+                    {c.notDone && <div style={{ fontSize: 12, color: C.orangeDeep || C.text2, marginBottom: 6, lineHeight: 1.7 }}>این بخش از یادداشت انجام نشد: {c.notDone}</div>}
                     <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>یادداشت برای استوری</div>
                     <Textarea
                       rows={2}
@@ -536,7 +559,7 @@ export default function VisaResults({ C, learn }) {
   const openCase = async (row, isSaved) => {
     setError("");
     if (isSaved) {
-      setCur({ ...row, images: (row.covered || []).map((url) => ({ url })), opts: { ...OPTS, ...(row.opts || {}) }, saved: true });
+      setCur({ ...row, images: (row.covered || []).map((url) => ({ url })), opts: { ...OPTS, ...(row.opts || {}), layout: { ...LAYOUT, ...((row.opts || {}).layout || {}) } }, saved: true });
       return;
     }
     setOpening(row.id);
@@ -544,7 +567,7 @@ export default function VisaResults({ C, learn }) {
       const r = await fetch("/api/visa-cases?id=" + encodeURIComponent(row.id), { cache: "no-store" });
       const j = await r.json();
       if (!r.ok || !j.case) throw new Error(j.error || "could not open");
-      setCur({ ...j.case, opts: { ...OPTS, ...(j.case.opts || {}) } });
+      setCur({ ...j.case, opts: { ...OPTS, ...(j.case.opts || {}), layout: { ...LAYOUT, ...((j.case.opts || {}).layout || {}) } } });
     } catch (e) {
       setError(String(e.message || e));
       load();
