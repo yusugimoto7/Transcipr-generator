@@ -54,3 +54,12 @@ line can be dragged and sized (text size with +/-). «ساخت این طرح و 
 saved to the device. «خودکار» clears `manual`. The screenshot is still the real photograph of the
 source, never redrawn: only where and how big it sits changes. The same panel serves the stories
 of every topic (News, Lexbase, Ideas, Studio).
+
+## Templates (Hamed, Oct 23 2026)
+Ten home-made "trending" looks (notes, tweet, breaking, big number, chat, scrapbook, marker, editorial,
+gradient, did-you-know) were built and **rejected**: "I only like the simple one; use ready-made
+templates (Canva, Pinterest…) and show me some to choose." Only `simple` is left in
+`lib/story/templates.js`; the plumbing stays (`story.template`, `cleanTemplate`, `StoryTemplatePicker`,
+`story_draw` with `template`, previews in `public/story-templates/<key>.jpg`) and the picker shows
+itself again once there is more than one template. New templates come only from designs the team
+picked from ready-made galleries — don't invent looks.

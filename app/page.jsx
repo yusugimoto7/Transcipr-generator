@@ -10,6 +10,7 @@ import { AppBar, barStyles } from "./editing/ui";
 import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
+import { STORY_TEMPLATES } from "../lib/story/templates";
 import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
@@ -3554,6 +3555,30 @@ function BgSwatches({ value, onPick, disabled }) {
     </div>
   );
 }
+// The story templates (lib/story/templates.js), each shown by a small
+// picture of a sample page in that look (public/story-templates).
+function StoryTemplatePicker({ value, onPick, disabled }) {
+  return (
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+      {STORY_TEMPLATES.map((t) => {
+        const on = (value || "simple") === t.key;
+        return (
+          <button
+            key={t.key}
+            className="ui-btn"
+            disabled={disabled}
+            onClick={() => onPick(t.key)}
+            title={t.name}
+            style={{ flex: "0 0 auto", width: 76, padding: 0, background: "none", cursor: disabled ? "default" : "pointer", border: "none", textAlign: "center" }}
+          >
+            <img src={`/story-templates/${t.key}.jpg`} alt="" loading="lazy" style={{ display: "block", width: 76, height: 135, objectFit: "cover", borderRadius: 10, border: on ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxSizing: "border-box" }} />
+            <div style={{ fontSize: 10.5, marginTop: 4, fontWeight: on ? 800 : 500, color: on ? STORY_TONE : C.text2, fontFamily: "'Vazirmatn', sans-serif", lineHeight: 1.3 }}>{t.name}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
   const [form, setForm] = useState(false);
   useEffect(() => {
@@ -3561,6 +3586,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   }, [openSignal]);
   const [count, setCount] = useState(1);
   const [bg, setBg] = useState("purple");
+  const [template, setTemplate] = useState("simple");
   const [notes, setNotes] = useState("");
   const [revNotes, setRevNotes] = useState("");
   const [learnRev, setLearnRev] = useState(false);
@@ -3582,7 +3608,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const start = () => {
     if (pages.length && !window.confirm("A new story replaces the current one. Continue?")) return;
     setForm(false);
-    onJob("story", { count, notes: notes.trim(), bg });
+    onJob("story", { count, notes: notes.trim(), bg, template });
   };
   const btn = (bg, color, border) => ({ background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: font });
 
@@ -3600,6 +3626,14 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               </button>
             ))}
           </div>
+          {STORY_TEMPLATES.length > 1 && (
+            <>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>قالب</div>
+              <div style={{ marginBottom: 12 }}>
+                <StoryTemplatePicker value={template} onPick={setTemplate} />
+              </div>
+            </>
+          )}
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>رنگ پس‌زمینه</div>
           <div style={{ marginBottom: 12 }}>
             <BgSwatches value={bg} onPick={setBg} />
@@ -3707,6 +3741,12 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             <div dir="rtl" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2, flexWrap: "wrap" }}>
               <span>رنگ پس‌زمینه:</span>
               <BgSwatches value={story.bg || "purple"} onPick={(k) => k !== (story.bg || "purple") && onJob("story_draw", { bg: k })} />
+            </div>
+          )}
+          {!running && STORY_TEMPLATES.length > 1 && (
+            <div dir="rtl" style={{ marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2 }}>
+              <div style={{ marginBottom: 6 }}>قالب (متن عوض نمی‌شه، فقط صفحه‌ها دوباره کشیده می‌شن):</div>
+              <StoryTemplatePicker value={story.template || "simple"} onPick={(k) => k !== (story.template || "simple") && onJob("story_draw", { template: k })} />
             </div>
           )}
           {!running && missing > 0 && (
