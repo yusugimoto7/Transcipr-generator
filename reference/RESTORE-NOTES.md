@@ -408,3 +408,51 @@ WordPress confirmed status:publish, modified 2026-09-11T04:40:57Z.
 
 The full corrected Expand Programs source is kept at
 `reference/social-expand-programs.js` for reference.
+
+## Instagram tokens — auto refresh (Oct 2026)
+
+Instagram stopped posting on 5 Oct 2026: the long-lived token expired (they last
+60 days). The alert hid it as "[object Object]" because the live version was
+still running `String(c.json.error)` — the fix existed only as an unpublished
+draft. Saving is not publishing.
+
+**The fixed account ID was the second, hidden failure.** The workflow posted to
+`/26846240431664402/media`. Instagram-login IDs are *app-scoped*: a token from a
+different app sees a different ID for the same account, so every new token
+returned "object does not exist" against the old one. Both IG nodes now post to
+`/me/...`, which always means "the account this token belongs to" and survives
+any future change of app or token.
+
+Layout now:
+
+- Data Table **`ig_tokens`** (`9lihmc7dzcsgI0OK`): username, user_id, token,
+  expires_at, refreshed_at, last_error. One row per account:
+  `sugimotovisa` (Farsi, Canada — the draw account), `sugimoto.visa` (English),
+  `sugimotovisa.europe` (Farsi, Europe). Identified by reading each account's
+  recent captions, not assumed.
+- Main workflow: new **Get IG token** node (executeOnce) between
+  Render story to PNG and Create IG story container; both IG nodes take
+  `access_token` from it. The old Query Auth credential is no longer used.
+- Workflow **Instagram tokens — auto refresh** (`55KPolbQ5VMw6jL3`), source in
+  `reference/ig-token-refresh-workflow.js`: every Monday 09:13 UTC, refreshes all
+  rows, stores the new token and expiry, alerts @testchannel_draws on failure.
+  A failed refresh keeps the previous token — it still works until its own
+  expiry, which is the window to fix it in.
+
+Facts checked, not assumed:
+
+- `/me/media` story-container creation works with the new token and publishes
+  nothing (quota_usage stayed 0).
+- Instagram refreshed tokens only hours old — there is no practical 24h wait.
+- **Refreshing does not revoke the old token.** Both stay valid until their own
+  expiry. To kill a leaked token: Instagram → Settings → Apps and websites →
+  Remove the app (revokes every token it holds for that account), re-add it,
+  generate, and put the new token in `ig_tokens`.
+- n8n auto-assigns credentials by *type*, not name: the refresh workflow's
+  Telegram node got "Video Bot (Imm_News_bot)" instead of
+  "Telegram Notifier bot" and had to be switched by hand.
+
+How the main workflow was edited without hand-transcribing 37KB: SDK code was
+generated mechanically from the live JSON, written as a draft, and every node
+diffed against live before publishing — 17/17 untouched nodes identical apart
+from canvas position, the three Code nodes byte-identical.
