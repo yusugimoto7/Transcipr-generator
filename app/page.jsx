@@ -3626,10 +3626,14 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>قالب</div>
-          <div style={{ marginBottom: 12 }}>
-            <StoryTemplatePicker value={template} onPick={setTemplate} />
-          </div>
+          {STORY_TEMPLATES.length > 1 && (
+            <>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>قالب</div>
+              <div style={{ marginBottom: 12 }}>
+                <StoryTemplatePicker value={template} onPick={setTemplate} />
+              </div>
+            </>
+          )}
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>رنگ پس‌زمینه</div>
           <div style={{ marginBottom: 12 }}>
             <BgSwatches value={bg} onPick={setBg} />
@@ -3739,7 +3743,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               <BgSwatches value={story.bg || "purple"} onPick={(k) => k !== (story.bg || "purple") && onJob("story_draw", { bg: k })} />
             </div>
           )}
-          {!running && (
+          {!running && STORY_TEMPLATES.length > 1 && (
             <div dir="rtl" style={{ marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2 }}>
               <div style={{ marginBottom: 6 }}>قالب (متن عوض نمی‌شه، فقط صفحه‌ها دوباره کشیده می‌شن):</div>
               <StoryTemplatePicker value={story.template || "simple"} onPick={(k) => k !== (story.template || "simple") && onJob("story_draw", { template: k })} />

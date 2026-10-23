@@ -55,15 +55,11 @@ saved to the device. «خودکار» clears `manual`. The screenshot is still t
 source, never redrawn: only where and how big it sits changes. The same panel serves the stories
 of every topic (News, Lexbase, Ideas, Studio).
 
-## Templates (Hamed, Oct 23 2026: "at least 10 trending templates besides the simple one")
-`lib/story/templates.js` holds 11 looks, chosen per story in the form («قالب», a row of sample pictures
-from `public/story-templates/<key>.jpg`) and changeable afterwards (job `story_draw` with `template`,
-text unchanged): `simple` (default, the team's raw style, drawn in index.js), `notes` (iPhone Notes),
-`tweet` (X post card, @sugimotovisa), `breaking` (red «خبر فوری» tag; «نکته مهم» on explainers via
-`story.evergreen`), `bignumber` (the headline's first number huge — `leadNumber`), `chat` (message
-bubbles), `scrapbook` (taped paper), `marker` (highlighter on grid paper), `editorial` (colour block +
-serif), `gradient` (mesh gradient + glass box), `didyouknow` («میدونستی؟» sticker). Fonts: `STORY_FONTS`
-(Vazirmatn, Inter, Lalezar, Markazi Text). Every template keeps the rules: the screenshot whole and
-uncovered, no added facts (only framing labels), no logo, content inside the safe area.
-To add one: a function in `T`, an entry in `STORY_TEMPLATES`, and a 216×384 preview jpg rendered from
-a sample page. A hand-drawn page (`page.manual`) is drawn in the simple style whatever the template.
+## Templates (Hamed, Oct 23 2026)
+Ten home-made "trending" looks (notes, tweet, breaking, big number, chat, scrapbook, marker, editorial,
+gradient, did-you-know) were built and **rejected**: "I only like the simple one; use ready-made
+templates (Canva, Pinterest…) and show me some to choose." Only `simple` is left in
+`lib/story/templates.js`; the plumbing stays (`story.template`, `cleanTemplate`, `StoryTemplatePicker`,
+`story_draw` with `template`, previews in `public/story-templates/<key>.jpg`) and the picker shows
+itself again once there is more than one template. New templates come only from designs the team
+picked from ready-made galleries — don't invent looks.
