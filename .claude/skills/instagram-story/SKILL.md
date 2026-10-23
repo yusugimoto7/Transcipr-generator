@@ -54,3 +54,16 @@ line can be dragged and sized (text size with +/-). «ساخت این طرح و 
 saved to the device. «خودکار» clears `manual`. The screenshot is still the real photograph of the
 source, never redrawn: only where and how big it sits changes. The same panel serves the stories
 of every topic (News, Lexbase, Ideas, Studio).
+
+## Templates (Hamed, Oct 23 2026: "at least 10 trending templates besides the simple one")
+`lib/story/templates.js` holds 11 looks, chosen per story in the form («قالب», a row of sample pictures
+from `public/story-templates/<key>.jpg`) and changeable afterwards (job `story_draw` with `template`,
+text unchanged): `simple` (default, the team's raw style, drawn in index.js), `notes` (iPhone Notes),
+`tweet` (X post card, @sugimotovisa), `breaking` (red «خبر فوری» tag; «نکته مهم» on explainers via
+`story.evergreen`), `bignumber` (the headline's first number huge — `leadNumber`), `chat` (message
+bubbles), `scrapbook` (taped paper), `marker` (highlighter on grid paper), `editorial` (colour block +
+serif), `gradient` (mesh gradient + glass box), `didyouknow` («میدونستی؟» sticker). Fonts: `STORY_FONTS`
+(Vazirmatn, Inter, Lalezar, Markazi Text). Every template keeps the rules: the screenshot whole and
+uncovered, no added facts (only framing labels), no logo, content inside the safe area.
+To add one: a function in `T`, an entry in `STORY_TEMPLATES`, and a 216×384 preview jpg rendered from
+a sample page. A hand-drawn page (`page.manual`) is drawn in the simple style whatever the template.
