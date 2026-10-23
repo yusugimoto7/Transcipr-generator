@@ -1,3 +1,4 @@
+import { LANG_COOKIE, normLang } from "../../../../../lib/i18n";
 import { editingEnabled, findByEmail, checkPassword, createUser, sessionCookie, publicUser, json, normEmail, loginLocked, loginFailed, loginOk, allUsers } from "../../../../../lib/editing/auth";
 
 export const runtime = "nodejs";
@@ -23,7 +24,11 @@ export async function POST(request) {
       return json({ error: "wrong email or password" }, 401);
     }
     loginOk(email);
-    return json({ user: publicUser(user) }, 200, { "Set-Cookie": await sessionCookie(user) });
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    headers.append("Set-Cookie", await sessionCookie(user));
+    // The language chosen on the account follows the person to this device.
+    if (user.lang) headers.append("Set-Cookie", `${LANG_COOKIE}=${normLang(user.lang)}; Path=/; Max-Age=${365 * 86400}; SameSite=Lax`);
+    return Response.json({ user: publicUser(user) }, { status: 200, headers });
   } catch (e) {
     return json({ error: String(e.message || e) }, 500);
   }

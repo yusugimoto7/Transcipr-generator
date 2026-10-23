@@ -26,6 +26,10 @@
 .menuHead { display: flex; gap: 10px; align-items: center; padding: 8px 10px 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; font-size: 14px; }
 .menuItem { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--text); text-decoration: none; font: inherit; font-size: 14px; font-weight: 500; background: none; border: 0; cursor: pointer; text-align: left; width: 100%; box-sizing: border-box; }
 .menuItem:hover { background: var(--ground); }
+.menuLabel { display: flex; align-items: center; gap: 6px; padding: 8px 10px 2px; font-size: 12px; font-weight: 600; color: var(--muted, #6b7280); }
+.menuSep { height: 1px; background: var(--line); margin: 4px 0; }
+[dir="rtl"] .menu { right: auto; left: 0; }
+[dir="rtl"] .menuItem { text-align: right; }
 .narrowOnly { display: none; flex-direction: column; border-bottom: 1px solid var(--line); margin-bottom: 4px; padding-bottom: 4px; }
 @media (max-width: 720px) {
   .apps, .wideOnly { display: none; }

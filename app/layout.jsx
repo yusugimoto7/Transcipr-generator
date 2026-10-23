@@ -1,4 +1,7 @@
 import "./globals.css";
+import { cookies } from "next/headers";
+import LangProvider from "./LangProvider";
+import { LANG_COOKIE, normLang } from "../lib/i18n";
 import VoiceDictation from "./VoiceDictation";
 import CopyCorners from "./CopyCorners";
 import PasteImages from "./PasteImages";
@@ -10,8 +13,9 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+  const lang = normLang(cookies().get(LANG_COOKIE)?.value);
   return (
-    <html lang="en">
+    <html lang={lang}>
       <head>
         <meta name="theme-color" content="#243b44" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -21,10 +25,12 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
-        {children}
-        <VoiceDictation />
-        <CopyCorners />
-        <PasteImages />
+        <LangProvider lang={lang}>
+          {children}
+          <VoiceDictation />
+          <CopyCorners />
+          <PasteImages />
+        </LangProvider>
       </body>
     </html>
   );
