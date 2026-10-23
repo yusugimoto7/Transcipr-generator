@@ -40,6 +40,14 @@ A topic's **Story** tile makes 1–4 pages (default **1**). Each page is a short
 Spoken everyday Persian (میتونه، نشون میده، ایشون), short lines, the striking number/decision first, openers like «یه آمار تکان‌دهنده», «یه سؤال جالب از اداره مهاجرت کانادا», an exclamation mark when surprising, the English term after the Persian one. Naming what the screenshot is («این رأی», «این ایمیل داخلی») is fine; «طبق منبع» and conclusions the source doesn't state are not. No CTA.
 
 ## Setup
+**Drawing (Oct 23 2026):** HCTI's free plan (50 images a month) ran out and the team won't pay, so every
+browser drawing (story pages, source-page photographs, visa-result stories, the draws card) now runs in
+the server's own Chromium: installed in the Dockerfile, path `CHROMIUM_PATH`, driven by playwright-core
+in `lib/story/hcti.js` (`hctiImage` keeps HCTI's request shape; one page at a time, the browser closes
+after a quiet minute because the server has little memory; the PNG is kept with `keepImage`). HCTI is
+used only when there is no Chromium and its keys are set, or with `STORY_RENDERER=hcti`.
+Google Fonts are linked one family per link: a weight a family lacks (Lalezar has only 400) makes
+Google refuse the whole request.
 Needs `HCTI_USER_ID` and `HCTI_API_KEY` on Render (htmlcsstoimage.com; API key permissions: Images → Read, Create, Store only). Without them the tile shows "HCTI not set". Lexbase stories also need `GMAIL_USER`/`GMAIL_APP_PASSWORD` (the PDF is fetched again from Gmail).
 
 ## Checking a change locally

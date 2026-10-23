@@ -2838,7 +2838,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         stRunning ? { label: stStage === "screenshots" ? L("در حال گرفتن اسکرین‌شات…", "Taking screenshots…") : stStage === "drawing" ? L("در حال کشیدن…", "Drawing…") : L("در حال نوشتن…", "Writing…"), tone: C.orange, running: true }
         : storyPages.length ? { label: (storyPages.length === 1 ? L("۱ صفحه", "1 page") : L(`${storyPages.length} صفحه`, `${storyPages.length} pages`)) + (story.sent && story.sent.public ? L(" · منتشر شد", " · published") : ""), tone: C.success, done: true }
         : storyJob && storyJob.status === "error" ? { label: L("نشد", "Failed"), tone: C.reject }
-        : caps.story === false ? { label: L("HCTI تنظیم نشده", "HCTI not set"), tone: C.text3 }
+        : caps.story === false ? { label: L("مرورگر سرور آماده نیست", "No browser on the server"), tone: C.text3 }
         : { label: L("ساخته نشده", "Not made"), tone: C.text3 },
     },
     {
@@ -3747,7 +3747,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               {L("انصراف", "Cancel")}
             </button>
           </div>
-          {caps.story === false && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 8 }}>{L("HCTI_USER_ID / HCTI_API_KEY روی سرور تنظیم نشده.", "HCTI_USER_ID / HCTI_API_KEY are not set on the server.")}</div>}
+          {caps.story === false && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 8 }}>{L("مرورگر Chromium روی سرور نصب نیست (و کلید HCTI هم نیست)؛ استوری کشیده نمی‌شود.", "No Chromium on the server (and no HCTI keys), so stories cannot be drawn.")}</div>}
         </div>
       )}
 
