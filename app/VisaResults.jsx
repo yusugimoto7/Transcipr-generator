@@ -238,6 +238,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
       );
       // From now on the case is the saved one: covered pictures only, the originals let go.
       update({ stories: r.stories || [], images: (r.covered || []).map((url, i) => (url ? { url } : c.images[i])), marks: r.marks || [], scans: null, checked: false, calendar: "", saved: !!r.saved, status: "saved" });
+      return r.stories || [];
     } catch (e) {
       update({ error: String(e.message || e) });
     } finally {
@@ -277,8 +278,8 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
       setRestyling(false);
     }
   };
-  const download = async () => {
-    for (const [k, s] of (c.stories || []).filter((x) => x.url).entries()) {
+  const download = async (list) => {
+    for (const [k, s] of (Array.isArray(list) ? list : c.stories || []).filter((x) => x.url).entries()) {
       const a = document.createElement("a");
       a.href = "/api/carousel/download?url=" + encodeURIComponent(s.url) + "&name=" + encodeURIComponent(`visa-result-${k + 1}.png`);
       a.download = "";
@@ -476,6 +477,25 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                     );
                   })()}
                   <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>پیش‌نمایشه؛ استوری واقعی با «ساخت» کشیده می‌شه (لوگو خودش جایی می‌شینه که روی تاریخ‌ها و متن نباشه). با طرح دستی، گزینه‌های پایین بی‌اثرن.</div>
+                  {/* The design is finished here, so it is made and saved to the device from here too. */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    <Button
+                      disabled={(fresh && !c.checked) || c.busy || tooMany || !c.images.length}
+                      onClick={async () => {
+                        const made = await draw();
+                        if (made && made.some((x) => x.url)) download(made);
+                      }}
+                    >
+                      {c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
+                      {c.busy ? `در حال ساخت… ${c.progress || ""}` : "ساخت این طرح و دانلود"}
+                    </Button>
+                    {c.stories && c.stories.some((x) => x.url) && !c.busy && (
+                      <Button variant="outline" onClick={() => download()}>
+                        <Download aria-hidden /> دانلود آخرین ساخته‌شده
+                      </Button>
+                    )}
+                  </div>
+                  {fresh && !c.checked && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 4 }}>اول پایین صفحه تیک «همهٔ عکس‌ها رو چک کردم» رو بزن.</div>}
                 </div>
               )}
               {LAYOUT_CHOICES.map(([key, label, choices]) => (
@@ -530,7 +550,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                     ))}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <Button variant="outline" onClick={download} disabled={!c.stories.some((x) => x.url)}>
+                    <Button variant="outline" onClick={() => download()} disabled={!c.stories.some((x) => x.url)}>
                       <Download aria-hidden /> دانلود
                     </Button>
                     <Button variant="outline" onClick={toCalendar} disabled={!c.stories.some((x) => x.url) || c.calendar === "…" || /^\/calendar/.test(c.calendar || "")}>
