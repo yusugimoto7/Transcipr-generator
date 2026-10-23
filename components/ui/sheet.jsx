@@ -6,6 +6,7 @@ import * as React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "../../lib/cn";
+import { L } from "../../lib/i18n";
 
 const Sheet = Dialog.Root;
 const SheetTrigger = Dialog.Trigger;
@@ -28,7 +29,7 @@ function SheetContent({ className, children, title, description, ...props }) {
         {title && <Dialog.Title className="m-0 mb-1 text-[17px] font-semibold">{title}</Dialog.Title>}
         {description ? <Dialog.Description className="m-0 mb-3 text-sm text-muted">{description}</Dialog.Description> : <Dialog.Description className="sr-only">{title}</Dialog.Description>}
         {children}
-        <Dialog.Close className="absolute right-3 top-3 hidden h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted hover:bg-[#efebe3] md:flex" aria-label="Close">
+        <Dialog.Close className="absolute right-3 top-3 hidden h-8 w-8 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted hover:bg-[#efebe3] md:flex" aria-label={L("بستن", "Close")}>
           <X size={16} />
         </Dialog.Close>
       </Dialog.Content>

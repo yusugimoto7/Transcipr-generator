@@ -7,6 +7,7 @@
 // the same. Plain text pastes are left alone.
 
 import { useEffect, useState } from "react";
+import { L, uiDir } from "../lib/i18n";
 
 const ACCEPTS = (input) => {
   const a = String(input.getAttribute("accept") || "");
@@ -50,7 +51,7 @@ export default function PasteImages() {
         if (all.length === 1) input = all[0];
         else {
           if (all.length > 1) {
-            setNote("روی جای آپلود عکس بزن، بعد Ctrl+V");
+            setNote(L("روی جای آپلود عکس بزن، بعد Ctrl+V", "Tap the picture upload box, then Ctrl+V"));
             setTimeout(() => setNote(""), 2600);
           }
           return;
@@ -66,7 +67,7 @@ export default function PasteImages() {
       }
       input.files = dt.files;
       input.dispatchEvent(new Event("change", { bubbles: true }));
-      setNote(dt.files.length > 1 ? `${dt.files.length} عکس اضافه شد` : "عکس اضافه شد");
+      setNote(dt.files.length > 1 ? L(`${dt.files.length} عکس اضافه شد`, `${dt.files.length} pictures added`) : L("عکس اضافه شد", "Picture added"));
       setTimeout(() => setNote(""), 1800);
     };
     document.addEventListener("pointerdown", remember, true);
@@ -82,7 +83,7 @@ export default function PasteImages() {
   return (
     <div
       role="status"
-      dir="rtl"
+      dir={uiDir()}
       style={{
         position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 2147482500,
         background: "#243b44", color: "#fff", borderRadius: 12, padding: "9px 16px", fontSize: 13.5,

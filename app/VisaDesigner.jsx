@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { L, uiDir } from "../lib/i18n";
 
 const SW = 1080, SH = 1920;
 const FA = "'Vazirmatn', sans-serif";
@@ -100,18 +101,18 @@ export default function VisaDesigner({ pics, lines, manual, background = "light"
   const pad = m.text ? m.text.font * 0.7 : 0;
 
   return (
-    <div dir="rtl" style={{ fontFamily: FA }}>
+    <div dir={uiDir()} style={{ fontFamily: FA }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8, fontSize: 12.5 }}>
-        <span style={{ color: "#52605b" }}>بکش تا جابه‌جا بشه؛ گوشهٔ پایین‌چپ رو بکش تا بزرگ یا کوچک بشه.</span>
+        <span style={{ color: "#52605b" }}>{L("بکش تا جابه‌جا بشه؛ گوشهٔ بنفش رو بکش تا بزرگ یا کوچک بشه.", "Drag to move; drag the purple corner to resize.")}</span>
         {m.text && (
-          <span style={{ display: "inline-flex", gap: 4, alignItems: "center", marginRight: "auto" }}>
-            متن
-            <Button size="sm" variant="outline" onClick={() => font(-2)} aria-label="Smaller text"><Minus aria-hidden /></Button>
+          <span style={{ display: "inline-flex", gap: 4, alignItems: "center", marginInlineStart: "auto" }}>
+            {L("متن", "Text")}
+            <Button size="sm" variant="outline" onClick={() => font(-2)} aria-label={L("متن کوچک‌تر", "Smaller text")}><Minus aria-hidden /></Button>
             <span style={{ minWidth: 26, textAlign: "center" }}>{m.text.font}</span>
-            <Button size="sm" variant="outline" onClick={() => font(2)} aria-label="Larger text"><Plus aria-hidden /></Button>
+            <Button size="sm" variant="outline" onClick={() => font(2)} aria-label={L("متن بزرگ‌تر", "Larger text")}><Plus aria-hidden /></Button>
           </span>
         )}
-        <Button size="sm" variant="ghost" onClick={onReset}><RotateCcw aria-hidden /> خودکار</Button>
+        <Button size="sm" variant="ghost" onClick={onReset}><RotateCcw aria-hidden /> {L("خودکار", "Automatic")}</Button>
       </div>
       <div ref={wrap} style={{ width: "100%" }}>
         <div

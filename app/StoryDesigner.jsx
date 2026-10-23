@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Download, Loader2, Minus, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { L, uiDir } from "../lib/i18n";
 
 const SW = 1080, SH = 1920;
 const FA = "'Vazirmatn', sans-serif";
@@ -22,7 +23,8 @@ const COLOURS = {
   white: { bg: "#ffffff", text: "#000000", box: "#000000", boxText: "#ffffff", edge: "#dddddd" },
 };
 const faDigits = (s) => String(s || "").replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
-const PARTS = [["headline", "تیتر"], ["shot", "اسکرین‌شات"], ["body", "متن"], ["ref", "منبع"]];
+// Labels are [fa, en] pairs, read with L() when drawn.
+const PARTS = [["headline", ["تیتر", "Headline"]], ["shot", ["اسکرین‌شات", "Screenshot"]], ["body", ["متن", "Text"]], ["ref", ["منبع", "Source"]]];
 
 export default function StoryDesigner({ page, bg = "purple", busy, onMake, onReset, onSave }) {
   const c = COLOURS[bg] || COLOURS.purple;
@@ -119,24 +121,24 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
   const grab = (part) => (m ? { onPointerDown: (e) => start(e, part, "move") } : {});
 
   return (
-    <div dir="rtl" style={{ fontFamily: FA }}>
+    <div dir={uiDir()} style={{ fontFamily: FA }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8, fontSize: 12.5 }}>
-        <span style={{ color: "#52605b" }}>هر بخش رو بکش تا جابه‌جا بشه؛ گوشهٔ بنفش رو بکش تا بزرگ یا کوچک بشه.</span>
+        <span style={{ color: "#52605b" }}>{L("هر بخش رو بکش تا جابه‌جا بشه؛ گوشهٔ بنفش رو بکش تا بزرگ یا کوچک بشه.", "Drag a part to move it; drag the purple corner to resize it.")}</span>
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8, fontSize: 12.5 }}>
         {PARTS.filter(([k]) => k === "headline" || k === "shot" || (k === "body" && page.body) || (k === "ref" && page.ref)).map(([k, l]) => (
           <button key={k} type="button" onClick={() => setSel(k)} style={{ padding: "5px 10px", borderRadius: 999, border: `1px solid ${sel === k ? "#6d5bd0" : "#e5e0d5"}`, background: sel === k ? "rgba(109,91,208,0.1)" : "#fff", color: sel === k ? "#6d5bd0" : "#52605b", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: FA }}>
-            {l}
+            {L(l)}
           </button>
         ))}
         {sel !== "shot" && m && m[sel] && (
           <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
-            <Button size="sm" variant="outline" onClick={() => font(-2)} aria-label="Smaller text"><Minus aria-hidden /></Button>
+            <Button size="sm" variant="outline" onClick={() => font(-2)} aria-label={L("متن کوچک‌تر", "Smaller text")}><Minus aria-hidden /></Button>
             <span style={{ minWidth: 26, textAlign: "center" }}>{m[sel].font}</span>
-            <Button size="sm" variant="outline" onClick={() => font(2)} aria-label="Larger text"><Plus aria-hidden /></Button>
+            <Button size="sm" variant="outline" onClick={() => font(2)} aria-label={L("متن بزرگ‌تر", "Larger text")}><Plus aria-hidden /></Button>
           </span>
         )}
-        <Button size="sm" variant="ghost" onClick={() => { setM(null); setLoaded(false); onReset(); }}><RotateCcw aria-hidden /> خودکار</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setM(null); setLoaded(false); onReset(); }}><RotateCcw aria-hidden /> {L("خودکار", "Automatic")}</Button>
       </div>
       <div ref={wrap} style={{ width: "100%" }}>
         <div style={{ position: "relative", width, height: SH * scale, overflow: "hidden", borderRadius: 14, touchAction: "none", userSelect: "none" }} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
@@ -171,14 +173,14 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
           </div>
         </div>
       </div>
-      <div style={{ fontSize: 11.5, color: "#7d8984", marginTop: 6, lineHeight: 1.7 }}>پیش‌نمایشه؛ صفحهٔ واقعی با «ساخت» روی سرور کشیده می‌شه.</div>
+      <div style={{ fontSize: 11.5, color: "#7d8984", marginTop: 6, lineHeight: 1.7 }}>{L("پیش‌نمایشه؛ صفحهٔ واقعی با «ساخت» روی سرور کشیده می‌شه.", "This is a preview; the real page is drawn on the server when you press “Make”.")}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
         <Button disabled={!m || busy} onClick={() => { setAsked(true); onMake(m); }}>
-          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} {busy ? "در حال ساخت…" : "ساخت این طرح و دانلود"}
+          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} {busy ? L("در حال ساخت…", "Making…") : L("ساخت این طرح و دانلود", "Make this design and download")}
         </Button>
         {page.image_url && !busy && (
           <Button variant="outline" onClick={() => onSave(page.image_url)}>
-            <Download aria-hidden /> دانلود این صفحه
+            <Download aria-hidden /> {L("دانلود این صفحه", "Download this page")}
           </Button>
         )}
       </div>
