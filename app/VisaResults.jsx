@@ -9,10 +9,11 @@
 // pictures only (lib/visa-news/cases.js).
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarPlus, CircleDashed, Download, EyeOff, ImagePlus, Loader2, Megaphone, ScanSearch, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowRight, CalendarPlus, CircleDashed, Download, EyeOff, ImagePlus, Loader2, Megaphone, PencilRuler, ScanSearch, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/input";
 import { Card } from "../components/ui/card";
+import VisaDesigner, { defaultManual } from "./VisaDesigner";
 
 const MAX = 10;
 const FA = "'Vazirmatn', sans-serif";
@@ -153,6 +154,48 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
   const [fixing, setFixing] = useState({}); // picture index -> being read again
   const [storyNote, setStoryNote] = useState("");
   const [restyling, setRestyling] = useState(false);
+  const [designing, setDesigning] = useState(false);
+  const [designN, setDesignN] = useState(null); // the story being drawn by hand
+  const [dims, setDims] = useState({}); // picture index -> { W, H } of a saved (covered) picture
+  // A saved picture's size is read from the picture itself (its reading is gone).
+  useEffect(() => {
+    (c.images || []).forEach((im, i) => {
+      if (!im.url || dims[i]) return;
+      const img = new Image();
+      img.onload = () => setDims((d) => ({ ...d, [i]: { W: img.naturalWidth, H: img.naturalHeight } }));
+      img.src = im.url;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.images]);
+  const storyLines = (n) => String((c.texts || {})[n] || "").split("\n").map((l) => l.trim()).filter((l) => l && !/[:：]\s*(…|\.\.\.)?\s*$/.test(l) && !/^(…|\.\.\.)$/.test(l));
+  // The story's pictures as the designer shows them: the original with its covered parts blacked,
+  // or the covered picture of a saved case.
+  const designPics = (n) =>
+    c.groups
+      .map((g, i) => (g === n ? i : -1))
+      .filter((i) => i >= 0)
+      .map((i) => {
+        const im = c.images[i];
+        const sc = c.scans && c.scans[i];
+        const size = sc && sc.width ? { W: sc.width, H: sc.height } : dims[i] || { W: 1000, H: 1300 };
+        return { src: im.data || im.url, ...size, hides: sc ? (sc.boxes || []).filter((b) => b.kind === "hide" && b.on) : [] };
+      });
+  // Where a story's hand-drawn layout starts: what was last drawn, else the automatic shape.
+  const manualOf = (n) => {
+    const kept = ((c.opts.layout || {}).manual || {})[n];
+    if (kept) return kept;
+    const idx = c.groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0);
+    const drawn = (c.stories || []).find((st) => st.plan && JSON.stringify(st.images) === JSON.stringify(idx));
+    if (drawn && drawn.plan) return { place: drawn.plan.place, text: drawn.plan.text || defaultManual(designPics(n)).text };
+    return null;
+  };
+  const setManual = (n, m) => update((x) => ({ opts: { ...x.opts, layout: { ...LAYOUT, ...(x.opts.layout || {}), manual: { ...((x.opts.layout || {}).manual || {}), [n]: m } } } }));
+  const clearManual = (n) =>
+    update((x) => {
+      const manual = { ...((x.opts.layout || {}).manual || {}) };
+      delete manual[n];
+      return { opts: { ...x.opts, layout: { ...LAYOUT, ...(x.opts.layout || {}), manual } } };
+    });
   const Learn = (learn && learn.Toggle) || (() => null);
   const teachFrom = (note, context) => learn && learn.teach && learn.teach({ topic: { title_fa: "خبر ویزا · " + caseName(c) }, scope: "visa", note, context });
   const topRef = useRef(null);
@@ -187,7 +230,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
         {
           // Pictures still held on the server go by reference (no second upload of the originals).
           images: c.images.map((im, i) => (im.data ? { pending: true, boxes: (c.scans && c.scans[i] && c.scans[i].boxes) || [] } : { url: im.url, marks: (c.marks || [])[i] || [] })),
-          stories: nums.map((n) => ({ images: c.groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0), text: (texts || {})[n] || "" })),
+          stories: nums.map((n) => ({ images: c.groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0), text: (texts || {})[n] || "", manual: ((opts.layout || {}).manual || {})[n] || null })),
           ...opts,
           case: { id: c.id, title: caseName({ ...c, texts }), created: c.created, groups: c.groups, texts, kinds: c.kinds },
         },
@@ -401,6 +444,40 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                   </button>
                 ))}
               </div>
+              <div style={{ marginBottom: 12 }}>
+                <Button size="sm" variant={designing ? "default" : "outline"} onClick={() => { setDesigning(!designing); if (designN == null) setDesignN(nums[0]); }}>
+                  <PencilRuler aria-hidden /> {designing ? "بستن طراحی دستی" : "طراحی دستی"}
+                </Button>
+                {Object.keys((c.opts.layout || {}).manual || {}).length > 0 && !designing && <span style={{ fontSize: 11.5, color: C.text3, marginRight: 8 }}>طرح دستی ذخیره شده؛ با «ساخت» همون کشیده می‌شه.</span>}
+              </div>
+              {designing && (
+                <div style={{ marginBottom: 14 }}>
+                  {nums.length > 1 && (
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      {nums.map((n, k) => (
+                        <button key={n} type="button" onClick={() => setDesignN(n)} style={pill(designN === n)}>استوری {k + 1}</button>
+                      ))}
+                    </div>
+                  )}
+                  {(() => {
+                    const n = designN != null && nums.includes(designN) ? designN : nums[0];
+                    const pics = designPics(n);
+                    if (!pics.length) return null;
+                    return (
+                      <VisaDesigner
+                        key={n + ":" + pics.map((p) => p.W + "x" + p.H).join(",")}
+                        pics={pics}
+                        lines={storyLines(n)}
+                        manual={manualOf(n)}
+                        background={c.opts.background}
+                        onChange={(m) => setManual(n, m)}
+                        onReset={() => clearManual(n)}
+                      />
+                    );
+                  })()}
+                  <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>پیش‌نمایشه؛ استوری واقعی با «ساخت» کشیده می‌شه (لوگو خودش جایی می‌شینه که روی تاریخ‌ها و متن نباشه). با طرح دستی، گزینه‌های پایین بی‌اثرن.</div>
+                </div>
+              )}
               {LAYOUT_CHOICES.map(([key, label, choices]) => (
                 <div key={key} style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{label}</div>
