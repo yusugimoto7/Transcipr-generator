@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { L, uiDir, isFa } from "../../lib/i18n";
 
 // Light, minimal theme shared with the Topic Engine (app/globals.css).
 // Keys kept from the original dark theme so every use site still reads the
@@ -55,79 +56,79 @@ async function pushLibraryRemote(items) {
 }
 
 const COUNTRIES = [
-  { label: "Canada", value: "canada", flag: "🇨🇦" },
-  { label: "Finland", value: "finland", flag: "🇫🇮" },
-  { label: "Germany", value: "germany", flag: "🇩🇪" },
-  { label: "Netherlands", value: "netherlands", flag: "🇳🇱" },
-  { label: "Spain", value: "spain", flag: "🇪🇸" },
-  { label: "France", value: "france", flag: "🇫🇷" },
+  { label: ["کانادا", "Canada"], value: "canada", flag: "🇨🇦" },
+  { label: ["فنلاند", "Finland"], value: "finland", flag: "🇫🇮" },
+  { label: ["آلمان", "Germany"], value: "germany", flag: "🇩🇪" },
+  { label: ["هلند", "Netherlands"], value: "netherlands", flag: "🇳🇱" },
+  { label: ["اسپانیا", "Spain"], value: "spain", flag: "🇪🇸" },
+  { label: ["فرانسه", "France"], value: "france", flag: "🇫🇷" },
 ];
 
 const FIELDS_BY_COUNTRY = {
   canada: [
     { label: "Express Entry", value: "Express Entry" },
     { label: "PNP", value: "PNP" },
-    { label: "Startup Visa", value: "Startup Visa" },
-    { label: "Work Permit", value: "ورک پرمیت" },
-    { label: "Study", value: "تحصیل" },
-    { label: "Family Immigration", value: "مهاجرت خانوادگی" },
-    { label: "Permanent Residence", value: "اقامت دائم" },
-    { label: "Policy & News", value: "سیاست‌گذاری" },
-    { label: "Immigration News", value: "خبرهای مهاجرتی" },
-    { label: "General", value: "عمومی" },
+    { label: ["استارتاپ ویزا", "Startup Visa"], value: "Startup Visa" },
+    { label: ["ورک پرمیت", "Work permit"], value: "ورک پرمیت" },
+    { label: ["تحصیل", "Study"], value: "تحصیل" },
+    { label: ["مهاجرت خانوادگی", "Family immigration"], value: "مهاجرت خانوادگی" },
+    { label: ["اقامت دائم", "Permanent residence"], value: "اقامت دائم" },
+    { label: ["سیاست‌گذاری", "Policy & news"], value: "سیاست‌گذاری" },
+    { label: ["خبرهای مهاجرتی", "Immigration news"], value: "خبرهای مهاجرتی" },
+    { label: ["عمومی", "General"], value: "عمومی" },
   ],
   europe: [
-    { label: "Study", value: "تحصیل" },
-    { label: "Work Permit", value: "ورک پرمیت" },
-    { label: "Startup Visa", value: "Startup Visa" },
-    { label: "Family Immigration", value: "مهاجرت خانوادگی" },
-    { label: "Policy & News", value: "سیاست‌گذاری" },
-    { label: "Immigration News", value: "خبرهای مهاجرتی" },
-    { label: "General", value: "عمومی" },
+    { label: ["تحصیل", "Study"], value: "تحصیل" },
+    { label: ["ورک پرمیت", "Work permit"], value: "ورک پرمیت" },
+    { label: ["استارتاپ ویزا", "Startup Visa"], value: "Startup Visa" },
+    { label: ["مهاجرت خانوادگی", "Family immigration"], value: "مهاجرت خانوادگی" },
+    { label: ["سیاست‌گذاری", "Policy & news"], value: "سیاست‌گذاری" },
+    { label: ["خبرهای مهاجرتی", "Immigration news"], value: "خبرهای مهاجرتی" },
+    { label: ["عمومی", "General"], value: "عمومی" },
   ],
 };
 
 const EUROPE_COUNTRIES = ["finland", "germany", "netherlands", "spain", "france"];
 
 const CONTENT_APPROACHES = [
-  { label: "Analytical", value: "analytical", desc: "Single country deep-dive" },
-  { label: "Comparison", value: "comparison", desc: "Two-country side-by-side" },
+  { label: ["تحلیلی", "Analytical"], value: "analytical", desc: ["بررسی عمیق یک کشور", "Single country deep-dive"] },
+  { label: ["مقایسه‌ای", "Comparison"], value: "comparison", desc: ["دو کشور کنار هم", "Two-country side-by-side"] },
 ];
 
 const COMPARISON_DIMENSIONS = [
-  { label: "Requirements", value: "Requirements" },
-  { label: "Processing Time", value: "Processing Time" },
-  { label: "Cost", value: "Cost" },
-  { label: "Language", value: "Language Requirements" },
-  { label: "PR Pathway", value: "PR Pathway" },
-  { label: "Family Options", value: "Family Options" },
-  { label: "Work Rights", value: "Work Rights" },
-  { label: "Startup/Business", value: "Startup/Business" },
+  { label: ["شرایط", "Requirements"], value: "Requirements" },
+  { label: ["زمان رسیدگی", "Processing time"], value: "Processing Time" },
+  { label: ["هزینه", "Cost"], value: "Cost" },
+  { label: ["زبان", "Language"], value: "Language Requirements" },
+  { label: ["مسیر اقامت دائم", "PR pathway"], value: "PR Pathway" },
+  { label: ["گزینه‌های خانواده", "Family options"], value: "Family Options" },
+  { label: ["حق کار", "Work rights"], value: "Work Rights" },
+  { label: ["استارتاپ و کسب‌وکار", "Startup/business"], value: "Startup/Business" },
 ];
 
 const TONES = [
-  { label: "Educational & Formal", value: "آموزشی و رسمی" },
-  { label: "Friendly & Simple", value: "صمیمی و ساده" },
-  { label: "Urgent & Newsworthy", value: "فوری و خبری" },
-  { label: "Analytical & In-depth", value: "تحلیلی و عمیق" },
-  { label: "Motivational", value: "انگیزشی" },
+  { label: ["آموزشی و رسمی", "Educational & formal"], value: "آموزشی و رسمی" },
+  { label: ["صمیمی و ساده", "Friendly & simple"], value: "صمیمی و ساده" },
+  { label: ["فوری و خبری", "Urgent & newsworthy"], value: "فوری و خبری" },
+  { label: ["تحلیلی و عمیق", "Analytical & in-depth"], value: "تحلیلی و عمیق" },
+  { label: ["انگیزشی", "Motivational"], value: "انگیزشی" },
 ];
 
 const FORMATS = [
-  { label: "Carousel", value: "carousel" },
-  { label: "Infographic", value: "infographic" },
-  { label: "Reel Script", value: "reel" },
-  { label: "Article", value: "article" },
-  { label: "Telegram Post", value: "telegram" },
-  { label: "Video Script", value: "video_script", stub: true },
-  { label: "Story Script", value: "story_script", stub: true },
+  { label: ["کاروسل", "Carousel"], value: "carousel" },
+  { label: ["اینفوگرافیک", "Infographic"], value: "infographic" },
+  { label: ["اسکریپت ریل", "Reel script"], value: "reel" },
+  { label: ["مقاله", "Article"], value: "article" },
+  { label: ["پست تلگرام", "Telegram post"], value: "telegram" },
+  { label: ["اسکریپت ویدیو", "Video script"], value: "video_script", stub: true },
+  { label: ["اسکریپت استوری", "Story script"], value: "story_script", stub: true },
 ];
 
 const SLIDE_COUNTS = [5, 7, 10, 12];
 
 const LANGUAGES = [
-  { label: "🇮🇷 Persian", value: "persian" },
-  { label: "🇬🇧 English", value: "english" },
+  { label: ["🇮🇷 فارسی", "🇮🇷 Persian"], value: "persian" },
+  { label: ["🇬🇧 انگلیسی", "🇬🇧 English"], value: "english" },
 ];
 
 function fieldsForCountry(country) {
@@ -178,7 +179,7 @@ function PillSelect({ options, value, onChange }) {
               transition: "all 0.18s",
             }}
           >
-            {opt.flag ? `${opt.flag} ${opt.label}` : opt.label}
+            {opt.flag ? `${opt.flag} ${L(opt.label)}` : L(opt.label)}
           </button>
         );
       })}
@@ -212,7 +213,7 @@ function MultiPillSelect({ options, value, onChange }) {
               transition: "all 0.18s",
             }}
           >
-            {opt.label}
+            {L(opt.label)}
           </button>
         );
       })}
@@ -228,7 +229,8 @@ function FieldLabel({ children }) {
         fontSize: 12,
         fontWeight: 600,
         marginBottom: 8,
-        letterSpacing: "0.06em",
+        // Spacing breaks the joins between Persian letters.
+        letterSpacing: isFa() ? 0 : "0.06em",
       }}
     >
       {children}
@@ -261,7 +263,7 @@ function Spinner() {
         }}
       />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div>Generating content…</div>
+      <div>{L("در حال ساخت محتوا…", "Generating content…")}</div>
     </div>
   );
 }
@@ -290,10 +292,10 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
   return (
     <div>
       <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 24 }}>
-        Content Setup
+        {L("تنظیمات محتوا", "Content setup")}
       </h2>
 
-      <Section label="CONTENT APPROACH">
+      <Section label={L("رویکرد محتوا", "CONTENT APPROACH")}>
         <div style={{ display: "flex", gap: 10 }}>
           {CONTENT_APPROACHES.map((opt) => {
             const active = settings.contentApproach === opt.value;
@@ -312,13 +314,13 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
                   fontWeight: active ? 700 : 400,
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  textAlign: "left",
+                  textAlign: isFa() ? "right" : "left",
                   transition: "all 0.18s",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>{opt.label}</div>
+                <div style={{ fontWeight: 600 }}>{L(opt.label)}</div>
                 <div style={{ fontSize: 11, color: active ? C.orange : C.inkSoft, marginTop: 2 }}>
-                  {opt.desc}
+                  {L(opt.desc)}
                 </div>
               </button>
             );
@@ -326,7 +328,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         </div>
       </Section>
 
-      <Section label="COUNTRY">
+      <Section label={L("کشور", "COUNTRY")}>
         <PillSelect options={COUNTRIES} value={settings.country} onChange={(v) => onChange("country", v)} />
       </Section>
 
@@ -341,7 +343,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
             background: "rgba(50, 81, 93,0.06)",
           }}
         >
-          <FieldLabel>SECOND COUNTRY (Comparison) ✱</FieldLabel>
+          <FieldLabel>{L("کشور دوم (مقایسه) ✱", "SECOND COUNTRY (Comparison) ✱")}</FieldLabel>
           <PillSelect
             options={country2Options}
             value={settings.country2}
@@ -350,12 +352,12 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         </div>
       )}
 
-      <Section label="TOPIC AREA">
+      <Section label={L("حوزهٔ موضوع", "TOPIC AREA")}>
         <PillSelect options={fields} value={settings.field} onChange={(v) => onChange("field", v)} />
       </Section>
 
       {isComparison && (
-        <Section label="COMPARISON DIMENSIONS (optional)">
+        <Section label={L("جنبه‌های مقایسه (اختیاری)", "COMPARISON DIMENSIONS (optional)")}>
           <MultiPillSelect
             options={COMPARISON_DIMENSIONS}
             value={settings.comparisonDimensions}
@@ -364,11 +366,11 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         </Section>
       )}
 
-      <Section label="TONE">
+      <Section label={L("لحن", "TONE")}>
         <PillSelect options={TONES} value={settings.tone} onChange={(v) => onChange("tone", v)} />
       </Section>
 
-      <Section label="FORMAT">
+      <Section label={L("فرمت", "FORMAT")}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {FORMATS.map((opt) => {
             const active = settings.format === opt.value;
@@ -377,7 +379,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
                 <div
                   key={opt.value}
                   style={{ position: "relative", display: "inline-block" }}
-                  title="Coming soon"
+                  title={L("به‌زودی", "Coming soon")}
                 >
                   <button
                     disabled
@@ -393,7 +395,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
                       opacity: 0.55,
                     }}
                   >
-                    {opt.label}
+                    {L(opt.label)}
                   </button>
                   <span
                     style={{
@@ -406,10 +408,10 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
                       fontWeight: 700,
                       padding: "1px 5px",
                       borderRadius: 8,
-                      letterSpacing: "0.04em",
+                      letterSpacing: isFa() ? 0 : "0.04em",
                     }}
                   >
-                    SOON
+                    {L("به‌زودی", "SOON")}
                   </span>
                 </div>
               );
@@ -430,20 +432,20 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
                   transition: "all 0.18s",
                 }}
               >
-                {opt.label}
+                {L(opt.label)}
               </button>
             );
           })}
         </div>
         {isStubFormat && (
           <div style={{ color: C.orange, fontSize: 12, marginTop: 8 }}>
-            This format is coming soon — pick another to continue.
+            {L("این فرمت به‌زودی میاد؛ برای ادامه یکی دیگه رو انتخاب کن.", "This format is coming soon — pick another to continue.")}
           </div>
         )}
       </Section>
 
       {settings.format === "carousel" && (
-        <Section label="SLIDE COUNT">
+        <Section label={L("تعداد اسلاید", "SLIDE COUNT")}>
           <PillSelect
             options={SLIDE_COUNTS.map((n) => ({ label: String(n), value: n }))}
             value={settings.slideCount}
@@ -452,7 +454,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
         </Section>
       )}
 
-      <Section label="OUTPUT LANGUAGE">
+      <Section label={L("زبان خروجی", "OUTPUT LANGUAGE")}>
         <PillSelect options={LANGUAGES} value={settings.language} onChange={(v) => onChange("language", v)} />
       </Section>
 
@@ -479,7 +481,7 @@ function SetupStep({ settings, onChange, onNext, loading, error }) {
           fontFamily: "inherit",
         }}
       >
-        {loading ? "Searching…" : "Get Topic Suggestions →"}
+        {loading ? L("در حال جستجو…", "Searching…") : L("پیشنهاد موضوع ←", "Get topic suggestions →")}
       </button>
     </div>
   );
@@ -491,10 +493,10 @@ function SuggestStep({ topics, onPick, onBack }) {
   return (
     <div>
       <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
-        Choose a Topic
+        {L("یک موضوع انتخاب کن", "Choose a topic")}
       </h2>
       <p style={{ color: C.inkSoft, fontSize: 13, marginBottom: 20 }}>
-        Pick a hook — these are grounded in current facts
+        {L("یک هوک انتخاب کن؛ همه بر پایهٔ واقعیت‌های امروزن", "Pick a hook — these are grounded in current facts")}
       </p>
       {topics.map((t, i) => (
         <button
@@ -536,7 +538,7 @@ function SuggestStep({ topics, onPick, onBack }) {
           fontFamily: "inherit",
         }}
       >
-        ← Back
+        {L("→ برگشت", "← Back")}
       </button>
     </div>
   );
@@ -552,7 +554,7 @@ function ResultDisplay({ format, parsed, raw }) {
     return (
       <div style={{ marginTop: 8 }}>
         <div style={{ color: C.inkSoft, fontSize: 11, marginBottom: 6 }}>
-          Raw model output (not parsed):
+          {L("خروجی خام مدل (خوانده نشد):", "Raw model output (not parsed):")}
         </div>
         <pre
           style={{
@@ -589,7 +591,7 @@ function ResultDisplay({ format, parsed, raw }) {
             }}
           >
             <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-              Slide {s.num}
+              {L(`اسلاید ${s.num}`, `Slide ${s.num}`)}
             </div>
             <div style={{ color: C.cream, fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {s.content}
@@ -606,7 +608,7 @@ function ResultDisplay({ format, parsed, raw }) {
               direction: "rtl",
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Caption</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{L("کپشن", "Caption")}</div>
             <div style={{ color: C.cream, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {parsed.caption}
             </div>
@@ -665,9 +667,9 @@ function ResultDisplay({ format, parsed, raw }) {
   if (format === "reel") {
     if (!parsed.hook && !parsed.body) return <RawFallback />;
     const sections = [
-      { key: "hook", label: "Hook" },
-      { key: "body", label: "Body" },
-      { key: "cta", label: "CTA" },
+      { key: "hook", label: L("هوک", "Hook") },
+      { key: "body", label: L("بدنه", "Body") },
+      { key: "cta", label: L("دعوت به اقدام", "CTA") },
     ];
     return (
       <div style={{ direction: "rtl" }}>
@@ -700,7 +702,7 @@ function ResultDisplay({ format, parsed, raw }) {
             }}
           >
             <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-              On-screen text
+              {L("متن روی صفحه", "On-screen text")}
             </div>
             {parsed.onscreen.map((line, i) => (
               <div key={i} style={{ color: C.cream, fontSize: 13, lineHeight: 1.7 }}>
@@ -730,7 +732,7 @@ function ResultDisplay({ format, parsed, raw }) {
               marginBottom: 10,
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Stats</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>{L("آمار", "Stats")}</div>
             {parsed.stats.map((s, i) => (
               <div key={i} style={{ color: C.cream, fontSize: 13, lineHeight: 1.8 }}>
                 • {s}
@@ -748,7 +750,7 @@ function ResultDisplay({ format, parsed, raw }) {
               marginBottom: 10,
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Comparison</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{L("مقایسه", "Comparison")}</div>
             <div style={{ color: C.cream, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {parsed.comparison}
             </div>
@@ -763,7 +765,7 @@ function ResultDisplay({ format, parsed, raw }) {
               padding: "14px 16px",
             }}
           >
-            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Roadmap</div>
+            <div style={{ color: C.orange, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{L("نقشهٔ راه", "Roadmap")}</div>
             <div style={{ color: C.cream, fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
               {parsed.roadmap}
             </div>
@@ -809,7 +811,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: C.cream, fontSize: 20, fontWeight: 700, margin: 0 }}>
-          Result
+          {L("نتیجه", "Result")}
         </h2>
         <span
           style={{
@@ -819,10 +821,13 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             padding: "4px 10px",
             borderRadius: 12,
             fontWeight: 600,
-            letterSpacing: "0.05em",
+            letterSpacing: isFa() ? 0 : "0.05em",
           }}
         >
-          {result.format?.toUpperCase()}
+          {(() => {
+            const f = FORMATS.find((x) => x.value === result.format);
+            return f ? L(f.label) : result.format?.toUpperCase();
+          })()}
         </span>
       </div>
 
@@ -831,11 +836,11 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <FieldLabel>FEEDBACK FOR REGENERATION (optional)</FieldLabel>
+        <FieldLabel>{L("بازخورد برای نوشتن دوباره (اختیاری)", "FEEDBACK FOR REGENERATION (optional)")}</FieldLabel>
         <textarea
           value={feedback}
           onChange={(e) => setFeedback(e.target.value)}
-          placeholder="Describe what you'd like changed…"
+          placeholder={L("بگو چی عوض بشه…", "Describe what you'd like changed…")}
           rows={3}
           style={{
             width: "100%",
@@ -847,7 +852,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             fontSize: 13,
             fontFamily: "inherit",
             resize: "vertical",
-            direction: "ltr",
+            direction: uiDir(),
             boxSizing: "border-box",
           }}
         />
@@ -875,7 +880,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             opacity: genLoading ? 0.6 : 1,
           }}
         >
-          {genLoading ? "Generating…" : "Rewrite with Feedback"}
+          {genLoading ? L("در حال ساخت…", "Generating…") : L("بازنویسی با بازخورد", "Rewrite with feedback")}
         </button>
         <button
           onClick={onSave}
@@ -894,7 +899,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
             opacity: saved ? 0.7 : 1,
           }}
         >
-          {saved ? "Saved ✓" : "Save to Library"}
+          {saved ? L("ذخیره شد ✓", "Saved ✓") : L("ذخیره در کتابخانه", "Save to library")}
         </button>
       </div>
 
@@ -909,7 +914,7 @@ function ResultStep({ result, chosenTopic, onRegenerate, onBack, saved, onSave }
           fontFamily: "inherit",
         }}
       >
-        ← New topic
+        {L("→ موضوع جدید", "← New topic")}
       </button>
     </div>
   );
@@ -975,7 +980,7 @@ export default function ContentWizard() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load topics / خطا در دریافت موضوعات");
+      if (!res.ok) throw new Error(data.error || L("دریافت موضوع‌ها نشد", "Failed to load topics"));
       setSuggestedTopics(data.topics || []);
       setStep(2);
     } catch (err) {
@@ -1005,7 +1010,7 @@ export default function ContentWizard() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to generate / خطا در تولید محتوا");
+      if (!res.ok) throw new Error(data.error || L("ساخت محتوا نشد", "Failed to generate"));
       setResult(data);
       setStep(4);
     } catch (err) {
@@ -1067,6 +1072,7 @@ export default function ContentWizard() {
 
   return (
     <div
+      dir={uiDir()}
       style={{
         minHeight: "100vh",
         background: C.ground,
@@ -1084,8 +1090,8 @@ export default function ContentWizard() {
           justifyContent: "space-between",
         }}
       >
-        <span style={{ color: C.cream, fontWeight: 800, fontSize: 15, letterSpacing: "0.04em" }}>
-          SUGIMOTO · Content Wizard
+        <span style={{ color: C.cream, fontWeight: 800, fontSize: 15, letterSpacing: isFa() ? 0 : "0.04em" }}>
+          {L("SUGIMOTO · ویزارد محتوا", "SUGIMOTO · Content Wizard")}
         </span>
         <a
           href="/"
@@ -1097,7 +1103,7 @@ export default function ContentWizard() {
             paddingBottom: 1,
           }}
         >
-          ← Topic Engine
+          {L("→ تاپیک انجین", "← Topic Engine")}
         </a>
       </div>
 
