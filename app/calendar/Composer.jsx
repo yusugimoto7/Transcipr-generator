@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import { apiAt } from "../editing/ui";
 import DrivePicker from "../DrivePicker";
 import { NETWORKS, NET, STATUS, effectiveCaption, thumbOf } from "./channels";
+import { IG_ACCOUNTS } from "../../lib/calendar/igAccounts";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
 
@@ -230,6 +231,14 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       <option value="reel">Reel (video)</option>
                       <option value="post">Feed post (image or carousel)</option>
                       <option value="story">Stories (each file its own story)</option>
+                    </select>
+                  )}
+                  {tab === "instagram" && (
+                    <select id="cmp-igaccount" className={c.select} value={editing.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })} title="Which Instagram page this post goes to">
+                      <option value="">Page: by market label (EU → Europe)</option>
+                      {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
+                        <option key={k} value={k}>Page: {name}</option>
+                      ))}
                     </select>
                   )}
                   {tab === "youtube" && <input id="cmp-yttitle" className={`${c.input} ${c.grow}`} dir="auto" placeholder="YouTube title" value={editing.title || ""} disabled={locked} onChange={(e) => setCh("youtube", { title: e.target.value })} />}
