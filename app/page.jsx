@@ -434,6 +434,7 @@ export default function App() {
       if (kind === "story") {
         delete entry.story_draw;
         delete entry.story_page;
+        delete entry.story_photo;
         delete entry.story_send;
       }
       entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now(), extra };
@@ -503,7 +504,7 @@ export default function App() {
         } else if (remote.kind === "carousel_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).carousel || {};
           patchWs(t, { materials: { carousel: { ...cur, sent: r.sent || {} } } });
-        } else if (remote.kind === "story" || remote.kind === "story_draw" || remote.kind === "story_page") {
+        } else if (remote.kind === "story" || remote.kind === "story_draw" || remote.kind === "story_page" || remote.kind === "story_photo") {
           patchWs(t, { materials: { story: { ts: now, count: (r.pages || []).length, sent: r.sent || {} } } });
         } else if (remote.kind === "story_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).story || {};
@@ -988,7 +989,7 @@ export default function App() {
   // The story, the same way as the carousel.
   let story = savedStory;
   let storyJob = null;
-  for (const kind of ["story", "story_draw", "story_page"]) {
+  for (const kind of ["story", "story_draw", "story_page", "story_photo"]) {
     const j = svJobs[kind];
     if (!j) continue;
     if (!storyJob || (j.startedAt || 0) > (storyJob.startedAt || 0)) storyJob = j;
@@ -3600,7 +3601,36 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const pages = (story && story.pages) || [];
   const drawn = pages.filter((p) => p.image_url).length;
   const missing = pages.length - drawn;
-  const busyPage = running && job.kind === "story_page" ? (job.extra && job.extra.num) || 0 : 0;
+  const busyPage = running && (job.kind === "story_page" || job.kind === "story_photo") ? (job.extra && job.extra.num) || 0 : 0;
+  // The chosen template has an AI photo on each page, which the team can change.
+  const hasPhoto = !!(STORY_TEMPLATES.find((t) => t.key === ((story && story.template) || "simple")) || {}).photo;
+  const [photoFor, setPhotoFor] = useState(0); // page whose photo note box is open
+  const [photoNote, setPhotoNote] = useState("");
+  const [uploadErr, setUploadErr] = useState("");
+  // A picture from the device: made smaller here (at most 1600 px), sent to
+  // the server to be kept, then that page is drawn again with it.
+  const uploadPhoto = async (num, file) => {
+    setUploadErr("");
+    try {
+      const img = await new Promise((ok, bad) => {
+        const im = new Image();
+        im.onload = () => ok(im);
+        im.onerror = () => bad(new Error("this file is not a picture"));
+        im.src = URL.createObjectURL(file);
+      });
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.naturalWidth * k);
+      cv.height = Math.round(img.naturalHeight * k);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      const res = await fetch("/api/story/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: cv.toDataURL("image/jpeg", 0.88) }) });
+      const j = await res.json();
+      if (!res.ok || !j.url) throw new Error(j.error || "upload failed");
+      onJob("story_photo", { num, url: j.url });
+    } catch (e) {
+      setUploadErr(String(e.message || e));
+    }
+  };
   const font = "'Geist', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
   const isLex = topic && (topic.newsletter === "lexbase" || /\/api\/lexbase\//.test(topic.source_url || ""));
@@ -3664,7 +3694,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
       {running && (
         <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(STORY_TONE, 0.07), border: `1px solid ${alpha(STORY_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span>{" "}
-          {stage === "writing" ? "در حال نوشتن متن استوری…" : stage === "screenshots" ? "در حال گرفتن اسکرین‌شات از منبع اصلی…" : `در حال طراحی صفحه‌ها… ${drawn} از ${pages.length}`}
+          {stage === "writing" ? "در حال نوشتن متن استوری…" : stage === "screenshots" ? "در حال گرفتن اسکرین‌شات از منبع اصلی…" : stage === "photos" ? "در حال ساخت عکس‌ها با هوش مصنوعی…" : `در حال طراحی صفحه‌ها… ${drawn} از ${pages.length}`}
           <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
         </div>
       )}
@@ -3716,6 +3746,32 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                       )}
                     </div>
                   )}
+                  {hasPhoto && !running && pg.image_url && (
+                    <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
+                      <button className="ui-btn" onClick={() => { setPhotoFor(photoFor === pg.num ? 0 : pg.num); setPhotoNote(""); }} title="Make this page's photo again" style={{ background: photoFor === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: photoFor === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
+                        🖼 عکس جدید
+                      </button>
+                      <label title="Use your own picture" style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
+                        ⬆ آپلود عکس
+                        <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) uploadPhoto(pg.num, f); }} />
+                      </label>
+                    </div>
+                  )}
+                  {photoFor === pg.num && !running && (
+                    <div style={{ marginBottom: 6 }}>
+                      <textarea
+                        value={photoNote}
+                        onChange={(e) => setPhotoNote(e.target.value)}
+                        rows={2}
+                        placeholder="چه عکسی؟ (اختیاری) مثلاً: فرودگاه ونکوور، بدون آدم"
+                        style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.line}`, padding: 6, fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, resize: "vertical" }}
+                      />
+                      <button className="ui-btn" onClick={() => { onJob("story_photo", { num: pg.num, note: photoNote.trim() }); setPhotoFor(0); }} style={{ marginTop: 4, width: "100%", background: STORY_TONE, color: "#fff", border: "none", borderRadius: 8, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: fa }}>
+                        ساخت عکس جدید
+                      </button>
+                    </div>
+                  )}
+                  {pg.photo_error && hasPhoto && <div style={{ color: C.orangeDeep, marginBottom: 4 }}>⚠️ عکس ساخته نشد؛ «عکس جدید» را بزنید.</div>}
                   <b style={{ color: C.text }}>{pg.headline}</b>
                   {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحه دیگه استفاده شد.</div>}
                 </div>
@@ -3749,6 +3805,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               <StoryTemplatePicker value={story.template || "simple"} onPick={(k) => k !== (story.template || "simple") && onJob("story_draw", { template: k })} />
             </div>
           )}
+          {uploadErr && <div style={{ fontSize: 12, color: C.reject, marginTop: 8, direction: "ltr" }}>⚠️ {uploadErr}</div>}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("story_draw", {})} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
               طراحی {missing} صفحه باقی‌مانده

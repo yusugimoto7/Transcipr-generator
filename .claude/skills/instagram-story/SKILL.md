@@ -56,10 +56,22 @@ source, never redrawn: only where and how big it sits changes. The same panel se
 of every topic (News, Lexbase, Ideas, Studio).
 
 ## Templates (Hamed, Oct 23 2026)
-Ten home-made "trending" looks (notes, tweet, breaking, big number, chat, scrapbook, marker, editorial,
-gradient, did-you-know) were built and **rejected**: "I only like the simple one; use ready-made
-templates (Canva, Pinterest…) and show me some to choose." Only `simple` is left in
-`lib/story/templates.js`; the plumbing stays (`story.template`, `cleanTemplate`, `StoryTemplatePicker`,
-`story_draw` with `template`, previews in `public/story-templates/<key>.jpg`) and the picker shows
-itself again once there is more than one template. New templates come only from designs the team
-picked from ready-made galleries — don't invent looks.
+Ten home-made "trending" looks were built first and **rejected** ("I only like the simple one; use
+ready-made templates"). From a gallery of 27 ready-made Canva/Freepik story designs Hamed **kept 15
+Canva ones: gallery numbers 2-12 and 16-19**, now `c2`…`c19` in `lib/story/templates.js` (redrawn in
+HTML with Persian text; labels such as «خبر فوری» / «آپدیت» switch to «نکته مهم» / «نکته» on
+explainers via `story.evergreen`). `simple` stays the default. The picker (`StoryTemplatePicker`) shows
+`public/story-templates/<key>.jpg`; changing the template later (`story_draw` with `template`) keeps the text.
+- **Photos (Hamed: "where a template has a photo, the AI makes it from the news, and it must be
+  changeable")**: templates with `photo` (shape portrait/landscape/square, `look` photo/bw/illustration)
+  get one AI picture per page (`lib/story/photo.js`, `fillStoryPhotos` in the story job, stage
+  "photos"). Under each page: «🖼 عکس جدید» (optional note → job `story_photo`) and «⬆ آپلود عکس»
+  (device picture → `/api/story/upload`, re-encoded with sharp, kept like the AI ones → `story_photo`
+  with `url`). Only that page is drawn again.
+- The photo is **illustration only**: no text, numbers, documents, screens, flags or seals (it must never
+  look like evidence); people at most in the background, never a hijab or head covering, never a real
+  person; learned `design` rules apply. **The source screenshot stays on every page of every template**:
+  it is the proof, shown whole.
+- A hand-drawn page (`page.manual`) is drawn in the simple style whatever the template.
+- To add a template: a function in `T`, an entry in `STORY_TEMPLATES` (with `photo`/`look` if it has a
+  picture), and a 216×384 preview jpg rendered from a sample page (stand-in photo blurred).
