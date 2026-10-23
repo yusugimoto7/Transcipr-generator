@@ -9,6 +9,7 @@ import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
 import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
+import StoryDesigner from "./StoryDesigner";
 import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
@@ -3566,6 +3567,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const [copiedCap, setCopiedCap] = useState(false);
   const [preview, setPreview] = useState(0);
   const [editing, setEditing] = useState(0); // page number whose edit sheet is open
+  const [designing, setDesigning] = useState(0); // page number laid out by hand
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
@@ -3673,6 +3675,11 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                           ✏️
                         </button>
                       )}
+                      {!running && pg.shot_url && (
+                        <button className="ui-btn" onClick={() => setDesigning(designing === pg.num ? 0 : pg.num)} title="Lay this page out by hand" aria-label={"Design page " + pg.num} style={{ background: designing === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: designing === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
+                          طراحی
+                        </button>
+                      )}
                     </div>
                   )}
                   <b style={{ color: C.text }}>{pg.headline}</b>
@@ -3682,6 +3689,20 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             ))}
           </div>
 
+          {designing > 0 && pages.some((x) => x.num === designing) && (
+            <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 14, padding: 12 }}>
+              <div dir="rtl" style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8, fontFamily: fa }}>طراحی دستی · صفحه {designing}</div>
+              <StoryDesigner
+                key={designing}
+                page={pages.find((x) => x.num === designing)}
+                bg={story.bg || "purple"}
+                busy={running}
+                onMake={(manual) => onJob("story_page", { num: designing, manual })}
+                onReset={() => onJob("story_page", { num: designing, manual: null })}
+                onSave={(url) => saveStoryImage(url, `sugimoto-story-${designing}.png`)}
+              />
+            </div>
+          )}
           {!running && (
             <div dir="rtl" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2, flexWrap: "wrap" }}>
               <span>رنگ پس‌زمینه:</span>

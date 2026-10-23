@@ -44,3 +44,13 @@ Needs `HCTI_USER_ID` and `HCTI_API_KEY` on Render (htmlcsstoimage.com; API key p
 
 ## Checking a change locally
 No HCTI locally: render the page HTML with Playwright/Chromium instead (`/opt/pw-browsers/chromium-*/chrome-linux/chrome` in cloud sessions) — `storyPageHtml(page, total, story)` + `STORY_CSS`, viewport 1080×1920, with Vazirmatn/Inter loaded from Google Fonts. Test `pdfQuoteShot` against a two-column justified PDF (reportlab makes one). Look at the image before pushing.
+
+
+## Hand-drawn pages (Hamed, Oct 23 2026)
+«طراحی» under each page opens `app/StoryDesigner.jsx`: the page at 9:16 in the automatic layout
+(same CSS as `STORY_CSS`), measured once, then the headline, the screenshot, the body and the source
+line can be dragged and sized (text size with +/-). «ساخت این طرح و دانلود» sends the positions as
+`page.manual` to `story_page`, which draws only that page again and saves it; the page is then
+saved to the device. «خودکار» clears `manual`. The screenshot is still the real photograph of the
+source, never redrawn: only where and how big it sits changes. The same panel serves the stories
+of every topic (News, Lexbase, Ideas, Studio).
