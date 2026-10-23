@@ -18,7 +18,7 @@ export async function POST(request) {
       return Response.json({ error: "unknown job kind" }, { status: 400 });
     }
     // With one login for the whole app, Telegram and WordPress sends need "publishing".
-    if (process.env.APP_LOGIN === "all" && PUBLISH_JOBS.includes(kind)) {
+    if (process.env.APP_LOGIN === "all" && PUBLISH_JOBS.includes(kind.replace(/@en$/, ""))) {
       const user = await currentUser(request).catch(() => null);
       if (!accessOf(user).includes("publishing")) {
         return Response.json({ error: "your account cannot send to Telegram or WordPress; ask Hamed" }, { status: 403 });

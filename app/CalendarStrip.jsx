@@ -13,6 +13,9 @@ const KINDS = [
   ["video", "🎬", "English video"],
   ["article", "📝", "Blog article"],
   ["script", "🎙️", "Script to record"],
+  ["carousel_en", "🖼️", "English carousel"],
+  ["story_en", "📱", "English story"],
+  ["article_en", "📝", "English blog article"],
 ];
 const STATUS = {
   draft: ["Draft", "#8b95a3"], pending: ["Waiting for approval", "#f28c28"], approved: ["Approved", "#2f6fde"],

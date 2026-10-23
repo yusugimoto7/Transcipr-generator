@@ -37,7 +37,7 @@ async function call(url, body) {
   return d;
 }
 
-const NAMES = { carousel: "carousel", story: "story" };
+const NAMES = { carousel: "carousel", story: "story", carousel_en: "English carousel", story_en: "English story" };
 
 export default function CalendarButtons({ topic, made, version = "", C, FONT }) {
   const key = String((topic && (topic.title_fa || topic.title_en)) || "").trim().toLowerCase();

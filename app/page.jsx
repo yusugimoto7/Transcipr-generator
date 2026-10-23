@@ -293,6 +293,9 @@ export default function App() {
   const [savedStory, setSavedStory] = useState(null);
   const [savedTg, setSavedTg] = useState(null); // the news post as saved (text, picture, when sent)
   const [savedVideo, setSavedVideo] = useState(null);
+  // The language content is made in on the topic page; the English versions are saved apart.
+  const [contentLang, setContentLang] = useState("fa");
+  const [savedEn, setSavedEn] = useState({});
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [caps, setCaps] = useState({ carousel: true, story: true, telegram: { review: true, public: true }, video: false });
 
@@ -421,20 +424,22 @@ export default function App() {
     setDismissed((d) => ({ ...d, [key + ":" + kind]: false }));
     setBg((prev) => {
       const entry = { ...(prev[key] || {}) };
+      const base = kind.replace(/@en$/, "");
+      const sfx = kind.endsWith("@en") ? "@en" : "";
       // A new article makes any earlier draft/Word-file result stale.
-      if (kind === "article") {
-        delete entry.publish;
-        delete entry.docfile;
+      if (base === "article") {
+        delete entry["publish" + sfx];
+        delete entry["docfile" + sfx];
       }
       // A new carousel replaces the earlier one and what was done to it.
-      if (kind === "carousel") {
-        delete entry.carousel_slide;
-        delete entry.carousel_send;
+      if (base === "carousel") {
+        delete entry["carousel_slide" + sfx];
+        delete entry["carousel_send" + sfx];
       }
-      if (kind === "story") {
-        delete entry.story_draw;
-        delete entry.story_page;
-        delete entry.story_send;
+      if (base === "story") {
+        delete entry["story_draw" + sfx];
+        delete entry["story_page" + sfx];
+        delete entry["story_send" + sfx];
       }
       entry[kind] = { id: null, kind, key, status: "running", result: null, error: "", topic, startedAt: Date.now(), extra };
       return { ...prev, [key]: entry };
@@ -494,18 +499,20 @@ export default function App() {
         const t = local.topic || {};
         const r = remote.result || {};
         const now = Date.now();
-        if (remote.kind === "script") patchWs(t, { status: "active", materials: { script: { ts: now } } });
-        else if (remote.kind === "article") patchWs(t, { materials: { article: { ts: now } } });
-        else if (remote.kind === "telegram" || remote.kind.startsWith("telegram_")) patchWs(t, { materials: { telegram: { ts: now } } });
-        else if (remote.kind === "video") patchWs(t, { status: "active", materials: { video: { ts: now, status: r.status || "requested" } } });
-        else if (remote.kind === "carousel" || remote.kind === "carousel_slide") {
+        // English steps ("carousel@en") mark the same list badges as the Persian ones.
+        const rk = remote.kind.replace(/@en$/, "");
+        if (rk === "script") patchWs(t, { status: "active", materials: { script: { ts: now } } });
+        else if (rk === "article") patchWs(t, { materials: { article: { ts: now } } });
+        else if (rk === "telegram" || rk.startsWith("telegram_")) patchWs(t, { materials: { telegram: { ts: now } } });
+        else if (rk === "video") patchWs(t, { status: "active", materials: { video: { ts: now, status: r.status || "requested" } } });
+        else if (rk === "carousel" || rk === "carousel_slide") {
           patchWs(t, { materials: { carousel: { ts: now, count: (r.slides || []).length, sent: r.sent || {} } } });
-        } else if (remote.kind === "carousel_send") {
+        } else if (rk === "carousel_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).carousel || {};
           patchWs(t, { materials: { carousel: { ...cur, sent: r.sent || {} } } });
-        } else if (remote.kind === "story" || remote.kind === "story_draw" || remote.kind === "story_page") {
+        } else if (rk === "story" || rk === "story_draw" || rk === "story_page") {
           patchWs(t, { materials: { story: { ts: now, count: (r.pages || []).length, sent: r.sent || {} } } });
-        } else if (remote.kind === "story_send") {
+        } else if (rk === "story_send") {
           const cur = ((wsRef.current[local.key] || {}).materials || {}).story || {};
           patchWs(t, { materials: { story: { ...cur, sent: r.sent || {} } } });
         }
@@ -806,6 +813,7 @@ export default function App() {
     setSavedCarousel(null);
     setSavedStory(null);
     setSavedTg(null);
+    setSavedEn({});
     setSavedVideo(null);
     setScriptError(null);
     setScriptTab("fa");
@@ -833,6 +841,7 @@ export default function App() {
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
           if (m.telegram) setSavedTg(m.telegram);
+          setSavedEn({ article: (m.article_en && m.article_en.article) || null, carousel: m.carousel_en || null, story: m.story_en || null, telegram: m.telegram_en || null });
         }
         if (m.video) setSavedVideo(m.video);
       })
@@ -952,15 +961,20 @@ export default function App() {
       : scriptError;
   // The Telegram news post on screen: the newest job result this session
   // (write, save, picture, send), else the saved one.
-  let tgPost = savedTg && (savedTg.text || savedTg.image_url || savedTg.sent) ? savedTg : null;
+  // The chosen language's jobs, under their plain kind so the panels need not know.
+  const EN = contentLang === "en";
+  const sfx = EN ? "@en" : "";
+  const LJ = (k) => (svJobs[k + sfx] ? { ...svJobs[k + sfx], kind: k } : null);
+  const savedTgL = EN ? savedEn.telegram : savedTg;
+  let tgPost = savedTgL && (savedTgL.text || savedTgL.image_url || savedTgL.sent) ? savedTgL : null;
   let tgJob = null;
   for (const kind of ["telegram_write", "telegram_save", "telegram_image", "telegram_send"]) {
-    const j = svJobs[kind];
+    const j = LJ(kind);
     if (!j) continue;
     if (!tgJob || (j.startedAt || 0) > (tgJob.startedAt || 0)) tgJob = j;
   }
   for (const kind of ["telegram_write", "telegram_save", "telegram_image", "telegram_send"]) {
-    const j = svJobs[kind];
+    const j = LJ(kind);
     if (j && j.status === "done" && j.result && (!tgPost || (j.startedAt || 0) >= (tgPost._at || 0))) tgPost = { ...j.result, _at: j.startedAt || 0 };
   }
 
@@ -972,29 +986,29 @@ export default function App() {
 
   // The carousel on screen: the newest job result this session, else the
   // saved one. `sent` merges what was sent since.
-  let carousel = savedCarousel;
+  let carousel = EN ? savedEn.carousel || null : savedCarousel;
   let carouselJob = null;
   for (const kind of ["carousel", "carousel_slide"]) {
-    const j = svJobs[kind];
+    const j = LJ(kind);
     if (!j) continue;
     if (!carouselJob || (j.startedAt || 0) > (carouselJob.startedAt || 0)) carouselJob = j;
   }
   if (carouselJob && carouselJob.result && (carouselJob.result.slides || []).length) carousel = carouselJob.result;
-  const sendJob = svJobs.carousel_send || null;
+  const sendJob = LJ("carousel_send");
   if (carousel && sendJob && sendJob.status === "done" && sendJob.result && sendJob.result.sent) {
     carousel = { ...carousel, sent: { ...(carousel.sent || {}), ...sendJob.result.sent } };
   }
 
   // The story, the same way as the carousel.
-  let story = savedStory;
+  let story = EN ? savedEn.story || null : savedStory;
   let storyJob = null;
   for (const kind of ["story", "story_draw", "story_page"]) {
-    const j = svJobs[kind];
+    const j = LJ(kind);
     if (!j) continue;
     if (!storyJob || (j.startedAt || 0) > (storyJob.startedAt || 0)) storyJob = j;
   }
   if (storyJob && storyJob.result && (storyJob.result.pages || []).length) story = storyJob.result;
-  const storySendJob = svJobs.story_send || null;
+  const storySendJob = LJ("story_send");
   if (story && storySendJob && storySendJob.status === "done" && storySendJob.result && storySendJob.result.sent) {
     story = { ...story, sent: { ...(story.sent || {}), ...storySendJob.result.sent } };
   }
@@ -1200,7 +1214,7 @@ export default function App() {
           key={"sv:" + topicKey(scriptTopic)}
           topic={scriptTopic}
           scripts={viewScripts}
-          initialArticle={initialArticle}
+          initialArticle={EN ? savedEn.article || null : initialArticle}
           loading={viewLoading}
           loadingText={loadingSaved && !(sj && sj.status === "running") ? "در حال بارگذاری محتوای ذخیره‌شده…" : ""}
           error={viewError}
@@ -1215,9 +1229,11 @@ export default function App() {
           draftJob={enJob && !enRewrite ? enJob : null}
           tgPost={tgPost}
           tgJob={tgJob}
-          articleJob={svJobs.article || null}
-          publishJob={svJobs.publish || null}
-          docJob={svJobs.docfile || null}
+          articleJob={LJ("article")}
+          publishJob={LJ("publish")}
+          docJob={LJ("docfile")}
+          lang={contentLang}
+          setLang={setContentLang}
           carousel={carousel}
           carouselJob={carouselJob}
           sendJob={sendJob}
@@ -1228,7 +1244,7 @@ export default function App() {
           video={video}
           onRefreshVideo={() => loadSaved(svKey, "video")}
           caps={caps}
-          onJob={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
+          onJob={(kind, extra) => startJob(LANG_KINDS.includes(kind) ? kind + sfx : kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
     </div>
@@ -1305,6 +1321,8 @@ function StudioSection({ topics, listProps, research, own }) {
 }
 
 // List (every topic, new and used) or the Lexbase newsletter section.
+// Steps made in the language chosen on the topic page (lib/jobs.js LANG_KINDS).
+const LANG_KINDS = ["article", "publish", "telegram_write", "telegram_save", "telegram_image", "telegram_send", "carousel", "carousel_slide", "carousel_send", "story", "story_draw", "story_page", "story_send"];
 const MODES = [["list", Newspaper, "News"], ["lexbase", Mail, "Lexbase"], ["ideas", Lightbulb, "Ideas"], ["studio", Images, "Studio"]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
@@ -2646,7 +2664,7 @@ function Segmented({ value, onChange, items }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob }) {
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
   const f = fieldOf(topic);
   const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -2945,6 +2963,17 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {/* What to make from it */}
       {!loading && !error && (
         <Section title="ساخت از این موضوع" hint="هر کدوم جدا؛ هیچ‌چیز خودکار ارسال نمی‌شه">
+          {/* Chosen before anything is made: the post, article, carousel and story below are
+              written in this language, and each language keeps its own versions. */}
+          <div style={{ marginBottom: 12 }}>
+            <div dir="rtl" style={{ fontFamily: FA_FONT, fontSize: 12.5, fontWeight: 700, color: C.text2, marginBottom: 6, textAlign: "right" }}>زبان محتوا · Content language</div>
+            <Segmented value={lang} onChange={setLang} items={[["fa", "فارسی", FA_FONT], ["en", "English"]]} />
+            <div dir={lang === "en" ? "ltr" : "rtl"} style={{ fontFamily: lang === "en" ? FONT : FA_FONT, fontSize: 11.5, color: C.text3, marginTop: 6, textAlign: lang === "en" ? "left" : "right" }}>
+              {lang === "en"
+                ? "Telegram post, blog article, carousel and story are made in English. The Persian versions stay as they are."
+                : "پست تلگرام، مقاله، کاروسل و استوری به فارسی ساخته می‌شن. نسخه‌های انگلیسی جدا نگه داشته می‌شن."}
+            </div>
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
             {tiles.filter(Boolean).map((t) => <ActionTile key={t.k} {...t} />)}
           </div>
@@ -2954,13 +2983,13 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {/* Telegram news post (nothing until asked for or made) */}
       {!loading && !error && (tgOpen || tgPost || tgJob) && (
         <div ref={telegramRef} style={{ scrollMarginTop: 90 }}>
-          <TelegramPanel topic={topic} post={tgPost} job={tgJob} caps={caps} onJob={onJob} />
+          <TelegramPanel key={"tg:" + lang} topic={topic} post={tgPost} job={tgJob} caps={caps} onJob={onJob} lang={lang} />
         </div>
       )}
 
       {/* Blog article */}
       {!loading && !error && artState !== "idle" && (
-        <Section title="مقاله وبلاگ" innerRef={articleRef}>
+        <Section title={lang === "en" ? "مقاله وبلاگ · English" : "مقاله وبلاگ"} innerRef={articleRef}>
           {artState === "generating" && (
             <div dir="rtl" className="ui-progress" style={{ ...card, padding: "12px 14px", fontFamily: FA_FONT, fontSize: 13 }}>
               <span className="ui-pulse">⏳</span> در حال نوشتن مقاله…
@@ -2991,13 +3020,13 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                   {!article.parse_ok && <span style={{ color: C.orange }}>⚠️ خروجی ناقص — قبل از انتشار بررسی کن</span>}
                 </div>
                 <div style={{ maxHeight: 360, overflowY: "auto" }}>
-                  <div dir="rtl" style={{ fontFamily: FA_FONT, fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
+                  <div dir={article.lang === "en" ? "ltr" : "rtl"} style={{ fontFamily: article.lang === "en" ? FONT : FA_FONT, fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
                     {article.title_fa}
                   </div>
                   <div
-                    dir="rtl"
+                    dir={article.lang === "en" ? "ltr" : "rtl"}
                     className="article-preview"
-                    style={{ fontFamily: FA_FONT, fontSize: 13.5, lineHeight: 1.9, color: "#2f3f45", textAlign: "right" }}
+                    style={{ fontFamily: article.lang === "en" ? FONT : FA_FONT, fontSize: 13.5, lineHeight: 1.9, color: "#2f3f45", textAlign: article.lang === "en" ? "left" : "right" }}
                     dangerouslySetInnerHTML={{ __html: article.content_html }}
                   />
                 </div>
@@ -3055,14 +3084,14 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {/* Carousel (it shows nothing until asked for or made) */}
       {!loading && !error && (
         <div ref={carouselRef} style={{ scrollMarginTop: 90 }}>
-          <CarouselPanel topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} openSignal={carouselOpen} />
+          <CarouselPanel key={"car:" + lang} lang={lang} topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} openSignal={carouselOpen} />
         </div>
       )}
 
       {/* Story (nothing until asked for or made) */}
       {!loading && !error && (
         <div ref={storyRef} style={{ scrollMarginTop: 90 }}>
-          <StoryPanel topic={topic} story={story} job={storyJob} sendJob={storySendJob} caps={caps} onJob={onJob} openSignal={storyOpen} />
+          <StoryPanel key={"st:" + lang} lang={lang} topic={topic} story={story} job={storyJob} sendJob={storySendJob} caps={caps} onJob={onJob} openSignal={storyOpen} />
         </div>
       )}
 
@@ -3137,7 +3166,8 @@ async function downloadSlides(slides, topic) {
   }
 }
 
-function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
+function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSignal = 0, lang = "fa" }) {
+  const textDir = lang === "en" ? "ltr" : "rtl";
   const [form, setForm] = useState(false);
   // The Carousel tile on the topic page opens the form.
   useEffect(() => {
@@ -3200,7 +3230,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 
   if (!slides.length && !running && !form && !failed) return null;
   return (
-    <Section title="پست کاروسل">
+    <Section title={lang === "en" ? "پست کاروسل · English" : "پست کاروسل"}>
 
       {form && !running && (
         <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
@@ -3324,7 +3354,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                     </span>
                   )}
                 </div>
-                <div dir="rtl" style={{ padding: "0 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-line" }}>
+                <div dir={textDir} style={{ padding: "0 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", whiteSpace: "pre-line" }}>
                   {sl.content}
                 </div>
               </div>
@@ -3409,7 +3439,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                 </span>
               </div>
               {capOpen ? (
-                <div dir="rtl">
+                <div dir={textDir}>
                   <textarea value={capText} onChange={(e) => setCapText(e.target.value)} rows={8} style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, resize: "vertical" }} />
                   <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
                     <button className="ui-btn" onClick={saveCaption} disabled={!capText.trim()} style={{ ...btn("#6d5bd0", "#fff", "none"), padding: "7px 14px", opacity: capText.trim() ? 1 : 0.5 }}>ذخیره کپشن</button>
@@ -3418,13 +3448,13 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                   </div>
                 </div>
               ) : (
-                <div dir="rtl" style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 180, overflowY: "auto" }}>{carousel.caption}</div>
+                <div dir={textDir} style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap", maxHeight: 180, overflowY: "auto" }}>{carousel.caption}</div>
               )}
             </div>
           )}
 
           {drawn > 0 && !running && (
-            <CalendarButtons topic={topic} made="carousel" version={slides.map((x) => x.image_url || "").join("|")} C={C} FONT={font} />
+            <CalendarButtons topic={topic} made={lang === "en" ? "carousel_en" : "carousel"} version={slides.map((x) => x.image_url || "").join("|")} C={C} FONT={font} />
           )}
         </div>
       )}
@@ -3585,7 +3615,7 @@ function StoryTemplatePicker({ value, onPick, disabled }) {
     </div>
   );
 }
-function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal = 0 }) {
+function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal = 0, lang = "fa" }) {
   const [form, setForm] = useState(false);
   useEffect(() => {
     if (openSignal) setForm(true);
@@ -3620,7 +3650,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
 
   if (!pages.length && !running && !form && !failed) return null;
   return (
-    <Section title="استوری">
+    <Section title={lang === "en" ? "استوری · English" : "استوری"}>
       {form && !running && (
         <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
           <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>📱 استوری فکت از این موضوع</div>
@@ -3815,12 +3845,12 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   {copiedCap ? "Copied ✓" : "Copy"}
                 </button>
               </div>
-              <div dir="rtl" style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{story.caption}</div>
+              <div dir={lang === "en" ? "ltr" : "rtl"} style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{story.caption}</div>
             </div>
           )}
 
           {drawn > 0 && !running && (
-            <CalendarButtons topic={topic} made="story" version={pages.map((x) => x.image_url || "").join("|")} C={C} FONT={font} />
+            <CalendarButtons topic={topic} made={lang === "en" ? "story_en" : "story"} version={pages.map((x) => x.image_url || "").join("|")} C={C} FONT={font} />
           )}
         </div>
       )}
@@ -3833,7 +3863,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
 // that can be drawn again or changed with a note. Send puts it on the public
 // channel @sugimotovisa; nothing is sent until that button is pressed.
 const TG_TONE = "#0088cc";
-function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
+function TelegramPanel({ topic, post, job, caps = {}, onJob, lang = "fa" }) {
   const [text, setText] = useState((post && post.text) || "");
   const [dirty, setDirty] = useState(false);
   const [link, setLink] = useState((post && post.link) || null);
@@ -3847,7 +3877,10 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
   const fa = "'Vazirmatn', sans-serif";
   const font = "'Geist', 'Vazirmatn', sans-serif";
   const image = (post && post.image_url) || "";
-  const publicOk = caps.telegram?.public !== false;
+  // An English post goes only to the English channel (TELEGRAM_PUBLIC_CHANNEL_ID_EN).
+  const en = lang === "en";
+  const publicOk = en ? !!caps.telegram?.english : caps.telegram?.public !== false;
+  const where = en ? "the English channel" : "@sugimotovisa";
 
   // What the server has, unless someone is typing over it.
   useEffect(() => {
@@ -3867,7 +3900,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
   const send = () => {
     if (!text.trim()) return;
     const again = post && post.sent && post.sent_to === "public" ? "\n\nIt was already sent on " + when(post.sent) + "." : "";
-    if (!window.confirm((image ? "Send this post with its picture to @sugimotovisa now?" : "Send this post to @sugimotovisa now, without a picture?") + again)) return;
+    if (!window.confirm((image ? `Send this post with its picture to ${where} now?` : `Send this post to ${where} now, without a picture?`) + again)) return;
     setDirty(false);
     onJob("telegram_send", { text, link });
   };
@@ -3879,10 +3912,10 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
     setNotes("");
   };
   const fullLen = text.length + (link ? (link.title || "").length + 6 : 0);
-  const label = { telegram_write: "در حال نوشتن پست…", telegram_image: "در حال طراحی تصویر…", telegram_send: "در حال ارسال به @sugimotovisa…", telegram_save: "در حال ذخیره…" }[kind] || "…";
+  const label = { telegram_write: "در حال نوشتن پست…", telegram_image: "در حال طراحی تصویر…", telegram_send: `در حال ارسال به ${where}…`, telegram_save: "در حال ذخیره…" }[kind] || "…";
 
   return (
-    <Section title="پست تلگرام">
+    <Section title={en ? "پست تلگرام · English" : "پست تلگرام"}>
       {running && (
         <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(TG_TONE, 0.07), border: `1px solid ${alpha(TG_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span> {label}
@@ -3891,12 +3924,12 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
       )}
       {failed && !running && <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>}
       {post && post.sent && post.sent_to === "public" && (
-        <div dir="rtl" style={{ fontSize: 12.5, color: C.success, marginBottom: 10, fontFamily: fa }}>✓ ارسال شد به @sugimotovisa · {when(post.sent)}</div>
+        <div dir="rtl" style={{ fontSize: 12.5, color: C.success, marginBottom: 10, fontFamily: fa }}>✓ ارسال شد به {where} · {when(post.sent)}</div>
       )}
 
       {!text && !running && !(post && post.text) ? (
         <div style={{ textAlign: "center" }}>
-          <button className="ui-btn ui-glow-orange" onClick={() => onJob("telegram_write", {})} style={{ ...btn(TG_TONE, "#fff", "none"), padding: "12px 20px" }}>✍️ نوشتن پست تلگرام</button>
+          <button className="ui-btn ui-glow-orange" onClick={() => onJob("telegram_write", {})} style={{ ...btn(TG_TONE, "#fff", "none"), padding: "12px 20px" }}>{en ? "✍️ Write the English Telegram post" : "✍️ نوشتن پست تلگرام"}</button>
         </div>
       ) : (
         <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 12, fontFamily: fa }}>
@@ -3948,7 +3981,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
               }}
               rows={12}
               disabled={running && kind === "telegram_write"}
-              style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${dirty ? alpha(TG_TONE, 0.6) : C.line}`, padding: 12, fontFamily: fa, fontSize: 13.5, lineHeight: 1.9, resize: "vertical", direction: "rtl", unicodeBidi: "plaintext" }}
+              style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${dirty ? alpha(TG_TONE, 0.6) : C.line}`, padding: 12, fontFamily: en ? font : fa, fontSize: 13.5, lineHeight: 1.9, resize: "vertical", direction: en ? "ltr" : "rtl", unicodeBidi: "plaintext" }}
             />
             <div style={{ fontSize: 11.5, color: C.text3, marginTop: 4 }}>برای متن پررنگ دو ستاره بذار: **متن**</div>
           </div>
@@ -3966,14 +3999,14 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob }) {
               💾 ذخیره
             </button>
             <button className="ui-btn ui-glow-orange" disabled={running || !text.trim() || !publicOk} onClick={send} style={{ ...btn(TG_TONE, "#fff", "none"), flex: 1, minWidth: 180, opacity: running || !text.trim() || !publicOk ? 0.5 : 1 }}>
-              📢 ارسال به @sugimotovisa
+              📢 ارسال به {where}
             </button>
           </div>
           {/* The send's outcome right under the button, where the eye is. */}
-          {kind === "telegram_send" && running && <div className="ui-pulse" style={{ fontSize: 12.5, color: C.text2, textAlign: "center" }}>⏳ در حال ارسال به @sugimotovisa…</div>}
+          {kind === "telegram_send" && running && <div className="ui-pulse" style={{ fontSize: 12.5, color: C.text2, textAlign: "center" }}>⏳ در حال ارسال به {where}…</div>}
           {kind === "telegram_send" && failed && !running && <div style={{ fontSize: 12.5, color: C.reject, direction: "ltr", textAlign: "center" }}>⚠️ Not sent: {failed}</div>}
-          {kind === "telegram_send" && job.status === "done" && <div style={{ fontSize: 12.5, color: C.success, textAlign: "center" }}>✓ ارسال شد به @sugimotovisa</div>}
-          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr" }}>The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID), or your account has no publishing access.</div>}
+          {kind === "telegram_send" && job.status === "done" && <div style={{ fontSize: 12.5, color: C.success, textAlign: "center" }}>✓ ارسال شد به {where}</div>}
+          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr" }}>{en ? "No English Telegram channel is set (TELEGRAM_PUBLIC_CHANNEL_ID_EN), or your account has no publishing access. The post can still be written, saved and copied." : "The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID), or your account has no publishing access."}</div>}
 
           <div style={{ background: C.surface, border: `1px solid ${alpha(TG_TONE, 0.3)}`, borderRadius: 14, padding: 12 }}>
             <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>✏️ بازنویسی با یادداشت</div>

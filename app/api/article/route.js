@@ -4,6 +4,7 @@ import { openaiEnabled, openaiArticle } from "../../../lib/openai";
 import { getArticleLinks } from "../../../lib/wordpress";
 import { sourceTextFor } from "../../../lib/grounding";
 import { editorNoteBlock } from "../../../lib/custom-news";
+import { englishBlock, langOf } from "../../../lib/lang";
 import { articlePrompt, parseArticle, ARTICLE_MIN_CHARS, ARTICLE_MAX_CHARS } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -26,7 +27,8 @@ function visibleChars(html) {
 
 export async function POST(request) {
   try {
-    const { topic } = await request.json();
+    const { topic, lang: asked } = await request.json();
+    const lang = langOf(asked);
     if (!topic || !(topic.title_fa || topic.title_en)) {
       return Response.json({ error: "bad request" }, { status: 400 });
     }
@@ -37,7 +39,7 @@ export async function POST(request) {
     const today = new Date().toLocaleDateString("en-CA");
     // Ground the article in the REAL source article text (never fabricate).
     const sourceText = await sourceTextFor(topic, { maxChars: 5000 });
-    const prompt = articlePrompt(topic, links, today, sourceText) + editorNoteBlock(topic, "en") + (await lessonsBlock("article"));
+    const prompt = articlePrompt(topic, links, today, sourceText) + editorNoteBlock(topic, "en") + (await lessonsBlock("article")) + (lang === "en" ? englishBlock("article") : "");
 
     async function generate(p) {
       if (openaiEnabled()) {
@@ -87,20 +89,22 @@ export async function POST(request) {
       try {
         return new URL(topic.source_url).hostname.replace(/^www\./, "");
       } catch (_) {
-        return "منبع خبر";
+        return lang === "en" ? "Source" : "منبع خبر";
       }
     })();
     const hasHtml = a.content_html && a.content_html.indexOf("<") !== -1;
     const body = hasHtml ? a.content_html : `<p>${topic.why_now || ""}</p>`;
     const sourceP = topic.source_url
-      ? `<p><strong>منبع:</strong> <a href="${topic.source_url}" target="_blank" rel="noopener nofollow">${srcName}</a></p>`
+      ? `<p><strong>${lang === "en" ? "Source:" : "منبع:"}</strong> <a href="${topic.source_url}" target="_blank" rel="noopener nofollow">${srcName}</a></p>`
       : "";
 
     return Response.json({
       provider,
       article: {
-        title_fa: a.title_fa || topic.title_fa || topic.title_en,
-        slug: slugify(a.slug_en),
+        // The field keeps its old name; for an English article it holds the English title.
+        title_fa: a.title_fa || (lang === "en" ? topic.title_en || topic.title_fa : topic.title_fa || topic.title_en),
+        lang,
+        slug: slugify(a.slug_en) + (lang === "en" ? "-en" : ""),
         meta_description: a.meta_description || "",
         focus_keyword: a.focus_keyword || "",
         excerpt: a.excerpt || "",
