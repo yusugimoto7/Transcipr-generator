@@ -5,6 +5,7 @@
 import { Play } from "lucide-react";
 import { NET, effectiveCaption, thumbOf } from "./channels";
 import c from "./publishing.module.css";
+import { L } from "../../lib/i18n";
 
 const HANDLE = "sugimotovisa";
 
@@ -27,8 +28,8 @@ function Text({ text, limit, more }) {
   return (
     <p className={c.pvText} dir="auto">
       {cut}
-      {cut.length < t.length && <span className={c.more}>… more</span>}
-      {limit && t.length > limit && <span className={c.over}> (too long by {t.length - limit})</span>}
+      {cut.length < t.length && <span className={c.more}>{L("… بیشتر", "… more")}</span>}
+      {limit && t.length > limit && <span className={c.over}>{L(` (${t.length - limit} نویسه بیش از حد)`, ` (too long by ${t.length - limit})`)}</span>}
     </p>
   );
 }
@@ -63,7 +64,7 @@ export function Preview({ card, network }) {
       <div className={c.pvYT}>
         <Media media={card.media} shape="wide" />
         <b className={c.pvTitle} dir="auto">
-          {ch.title || card.title || "Video title"}
+          {ch.title || card.title || L("عنوان ویدیو", "Video title")}
         </b>
         <span className={c.muted}>Sugimoto Visa</span>
         <Text text={caption} more={160} limit={NET.youtube.max} />
@@ -76,12 +77,12 @@ export function Preview({ card, network }) {
           <span className={c.pvAvatar} style={{ borderRadius: 4 }}>SV</span>
           <div>
             <b>Sugimoto Visa</b>
-            <div className={c.muted}>Company page · now</div>
+            <div className={c.muted}>{L("صفحهٔ شرکت · همین الان", "Company page · now")}</div>
           </div>
         </div>
         <Text text={caption} more={210} limit={NET.linkedin.max} />
         <Media media={card.media} shape="wide" />
-        <div className={c.pvIcons}>👍 Like · 💬 Comment · ↗ Repost</div>
+        <div className={c.pvIcons}>{L("👍 پسند · 💬 نظر · ↗ بازنشر", "👍 Like · 💬 Comment · ↗ Repost")}</div>
       </div>
     );
   return (

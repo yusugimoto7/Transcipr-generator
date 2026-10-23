@@ -3,17 +3,18 @@
 // Publishing views: the week planner (posts in their hour, drag to move) and the post lists by
 // status (Drafts, Waiting for approval, Scheduled, Published, Failed), as in Zoho Social.
 
-import { whenAll, myZone, zoneName, zoneAbbr } from "../../lib/tz";
+import { whenAll, myZone, zoneName, zoneAbbr, dateLocale } from "../../lib/tz";
+import { L, uiDir } from "../../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
-import { NETWORKS, STATUS, effectiveCaption, onNetworks, thumbOf } from "./channels";
+import { STATUS, effectiveCaption, onNetworks, thumbOf, statusName, netName, publishStateName } from "./channels";
 import { NetChip, StatusPill } from "./Composer";
 import c from "./publishing.module.css";
 import { Clock, Play } from "lucide-react";
 
 const pad = (n) => String(n).padStart(2, "0");
 const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const timeOf = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const timeOf = (iso) => new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
 
 export function captionOf(card) {
   return card.caption || onNetworks(card).map((n) => effectiveCaption(card, n.key)).find(Boolean) || "";
@@ -29,8 +30,8 @@ export function ZoneBanner() {
   }, []);
   if (!now) return null;
   return (
-    <div className={c.muted} style={{ lineHeight: 1.5 }}>
-      <Clock size={12} aria-hidden style={{ verticalAlign: "-1px" }} /> Times are in <b>your</b> time zone: {zoneName(myZone())} ({zoneAbbr(now, myZone())}). Right now: {whenAll(now.toISOString(), { withZone: false }).split(" · ").slice(1).join(" · ")}. Hover a post for its time at every place.
+    <div className={c.muted} style={{ lineHeight: 1.5 }} dir={uiDir()}>
+      <Clock size={12} aria-hidden style={{ verticalAlign: "-1px" }} /> {L("زمان‌ها به وقت ", "Times are in ")}<b>{L("خودت", "your")}</b>{L(" هستند: ", " time zone: ")}{zoneName(myZone())} ({zoneAbbr(now, myZone())}). {L("الان: ", "Right now: ")}{whenAll(now.toISOString(), { withZone: false }).split(" · ").slice(1).join(" · ")}. {L("نشانگر را روی یک پست نگه دار تا زمانش را در هر جا ببینی.", "Hover a post for its time at every place.")}
     </div>
   );
 }
@@ -39,14 +40,14 @@ export function Tile({ card, onOpen, drag = true }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: card.id, disabled: !drag || card.status === "published" });
   const st = STATUS[card.status] || STATUS.draft;
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners} className={`${c.tile} ${isDragging ? c.dragging : ""}`} style={{ borderLeftColor: st.color }} onClick={() => onOpen(card)} title={`${st.name}${card.board_name ? " · " + card.board_name : ""}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
+    <div ref={setNodeRef} {...attributes} {...listeners} className={`${c.tile} ${isDragging ? c.dragging : ""}`} style={{ borderLeftColor: st.color }} onClick={() => onOpen(card)} title={`${statusName(card.status)}${card.board_name ? " · " + card.board_name : ""}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
       <b>
         {card.publish_at ? timeOf(card.publish_at) : ""}
         {onNetworks(card).map((n) => (
           <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
         ))}
       </b>
-      <span dir="auto">{card.title || captionOf(card) || "Untitled post"}</span>
+      <span dir="auto">{card.title || captionOf(card) || L("پست بی‌عنوان", "Untitled post")}</span>
     </div>
   );
 }
@@ -94,11 +95,11 @@ export function WeekView({ cards, onOpen, onMove, onNew }) {
     const when = new Date(y, m - 1, d, h, old ? old.getMinutes() : 0);
     if (!old || when.getTime() !== old.getTime()) onMove(card, { publish_at: when.toISOString() });
   };
-  const label = `${days[0].toLocaleDateString([], { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+  const label = `${days[0].toLocaleDateString(dateLocale(), { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" })}`;
   return (
     <DndContext sensors={sensors} onDragStart={(e) => setActive(e.active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       <div className={c.row}>
-        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 7))} aria-label="Previous week">
+        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 7))} aria-label={L("هفتهٔ قبل", "Previous week")}>
           ‹
         </button>
         <button className={c.btn} onClick={() => {
@@ -107,20 +108,20 @@ export function WeekView({ cards, onOpen, onMove, onNew }) {
           d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
           setAnchor(d);
         }}>
-          This week
+          {L("این هفته", "This week")}
         </button>
-        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7))} aria-label="Next week">
+        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7))} aria-label={L("هفتهٔ بعد", "Next week")}>
           ›
         </button>
         <strong>{label}</strong>
-        <span className={c.muted}>Double-click an hour to write a post for that time. Drag posts to move them.</span>
+        <span className={c.muted} dir={uiDir()}>{L("روی یک ساعت دوبار کلیک کن تا برای همان ساعت پست بنویسی. پست‌ها را بکش تا جابه‌جا بشن.", "Double-click an hour to write a post for that time. Drag posts to move them.")}</span>
       </div>
       <div className={c.weekScroll} ref={scroller}>
         <div className={c.week}>
           <div className={c.wHead} />
           {days.map((d) => (
             <div key={dayKey(d)} className={`${c.wHead} ${dayKey(d) === dayKey(new Date()) ? c.today : ""}`}>
-              {d.toLocaleDateString([], { weekday: "short", day: "numeric" })}
+              {d.toLocaleDateString(dateLocale(), { weekday: "short", day: "numeric" })}
             </div>
           ))}
           {Array.from({ length: 24 }, (_, h) => (
@@ -136,7 +137,7 @@ export function WeekView({ cards, onOpen, onMove, onNew }) {
 function Hour({ h, days, slots, onOpen, onNew }) {
   return (
     <>
-      <div className={c.hour}>{new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: "numeric" })}</div>
+      <div className={c.hour}>{new Date(2000, 0, 1, h).toLocaleTimeString(dateLocale(), { hour: "numeric" })}</div>
       {days.map((d) => {
         const key = `${dayKey(d)}-${h}`;
         return (
@@ -153,12 +154,13 @@ function Hour({ h, days, slots, onOpen, onNew }) {
   );
 }
 
+// Labels are pairs, read with L() where the tabs are drawn.
 export const LIST_TABS = [
-  ["draft", "Drafts"],
-  ["pending", "Waiting for approval"],
-  ["scheduled", "Scheduled"],
-  ["published", "Published"],
-  ["failed", "Failed"],
+  ["draft", ["پیش‌نویس‌ها", "Drafts"]],
+  ["pending", ["در انتظار تأیید", "Waiting for approval"]],
+  ["scheduled", ["زمان‌بندی‌شده", "Scheduled"]],
+  ["published", ["منتشرشده", "Published"]],
+  ["failed", ["ناموفق", "Failed"]],
 ];
 
 // Cards brought over from Trello are planning cards: they join the Posts lists once a network is
@@ -181,13 +183,13 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
     });
   if (!rows.length) {
     const empty = {
-      draft: "No drafts. Start one with New post.",
-      pending: "Nothing is waiting for approval.",
-      scheduled: "Nothing scheduled yet.",
-      published: "Nothing published yet.",
-      failed: "No failed posts.",
+      draft: L("پیش‌نویسی نیست. با «پست جدید» یکی شروع کن.", "No drafts. Start one with New post."),
+      pending: L("چیزی در انتظار تأیید نیست.", "Nothing is waiting for approval."),
+      scheduled: L("هنوز چیزی زمان‌بندی نشده.", "Nothing scheduled yet."),
+      published: L("هنوز چیزی منتشر نشده.", "Nothing published yet."),
+      failed: L("پست ناموفقی نیست.", "No failed posts."),
     };
-    return <div className={`${c.list} ${c.empty}`}>{empty[tab]}</div>;
+    return <div className={`${c.list} ${c.empty}`} dir={uiDir()}>{empty[tab]}</div>;
   }
   return (
     <div className={c.list}>
@@ -198,7 +200,7 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
           <div key={card.id} className={c.listRow} onClick={() => onOpen(card)}>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <b style={{ fontSize: 14 }} title={card.publish_at ? whenAll(card.publish_at) : ""}>
-                {card.publish_at ? new Date(card.publish_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "No date"}
+                {card.publish_at ? new Date(card.publish_at).toLocaleString(dateLocale(), { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : L("بدون تاریخ", "No date")}
               </b>
               <span className={c.muted}>{card.board_name}</span>
             </div>
@@ -210,12 +212,12 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
                 {onNetworks(card).map((n) => (
                   <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
                 ))}
-                <b dir="auto">{card.title || "Untitled post"}</b>
+                <b dir="auto">{card.title || L("پست بی‌عنوان", "Untitled post")}</b>
               </div>
               <p dir="auto">{captionOf(card)}</p>
               {fails.map(([k, p]) => (
                 <span key={k} style={{ color: "#b42318", fontSize: 12 }}>
-                  {NETWORKS.find((n) => n.key === k).name}: {p.error || p.status}
+                  {netName(k)}: {p.error || publishStateName(p.status)}
                 </span>
               ))}
             </div>
@@ -224,10 +226,10 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
               {admin && card.status === "pending" && (
                 <>
                   <button className={`${c.btn} ${c.blue}`} onClick={() => onAction(card, "approve")}>
-                    Approve
+                    {L("تأیید", "Approve")}
                   </button>
                   <button className={`${c.btn} ${c.danger}`} onClick={() => onAction(card, "reject")}>
-                    Send back
+                    {L("برگرداندن", "Send back")}
                   </button>
                 </>
               )}

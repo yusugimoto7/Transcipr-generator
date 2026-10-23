@@ -61,7 +61,7 @@ h2.h2 { font-size: 16px; margin: 0; }
 .ok { color: #067647; font-size: 14px; background: #ecfdf3; border: 1px solid #abefc6; padding: 8px 10px; border-radius: 8px; }
 .tableWrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
-.table th { text-align: left; color: var(--text-2); font-weight: 500; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.table th { text-align: start; color: var(--text-2); font-weight: 500; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .table td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .table tr:last-child td { border-bottom: 0; }
 .table a { color: var(--text); font-weight: 600; text-decoration: none; }
@@ -81,9 +81,9 @@ h2.h2 { font-size: 16px; margin: 0; }
 .playerWide { aspect-ratio: 16 / 9; }
 .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; font-variant-numeric: tabular-nums; }
 .stats b { display: block; font-size: 18px; }
-.list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.list { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .pre { white-space: pre-wrap; font-size: 13px; background: var(--ground); padding: 10px; border-radius: 8px; margin: 0; overflow-x: auto; }
-.rule { font-size: 13px; color: var(--text-2); border-left: 3px solid var(--orange); padding-left: 10px; }
+.rule { font-size: 13px; color: var(--text-2); border-inline-start: 3px solid var(--orange); padding-inline-start: 10px; }
 .diff { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .diffOld { border-left: 3px solid #f04438; background: #fef3f2; }
 .diffNew { border-left: 3px solid #12b76a; background: #ecfdf3; }

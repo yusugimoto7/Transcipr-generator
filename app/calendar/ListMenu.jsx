@@ -12,23 +12,29 @@ import { Sheet, SheetContent } from "../../components/ui/sheet";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { FILLED_LIST_COLORS } from "../../lib/calendar/palette";
+import { L, uiDir } from "../../lib/i18n";
 
+// [name as a pair (read with L), hex]
+const FILLED_NAMES = { forest: ["جنگلی", "Forest"], maroon: ["زرشکی", "Maroon"], black: ["مشکی", "Black"] };
 export const LIST_COLORS = {
-  slate: ["Slate", "#32515d"], blue: ["Blue", "#2563eb"], green: ["Green", "#16a34a"], amber: ["Amber", "#d97706"],
-  red: ["Red", "#dc2626"], purple: ["Purple", "#7c3aed"], pink: ["Pink", "#db2777"], gray: ["Gray", "#6b7280"],
+  slate: [["سربی", "Slate"], "#32515d"], blue: [["آبی", "Blue"], "#2563eb"], green: [["سبز", "Green"], "#16a34a"], amber: [["کهربایی", "Amber"], "#d97706"],
+  red: [["قرمز", "Red"], "#dc2626"], purple: [["بنفش", "Purple"], "#7c3aed"], pink: [["صورتی", "Pink"], "#db2777"], gray: [["خاکستری", "Gray"], "#6b7280"],
   // the colours the team's Trello lists had; these fill the whole list
-  ...Object.fromEntries(Object.entries(FILLED_LIST_COLORS).map(([k, hex]) => [k, [k[0].toUpperCase() + k.slice(1) + " (filled)", hex]])),
+  ...Object.fromEntries(Object.entries(FILLED_LIST_COLORS).map(([k, hex]) => {
+    const [fa, en] = FILLED_NAMES[k] || [k, k[0].toUpperCase() + k.slice(1)];
+    return [k, [[fa + " (پُر)", en + " (filled)"], hex]];
+  })),
 };
-const SORTS = [["newest", "Date created (newest first)"], ["oldest", "Date created (oldest first)"], ["title", "Card name (alphabetically)"], ["date", "Publish date (soonest first)"]];
+const SORTS = [["newest", ["تاریخ ساخت (جدیدترین اول)", "Date created (newest first)"]], ["oldest", ["تاریخ ساخت (قدیمی‌ترین اول)", "Date created (oldest first)"]], ["title", ["نام کارت (الفبایی)", "Card name (alphabetically)"]], ["date", ["تاریخ انتشار (نزدیک‌ترین اول)", "Publish date (soonest first)"]]];
 
-const row = "flex min-h-12 w-full cursor-pointer items-center gap-3 border-0 border-b border-solid border-border bg-transparent px-1 py-2.5 text-left text-[15px] text-ink hover:bg-[#f3f0ea] disabled:cursor-default disabled:opacity-50";
+const row = "flex min-h-12 w-full cursor-pointer items-center gap-3 border-0 border-b border-solid border-border bg-transparent px-1 py-2.5 text-start text-[15px] text-ink hover:bg-[#f3f0ea] disabled:cursor-default disabled:opacity-50";
 
 function Row({ Icon, children, onClick, arrow, danger, disabled }) {
   return (
-    <button type="button" className={`${row} ${danger ? "text-[#b91c1c]" : ""}`} onClick={onClick} disabled={disabled}>
+    <button type="button" className={`${row} ${danger ? "text-[#b91c1c]" : ""}`} onClick={onClick} disabled={disabled} dir={uiDir()}>
       <Icon size={18} className="flex-none text-muted" aria-hidden />
       <span className="flex-1">{children}</span>
-      {arrow && <ChevronRight size={18} className="text-muted" aria-hidden />}
+      {arrow && <ChevronRight size={18} className="text-muted rtl:rotate-180" aria-hidden />}
     </button>
   );
 }
@@ -60,14 +66,14 @@ export default function ListMenu({ list, lists, cards, admin, onAddTop, onOp }) 
     }
   };
   const ask = (msg, body) => window.confirm(msg) && run(body);
-  const title = { root: list.name, rename: "Rename list", copy: "Copy list", move: "Move list", sort: "Sort list", color: "Change list color", move_all: "Move all cards in this list" }[view];
+  const title = { root: list.name, rename: L("تغییر نام لیست", "Rename list"), copy: L("کپی لیست", "Copy list"), move: L("جابه‌جایی لیست", "Move list"), sort: L("مرتب‌سازی لیست", "Sort list"), color: L("تغییر رنگ لیست", "Change list color"), move_all: L("جابه‌جایی همهٔ کارت‌های این لیست", "Move all cards in this list") }[view];
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <button
         type="button"
         className="grid h-7 w-7 flex-none cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted hover:bg-[#e5e0d5]"
-        aria-label={`Actions for the list ${list.name}`}
+        aria-label={L(`کارهای لیست ${list.name}`, `Actions for the list ${list.name}`)}
         onClick={() => (show("root"), setOpen(true))}
       >
         <MoreHorizontal size={16} aria-hidden />
@@ -75,29 +81,29 @@ export default function ListMenu({ list, lists, cards, admin, onAddTop, onOp }) 
       <SheetContent title={title} className="md:w-[min(420px,92vw)]">
         {view !== "root" && (
           <button type="button" className="mb-2 inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-sm text-muted" onClick={() => show("root")}>
-            <ArrowLeft size={14} aria-hidden /> Back
+            <ArrowLeft size={14} aria-hidden /> {L("برگشت", "Back")}
           </button>
         )}
 
         {view === "root" && (
           <div className="mt-2 flex flex-col">
-            <Row Icon={Plus} onClick={() => (setOpen(false), onAddTop())}>Add card to top of list</Row>
-            {admin && <Row Icon={PencilLine} arrow onClick={() => show("rename", list.name)}>Rename list</Row>}
-            {admin && <Row Icon={Copy} arrow onClick={() => show("copy", `${list.name} (copy)`)}>Copy list</Row>}
-            {admin && <Row Icon={MoveHorizontal} arrow onClick={() => show("move")}>Move list</Row>}
-            <Row Icon={ArrowDownAZ} arrow onClick={() => show("sort")} disabled={cards.length < 2}>Sort list</Row>
-            {admin && <Row Icon={Palette} arrow onClick={() => show("color")}>Change list color</Row>}
-            <Row Icon={ArrowRightLeft} arrow onClick={() => show("move_all")} disabled={!cards.length || !others.length}>Move all cards in this list</Row>
+            <Row Icon={Plus} onClick={() => (setOpen(false), onAddTop())}>{L("افزودن کارت به بالای لیست", "Add card to top of list")}</Row>
+            {admin && <Row Icon={PencilLine} arrow onClick={() => show("rename", list.name)}>{L("تغییر نام لیست", "Rename list")}</Row>}
+            {admin && <Row Icon={Copy} arrow onClick={() => show("copy", L(`${list.name} (کپی)`, `${list.name} (copy)`))}>{L("کپی لیست", "Copy list")}</Row>}
+            {admin && <Row Icon={MoveHorizontal} arrow onClick={() => show("move")}>{L("جابه‌جایی لیست", "Move list")}</Row>}
+            <Row Icon={ArrowDownAZ} arrow onClick={() => show("sort")} disabled={cards.length < 2}>{L("مرتب‌سازی لیست", "Sort list")}</Row>
+            {admin && <Row Icon={Palette} arrow onClick={() => show("color")}>{L("تغییر رنگ لیست", "Change list color")}</Row>}
+            <Row Icon={ArrowRightLeft} arrow onClick={() => show("move_all")} disabled={!cards.length || !others.length}>{L("جابه‌جایی همهٔ کارت‌های این لیست", "Move all cards in this list")}</Row>
             {admin && (
               <>
-                <Row Icon={Archive} disabled={!published || busy} onClick={() => ask(`Archive the ${published} published post${published > 1 ? "s" : ""} in “${list.name}”?`, { action: "archive_published" })}>
-                  Archive published posts
+                <Row Icon={Archive} disabled={!published || busy} onClick={() => ask(L(`${published} پست منتشرشدهٔ «${list.name}» بایگانی بشن؟`, `Archive the ${published} published post${published > 1 ? "s" : ""} in “${list.name}”?`), { action: "archive_published" })}>
+                  {L("بایگانی پست‌های منتشرشده", "Archive published posts")}
                 </Row>
-                <Row Icon={Archive} disabled={!cards.length || busy} onClick={() => ask(`Archive all ${cards.length} cards in “${list.name}”?`, { action: "archive_all" })}>
-                  Archive all cards in this list
+                <Row Icon={Archive} disabled={!cards.length || busy} onClick={() => ask(L(`همهٔ ${cards.length} کارت «${list.name}» بایگانی بشن؟`, `Archive all ${cards.length} cards in “${list.name}”?`), { action: "archive_all" })}>
+                  {L("بایگانی همهٔ کارت‌های این لیست", "Archive all cards in this list")}
                 </Row>
-                <Row Icon={Archive} danger disabled={!!list.role || busy} onClick={() => ask(cards.length ? `Archive the list “${list.name}” and its ${cards.length} card${cards.length > 1 ? "s" : ""}?` : `Archive the list “${list.name}”?`, { action: "archive_list", with_cards: true })}>
-                  {list.role ? "Archive list (publishing uses this list)" : "Archive list"}
+                <Row Icon={Archive} danger disabled={!!list.role || busy} onClick={() => ask(cards.length ? L(`لیست «${list.name}» با ${cards.length} کارتش بایگانی بشه؟`, `Archive the list “${list.name}” and its ${cards.length} card${cards.length > 1 ? "s" : ""}?`) : L(`لیست «${list.name}» بایگانی بشه؟`, `Archive the list “${list.name}”?`), { action: "archive_list", with_cards: true })}>
+                  {list.role ? L("بایگانی لیست (انتشار از این لیست استفاده می‌کنه)", "Archive list (publishing uses this list)") : L("بایگانی لیست", "Archive list")}
                 </Row>
               </>
             )}
@@ -112,19 +118,19 @@ export default function ListMenu({ list, lists, cards, admin, onAddTop, onOp }) 
               run({ action: view, name: text });
             }}
           >
-            <label htmlFor="list-name" className="text-sm text-muted">{view === "copy" ? "Name of the new list (its cards are copied as drafts)" : "Name"}</label>
+            <label htmlFor="list-name" className="text-sm text-muted">{view === "copy" ? L("نام لیست جدید (کارت‌هایش به‌صورت پیش‌نویس کپی می‌شن)", "Name of the new list (its cards are copied as drafts)") : L("نام", "Name")}</label>
             <Input id="list-name" autoFocus value={text} onChange={(e) => setText(e.target.value)} maxLength={60} dir="auto" />
-            <Button disabled={busy || !text.trim()}>{view === "copy" ? "Create list" : "Rename"}</Button>
+            <Button disabled={busy || !text.trim()}>{view === "copy" ? L("ساخت لیست", "Create list") : L("تغییر نام", "Rename")}</Button>
           </form>
         )}
 
         {view === "move" && (
           <div className="mt-2 flex flex-col">
-            <p className="m-0 mb-1 text-sm text-muted">Choose the new position.</p>
+            <p className="m-0 mb-1 text-sm text-muted" dir={uiDir()}>{L("جای جدید را انتخاب کن.", "Choose the new position.")}</p>
             {lists.map((l, i) => (
               <button key={l.id} type="button" className={row} disabled={busy} onClick={() => run({ action: "move", to: i + 1 })}>
                 <span className="w-6 text-muted">{i + 1}</span>
-                <span className="flex-1" dir="auto">{l.name}{l.id === list.id ? " (current)" : ""}</span>
+                <span className="flex-1" dir="auto">{l.name}{l.id === list.id ? L(" (فعلی)", " (current)") : ""}</span>
               </button>
             ))}
           </div>
@@ -133,8 +139,8 @@ export default function ListMenu({ list, lists, cards, admin, onAddTop, onOp }) 
         {view === "sort" && (
           <div className="mt-2 flex flex-col">
             {SORTS.map(([k, label]) => (
-              <button key={k} type="button" className={row} disabled={busy} onClick={() => run({ action: "sort", by: k })}>
-                {label}
+              <button key={k} type="button" className={row} disabled={busy} onClick={() => run({ action: "sort", by: k })} dir={uiDir()}>
+                {L(label)}
               </button>
             ))}
           </div>
@@ -144,18 +150,18 @@ export default function ListMenu({ list, lists, cards, admin, onAddTop, onOp }) 
           <div className="mt-2 grid grid-cols-2 gap-2">
             {Object.entries(LIST_COLORS).map(([k, [name, hex]]) => (
               <button key={k} type="button" disabled={busy} onClick={() => run({ action: "color", color: k })} className="flex h-11 cursor-pointer items-center gap-2 rounded-[10px] border border-solid border-border bg-surface px-3 text-sm text-ink" style={list.color === k ? { outline: `2px solid ${hex}` } : undefined}>
-                <span className="h-4 w-4 rounded-full" style={{ background: hex }} aria-hidden /> {name}
+                <span className="h-4 w-4 rounded-full" style={{ background: hex }} aria-hidden /> {L(name)}
               </button>
             ))}
             <button type="button" disabled={busy} onClick={() => run({ action: "color", color: "" })} className="col-span-2 h-10 cursor-pointer rounded-[10px] border border-dashed border-border bg-transparent text-sm text-muted">
-              Remove color
+              {L("حذف رنگ", "Remove color")}
             </button>
           </div>
         )}
 
         {view === "move_all" && (
           <div className="mt-2 flex flex-col">
-            <p className="m-0 mb-1 text-sm text-muted">Move all {cards.length} cards to:</p>
+            <p className="m-0 mb-1 text-sm text-muted" dir={uiDir()}>{L(`انتقال همهٔ ${cards.length} کارت به:`, `Move all ${cards.length} cards to:`)}</p>
             {others.map((l) => (
               <button key={l.id} type="button" className={row} disabled={busy} onClick={() => run({ action: "move_all", to_list_id: l.id })}>
                 <span dir="auto">{l.name}</span>
