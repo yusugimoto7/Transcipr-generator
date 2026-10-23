@@ -1,16 +1,16 @@
-import { LANG_COOKIE, normLang } from "../../../../../lib/i18n";
+import { LANG_COOKIE, normLang, Lfor } from "../../../../../lib/i18n";
 import { editingEnabled, findByEmail, checkPassword, createUser, sessionCookie, publicUser, json, normEmail, loginLocked, loginFailed, loginOk, allUsers } from "../../../../../lib/editing/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request) {
-  if (!editingEnabled()) return json({ error: "Video Editing is not switched on yet" }, 503);
+  if (!editingEnabled()) return json({ error: Lfor(request)("حساب‌ها و تدوین ویدیو هنوز روشن نشده‌اند", "Video Editing is not switched on yet") }, 503);
   const body = await request.json().catch(() => ({}));
   const email = normEmail(body.email);
   const password = String(body.password || "");
-  if (!email || !password) return json({ error: "enter your email and password" }, 400);
-  if (loginLocked(email)) return json({ error: "too many attempts; wait 15 minutes" }, 429);
+  if (!email || !password) return json({ error: Lfor(request)("ایمیل و رمز عبورت را وارد کن", "enter your email and password") }, 400);
+  if (loginLocked(email)) return json({ error: Lfor(request)("تلاش‌ها زیاد شد؛ ۱۵ دقیقه صبر کن", "too many attempts; wait 15 minutes") }, 429);
   try {
     let user = await findByEmail(email);
     // First login of the admin: the account is created from ADMIN_EMAIL + ADMIN_BOOTSTRAP_PASSWORD,
@@ -21,7 +21,7 @@ export async function POST(request) {
     }
     if (!user || !user.active || !checkPassword(password, user.hash)) {
       loginFailed(email);
-      return json({ error: "wrong email or password" }, 401);
+      return json({ error: Lfor(request)("ایمیل یا رمز عبور اشتباه است", "wrong email or password") }, 401);
     }
     loginOk(email);
     const headers = new Headers({ "Cache-Control": "no-store" });

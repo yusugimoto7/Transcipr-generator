@@ -1,3 +1,4 @@
+import { Lfor } from "../../../../../../../../lib/i18n";
 import { guard, json } from "../../../../../../../../lib/editing/auth";
 import { getBoard, checkId, mediaItems } from "../../../../../../../../lib/calendar/model";
 import { openMedia } from "../../../../../../../../lib/calendar/media";
@@ -22,7 +23,7 @@ export async function GET(request, { params }) {
     const q = new URL(request.url).searchParams;
     const b = await getBoard(params.bid);
     const card = b.cards.find((c) => c.id === checkId(params.cid));
-    if (!card) return json({ error: "this card was archived or removed" }, 404);
+    if (!card) return json({ error: Lfor(request)("این کارت بایگانی یا حذف شده است", "this card was archived or removed") }, 404);
     const base = slug(card.title);
     if (q.get("caption")) {
       const on = Object.keys(CHANNELS).filter((k) => card.channels[k] && card.channels[k].on);
@@ -40,7 +41,7 @@ export async function GET(request, { params }) {
     const items = mediaItems(card.media);
     const i = Math.max(0, Math.floor(Number(q.get("i")) || 0));
     const item = items[i];
-    if (!item) return json({ error: "this post has no such file" }, 404);
+    if (!item) return json({ error: Lfor(request)("این پست چنین فایلی ندارد", "this post has no such file") }, 404);
     const res = await openMedia(item.url);
     const type = (res.headers.get("content-type") || "").split(";")[0];
     const ext = EXT[type] || (item.kind === "image" ? "jpg" : "mp4");

@@ -1,3 +1,4 @@
+import { Lfor } from "../../../lib/i18n";
 import { listCases, archiveCase } from "../../../lib/visa-news/cases";
 import { listPending, getPending, putPending, dropPending, cleanEdit } from "../../../lib/visa-news/pending";
 
@@ -16,7 +17,7 @@ export async function GET(request) {
   try {
     if (id) {
       const c = ID_RE.test(id) ? getPending(id) : null;
-      return c ? Response.json({ case: c }, { headers: { "Cache-Control": "no-store" } }) : Response.json({ error: "this case is no longer on the server" }, { status: 404 });
+      return c ? Response.json({ case: c }, { headers: { "Cache-Control": "no-store" } }) : Response.json({ error: Lfor(request)("این پرونده دیگر روی سرور نیست", "this case is no longer on the server") }, { status: 404 });
     }
     return Response.json({ cases: await listCases(), pending: listPending() }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
