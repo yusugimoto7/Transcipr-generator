@@ -707,6 +707,9 @@ export async function GET(request) {
   }
   // Also keeps the newsletter section written after a restart.
   if (warm && lexbaseEnabled()) getLexbaseDeck({ waitMs: 0 }).catch(() => {});
+  // Instagram tokens die after 60 days unless refreshed; this ten-minute call is the one clock that
+  // always runs (the publishing clock may be off). It does real work at most weekly.
+  if (warm) import("../../../lib/calendar/channels/instagram").then((m) => m.refreshTokens()).catch(() => {});
   return Response.json(
     {
       ok: true,
