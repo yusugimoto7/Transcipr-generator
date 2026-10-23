@@ -42,7 +42,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 
 | Area | Files |
 |---|---|
-| **Feed list — add sources here** | `lib/feeds.js` |
+| **Feed list — add sources here** (`SOCIAL_FEEDS`: practitioners' and outlets' X / Facebook / Instagram accounts as rss.app feeds; each post is named by its account, the page it links to is read as its source, the legal disclaimer is cut off, social posts have their own cap) | `lib/feeds.js` |
 | News ingest logic: parsing, dedupe, YouTube resolution | `lib/news.js` |
 | Candidate pool: relevance scoring, merge, reading the harvest | `lib/candidates.js` |
 | Scheduled harvester (every 2h, GitHub Actions → `harvest-data` branch) | `scripts/harvest.mjs`, `.github/workflows/harvest.yml` |

@@ -246,8 +246,9 @@ function recencyBoost(ms, nowMs) {
 async function groundTextFor(item) {
   if (item.text && item.text.length >= MIN_GROUND) return item.text;
   if ((item.snippet || "").length >= MIN_GROUND) return item.snippet;
-  // An Instagram post page is a login wall; its caption is all the text there is.
-  if (item.social) return "";
+  // A social post's page is a login wall; its caption is all the text there is, unless the post
+  // links to a page of its own (an IRCC notice, an article), which is then read.
+  if (item.social && !item.resolved_url) return "";
   let url = item.resolved_url || "";
   if (!url && isGoogleNews(item.source_url) && item.resolved_url === undefined) {
     url = (await resolveGoogleNewsUrl(item.source_url, { timeoutMs: 6000 })) || "";
