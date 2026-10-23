@@ -433,11 +433,17 @@ Layout now:
 - Main workflow: new **Get IG token** node (executeOnce) between
   Render story to PNG and Create IG story container; both IG nodes take
   `access_token` from it. The old Query Auth credential is no longer used.
-- Workflow **Instagram tokens — auto refresh** (`55KPolbQ5VMw6jL3`), source in
-  `reference/ig-token-refresh-workflow.js`: every Monday 09:13 UTC, refreshes all
-  rows, stores the new token and expiry, alerts @testchannel_draws on failure.
-  A failed refresh keeps the previous token — it still works until its own
-  expiry, which is the window to fix it in.
+- The refresh runs **inside the main workflow** as a second trigger,
+  `Every Monday 09:13` (UTC) → Read tokens → Refresh token → Build updates →
+  Save token, with `Summarise token refresh` feeding the existing
+  `Any failures?` → `Send alert`. Reusing Send alert means the alert goes out on
+  the bot that already has the right credential. A failed refresh keeps the
+  previous token — it still works until its own expiry, which is the window to
+  fix it in.
+- It briefly lived as a separate workflow, "Instagram tokens — auto refresh"
+  (`55KPolbQ5VMw6jL3`, now archived; its first version is in
+  `reference/ig-token-refresh-workflow.js`). Merged at the user's request: one
+  workflow to look after instead of two.
 
 Facts checked, not assumed:
 
@@ -448,9 +454,10 @@ Facts checked, not assumed:
   expiry. To kill a leaked token: Instagram → Settings → Apps and websites →
   Remove the app (revokes every token it holds for that account), re-add it,
   generate, and put the new token in `ig_tokens`.
-- n8n auto-assigns credentials by *type*, not name: the refresh workflow's
-  Telegram node got "Video Bot (Imm_News_bot)" instead of
-  "Telegram Notifier bot" and had to be switched by hand.
+- n8n auto-assigns credentials by *type*, not name: the standalone refresh
+  workflow's new Telegram node got "Video Bot (Imm_News_bot)" instead of
+  "Telegram Notifier bot". Routing alerts into an existing, correctly
+  credentialed node avoids that entirely.
 
 How the main workflow was edited without hand-transcribing 37KB: SDK code was
 generated mechanically from the live JSON, written as a draft, and every node
