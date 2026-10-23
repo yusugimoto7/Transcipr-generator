@@ -1288,7 +1288,7 @@ function StudioSection({ topics, listProps, research, own }) {
       <div className="ui-fade" key={tab}>
         {tab === "research" && research}
         {tab === "own" && own}
-        {tab === "visa" && <VisaResults C={C} />}
+        {tab === "visa" && <VisaResults C={C} learn={{ Toggle: LearnToggle, teach }} />}
         {listed.length > 0 && (
           <>
             <div dir="rtl" style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: fa }}>

@@ -2,9 +2,11 @@
 
 // Studio → خبر ویزا: up to ten pictures of a client's approval letter and application timeline,
 // plus the team's notes, become a visa-result case, listed like a topic. Opened, it holds the
-// story tools: the boxes on each picture (lib/visa-news/scan.js) to check, the story text, the
-// design, and the stories. The original pictures stay in this page's memory until the stories are
-// made; only then is the case saved for the team, with the covered pictures (lib/visa-news/cases.js).
+// story tools: the boxes on each picture (lib/visa-news/scan.js) to check, a note per picture and
+// per story to correct them, the story text, the design, and the stories. While it is worked on the
+// case is held in the server's memory (lib/visa-news/pending.js), so leaving or closing the page
+// does not stop or lose it; once its stories are made it is saved for the team with the covered
+// pictures only (lib/visa-news/cases.js).
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CalendarPlus, CircleDashed, Download, EyeOff, ImagePlus, Loader2, Megaphone, ScanSearch, Sparkles, Trash2, X } from "lucide-react";
@@ -62,63 +64,6 @@ async function runJob(kind, body, onProgress) {
     if (job.status === "done") return job.result;
     onProgress(job.result);
   }
-}
-
-// "2025/05/14" -> Date; anything else -> null.
-function day(s) {
-  const m = String(s || "").match(/(20\d\d)[/.-](\d{1,2})[/.-](\d{1,2})/);
-  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
-}
-
-// The lines under the pictures, in the team's format. What the team typed (`noted`) wins over what
-// the pictures say; anything neither gives is left as «…» to fill in or delete.
-function draftText(fields, noted) {
-  const f = fields || {};
-  const n = noted || {};
-  const sub = n.submitted || f.submitted || "";
-  const app = n.approved || f.approved || f.letter_date || "";
-  const a = day(sub);
-  const b = day(app);
-  // The team's own wording of the wait wins («۷ ماه و ۱۶ روز»); otherwise it is counted from the dates.
-  const counted = a && b && b >= a ? Math.round((b - a) / 86400000) + " روز" : "";
-  const waitText = String(n.wait || n.wait_days || "").trim() || counted;
-  // A line the team or the pictures cannot fill is left out (Hamed, Oct 2026), not shown as «…».
-  const name = n.first_name_fa || f.first_name_fa || f.first_name || "";
-  const title = n.title || f.title_fa || "";
-  const line = (label, v) => (v ? [`⬅️ ${label}: ${v}`] : []);
-  return [
-    ...(title || name ? [[title, name].filter(Boolean).join(" ")] : []),
-    ...line("نوع ویزا", n.visa_type_fa || f.visa_type_fa || f.visa_type),
-    ...line("اقدام از", n.applied_from),
-    ...line("سن", n.age),
-    ...line("تاریخ سابمیت ویزا", sub),
-    ...line("مدت زمان انتظار ویزا", waitText),
-    ...line("تاریخ اپرووال ویزا", app),
-    ...(n.extra ? [`✅ ${String(n.extra).replace(/^✅\s*/, "")}`] : []),
-  ].join("\n");
-}
-
-function mergeFields(list) {
-  const out = {};
-  for (const f of list) for (const [k, v] of Object.entries(f || {})) if (v && !out[k]) out[k] = v;
-  return out;
-}
-
-// Letters and timelines are paired when they come one after the other; otherwise one per story.
-function defaultGroups(scans) {
-  const g = [];
-  let story = 0;
-  for (let i = 0; i < scans.length; i++) {
-    g[i] = story;
-    const a = scans[i] && scans[i].kind;
-    const b = scans[i + 1] && scans[i + 1].kind;
-    if (i + 1 < scans.length && a && b && a !== b && a !== "other" && b !== "other") {
-      g[i + 1] = story;
-      i++;
-    }
-    story++;
-  }
-  return g;
 }
 
 function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
@@ -194,8 +139,15 @@ function when(ms) {
 
 // One client's visa result, opened like a topic: pictures (with the boxes to check when they were
 // just uploaded), the story text, the design, making the stories, and what was made.
-function VisaCase({ c, C, update, onBack, onArchive }) {
+function VisaCase({ c, C, update, onBack, onArchive, learn }) {
   const [tool, setTool] = useState(null);
+  const [notes, setNotes] = useState({}); // picture index -> the team's note
+  const [learnOn, setLearnOn] = useState({}); // picture index (or "story") -> learn from it
+  const [fixing, setFixing] = useState({}); // picture index -> being read again
+  const [storyNote, setStoryNote] = useState("");
+  const [restyling, setRestyling] = useState(false);
+  const Learn = (learn && learn.Toggle) || (() => null);
+  const teachFrom = (note, context) => learn && learn.teach && learn.teach({ topic: { title_fa: "خبر ویزا · " + caseName(c) }, scope: "visa", note, context });
   const topRef = useRef(null);
   // Opened from further down the list: the case starts at its own top, like a topic page.
   useEffect(() => {
@@ -218,25 +170,61 @@ function VisaCase({ c, C, update, onBack, onArchive }) {
   const addBox = (i, b) => setScan(i, (s) => ({ ...s, boxes: [...s.boxes, { ...b, id: Math.max(-1, ...s.boxes.map((x) => x.id)) + 1, on: true, label: "added by hand" }] }));
   const removeImage = (i) => update((x) => ({ images: x.images.filter((_, j) => j !== i), scans: x.scans ? x.scans.filter((_, j) => j !== i) : x.scans, groups: x.groups.filter((_, j) => j !== i), kinds: (x.kinds || []).filter((_, j) => j !== i) }));
 
-  const draw = async () => {
+  const draw = async (over = {}) => {
+    const texts = over.texts || c.texts;
+    const opts = over.opts || c.opts;
     update({ busy: true, error: "", progress: "" });
     try {
       const r = await runJob(
         "visa_story",
         {
-          images: c.images.map((im, i) => (im.data ? { name: im.name, data: im.data, boxes: (c.scans && c.scans[i] && c.scans[i].boxes) || [] } : { url: im.url })),
-          stories: nums.map((n) => ({ images: c.groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0), text: (c.texts || {})[n] || "" })),
-          ...c.opts,
-          case: { id: c.id, title: caseName(c), created: c.created, groups: c.groups, texts: c.texts, kinds: c.kinds },
+          // Pictures still held on the server go by reference (no second upload of the originals).
+          images: c.images.map((im, i) => (im.data ? { pending: true, boxes: (c.scans && c.scans[i] && c.scans[i].boxes) || [] } : { url: im.url, marks: (c.marks || [])[i] || [] })),
+          stories: nums.map((n) => ({ images: c.groups.map((g, i) => (g === n ? i : -1)).filter((i) => i >= 0), text: (texts || {})[n] || "" })),
+          ...opts,
+          case: { id: c.id, title: caseName({ ...c, texts }), created: c.created, groups: c.groups, texts, kinds: c.kinds },
         },
         (p) => p && update({ progress: `${p.done || 0} از ${p.total || nums.length}` })
       );
       // From now on the case is the saved one: covered pictures only, the originals let go.
-      update({ stories: r.stories || [], images: (r.covered || []).map((url, i) => (url ? { url } : c.images[i])), scans: null, checked: false, calendar: "", saved: !!r.saved });
+      update({ stories: r.stories || [], images: (r.covered || []).map((url, i) => (url ? { url } : c.images[i])), marks: r.marks || [], scans: null, checked: false, calendar: "", saved: !!r.saved, status: "saved" });
     } catch (e) {
       update({ error: String(e.message || e) });
     } finally {
       update({ busy: false, progress: "" });
+    }
+  };
+  // A picture read again with the team's note; its boxes are replaced.
+  const fix = async (i) => {
+    const note = String(notes[i] || "").trim();
+    if (!note) return;
+    setFixing((f) => ({ ...f, [i]: true }));
+    if (learnOn[i]) teachFrom(note, `picture ${i + 1} of a visa-result case (${(c.scans && c.scans[i] && c.scans[i].kind) || "picture"})`);
+    try {
+      const r = await runJob("visa_fix", { caseId: c.id, index: i, note }, () => {});
+      update((x) => ({ scans: (x.scans || []).map((s, j) => (j === i ? r.scan : s)), checked: false }));
+      setNotes((n) => ({ ...n, [i]: "" }));
+    } catch (e) {
+      update({ error: String(e.message || e) });
+    } finally {
+      setFixing((f) => ({ ...f, [i]: false }));
+    }
+  };
+  // The finished stories changed by a note: new text and look, then drawn again.
+  const restyle = async () => {
+    const note = storyNote.trim();
+    if (!note) return;
+    setRestyling(true);
+    if (learnOn.story) teachFrom(note, Object.values(c.texts || {}).join("\n---\n"));
+    try {
+      const r = await runJob("visa_restyle", { texts: c.texts, note, opts: c.opts }, () => {});
+      update({ texts: r.texts, opts: r.opts });
+      setStoryNote("");
+      setRestyling(false);
+      await draw({ texts: r.texts, opts: r.opts });
+    } catch (e) {
+      update({ error: String(e.message || e) });
+      setRestyling(false);
     }
   };
   const download = async () => {
@@ -346,6 +334,23 @@ function VisaCase({ c, C, update, onBack, onArchive }) {
                     ) : (
                       <img src={im.url} alt={"Picture " + (i + 1)} style={{ display: "block", width: "100%", borderRadius: 8 }} />
                     )}
+                    {im.data && sc && (
+                      <div style={{ marginTop: 8 }}>
+                        <Textarea
+                          rows={2}
+                          value={notes[i] || ""}
+                          onChange={(e) => setNotes((n) => ({ ...n, [i]: e.target.value }))}
+                          placeholder="یادداشت برای این عکس، مثلاً: تاریخ فاینال دسیژن رو هم هایلایت کن، یا شماره پاسپورت پایین صفحه پیدا نیست"
+                          style={{ fontFamily: FA, lineHeight: 1.7, fontSize: 12.5 }}
+                        />
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <Button size="sm" variant="outline" className="mt-1.5" disabled={!String(notes[i] || "").trim() || fixing[i]} onClick={() => fix(i)}>
+                            {fixing[i] ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} {fixing[i] ? "در حال اصلاح…" : "اصلاح این عکس"}
+                          </Button>
+                          <Learn on={!!learnOn[i]} setOn={(v) => setLearnOn((l) => ({ ...l, [i]: v }))} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -401,7 +406,7 @@ function VisaCase({ c, C, update, onBack, onArchive }) {
               همهٔ عکس‌ها رو چک کردم: نام خانوادگی، UCI، شماره پرونده و پاسپورت، آدرس، ایمیل و بارکدها پوشونده شدن ({hidden} کادر) و فقط اسم کوچیک دیده می‌شه.
             </label>
           )}
-          <Button className="w-full" disabled={(fresh && !c.checked) || c.busy || tooMany || !c.images.length} onClick={draw}>
+          <Button className="w-full" disabled={(fresh && !c.checked) || c.busy || tooMany || !c.images.length} onClick={() => draw()}>
             {c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
             {c.busy ? `در حال ساخت استوری‌ها… ${c.progress || ""}` : c.stories ? `ساخت دوباره (${nums.length} استوری)` : `ساخت ${nums.length} استوری`}
           </Button>
@@ -433,6 +438,22 @@ function VisaCase({ c, C, update, onBack, onArchive }) {
                       {c.calendar === "…" ? <Loader2 className="animate-spin" aria-hidden /> : <CalendarPlus aria-hidden />} به تقویم محتوا
                     </Button>
                   </div>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>یادداشت برای استوری</div>
+                    <Textarea
+                      rows={2}
+                      value={storyNote}
+                      onChange={(e) => setStoryNote(e.target.value)}
+                      placeholder="مثلاً: متن کوتاه‌تر، پس‌زمینه سرمه‌ای، اسم رو بالاتر بیار"
+                      style={{ fontFamily: FA, lineHeight: 1.7, fontSize: 12.5 }}
+                    />
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <Button size="sm" className="mt-1.5" disabled={!storyNote.trim() || restyling || c.busy} onClick={restyle}>
+                        {restyling || c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} اصلاح و ساخت دوباره
+                      </Button>
+                      <Learn on={!!learnOn.story} setOn={(v) => setLearnOn((l) => ({ ...l, story: v }))} />
+                    </div>
+                  </div>
                   {/^\/calendar/.test(c.calendar || "") && (
                     <div style={{ marginTop: 8, fontSize: 12.5 }}>
                       ✓ به‌عنوان پیش‌نویس به تقویم اضافه شد (بعد از تأیید حامد منتشر می‌شه): <a href={c.calendar} style={{ color: C.teal, fontWeight: 700 }}>باز کردن</a>
@@ -449,23 +470,35 @@ function VisaCase({ c, C, update, onBack, onArchive }) {
   );
 }
 
-export default function VisaResults({ C }) {
+export default function VisaResults({ C, learn }) {
   const [images, setImages] = useState([]);
   const [notes, setNotes] = useState(""); // the team's own lines: timeline, visa type, age…
-  const [local, setLocal] = useState([]); // cases made on this page (with their original pictures until drawn)
-  const [saved, setSaved] = useState([]); // cases the team saved
-  const [openId, setOpenId] = useState("");
+  const [saved, setSaved] = useState([]); // cases the team saved (covered pictures only)
+  const [pending, setPending] = useState([]); // cases being worked on, held in the server's memory
+  const [cur, setCur] = useState(null); // the case opened
+  const [opening, setOpening] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef(null);
+  const editTimer = useRef(null);
 
-  const loadSaved = () =>
+  const load = () =>
     fetch("/api/visa-cases", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => setSaved(Array.isArray(j.cases) ? j.cases : []))
+      .then((j) => {
+        setSaved(Array.isArray(j.cases) ? j.cases : []);
+        setPending(Array.isArray(j.pending) ? j.pending : []);
+      })
       .catch(() => {});
+  // The list comes from the server, so a case started before the page was left or closed is here;
+  // while one is being read it is checked every few seconds.
+  const reading = pending.some((p) => p.status === "reading");
   useEffect(() => {
-    loadSaved();
+    load();
   }, []);
+  useEffect(() => {
+    const t = setInterval(() => document.visibilityState === "visible" && load(), reading ? 3000 : 20000);
+    return () => clearInterval(t);
+  }, [reading]);
 
   const addFiles = async (files) => {
     const list = [...(files || [])].filter((f) => /^image\//.test(f.type));
@@ -473,84 +506,102 @@ export default function VisaResults({ C }) {
     const shrunk = (await Promise.all(list.map(shrink))).filter(Boolean);
     setImages((prev) => [...prev, ...shrunk].slice(0, MAX));
   };
-  const patch = (id, p) => setLocal((prev) => prev.map((c) => (c.id === id ? { ...c, ...(typeof p === "function" ? p(c) : p) } : c)));
 
-  // «ساخت خبر ویزا»: the case is listed at once and filled when the pictures are read.
+  // «ساخت خبر ویزا»: the server reads the pictures and keeps the case; the page only starts it.
   const create = async () => {
     const pics = images;
     const typed = notes.trim();
     const id = newId();
-    setLocal((prev) => [{ id, created: Date.now(), title: "در حال خواندن…", images: pics, scans: null, groups: pics.map(() => 0), texts: {}, opts: { ...OPTS }, reading: true, progress: "" }, ...prev]);
+    setError("");
+    setPending((prev) => [{ id, created: Date.now(), status: "reading", progress: "", count: pics.length }, ...prev]);
     setImages([]);
     setNotes("");
-    setError("");
     try {
-      const r = await runJob("visa_scan", { images: pics.map(({ name, data }) => ({ name, data })), notes: typed }, (p) => p && patch(id, { progress: `${p.done || 0} از ${p.total || pics.length}` }));
-      const sc = r.scans || [];
-      const clients = r.clients || [];
-      // Nearly always one client's pictures (Hamed, Oct 2026); notes naming several clients split them in order.
-      const n = Math.max(1, Math.min(clients.length, sc.length));
-      const own = sc.map((_, i) => Math.min(n - 1, Math.floor((i * n) / sc.length)));
-      const cases = Array.from({ length: n }, (_, k) => {
-        const idx = own.map((o, i) => (o === k ? i : -1)).filter((i) => i >= 0);
-        const s = idx.map((i) => sc[i]);
-        const g = idx.length <= 2 ? idx.map(() => 0) : defaultGroups(s);
-        const texts = {};
-        for (const sn of [...new Set(g)]) texts[sn] = draftText(mergeFields(s.filter((_, j) => g[j] === sn).map((x) => x.fields)), clients[k] || clients[0]);
-        return { id: k === 0 ? id : newId(), created: Date.now(), title: "", images: idx.map((i) => pics[i]), scans: s, kinds: s.map((x) => x.kind || ""), groups: g, texts, opts: { ...OPTS }, reading: false };
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "visa_scan", topic: { title_fa: `visa-results-${id}` }, images: pics.map(({ name, data }) => ({ name, data })), notes: typed, caseId: id }),
       });
-      setLocal((prev) => [...cases, ...prev.filter((c) => c.id !== id)]);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.job) throw new Error(d.error || "could not start");
+      setTimeout(load, 1500);
     } catch (e) {
-      setLocal((prev) => prev.filter((c) => c.id !== id));
+      setPending((prev) => prev.filter((p) => p.id !== id));
       setImages(pics);
       setNotes(typed);
       setError(String(e.message || e));
     }
   };
 
-  // A saved case opened here becomes editable the same way (with its covered pictures).
-  const all = [...local, ...saved.filter((s) => !local.some((l) => l.id === s.id)).map((s) => ({ ...s, images: (s.covered || []).map((url) => ({ url })), opts: { ...OPTS, ...(s.opts || {}) }, saved: true }))];
-  const open = all.find((c) => c.id === openId);
-  // A saved case joins this page's cases on its first change; later changes patch that copy.
-  const update = (p) => {
-    if (!open) return;
-    const base = open;
-    setLocal((prev) => {
-      const has = prev.some((c) => c.id === base.id);
-      const list = has ? prev : [{ ...base }, ...prev];
-      return list.map((c) => (c.id === base.id ? { ...c, ...(typeof p === "function" ? p(c) : p) } : c));
-    });
+  const openCase = async (row, isSaved) => {
+    setError("");
+    if (isSaved) {
+      setCur({ ...row, images: (row.covered || []).map((url) => ({ url })), opts: { ...OPTS, ...(row.opts || {}) }, saved: true });
+      return;
+    }
+    setOpening(row.id);
+    try {
+      const r = await fetch("/api/visa-cases?id=" + encodeURIComponent(row.id), { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j.case) throw new Error(j.error || "could not open");
+      setCur({ ...j.case, opts: { ...OPTS, ...(j.case.opts || {}) } });
+    } catch (e) {
+      setError(String(e.message || e));
+      load();
+    } finally {
+      setOpening("");
+    }
   };
 
-  if (open) {
+  // Changes on a case still held by the server are kept there too (a moment after the last one),
+  // so closing the page keeps the checks and the text.
+  const update = (p) =>
+    setCur((x) => {
+      if (!x) return x;
+      const next = { ...x, ...(typeof p === "function" ? p(x) : p) };
+      if (!next.saved && next.status !== "saved") {
+        clearTimeout(editTimer.current);
+        editTimer.current = setTimeout(() => {
+          fetch("/api/visa-cases", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: next.id, edit: { scans: next.scans, groups: next.groups, texts: next.texts, opts: next.opts, checked: !!next.checked } }),
+          }).catch(() => {});
+        }, 900);
+      }
+      return next;
+    });
+
+  if (cur) {
     return (
       <Card dir="rtl" className="p-3.5" style={{ fontFamily: FA, marginBottom: 12 }}>
         <VisaCase
-          c={open}
+          c={cur}
           C={C}
+          learn={learn}
           update={update}
           onBack={() => {
-            setOpenId("");
-            loadSaved();
+            setCur(null);
+            load();
           }}
           onArchive={async () => {
-            await fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: open.id, archive: true }) }).catch(() => {});
-            setLocal((prev) => prev.filter((c) => c.id !== open.id));
-            setSaved((prev) => prev.filter((c) => c.id !== open.id));
-            setOpenId("");
+            await fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: cur.id, archive: true }) }).catch(() => {});
+            setCur(null);
+            load();
           }}
         />
       </Card>
     );
   }
 
+  const rows = [...pending.map((p) => ({ ...p, isSaved: false })), ...saved.filter((s) => !pending.some((p) => p.id === s.id)).map((s) => ({ ...s, isSaved: true }))];
   return (
     <Card dir="rtl" className="p-3.5" style={{ fontFamily: FA, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 14.5, marginBottom: 4 }}>
         <Sparkles size={17} aria-hidden /> خبر ویزا (نتایج ویزای مشتری‌ها)
       </div>
       <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.8, marginBottom: 10 }}>
-        عکس نامهٔ اپرووال و تایم‌لاین رو بذار (تا ۱۰ عکس) و اطلاعات پرونده رو بنویس. یک خبر ویزا به فهرست پایین اضافه می‌شه؛ بازش کن تا اطلاعات شخصی، متن و طراحی استوری رو چک و درست کنی.
+        عکس نامهٔ اپرووال و تایم‌لاین رو بذار (تا ۱۰ عکس) و اطلاعات پرونده رو بنویس. یک خبر ویزا به فهرست پایین اضافه می‌شه؛ بازش کن تا اطلاعات شخصی، متن و طراحی استوری رو چک و درست کنی. می‌تونی از صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.
       </div>
       <div
         onDragOver={(e) => e.preventDefault()}
@@ -601,27 +652,41 @@ export default function VisaResults({ C }) {
       </Button>
       {error && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr", textAlign: "left" }}>⚠️ {error}</div>}
 
-      {all.length > 0 && (
+      {rows.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>خبرهای ویزا</div>
-          {all.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => !c.reading && setOpenId(c.id)}
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 12px", marginBottom: 7, borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, cursor: c.reading ? "default" : "pointer", fontFamily: FA, textAlign: "right" }}
-            >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                {c.reading ? <Loader2 className="animate-spin" size={16} aria-hidden /> : <Megaphone size={16} aria-hidden />}
-                <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  خبر ویزا · {c.reading ? `در حال خواندن عکس‌ها… ${c.progress || ""}` : caseName(c)}
+          {rows.map((c) => {
+            const busy = c.status === "reading";
+            const label = busy ? `در حال خواندن عکس‌ها… ${c.progress || ""}` : c.status === "error" ? `خواندن انجام نشد: ${c.error || ""}` : caseName(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => !busy && c.status !== "error" && openCase(c, c.isSaved)}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 12px", marginBottom: 7, borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, cursor: busy ? "default" : "pointer", fontFamily: FA, textAlign: "right" }}
+              >
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  {busy || opening === c.id ? <Loader2 className="animate-spin" size={16} aria-hidden /> : <Megaphone size={16} aria-hidden />}
+                  <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: c.status === "error" ? C.reject : C.text }}>خبر ویزا · {label}</span>
                 </span>
-              </span>
-              <span style={{ fontSize: 11.5, color: C.text3, whiteSpace: "nowrap" }}>
-                {c.reading ? "در حال خواندن" : (c.stories || []).some((x) => x.url) ? "✓ استوری ساخته شد" : "منتظر بررسی"} · {when(c.created)}
-              </span>
-            </button>
-          ))}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.text3, whiteSpace: "nowrap" }}>
+                  {busy ? "در حال خواندن" : c.isSaved ? "✓ استوری ساخته شد" : c.status === "error" ? "" : "منتظر بررسی"} · {when(c.created)}
+                  {c.status === "error" && (
+                    <span
+                      role="button"
+                      aria-label="Remove"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id, archive: true }) }).then(load);
+                      }}
+                    >
+                      <X size={14} aria-hidden />
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </Card>

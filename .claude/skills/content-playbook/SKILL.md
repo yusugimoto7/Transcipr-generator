@@ -237,6 +237,9 @@ the client's lines under them: «سرکار خانم … / جناب آقای …
 - **Story look (Hamed, Oct 21 2026):** a letter shows only its printed part — the white page margins
   are trimmed (`trimMargins`); a line with no information is left out (never «…»); the title comes from
   the first name («زینت» → «سرکار خانم», «علی» → «جناب آقای»), and is left off when the name could be either.
+- **The logo never sits on the dates** (Hamed, Oct 23 2026): it is burned into the picture of the story where it covers the least ink, never over a marked date; a picture with no free place gets none.
+- **Notes and learning** (Oct 23 2026): a note under a picture reads it again with that note; a note under the stories changes text and look and draws again; both can teach a rule (scope `visa`).
+- **The work never stops with the page** (Oct 23 2026): a case is held in the server's memory while it is read and checked; switching tab or closing the page loses nothing.
 - No stickers or GIFs (Congrats…) are drawn into the story: the team adds those inside Instagram / TikTok (Hamed, Oct 21 2026).
 - The waiting time is written as the team writes it («۷ ماه و ۱۶ روز»); counted from the dates only if not given.
 - **Only two dates are marked** (Hamed, Oct 21 2026): the submission date and the answer date. In a
