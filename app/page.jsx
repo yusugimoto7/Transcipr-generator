@@ -1569,6 +1569,12 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 >
                   {t.title_fa || t.title_en}
                 </a>
+                {/* The headline as published, so the editor can judge the story before opening it. */}
+                {t.title_fa && (t.source_title || t.title_en) && (
+                  <div dir="auto" style={{ fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: C.text2, marginTop: 2, textAlign: "right", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {t.source_title || t.title_en}
+                  </div>
+                )}
                 {plain && t.why_now && (
                   <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {t.why_now}
