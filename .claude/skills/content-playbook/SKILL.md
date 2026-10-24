@@ -102,6 +102,8 @@ as the change**, in the team's own words where possible, with the date.
   source text, keeping what the note does not ask to change.
 - After a deploy the saved script is always loaded; a failed write offers a retry button.
 
+- **Three hook options under every script** (Hamed, Oct 24 2026, from the instagram-agent-skill review; `lib/hooks.js`): after a script is written, a short call writes three other opening lines, each from a different pattern (`HOOK_PATTERNS`: number, decision, date, who it hits, before/after, common mistake, the question, exception, cost, mid-story), each a fact from the source. `hookProblems` marks the weak ones (greeting, preamble, asking for attention, longer than ~3 s, nothing concrete). It filters, it does not pick winners. Hooks are saved apart (`hooks_fa`, `hooks_en`), so they are never read out in the English video.
+
 ## 6. Telegram news post
 
 - **Voice (Oct 21 2026, replaces the neutral "clean news" tone):** a friendly lawyer posting himself,

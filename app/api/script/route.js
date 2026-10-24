@@ -1,5 +1,6 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiScript } from "../../../lib/openai";
+import { hookOptions } from "../../../lib/hooks";
 import { cleanText } from "../../../lib/clean-text";
 import { scriptPrompt, englishScriptRewritePrompt, persianShare } from "../../../lib/prompts";
 import { sourceTextFor } from "../../../lib/grounding";
@@ -59,7 +60,10 @@ export async function POST(request) {
       else throw new Error("the English script came back in Persian twice; try again");
     }
 
-    return Response.json({ text: cleanText(text, { lang }), provider });
+    const clean = cleanText(text, { lang });
+    // Three other opening lines to choose from (lib/hooks.js); a failure there never costs the script.
+    const hooks = rewrite ? [] : await hookOptions(topic, clean, lang, sourceText).catch(() => []);
+    return Response.json({ text: clean, provider, hooks });
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
   }
