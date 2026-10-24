@@ -56,6 +56,16 @@ as the change**, in the team's own words where possible, with the date.
 - Editors' own news: links (≤5) and/or pictures (≤5) + a note → one grounded card. Pictures are
   transcribed word for word first (`lib/image-text.js`); the transcription is the source.
   Minimum text: 200 characters from pages, 80 from pictures alone.
+- **Research makes a card only when its pages answer the idea** (Oct 24 2026: "when it can't
+  find the material exactly, why does it put up a topic that wastes my time?"). A research card
+  on "why the mandamus bid failed" came from a Federal Court page that gave the app only its
+  menu; the card took its "reasons" from the search's own pitch and the script then had to say
+  the reasons were unknown. Now: every research card is read again against the text it came
+  from (`supported` in `lib/idea-research.js`) and dropped, with the reason shown under
+  «استفاده نشد / Not used», unless the text itself carries the answer the idea promises and every
+  fact on the card. A page of menus and links counts as unreadable (`hasSubstance` in
+  `lib/news.js`), and court decision pages (decisions.fct-cf / fca-caf / scc-csc) are read
+  through their `?iframe=true` view, which holds the whole decision.
 - Topic links `/?t=<key>` open in a new tab; Back/Forward stay in the app.
 
 ## 3. Lexbase newsletter
