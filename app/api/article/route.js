@@ -5,6 +5,7 @@ import { getArticleLinks } from "../../../lib/wordpress";
 import { sourceTextFor } from "../../../lib/grounding";
 import { editorNoteBlock } from "../../../lib/custom-news";
 import { englishBlock, langOf } from "../../../lib/lang";
+import { cleanText, cleanHtml } from "../../../lib/clean-text";
 import { articlePrompt, parseArticle, ARTICLE_MIN_CHARS, ARTICLE_MAX_CHARS } from "../../../lib/prompts";
 
 export const runtime = "nodejs";
@@ -102,14 +103,14 @@ export async function POST(request) {
       provider,
       article: {
         // The field keeps its old name; for an English article it holds the English title.
-        title_fa: a.title_fa || (lang === "en" ? topic.title_en || topic.title_fa : topic.title_fa || topic.title_en),
+        title_fa: cleanText(a.title_fa || (lang === "en" ? topic.title_en || topic.title_fa : topic.title_fa || topic.title_en), { lang }),
         lang,
         slug: slugify(a.slug_en) + (lang === "en" ? "-en" : ""),
-        meta_description: a.meta_description || "",
+        meta_description: cleanText(a.meta_description || "", { lang }),
         focus_keyword: a.focus_keyword || "",
-        excerpt: a.excerpt || "",
+        excerpt: cleanText(a.excerpt || "", { lang }),
         tags: a.tags || "",
-        content_html: body + sourceP,
+        content_html: cleanHtml(body, { lang }) + sourceP,
         source_url: topic.source_url || "",
         parse_ok: !!(a.title_fa && hasHtml),
         length_chars: chars,
