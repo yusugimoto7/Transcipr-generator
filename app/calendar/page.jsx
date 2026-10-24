@@ -2,6 +2,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { publishStateOf } from "../../lib/calendar/publishState";
+import { IG_ACCOUNTS, IG_ACCOUNT_NOTES, igPageOf } from "../../lib/calendar/igAccounts";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext, DragOverlay, PointerSensor, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
@@ -187,6 +188,11 @@ function CardFace({ card, board, users, onOpen }) {
           {nets.map((n) => (
             <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
           ))}
+          {nets.some((n) => n.key === "instagram") && (
+            <span className="text-[11.5px] text-muted" title={L("صفحه اینستاگرامی که این پست به آن می‌رود", "The Instagram page this post goes to")}>
+              {IG_ACCOUNTS[igPageOf(card, board && board.labels)]}
+            </span>
+          )}
           {(people.length > 0 || ((card.trello && card.trello.unmapped) || []).length > 0) && (
             <span className="ml-auto flex gap-0.5">
               {people.map((u) => (
@@ -989,6 +995,26 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                     </span>
                   )}
                 </div>
+                {card.channels && card.channels.instagram && card.channels.instagram.on && (
+                  // Which Instagram page this goes to, changeable here; a change needs a new approval.
+                  <label className="flex flex-wrap items-center gap-2 text-[13px] text-ink">
+                    <span className="font-semibold">{L("صفحه اینستاگرام", "Instagram page")}:</span>
+                    <b>{IG_ACCOUNTS[igPageOf(card, board.labels)]}</b>
+                    <span className="text-muted">({L(...IG_ACCOUNT_NOTES[igPageOf(card, board.labels)])})</span>
+                    <select
+                      className="rounded-md border border-solid border-border bg-surface px-2 py-1 text-[13px]"
+                      value={card.channels.instagram.account || ""}
+                      disabled={["published", "publishing"].includes(publishStateOf((card.publish || {}).instagram))}
+                      onChange={(e) => commit({ channels: { instagram: { ...card.channels.instagram, account: e.target.value } } })}
+                      aria-label={L("عوض کردن صفحه اینستاگرام", "Change the Instagram page")}
+                    >
+                      <option value="">{L("خودکار", "Automatic")}</option>
+                      {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
+                        <option key={k} value={k}>{name}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {captionOf(card) ? (
                   <p dir="auto" className="m-0 whitespace-pre-wrap text-sm leading-relaxed text-ink">
                     {captionOf(card).slice(0, 320)}
