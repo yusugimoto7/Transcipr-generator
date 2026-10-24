@@ -113,6 +113,13 @@ as the change**, in the team's own words where possible, with the date.
 - After a deploy the saved script is always loaded; a failed write offers a retry button.
 
 - **Three hook options under every script** (Hamed, Oct 24 2026, from the instagram-agent-skill review; `lib/hooks.js`): after a script is written, a short call writes three other opening lines, each from a different pattern (`HOOK_PATTERNS`: number, decision, date, who it hits, before/after, common mistake, the question, exception, cost, mid-story), each a fact from the source. `hookProblems` marks the weak ones (greeting, preamble, asking for attention, longer than ~3 s, nothing concrete). It filters, it does not pick winners. Hooks are saved apart (`hooks_fa`, `hooks_en`), so they are never read out in the English video.
+- **A note under each script** (Oct 24 2026: "a place to give a prompt to change or modify the
+  script, like the story and post notes"). The note box under the Persian or English tab rewrites
+  that tab's script (job `script_fix`, `script_fix@en`): the full script prompt again, with the
+  current script and the note after it, so format, voice and length rules still hold and every
+  fact still comes from the source only (a note asking for something the source lacks is left
+  out). The other language's script is kept; opening-line options are made again. "Learn from
+  this note" stores a `script` rule for every later script.
 
 ## 6. Telegram news post
 

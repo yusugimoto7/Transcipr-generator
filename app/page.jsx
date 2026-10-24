@@ -959,6 +959,17 @@ export default function App() {
   const enJob = svJobs.script_en;
   const enRewrite = enJob && !(enJob.extra && enJob.extra.save === false) ? enJob : null;
   if (enRewrite && enRewrite.status === "done" && enRewrite.result && enRewrite.result.en) viewScripts.en = enRewrite.result.en;
+  // A script rewritten by the team's note (one job per language) replaces that language's script
+  // and its opening lines, when it is newer than whatever wrote them.
+  const fixJobs = { fa: svJobs.script_fix || null, en: svJobs["script_fix@en"] || null };
+  for (const l of ["fa", "en"]) {
+    const fj = fixJobs[l];
+    const newer = Math.max((sj && sj.startedAt) || 0, l === "en" ? (enRewrite && enRewrite.startedAt) || 0 : 0);
+    if (fj && fj.status === "done" && fj.result && fj.result.text && (fj.startedAt || 0) >= newer) {
+      viewScripts[l] = fj.result.text;
+      viewScripts["hooks_" + l] = fj.result.hooks || [];
+    }
+  }
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
@@ -1231,6 +1242,7 @@ export default function App() {
           onWrite={decisions[svKey] === "rejected" ? null : () => approveTopic(scriptTopic)}
           enError={(sjResult && sjResult.enError) || ""}
           enJob={enRewrite}
+          fixJobs={fixJobs}
           draftJob={enJob && !enRewrite ? enJob : null}
           tgPost={tgPost}
           tgJob={tgJob}
@@ -2709,7 +2721,46 @@ function Segmented({ value, onChange, items }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
+// A note under the script, like the ones under the post, carousel and story: the script in this
+// tab is rewritten by it from the same source (job script_fix, script_fix@en for English), and the
+// note can teach a rule for every later script.
+function ScriptNote({ topic, tab, script, job, onJob }) {
+  const [note, setNote] = useState("");
+  const [learn, setLearn] = useState(false);
+  const running = !!job && job.status === "running";
+  const failed = job && job.status === "error" ? job.error : "";
+  const done = job && job.status === "done";
+  const go = () => {
+    const n = note.trim();
+    if (!n || running) return;
+    onJob(tab === "en" ? "script_fix@en" : "script_fix", { lang: tab, script, note: n });
+    if (learn) teach({ topic, scope: "script", note: n, context: script });
+    setNote("");
+  };
+  const tone = C.orange;
+  return (
+    <div dir={uiDir()} style={{ marginTop: 16, background: C.surface, border: `1px solid ${alpha(tone, 0.3)}`, borderRadius: 14, padding: 12, fontFamily: FA_FONT }}>
+      <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>✏️ {tab === "en" ? L("بازنویسی اسکریپت انگلیسی با یادداشت", "Rewrite the English script with a note") : L("بازنویسی اسکریپت فارسی با یادداشت", "Rewrite the Persian script with a note")}</div>
+      <textarea
+        dir="auto"
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        placeholder={L("مثلاً: شروع رو قوی‌تر کن، کوتاه‌تر، جملهٔ آخر دعوت به مشاوره نباشه، تاریخ رو اول بگو…", "e.g. a stronger opening, shorter, no consultation line at the end, say the date first…")}
+        style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: FA_FONT, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+      />
+      <button className="ui-btn" disabled={running || !note.trim()} onClick={go} style={{ width: "100%", marginTop: 8, padding: "10px 14px", borderRadius: 12, background: alpha(tone, 0.1), color: C.text, border: `1px solid ${alpha(tone, 0.4)}`, fontWeight: 700, fontSize: 13, fontFamily: FA_FONT, cursor: running || !note.trim() ? "default" : "pointer", opacity: running || !note.trim() ? 0.5 : 1 }}>
+        ↻ {L("بازنویسی اسکریپت", "Rewrite the script")}
+      </button>
+      <LearnToggle on={learn} setOn={setLearn} />
+      {running && <div className="ui-progress" style={{ marginTop: 8, fontSize: 12.5, color: C.text2 }}><span className="ui-pulse">⏳</span> {L("در حال بازنویسی اسکریپت… می‌تونی از این صفحه بری.", "Rewriting the script… You can leave this page.")}</div>}
+      {failed && !running && <div style={{ marginTop: 8, fontSize: 12.5, color: C.reject, unicodeBidi: "plaintext" }}>⚠️ {L("بازنویسی نشد: ", "Not rewritten: ")}{failed}</div>}
+      {done && !running && job.result && job.result.note && <div style={{ marginTop: 8, fontSize: 12, color: C.success, unicodeBidi: "plaintext" }}>✓ {L("بازنویسی شد با یادداشت: ", "Rewritten with the note: ")}«{job.result.note}»</div>}
+    </div>
+  );
+}
+
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, fixJobs = {}, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
   const f = fieldOf(topic);
   const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -3003,6 +3054,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             <>
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
               <ScriptBody text={active} tab={tab} />
+              <ScriptNote key={tab} topic={topic} tab={tab} script={active} job={fixJobs[tab]} onJob={onJob} />
             </>
           )}
         </div>
