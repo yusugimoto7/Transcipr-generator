@@ -4,6 +4,7 @@
 // status (Drafts, Waiting for approval, Scheduled, Published, Failed), as in Zoho Social.
 
 import { whenAll, myZone, zoneName, zoneAbbr, dateLocale } from "../../lib/tz";
+import { publishStateOf } from "../../lib/calendar/publishState";
 import { L, uiDir } from "../../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { DndContext, DragOverlay, PointerSensor, TouchSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
@@ -44,7 +45,7 @@ export function Tile({ card, onOpen, drag = true }) {
       <b>
         {card.publish_at ? timeOf(card.publish_at) : ""}
         {onNetworks(card).map((n) => (
-          <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
+          <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
         ))}
       </b>
       <span dir="auto">{card.title || captionOf(card) || L("پست بی‌عنوان", "Untitled post")}</span>
@@ -210,14 +211,14 @@ export function PostList({ cards, tab, admin, onOpen, onAction }) {
             <div className={c.rowText}>
               <div className={c.row} style={{ gap: 6 }}>
                 {onNetworks(card).map((n) => (
-                  <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
+                  <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
                 ))}
                 <b dir="auto">{card.title || L("پست بی‌عنوان", "Untitled post")}</b>
               </div>
               <p dir="auto">{captionOf(card)}</p>
               {fails.map(([k, p]) => (
                 <span key={k} style={{ color: "#b42318", fontSize: 12 }}>
-                  {netName(k)}: {p.error || publishStateName(p.status)}
+                  {netName(k)}: {p.error || publishStateName(publishStateOf(p))}
                 </span>
               ))}
             </div>

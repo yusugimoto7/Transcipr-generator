@@ -34,6 +34,7 @@ export function statusName(status) {
 // What a single network's publish state means (card.publish[k].status), for the screen.
 const PUBLISH_STATE = {
   published: ["منتشرشده", "published"],
+  tested: ["فقط آزمایشی؛ واقعاً منتشر نشد", "test run only, not really posted"],
   publishing: ["در حال انتشار", "publishing"],
   failed: ["ناموفق", "failed"],
   unknown: ["نامعلوم", "unknown"],

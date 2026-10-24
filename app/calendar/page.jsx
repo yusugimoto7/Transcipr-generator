@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { publishStateOf } from "../../lib/calendar/publishState";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext, DragOverlay, PointerSensor, MouseSensor, TouchSensor, KeyboardSensor, useSensor, useSensors,
@@ -184,7 +185,7 @@ function CardFace({ card, board, users, onOpen }) {
           )}
           {card.stale_approval && <Badge variant="pending">{L("بعد از تأیید عوض شده", "changed after approval")}</Badge>}
           {nets.map((n) => (
-            <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
+            <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
           ))}
           {(people.length > 0 || ((card.trello && card.trello.unmapped) || []).length > 0) && (
             <span className="ml-auto flex gap-0.5">
@@ -980,7 +981,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusPill status={card.status} />
                   {onNetworks(card).map((n) => (
-                    <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
+                    <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
                   ))}
                   {card.publish_at && (
                     <span className="inline-flex items-center gap-1 text-[13px] text-muted">

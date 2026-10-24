@@ -15,6 +15,7 @@ import DrivePicker from "../DrivePicker";
 import { NETWORKS, NET, effectiveCaption, thumbOf, statusName, netName, publishStateName } from "./channels";
 import { L, uiDir } from "../../lib/i18n";
 import { IG_ACCOUNTS, IG_ACCOUNT_NOTES } from "../../lib/calendar/igAccounts";
+import { publishStateOf } from "../../lib/calendar/publishState";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
 
@@ -75,7 +76,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
     if (tab !== "original" && !on.some((n) => n.key === tab)) setTab("original");
   }, [on.map((n) => n.key).join(), pv, tab]);
 
-  const locked = saved && Object.values(saved.publish || {}).some((p) => ["published", "publishing"].includes(p.status));
+  const locked = saved && Object.values(saved.publish || {}).some((p) => ["published", "publishing"].includes(publishStateOf(p)));
   const setCh = (k, patch) => setD({ ...d, channels: { ...d.channels, [k]: { ...d.channels[k], ...patch } } });
   const toggleNet = (k) => !locked && setCh(k, { on: !d.channels[k].on });
   const status = saved ? saved.status : "draft";
@@ -363,8 +364,8 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 <div className={c.label}>{L("نتیجه‌ها", "Results")}</div>
                 {Object.entries(saved.publish).map(([k, p]) => (
-                  <div key={k} className={`${c.banner} ${p.status === "published" ? c.bOk : p.status === "publishing" ? c.bInfo : c.bBad}`}>
-                    <NetChip k={k} /> {netName(k)}: {publishStateName(p.status)}
+                  <div key={k} className={`${c.banner} ${publishStateOf(p) === "published" ? c.bOk : ["publishing", "tested"].includes(publishStateOf(p)) ? c.bInfo : c.bBad}`}>
+                    <NetChip k={k} /> {netName(k)}: {publishStateName(publishStateOf(p))}
                     {p.url && (
                       <a href={p.url} target="_blank" rel="noreferrer">
                         {L("باز کردن پست", "open the post")}
