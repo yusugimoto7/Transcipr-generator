@@ -5,7 +5,7 @@ description: The team's rules for carousel slide images (what pictures may and m
 
 # Carousel slide images
 
-Slides are drawn one by one by the image model in `lib/carousel.js` (`imagePrompt`, `drawSlide`), in parallel, with the brand's own carousels in `public/brand/carousel-style/` as style references. The logo is composited afterwards (`addLogo`), never drawn by the model.
+Slides are drawn one by one by the image model in `lib/carousel.js` (`imagePrompt`, `drawSlide`), in parallel, with the brand's own carousels in `public/brand/carousel-style/` as style references. The logo is composited afterwards (`addLogo`), never drawn by the model. **No plate behind it** (Hamed, Oct 24 2026): the transparent `logo-on-light.png` (dark letters) where the bottom of the picture is light, `logo-on-dark.png` (white letters) where it is dark, picked by the brightness under the spot (`lib/brandLogo.js`). The same goes for the Telegram picture and the visa-result stories.
 
 ## Rules from Hamed (keep them)
 - **Never show anyone wearing a hijab, headscarf or any head covering.**
