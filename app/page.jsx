@@ -1626,6 +1626,11 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   {t.grounding === "headline" && (
                     <span style={{ color: C.orange, border: `1px solid ${alpha(C.orange, 0.5)}`, borderRadius: 99, padding: "0 6px" }}>{L("فقط تیتر", "headline only")}</span>
                   )}
+                  {t.outlier >= 2 && (
+                    <span title={L("تعامل این پست چند برابرِ پست‌های معمول همین اکانت بوده", "This post's engagement compared with that account's usual posts")} style={{ color: "#7c3aed", background: alpha("#7c3aed", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>
+                      📈 {L(`${t.outlier}× معمول`, `${t.outlier}× usual`)}
+                    </span>
+                  )}
                   {t.coverage > 1 && (
                     <span title={L("پوشش‌داده‌شده در: ", "Also covered by: ") + (t.outlets || []).join(", ")} style={{ color: "#c2410c", background: alpha("#f97316", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>🔥 {L(`${t.coverage} منبع`, `${t.coverage} sources`)}</span>
                   )}
