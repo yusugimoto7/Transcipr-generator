@@ -4504,8 +4504,14 @@ function wordCount(t) {
 
 // The team's benchmark videos, from the shared Drive folder: a thumbnail of
 // each, which format its shape suits, tap to use it (and its format).
-function BenchmarkPicker({ value, ratio, onPick }) {
+function BenchmarkPicker({ value, ratio, onPick, onGone = () => {} }) {
   const [state, setState] = useState({ loading: true, videos: [], folder: "", error: "" });
+  // Only the folder's videos are samples: one remembered from an earlier video that is no longer
+  // in the folder (or a link pasted before the folder was the only source) is let go.
+  useEffect(() => {
+    if (value && !state.loading && !state.error && !state.videos.some((v) => v.url === value)) onGone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, value]);
   const load = (fresh) => {
     setState((x) => ({ ...x, loading: true }));
     fetch("/api/video/benchmarks" + (fresh ? "?fresh=1" : ""), { cache: "no-store" })
@@ -4781,28 +4787,10 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
               value={d.benchmark}
               ratio={d.ratio}
               onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}), ...(lookForBenchmark(v.url) ? { look: lookForBenchmark(v.url) } : {}) })}
+              onGone={() => set({ benchmark: "" })}
             />
-            <div style={{ ...hint, margin: "10px 0 6px" }}>{L("یا یک ویدیوی نمونهٔ تازه از Google Drive، یا لینکش:", "Or a new benchmark video from Google Drive, or its link:")}</div>
-            <div style={{ marginBottom: 8 }}>
-              <DrivePicker kind="video" onPick={(file) => set({ benchmark: file.url })} />
-            </div>
-            <div style={{ position: "relative" }}>
-              <input
-                value={d.benchmark}
-                onChange={(e) => set({ benchmark: e.target.value })}
-                dir="ltr"
-                placeholder={L("لینک Google Drive یا HeyGen", "Google Drive or HeyGen link")}
-                inputMode="url"
-                style={{ ...field, paddingRight: kind ? 110 : 12, borderColor: benchErr ? C.reject : C.line }}
-              />
-              {kind && !benchErr && (
-                <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, fontWeight: 700, color: C.teal, background: alpha(C.teal, 0.12), borderRadius: 99, padding: "3px 9px" }}>
-                  {L(LINK_KINDS[kind])}
-                </span>
-              )}
-            </div>
-            <div style={{ ...hint, marginTop: 6, lineHeight: 1.5 }}>
-              {benchErr ? <span style={{ color: C.reject }}>{benchErr}</span> : L("به‌عنوان مرجع ریتم و کادربندی برای ورک‌فلو فرستاده می‌شه؛ لباس و جا رو بخش ۵ تعیین می‌کنه. فایل Drive باید با «Anyone with the link» به اشتراک گذاشته شده باشه.", "Sent to the workflow as the reference for pacing and framing; the outfit and place come from section 5. A Drive file must be shared as “Anyone with the link”.")}
+            <div style={{ ...hint, marginTop: 8, lineHeight: 1.6 }}>
+              {L("نمونه‌ها فقط از پوشهٔ Benchmarks میان. برای نمونهٔ تازه، ویدیو رو توی همون پوشه بذار و «تازه‌سازی» رو بزن. نمونه ریتم و کادربندی رو نشون می‌ده؛ لباس و جا رو بخش ۵ تعیین می‌کنه.", "Samples come only from the Benchmarks folder. For a new one, put the video in that folder and tap Refresh. A sample sets the pacing and framing; the outfit and place come from section 5.")}
             </div>
           </div>
 
