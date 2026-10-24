@@ -9,16 +9,18 @@
 // pictures only (lib/visa-news/cases.js).
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CalendarPlus, CircleDashed, Download, EyeOff, ImagePlus, Loader2, Megaphone, PencilRuler, ScanSearch, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarPlus, CircleDashed, Download, EyeOff, ImagePlus, Loader2, Megaphone, PencilRuler, ScanSearch, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import VisaDesigner, { defaultManual } from "./VisaDesigner";
+import { L, uiDir, isFa } from "../lib/i18n";
 
 const MAX = 10;
 const FA = "'Vazirmatn', sans-serif";
-const MARKS = [["marker", "هایلایت زرد"], ["circle", "دایره قرمز"], ["underline", "خط زیر قرمز"]];
-const BACKS = [["light", "روشن", "#f1eaf7"], ["dark", "سرمه‌ای", "#1d2b45"], ["brand", "سبز سوگیموتو", "#32515d"]];
+// Labels are [fa, en] pairs, read with L() when drawn.
+const MARKS = [["marker", ["هایلایت زرد", "Yellow highlight"]], ["circle", ["دایره قرمز", "Red circle"]], ["underline", ["خط زیر قرمز", "Red underline"]]];
+const BACKS = [["light", ["روشن", "Light"], "#f1eaf7"], ["dark", ["سرمه‌ای", "Navy"], "#1d2b45"], ["brand", ["سبز سوگیموتو", "Sugimoto green"], "#32515d"]];
 
 function shrink(file) {
   return new Promise((resolve) => {
@@ -52,16 +54,16 @@ async function runJob(kind, body, onProgress) {
     body: JSON.stringify({ kind, topic: { title_fa: `visa-results-${Date.now()}` }, ...body }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.job) throw new Error(data.error || "could not start");
+  if (!res.ok || !data.job) throw new Error(data.error || L("شروع نشد", "could not start"));
   const id = data.job.id;
   for (;;) {
     await new Promise((r) => setTimeout(r, 2000));
     const j = await fetch("/api/jobs?ids=" + id, { cache: "no-store" }).then((r) => r.json()).catch(() => null);
     if (!j) continue;
-    if ((j.missing || []).includes(id)) throw new Error("the server restarted; try again");
+    if ((j.missing || []).includes(id)) throw new Error(L("سرور دوباره راه‌اندازی شد؛ دوباره امتحان کن", "the server restarted; try again"));
     const job = (j.jobs || [])[0];
     if (!job) continue;
-    if (job.status === "error") throw new Error(job.error || "failed");
+    if (job.status === "error") throw new Error(job.error || L("ناموفق بود", "failed"));
     if (job.status === "done") return job.result;
     onProgress(job.result);
   }
@@ -99,7 +101,7 @@ function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
         <button
           key={b.id}
           type="button"
-          title={(b.on ? "Tap to uncover: " : "Tap to cover again: ") + (b.label || "")}
+          title={(b.on ? L("بزن تا برداشته بشه: ", "Tap to uncover: ") : L("بزن تا دوباره پوشونده بشه: ", "Tap to cover again: ")) + (b.label || "")}
           onClick={(e) => {
             e.stopPropagation();
             if (!tool) onToggle(b.id);
@@ -124,10 +126,10 @@ const newId = () => "vc-" + Date.now().toString(36) + Math.random().toString(36)
 const LAYOUT = { big: "letter", first: "letter", text: "over", size: "normal" };
 const OPTS = { mark: "marker", background: "light", watermark: true, layout: LAYOUT };
 const LAYOUT_CHOICES = [
-  ["big", "عکس بزرگ‌تر", [["letter", "نامه"], ["timeline", "تایم‌لاین"], ["none", "هم‌اندازه"]]],
-  ["first", "بالا", [["letter", "نامه"], ["timeline", "تایم‌لاین"]]],
-  ["text", "جای متن", [["over", "روی نامه"], ["below", "زیر عکس‌ها"]]],
-  ["size", "اندازه متن", [["small", "کوچک"], ["normal", "معمولی"], ["large", "بزرگ"]]],
+  ["big", ["عکس بزرگ‌تر", "Bigger picture"], [["letter", ["نامه", "Letter"]], ["timeline", ["تایم‌لاین", "Timeline"]], ["none", ["هم‌اندازه", "Same size"]]]],
+  ["first", ["بالا", "On top"], [["letter", ["نامه", "Letter"]], ["timeline", ["تایم‌لاین", "Timeline"]]]],
+  ["text", ["جای متن", "Text position"], [["over", ["روی نامه", "Over the letter"]], ["below", ["زیر عکس‌ها", "Below the pictures"]]]],
+  ["size", ["اندازه متن", "Text size"], [["small", ["کوچک", "Small"]], ["normal", ["معمولی", "Normal"]], ["large", ["بزرگ", "Large"]]]],
 ];
 
 // The heading a case is listed under: «خبر ویزا · <title and first name>».
@@ -136,10 +138,15 @@ function caseName(c) {
   const first = String(((c.texts || {})[nums[0]] || "")).split("\n")[0].trim();
   return first && !/^⬅️/.test(first) ? first : c.title || "مشتری";
 }
+// The same name for the screen: a case with no name yet is "Client" in English.
+function shownName(c) {
+  const n = caseName(c);
+  return n === "مشتری" ? L("مشتری", "Client") : n;
+}
 
 function when(ms) {
   try {
-    return new Date(ms).toLocaleDateString("fa-IR", { month: "long", day: "numeric" });
+    return new Date(ms).toLocaleDateString(isFa() ? "fa-IR" : "en-US", { month: "long", day: "numeric" });
   } catch {
     return "";
   }
@@ -234,7 +241,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
           ...opts,
           case: { id: c.id, title: caseName({ ...c, texts }), created: c.created, groups: c.groups, texts, kinds: c.kinds },
         },
-        (p) => p && update({ progress: `${p.done || 0} از ${p.total || nums.length}` })
+        (p) => p && update({ progress: L(`${p.done || 0} از ${p.total || nums.length}`, `${p.done || 0} of ${p.total || nums.length}`) })
       );
       // From now on the case is the saved one: covered pictures only, the originals let go.
       update({ stories: r.stories || [], images: (r.covered || []).map((url, i) => (url ? { url } : c.images[i])), marks: r.marks || [], scans: null, checked: false, calendar: "", saved: !!r.saved, status: "saved" });
@@ -294,7 +301,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
     try {
       const r = await fetch("/api/calendar/visa", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: c.stories.filter((s) => s.url).map((s) => s.url), title: caseName(c).replace(/^(سرکار خانم|جناب آقای)\s*/, "") }) });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "failed");
+      if (!r.ok) throw new Error(j.error || L("ناموفق بود", "failed"));
       update({ calendar: `/calendar?board=${j.card.board_id}&card=${j.card.id}` });
     } catch (e) {
       update({ calendar: "error:" + String(e.message || e) });
@@ -303,7 +310,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
   const storySelect = (i) =>
     c.images.length > 1 && (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }}>
-        استوری
+        {L("استوری", "Story")}
         <select
           value={c.groups[i]}
           onChange={(e) => {
@@ -313,7 +320,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
           style={{ fontFamily: FA, borderRadius: 8, border: `1px solid ${C.line}`, padding: "3px 6px" }}
         >
           {[...nums, Math.max(-1, ...c.groups) + 1].map((n, k) => (
-            <option key={n} value={n}>{k < nums.length ? k + 1 : "جدید"}</option>
+            <option key={n} value={n}>{k < nums.length ? k + 1 : L("جدید", "New")}</option>
           ))}
         </select>
       </span>
@@ -323,67 +330,67 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
     <div ref={topRef} style={{ scrollMarginTop: 80 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
         <Button variant="outline" size="sm" onClick={onBack}>
-          <ArrowRight aria-hidden /> خبرهای ویزا
+          {isFa() ? <ArrowRight aria-hidden /> : <ArrowLeft aria-hidden />} {L("خبرهای ویزا", "Visa news")}
         </Button>
         {c.saved && onArchive && (
-          <Button variant="ghost" size="sm" onClick={() => window.confirm("این خبر ویزا از فهرست برداشته بشه؟") && onArchive()}>
-            <Trash2 aria-hidden /> بایگانی
+          <Button variant="ghost" size="sm" onClick={() => window.confirm(L("این خبر ویزا از فهرست برداشته بشه؟", "Remove this visa news from the list?")) && onArchive()}>
+            <Trash2 aria-hidden /> {L("بایگانی", "Archive")}
           </Button>
         )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 16, marginBottom: 4 }}>
-        <Megaphone size={18} aria-hidden /> خبر ویزا · {caseName(c)}
+        <Megaphone size={18} aria-hidden /> {L("خبر ویزا", "Visa news")} · {shownName(c)}
       </div>
       <div style={{ fontSize: 12, color: C.text3, marginBottom: 12 }}>
-        {when(c.created)} · {c.images.length} عکس · {c.saved ? "ذخیره‌شده برای تیم" : "فقط روی همین صفحه، تا استوری ساخته بشه"}
+        {when(c.created)} · {L(`${c.images.length} عکس`, `${c.images.length} picture${c.images.length === 1 ? "" : "s"}`)} · {c.saved ? L("ذخیره‌شده برای تیم", "Saved for the team") : L("فقط روی همین صفحه، تا استوری ساخته بشه", "Only on this page until the stories are made")}
       </div>
 
       {c.reading ? (
-        section("در حال خواندن عکس‌ها", <div style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}><Loader2 className="animate-spin" size={16} aria-hidden /> {c.progress || "…"}</div>)
+        section(L("در حال خواندن عکس‌ها", "Reading the pictures"), <div style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}><Loader2 className="animate-spin" size={16} aria-hidden /> {c.progress || "…"}</div>)
       ) : (
         <>
           {section(
-            fresh ? "عکس‌ها و اطلاعات شخصی" : "عکس‌ها",
+            fresh ? L("عکس‌ها و اطلاعات شخصی", "Pictures and personal details") : L("عکس‌ها", "Pictures"),
             <>
               {fresh && unchecked > 0 && (
                 <div style={{ background: "rgba(229,72,77,0.1)", border: "1px solid rgba(229,72,77,0.4)", borderRadius: 10, padding: "8px 10px", fontSize: 12.5, marginBottom: 10, lineHeight: 1.8 }}>
-                  ⚠️ بررسی هوشمند روی {unchecked} عکس انجام نشد؛ فقط قانون‌های ثابت اجرا شد. نام خانوادگی و آدرس رو خودت با «پوشاندن» بپوشون.
+                  ⚠️ {L(`بررسی هوشمند روی ${unchecked} عکس انجام نشد؛ فقط قانون‌های ثابت اجرا شد. نام خانوادگی و آدرس رو خودت با «پوشاندن یک قسمت» بپوشون.`, `The smart check did not run on ${unchecked} picture${unchecked === 1 ? "" : "s"}; only the fixed rules were applied. Cover the family name and address yourself with “Cover a part”.`)}
                 </div>
               )}
               {fresh && (
                 <div style={{ position: "sticky", top: 64, zIndex: 5, background: C.surface, padding: "6px 0", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", borderBottom: `1px solid ${C.line}`, marginBottom: 10 }}>
                   <button type="button" onClick={() => setTool(tool === "hide" ? null : "hide")} style={pill(tool === "hide")}>
-                    <EyeOff size={13} aria-hidden style={{ verticalAlign: -2 }} /> پوشاندن یک قسمت
+                    <EyeOff size={13} aria-hidden style={{ verticalAlign: -2 }} /> {L("پوشاندن یک قسمت", "Cover a part")}
                   </button>
                   <button type="button" onClick={() => setTool(tool === "date" ? null : "date")} style={pill(tool === "date")}>
-                    <CircleDashed size={13} aria-hidden style={{ verticalAlign: -2 }} /> علامت تاریخ
+                    <CircleDashed size={13} aria-hidden style={{ verticalAlign: -2 }} /> {L("علامت تاریخ", "Mark a date")}
                   </button>
-                  <span style={{ fontSize: 11.5, color: C.text3 }}>{tool ? "روی عکس بکش تا کادر اضافه بشه" : "روی هر کادر بزن تا برداشته یا دوباره گذاشته بشه"}</span>
+                  <span style={{ fontSize: 11.5, color: C.text3 }}>{tool ? L("روی عکس بکش تا کادر اضافه بشه", "Drag on the picture to add a box") : L("روی هر کادر بزن تا برداشته یا دوباره گذاشته بشه", "Tap a box to remove it or put it back")}</span>
                 </div>
               )}
-              {!fresh && <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 8 }}>عکس‌ها پوشونده و ذخیره شدن؛ متن و طراحی رو می‌تونی عوض کنی. برای تغییر پوشش، عکس اصلی رو دوباره بذار.</div>}
+              {!fresh && <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 8 }}>{L("عکس‌ها پوشونده و ذخیره شدن؛ متن و طراحی رو می‌تونی عوض کنی. برای تغییر پوشش، عکس اصلی رو دوباره بذار.", "The pictures are covered and saved; you can still change the text and design. To change what is covered, upload the original picture again.")}</div>}
               {c.images.map((im, i) => {
                 const sc = c.scans && c.scans[i];
                 const kind = (sc && sc.kind) || (c.kinds || [])[i];
                 return (
                   <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, marginBottom: 10, background: C.ground }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-                      <b style={{ fontSize: 13 }}>عکس {i + 1}{kind === "letter" ? " · نامه" : kind === "timeline" ? " · تایم‌لاین" : ""}</b>
+                      <b style={{ fontSize: 13 }}>{L("عکس", "Picture")} {i + 1}{kind === "letter" ? " · " + L("نامه", "Letter") : kind === "timeline" ? " · " + L("تایم‌لاین", "Timeline") : ""}</b>
                       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                         {storySelect(i)}
                         {fresh && c.images.length > 1 && (
-                          <Button variant="ghost" size="sm" onClick={() => removeImage(i)} aria-label="Remove picture">
+                          <Button variant="ghost" size="sm" onClick={() => removeImage(i)} aria-label={L("حذف عکس", "Remove picture")}>
                             <Trash2 aria-hidden />
                           </Button>
                         )}
                       </span>
                     </div>
                     {sc && sc.error ? (
-                      <div style={{ fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {sc.error}</div>
+                      <div style={{ fontSize: 12, color: C.reject, unicodeBidi: "plaintext" }}>⚠️ {sc.error}</div>
                     ) : im.data && sc ? (
                       <Picture image={im} scan={sc} tool={tool} mark={c.opts.mark} onToggle={(id) => toggle(i, id)} onAdd={(b) => addBox(i, b)} />
                     ) : (
-                      <img src={im.url} alt={"Picture " + (i + 1)} style={{ display: "block", width: "100%", borderRadius: 8 }} />
+                      <img src={im.url} alt={L("عکس ", "Picture ") + (i + 1)} style={{ display: "block", width: "100%", borderRadius: 8 }} />
                     )}
                     {im.data && sc && (
                       <div style={{ marginTop: 8 }}>
@@ -391,12 +398,13 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                           rows={2}
                           value={notes[i] || ""}
                           onChange={(e) => setNotes((n) => ({ ...n, [i]: e.target.value }))}
-                          placeholder="یادداشت برای این عکس، مثلاً: تاریخ فاینال دسیژن رو هم هایلایت کن، یا شماره پاسپورت پایین صفحه پیدا نیست"
+                          dir={uiDir()}
+                          placeholder={L("یادداشت برای این عکس، مثلاً: تاریخ فاینال دسیژن رو هم هایلایت کن، یا شماره پاسپورت پایین صفحه پیدا نیست", "A note for this picture, e.g. highlight the final decision date too, or the passport number at the bottom was missed")}
                           style={{ fontFamily: FA, lineHeight: 1.7, fontSize: 12.5 }}
                         />
                         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                           <Button size="sm" variant="outline" className="mt-1.5" disabled={!String(notes[i] || "").trim() || fixing[i]} onClick={() => fix(i)}>
-                            {fixing[i] ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} {fixing[i] ? "در حال اصلاح…" : "اصلاح این عکس"}
+                            {fixing[i] ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} {fixing[i] ? L("در حال اصلاح…", "Fixing…") : L("اصلاح این عکس", "Fix this picture")}
                           </Button>
                           <Learn on={!!learnOn[i]} setOn={(v) => setLearnOn((l) => ({ ...l, [i]: v }))} />
                         </div>
@@ -409,54 +417,54 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
           )}
 
           {section(
-            "متن استوری",
+            L("متن استوری", "Story text"),
             nums.map((n, k) => {
               const inStory = c.groups.map((g, i) => (g === n ? i + 1 : 0)).filter(Boolean);
               return (
                 <div key={n} style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4, color: inStory.length > 2 ? C.reject : C.text }}>
-                    {nums.length > 1 ? `استوری ${k + 1} · ` : ""}عکس {inStory.join(" و ")}{inStory.length > 2 ? " — هر استوری حداکثر ۲ عکس" : ""}
+                    {nums.length > 1 ? L(`استوری ${k + 1} · `, `Story ${k + 1} · `) : ""}{L(`عکس ${inStory.join(" و ")}`, `Picture${inStory.length > 1 ? "s" : ""} ${inStory.join(" and ")}`)}{inStory.length > 2 ? L(" — هر استوری حداکثر ۲ عکس", " — at most 2 pictures per story") : ""}
                   </div>
-                  <Textarea rows={7} value={(c.texts || {})[n] || ""} onChange={(e) => update((x) => ({ texts: { ...x.texts, [n]: e.target.value } }))} style={{ fontFamily: FA, lineHeight: 1.8 }} />
+                  <Textarea rows={7} value={(c.texts || {})[n] || ""} onChange={(e) => update((x) => ({ texts: { ...x.texts, [n]: e.target.value } }))} dir="rtl" style={{ fontFamily: FA, lineHeight: 1.8 }} />
                 </div>
               );
             })
           )}
 
           {section(
-            "طراحی استوری",
+            L("طراحی استوری", "Story design"),
             <>
               {fresh && (
                 <>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>علامت تاریخ‌ها</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{L("علامت تاریخ‌ها", "Date marks")}</div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                     {MARKS.map(([k, label]) => (
-                      <button key={k} type="button" onClick={() => update((x) => ({ opts: { ...x.opts, mark: k } }))} style={pill(c.opts.mark === k)}>{label}</button>
+                      <button key={k} type="button" onClick={() => update((x) => ({ opts: { ...x.opts, mark: k } }))} style={pill(c.opts.mark === k)}>{L(label)}</button>
                     ))}
                   </div>
                 </>
               )}
-              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>پس‌زمینه</div>
+              <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{L("پس‌زمینه", "Background")}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                 {BACKS.map(([k, label, color]) => (
                   <button key={k} type="button" onClick={() => update((x) => ({ opts: { ...x.opts, background: k } }))} style={pill(c.opts.background === k)}>
-                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 99, background: color, marginLeft: 5, border: "1px solid rgba(0,0,0,0.15)" }} />
-                    {label}
+                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 99, background: color, marginInlineEnd: 5, border: "1px solid rgba(0,0,0,0.15)" }} />
+                    {L(label)}
                   </button>
                 ))}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <Button size="sm" variant={designing ? "default" : "outline"} onClick={() => { setDesigning(!designing); if (designN == null) setDesignN(nums[0]); }}>
-                  <PencilRuler aria-hidden /> {designing ? "بستن طراحی دستی" : "طراحی دستی"}
+                  <PencilRuler aria-hidden /> {designing ? L("بستن طراحی دستی", "Close hand design") : L("طراحی دستی", "Design by hand")}
                 </Button>
-                {Object.keys((c.opts.layout || {}).manual || {}).length > 0 && !designing && <span style={{ fontSize: 11.5, color: C.text3, marginRight: 8 }}>طرح دستی ذخیره شده؛ با «ساخت» همون کشیده می‌شه.</span>}
+                {Object.keys((c.opts.layout || {}).manual || {}).length > 0 && !designing && <span style={{ fontSize: 11.5, color: C.text3, marginInlineStart: 8 }}>{L("طرح دستی ذخیره شده؛ با «ساخت» همون کشیده می‌شه.", "The hand design is saved; “Make” draws exactly that.")}</span>}
               </div>
               {designing && (
                 <div style={{ marginBottom: 14 }}>
                   {nums.length > 1 && (
                     <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
                       {nums.map((n, k) => (
-                        <button key={n} type="button" onClick={() => setDesignN(n)} style={pill(designN === n)}>استوری {k + 1}</button>
+                        <button key={n} type="button" onClick={() => setDesignN(n)} style={pill(designN === n)}>{L("استوری", "Story")} {k + 1}</button>
                       ))}
                     </div>
                   )}
@@ -476,7 +484,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                       />
                     );
                   })()}
-                  <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>پیش‌نمایشه؛ استوری واقعی با «ساخت» کشیده می‌شه (لوگو خودش جایی می‌شینه که روی تاریخ‌ها و متن نباشه). با طرح دستی، گزینه‌های پایین بی‌اثرن.</div>
+                  <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("پیش‌نمایشه؛ استوری واقعی با «ساخت» کشیده می‌شه (لوگو خودش جایی می‌شینه که روی تاریخ‌ها و متن نباشه). با طرح دستی، گزینه‌های پایین بی‌اثرن.", "This is a preview; the real story is drawn when you press “Make” (the logo finds a spot off the dates and the text). With a hand design, the options below have no effect.")}</div>
                   {/* The design is finished here, so it is made and saved to the device from here too. */}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
                     <Button
@@ -487,26 +495,26 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                       }}
                     >
                       {c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
-                      {c.busy ? `در حال ساخت… ${c.progress || ""}` : "ساخت این طرح و دانلود"}
+                      {c.busy ? L(`در حال ساخت… ${c.progress || ""}`, `Making… ${c.progress || ""}`) : L("ساخت این طرح و دانلود", "Make this design and download")}
                     </Button>
                     {c.stories && c.stories.some((x) => x.url) && !c.busy && (
                       <Button variant="outline" onClick={() => download()}>
-                        <Download aria-hidden /> دانلود آخرین ساخته‌شده
+                        <Download aria-hidden /> {L("دانلود آخرین ساخته‌شده", "Download the latest made")}
                       </Button>
                     )}
                   </div>
-                  {fresh && !c.checked && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 4 }}>اول پایین صفحه تیک «همهٔ عکس‌ها رو چک کردم» رو بزن.</div>}
+                  {fresh && !c.checked && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 4 }}>{L("اول پایین صفحه تیک «همهٔ عکس‌ها رو چک کردم» رو بزن.", "First tick “I checked every picture” at the bottom of the page.")}</div>}
                 </div>
               )}
               {LAYOUT_CHOICES.map(([key, label, choices]) => (
                 <div key={key} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{L(label)}</div>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {choices.map(([v, l]) => {
                       const on = ({ ...LAYOUT, ...(c.opts.layout || {}) })[key] === v;
                       return (
                         <button key={v} type="button" onClick={() => update((x) => ({ opts: { ...x.opts, layout: { ...LAYOUT, ...(x.opts.layout || {}), [key]: v } } }))} style={pill(on)}>
-                          {l}
+                          {L(l)}
                         </button>
                       );
                     })}
@@ -514,7 +522,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                 </div>
               ))}
               <label style={{ fontSize: 12.5 }}>
-                <input type="checkbox" checked={c.opts.watermark} onChange={(e) => update((x) => ({ opts: { ...x.opts, watermark: e.target.checked } }))} /> لوگوی بزرگ روی عکس‌ها
+                <input type="checkbox" checked={c.opts.watermark} onChange={(e) => update((x) => ({ opts: { ...x.opts, watermark: e.target.checked } }))} /> {L("لوگوی بزرگ روی عکس‌ها", "Large logo on the pictures")}
               </label>
             </>
           )}
@@ -522,64 +530,65 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
           {fresh && (
             <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.8, background: "rgba(18,148,94,0.07)", border: "1px solid rgba(18,148,94,0.3)", borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
               <input type="checkbox" checked={!!c.checked} onChange={(e) => update({ checked: e.target.checked })} style={{ marginTop: 6 }} />
-              همهٔ عکس‌ها رو چک کردم: نام خانوادگی، UCI، شماره پرونده و پاسپورت، آدرس، ایمیل و بارکدها پوشونده شدن ({hidden} کادر) و فقط اسم کوچیک دیده می‌شه.
+              {L(`همهٔ عکس‌ها رو چک کردم: نام خانوادگی، UCI، شماره پرونده و پاسپورت، آدرس، ایمیل و بارکدها پوشونده شدن (${hidden} کادر) و فقط اسم کوچیک دیده می‌شه.`, `I checked every picture: the family name, UCI, application and passport numbers, address, email and barcodes are covered (${hidden} box${hidden === 1 ? "" : "es"}) and only the first name shows.`)}
             </label>
           )}
           <Button className="w-full" disabled={(fresh && !c.checked) || c.busy || tooMany || !c.images.length} onClick={() => draw()}>
             {c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-            {c.busy ? `در حال ساخت استوری‌ها… ${c.progress || ""}` : c.stories ? `ساخت دوباره (${nums.length} استوری)` : `ساخت ${nums.length} استوری`}
+            {c.busy ? L(`در حال ساخت استوری‌ها… ${c.progress || ""}`, `Making the stories… ${c.progress || ""}`) : c.stories ? L(`ساخت دوباره (${nums.length} استوری)`, `Make again (${nums.length} ${nums.length === 1 ? "story" : "stories"})`) : L(`ساخت ${nums.length} استوری`, `Make ${nums.length} ${nums.length === 1 ? "story" : "stories"}`)}
           </Button>
-          {c.error && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr", textAlign: "left" }}>⚠️ {c.error}</div>}
+          {c.error && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, unicodeBidi: "plaintext", textAlign: "start" }}>⚠️ {c.error}</div>}
 
           {c.stories && (
             <div style={{ marginTop: 12 }}>
               {section(
-                "استوری‌ها",
+                L("استوری‌ها", "Stories"),
                 <>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10, marginBottom: 10 }}>
                     {c.stories.map((st, k) => (
                       <div key={k} style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", background: C.surface }}>
                         {st.url ? (
                           <a href={st.url} target="_blank" rel="noreferrer">
-                            <img src={st.url} alt={"Story " + (k + 1)} style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover" }} />
+                            <img src={st.url} alt={L("استوری ", "Story ") + (k + 1)} style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover" }} />
                           </a>
                         ) : (
-                          <div style={{ aspectRatio: "9 / 16", display: "grid", placeItems: "center", padding: 8, fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {st.error}</div>
+                          <div style={{ aspectRatio: "9 / 16", display: "grid", placeItems: "center", padding: 8, fontSize: 12, color: C.reject, unicodeBidi: "plaintext" }}>⚠️ {st.error}</div>
                         )}
                       </div>
                     ))}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <Button variant="outline" onClick={() => download()} disabled={!c.stories.some((x) => x.url)}>
-                      <Download aria-hidden /> دانلود
+                      <Download aria-hidden /> {L("دانلود", "Download")}
                     </Button>
                     <Button variant="outline" onClick={toCalendar} disabled={!c.stories.some((x) => x.url) || c.calendar === "…" || /^\/calendar/.test(c.calendar || "")}>
-                      {c.calendar === "…" ? <Loader2 className="animate-spin" aria-hidden /> : <CalendarPlus aria-hidden />} به تقویم محتوا
+                      {c.calendar === "…" ? <Loader2 className="animate-spin" aria-hidden /> : <CalendarPlus aria-hidden />} {L("به تقویم محتوا", "To the content calendar")}
                     </Button>
                   </div>
                   <div style={{ marginTop: 12 }}>
-                    {c.notDone && <div style={{ fontSize: 12, color: C.orangeDeep || C.text2, marginBottom: 6, lineHeight: 1.7 }}>این بخش از یادداشت انجام نشد: {c.notDone}</div>}
-                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>یادداشت برای استوری</div>
+                    {c.notDone && <div style={{ fontSize: 12, color: C.orangeDeep || C.text2, marginBottom: 6, lineHeight: 1.7 }}>{L("این بخش از یادداشت انجام نشد:", "This part of the note was not done:")} {c.notDone}</div>}
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{L("یادداشت برای استوری", "Note for the stories")}</div>
                     <Textarea
                       rows={2}
                       value={storyNote}
                       onChange={(e) => setStoryNote(e.target.value)}
-                      placeholder="مثلاً: متن کوتاه‌تر، پس‌زمینه سرمه‌ای، اسم رو بالاتر بیار"
+                      dir={uiDir()}
+                      placeholder={L("مثلاً: متن کوتاه‌تر، پس‌زمینه سرمه‌ای، اسم رو بالاتر بیار", "e.g. shorter text, navy background, move the name higher")}
                       style={{ fontFamily: FA, lineHeight: 1.7, fontSize: 12.5 }}
                     />
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <Button size="sm" className="mt-1.5" disabled={!storyNote.trim() || restyling || c.busy} onClick={restyle}>
-                        {restyling || c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} اصلاح و ساخت دوباره
+                        {restyling || c.busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />} {L("اصلاح و ساخت دوباره", "Fix and make again")}
                       </Button>
                       <Learn on={!!learnOn.story} setOn={(v) => setLearnOn((l) => ({ ...l, story: v }))} />
                     </div>
                   </div>
                   {/^\/calendar/.test(c.calendar || "") && (
                     <div style={{ marginTop: 8, fontSize: 12.5 }}>
-                      ✓ به‌عنوان پیش‌نویس به تقویم اضافه شد (بعد از تأیید حامد منتشر می‌شه): <a href={c.calendar} style={{ color: C.teal, fontWeight: 700 }}>باز کردن</a>
+                      ✓ {L("به‌عنوان پیش‌نویس به تقویم اضافه شد (بعد از تأیید حامد منتشر می‌شه):", "Added to the calendar as a draft (it is published after Hamed approves it):")} <a href={c.calendar} style={{ color: C.teal, fontWeight: 700 }}>{L("باز کردن", "Open")}</a>
                     </div>
                   )}
-                  {/^error:/.test(c.calendar || "") && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr" }}>⚠️ {c.calendar.slice(6)}</div>}
+                  {/^error:/.test(c.calendar || "") && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, unicodeBidi: "plaintext" }}>⚠️ {c.calendar.slice(6)}</div>}
                 </>
               )}
             </div>
@@ -643,7 +652,7 @@ export default function VisaResults({ C, learn }) {
         body: JSON.stringify({ kind: "visa_scan", topic: { title_fa: `visa-results-${id}` }, images: pics.map(({ name, data }) => ({ name, data })), notes: typed, caseId: id }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.job) throw new Error(d.error || "could not start");
+      if (!res.ok || !d.job) throw new Error(d.error || L("شروع نشد", "could not start"));
       setTimeout(load, 1500);
     } catch (e) {
       setPending((prev) => prev.filter((p) => p.id !== id));
@@ -663,7 +672,7 @@ export default function VisaResults({ C, learn }) {
     try {
       const r = await fetch("/api/visa-cases?id=" + encodeURIComponent(row.id), { cache: "no-store" });
       const j = await r.json();
-      if (!r.ok || !j.case) throw new Error(j.error || "could not open");
+      if (!r.ok || !j.case) throw new Error(j.error || L("باز نشد", "could not open"));
       setCur({ ...j.case, opts: { ...OPTS, ...(j.case.opts || {}), layout: { ...LAYOUT, ...((j.case.opts || {}).layout || {}) } } });
     } catch (e) {
       setError(String(e.message || e));
@@ -694,7 +703,7 @@ export default function VisaResults({ C, learn }) {
 
   if (cur) {
     return (
-      <Card dir="rtl" className="p-3.5" style={{ fontFamily: FA, marginBottom: 12 }}>
+      <Card dir={uiDir()} className="p-3.5" style={{ fontFamily: FA, marginBottom: 12 }}>
         <VisaCase
           c={cur}
           C={C}
@@ -716,12 +725,12 @@ export default function VisaResults({ C, learn }) {
 
   const rows = [...pending.map((p) => ({ ...p, isSaved: false })), ...saved.filter((s) => !pending.some((p) => p.id === s.id)).map((s) => ({ ...s, isSaved: true }))];
   return (
-    <Card dir="rtl" className="p-3.5" style={{ fontFamily: FA, marginBottom: 12 }}>
+    <Card dir={uiDir()} className="p-3.5" style={{ fontFamily: FA, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 14.5, marginBottom: 4 }}>
-        <Sparkles size={17} aria-hidden /> خبر ویزا (نتایج ویزای مشتری‌ها)
+        <Sparkles size={17} aria-hidden /> {L("خبر ویزا (نتایج ویزای مشتری‌ها)", "Visa news (clients' visa results)")}
       </div>
       <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.8, marginBottom: 10 }}>
-        عکس نامهٔ اپرووال و تایم‌لاین رو بذار (تا ۱۰ عکس) و اطلاعات پرونده رو بنویس. یک خبر ویزا به فهرست پایین اضافه می‌شه؛ بازش کن تا اطلاعات شخصی، متن و طراحی استوری رو چک و درست کنی. می‌تونی از صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.
+        {L("عکس نامهٔ اپرووال و تایم‌لاین رو بذار (تا ۱۰ عکس) و اطلاعات پرونده رو بنویس. یک خبر ویزا به فهرست پایین اضافه می‌شه؛ بازش کن تا اطلاعات شخصی، متن و طراحی استوری رو چک و درست کنی. می‌تونی از صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.", "Add pictures of the approval letter and the application timeline (up to 10) and write the case details. A visa news item is added to the list below; open it to check and fix the personal details, the story text and the design. You can leave the page; the work carries on on the server.")}
       </div>
       <div
         onDragOver={(e) => e.preventDefault()}
@@ -739,7 +748,7 @@ export default function VisaResults({ C, learn }) {
             {images.map((im, i) => (
               <div key={i} style={{ position: "relative", width: 76, height: 76, borderRadius: 9, overflow: "hidden", border: `1px solid ${C.line}` }}>
                 <img src={im.data} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                <button aria-label="Remove picture" onClick={(e) => { e.stopPropagation(); setImages((prev) => prev.filter((_, j) => j !== i)); }} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 99, border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", cursor: "pointer", padding: 0, display: "grid", placeItems: "center" }}>
+                <button aria-label={L("حذف عکس", "Remove picture")} onClick={(e) => { e.stopPropagation(); setImages((prev) => prev.filter((_, j) => j !== i)); }} style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: 99, border: "none", background: "rgba(0,0,0,0.6)", color: "#fff", cursor: "pointer", padding: 0, display: "grid", placeItems: "center" }}>
                   <X size={12} aria-hidden />
                 </button>
               </div>
@@ -752,49 +761,50 @@ export default function VisaResults({ C, learn }) {
           </div>
         ) : (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <ImagePlus size={16} aria-hidden /> عکس‌ها رو اینجا بکش، بزن تا انتخاب کنی، یا Ctrl+V (حداکثر ۱۰)
+            <ImagePlus size={16} aria-hidden /> {L("عکس‌ها رو اینجا بکش، بزن تا انتخاب کنی، یا Ctrl+V (حداکثر ۱۰)", "Drag pictures here, tap to choose, or Ctrl+V (up to 10)")}
           </span>
         )}
         <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
       </div>
       <div style={{ marginTop: 10 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>اطلاعات پرونده (اختیاری)</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{L("اطلاعات پرونده (اختیاری)", "Case details (optional)")}</div>
         <Textarea
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder={"مثلاً: خانم مریم، ورک پرمیت همسر worker، اقدام از خارج از کانادا، سن ۲۸، سابمیت 2025/05/14، اپروال 2025/06/18"}
+          dir={uiDir()}
+          placeholder={L("مثلاً: خانم مریم، ورک پرمیت همسر worker، اقدام از خارج از کانادا، سن ۲۸، سابمیت 2025/05/14، اپروال 2025/06/18", "e.g. Ms Maryam, spousal work permit (worker), applied from outside Canada, age 28, submitted 2025/05/14, approved 2025/06/18")}
           style={{ fontFamily: FA, lineHeight: 1.8 }}
         />
       </div>
       <Button className="mt-2.5 w-full" disabled={!images.length} onClick={create}>
-        <ScanSearch aria-hidden /> ساخت خبر ویزا ({images.length} عکس)
+        <ScanSearch aria-hidden /> {L(`ساخت خبر ویزا (${images.length} عکس)`, `Make visa news (${images.length} picture${images.length === 1 ? "" : "s"})`)}
       </Button>
-      {error && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, direction: "ltr", textAlign: "left" }}>⚠️ {error}</div>}
+      {error && <div style={{ marginTop: 8, fontSize: 12, color: C.reject, unicodeBidi: "plaintext", textAlign: "start" }}>⚠️ {error}</div>}
 
       {rows.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>خبرهای ویزا</div>
+          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>{L("خبرهای ویزا", "Visa news")}</div>
           {rows.map((c) => {
             const busy = c.status === "reading";
-            const label = busy ? `در حال خواندن عکس‌ها… ${c.progress || ""}` : c.status === "error" ? `خواندن انجام نشد: ${c.error || ""}` : caseName(c);
+            const label = busy ? L(`در حال خواندن عکس‌ها… ${c.progress || ""}`, `Reading the pictures… ${c.progress || ""}`) : c.status === "error" ? L(`خواندن انجام نشد: ${c.error || ""}`, `Reading failed: ${c.error || ""}`) : shownName(c);
             return (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => !busy && c.status !== "error" && openCase(c, c.isSaved)}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 12px", marginBottom: 7, borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, cursor: busy ? "default" : "pointer", fontFamily: FA, textAlign: "right" }}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 12px", marginBottom: 7, borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, cursor: busy ? "default" : "pointer", fontFamily: FA, textAlign: isFa() ? "right" : "left" }}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   {busy || opening === c.id ? <Loader2 className="animate-spin" size={16} aria-hidden /> : <Megaphone size={16} aria-hidden />}
-                  <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: c.status === "error" ? C.reject : C.text }}>خبر ویزا · {label}</span>
+                  <span style={{ fontWeight: 800, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: c.status === "error" ? C.reject : C.text }}>{L("خبر ویزا", "Visa news")} · {label}</span>
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: C.text3, whiteSpace: "nowrap" }}>
-                  {busy ? "در حال خواندن" : c.isSaved ? "✓ استوری ساخته شد" : c.status === "error" ? "" : "منتظر بررسی"} · {when(c.created)}
+                  {busy ? L("در حال خواندن", "Reading") : c.isSaved ? "✓ " + L("استوری ساخته شد", "Story made") : c.status === "error" ? "" : L("منتظر بررسی", "Waiting for review")} · {when(c.created)}
                   {c.status === "error" && (
                     <span
                       role="button"
-                      aria-label="Remove"
+                      aria-label={L("حذف", "Remove")}
                       onClick={(e) => {
                         e.stopPropagation();
                         fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id, archive: true }) }).then(load);

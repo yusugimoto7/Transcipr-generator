@@ -1,3 +1,4 @@
+import { Lfor } from "../../../../../../../../lib/i18n";
 import { guard, json } from "../../../../../../../../lib/editing/auth";
 import { approveCard, archiveCard, approvalValid, getBoard, checkId, addEvent, requestReview, rejectCard } from "../../../../../../../../lib/calendar/model";
 import { publishCard, resetChannel, platformPosting, dryRun, POSTING_OFF } from "../../../../../../../../lib/calendar/publisher";
@@ -30,18 +31,18 @@ export async function POST(request, { params }) {
         await archiveCard(g.user, params.bid, params.cid);
         return json({ ok: true });
       case "publish_now": {
-        if (!admin) return json({ error: "only Hamed publishes" }, 403);
+        if (!admin) return json({ error: Lfor(request)("فقط حامد منتشر می‌کند", "only Hamed publishes") }, 403);
         if (!platformPosting() && !dryRun()) return json({ error: POSTING_OFF }, 409);
         const b = await getBoard(params.bid);
         const card = b.cards.find((c) => c.id === checkId(params.cid));
-        if (!card) return json({ error: "card not found" }, 404);
-        if (!approvalValid(card)) return json({ error: "approve the card first" }, 409);
+        if (!card) return json({ error: Lfor(request)("کارت پیدا نشد", "card not found") }, 404);
+        if (!approvalValid(card)) return json({ error: Lfor(request)("اول کارت را تأیید کن", "approve the card first") }, 409);
         await addEvent(card.id, g.user.id, "started publishing now");
         publishCard(params.bid, params.cid, g.user.id).catch((e) => console.error("[calendar] publish", e));
         return json({ ok: true, started: true });
       }
       case "retry":
-        if (!admin) return json({ error: "only Hamed can try a channel again" }, 403);
+        if (!admin) return json({ error: Lfor(request)("فقط حامد می‌تواند یک کانال را دوباره امتحان کند", "only Hamed can try a channel again") }, 403);
         await resetChannel(params.bid, checkId(params.cid), String(body.channel || ""));
         await addEvent(params.cid, g.user.id, `cleared ${body.channel} to try again`);
         return json({ ok: true });

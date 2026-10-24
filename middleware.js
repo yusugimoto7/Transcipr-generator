@@ -1,3 +1,4 @@
+import { Lfor } from "./lib/i18n";
 import { NextResponse } from "next/server";
 import { COOKIE, TICKET, TICKET_MINUTES, readSession, readTicket, sessionSecret } from "./lib/editing/session";
 import { sectionOf, isPublishing, homeOf, SECTION_NAMES } from "./lib/editing/access";
@@ -46,16 +47,17 @@ export async function middleware(req) {
   const t = await ticketFor(req, s.uid);
   if (!t) return signIn();
   const need = section;
+  // The page is told the section's key and names it in the viewer's language (/no-access).
   const deny = (what) => {
-    if (api) return NextResponse.json({ error: `your account has no access to ${what}; ask Hamed` }, { status: 403 });
+    if (api) return NextResponse.json({ error: Lfor(req)(`حسابت به ${SECTION_NAMES[what][0]} دسترسی ندارد؛ از حامد بخواه`, `your account has no access to ${SECTION_NAMES[what][1]}; ask Hamed`) }, { status: 403 });
     const url = new URL(homeOf(t.ax), req.url);
     if (url.pathname === pathname) url.pathname = "/no-access";
     url.searchParams.set("denied", what);
     return NextResponse.redirect(url);
   };
   let res;
-  if (!t.ax.includes(need)) res = deny(need === "team" ? "the Team page" : SECTION_NAMES[need]);
-  else if (all && isPublishing(pathname, req.method) && !t.ax.includes("publishing")) res = deny(SECTION_NAMES.publishing);
+  if (!t.ax.includes(need)) res = deny(need);
+  else if (all && isPublishing(pathname, req.method) && !t.ax.includes("publishing")) res = deny("publishing");
   else res = NextResponse.next();
   if (t.set) {
     const secure = process.env.NODE_ENV === "production";

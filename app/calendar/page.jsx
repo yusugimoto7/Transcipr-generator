@@ -15,8 +15,9 @@ import PostFiles from "./PostFiles";
 import Composer, { NetChip, StatusPill } from "./Composer";
 import ListMenu, { LIST_COLORS } from "./ListMenu";
 import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
-import { whenAll, pickerNote } from "../../lib/tz";
-import { NETWORKS, STATUS, onNetworks, thumbOf } from "./channels";
+import { whenAll, pickerNote, dateLocale } from "../../lib/tz";
+import { NETWORKS, STATUS, onNetworks, thumbOf, statusName, netName } from "./channels";
+import { L, uiDir, isFa } from "../../lib/i18n";
 import { AlertCircle, AlignLeft, Archive, ArrowRight, CalendarCheck, CalendarDays, CheckCircle2, FilePen, FileText, Hourglass, Menu as MenuIcon, Newspaper, Radio, Rocket, Settings2, SlidersHorizontal, Columns3, List as ListIcon, Sparkles, Check, Clock, Link2, MessageSquare, Megaphone, Paperclip, Pencil, Play, Plus, SquareCheck, Tag, Users, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
@@ -33,7 +34,24 @@ const COLORS = {
   red: "#e5484d", pink: "#e86fa8", lime: "#7fb236", gray: "#8b95a3", navy: "#2f5d9b",
   ...TRELLO_LABELS,
 };
-const LINKS = [["docs", "Google Docs"], ["canva", "Canva"], ["final", "Final work"], ["other", "Other link"]];
+// Names are pairs, read with L() when drawn.
+// What a Topic Engine topic stands at, and what was made from it (workspace keys), for the picker.
+const TOPIC_STATUS = { new: ["جدید", "new"], active: ["در حال کار", "active"] };
+const MADE_NAMES = { script: ["اسکریپت", "script"], article: ["مقاله", "article"], carousel: ["کاروسل", "carousel"], story: ["استوری", "story"], video: ["ویدیو", "video"], telegram: ["تلگرام", "Telegram"] };
+// Colour keys as people read them in the labels form ("trello_green_dark" → "Trello green, dark").
+const COLOR_NAMES = {
+  sky: ["آسمانی", "sky"], orange: ["نارنجی", "orange"], yellow: ["زرد", "yellow"], purple: ["بنفش", "purple"], green: ["سبز", "green"],
+  red: ["قرمز", "red"], pink: ["صورتی", "pink"], lime: ["لیمویی", "lime"], gray: ["خاکستری", "gray"], navy: ["سرمه‌ای", "navy"],
+  blue: ["آبی", "blue"], black: ["مشکی", "black"],
+};
+function colorName(k) {
+  const m = String(k).match(/^trello_([a-z]+?)(?:_(light|dark))?$/);
+  if (!m) return COLOR_NAMES[k] ? L(COLOR_NAMES[k]) : k;
+  const base = COLOR_NAMES[m[1]] ? L(COLOR_NAMES[m[1]]) : m[1];
+  const shade = m[2] === "dark" ? L("، تیره", ", dark") : m[2] === "light" ? L("، روشن", ", light") : "";
+  return `Trello ${base}${shade}`;
+}
+const LINKS = [["docs", ["Google Docs", "Google Docs"]], ["canva", ["Canva", "Canva"]], ["final", ["کار نهایی", "Final work"]], ["other", ["لینک دیگر", "Other link"]]];
 
 const pad = (n) => String(n).padStart(2, "0");
 function toLocalInput(iso) {
@@ -50,10 +68,10 @@ function dayKey(d) {
 function shortWhen(iso) {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString(dateLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 function timeOf(iso) {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 function initials(name) {
   return String(name || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
@@ -99,7 +117,7 @@ function CardFace({ card, board, users, onOpen }) {
   const files = fileCount(card.media);
   const cover = thumbOf(card.media);
   const due = dueState(card);
-  const st = STATUS[card.status] || STATUS.draft;
+  const stName = statusName(card.status);
   const nets = onNetworks(card);
   const dueTone = due === "late" ? "bg-[#fef2f2] text-[#b91c1c]" : due === "soon" ? "bg-[#fff7ed] text-[#9a3412]" : due === "done" ? "bg-[#f0fdf4] text-[#15803d]" : "text-muted";
   return (
@@ -139,32 +157,32 @@ function CardFace({ card, board, users, onOpen }) {
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
           {(card.publish_at || nets.length > 0) && (
-            <Badge variant={STATUS_BADGE[card.status] || "draft"} title={`${st.name}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
+            <Badge variant={STATUS_BADGE[card.status] || "draft"} title={`${stName}${card.publish_at ? " · " + whenAll(card.publish_at) : ""}`}>
               {card.status === "published" ? <Check size={12} /> : <CalendarDays size={12} />}
-              {card.publish_at ? shortWhen(card.publish_at) : st.name}
+              {card.publish_at ? shortWhen(card.publish_at) : stName}
             </Badge>
           )}
           {card.due_at && (
-            <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${dueTone}`} title={`Ready by · ${whenAll(card.due_at)}`}>
+            <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${dueTone}`} title={`${L("آماده تا", "Ready by")} · ${whenAll(card.due_at)}`}>
               {card.due_complete ? <Check size={12} /> : <Clock size={12} />} {shortWhen(card.due_at)}
             </span>
           )}
           {card.description && (
-            <span className="inline-flex" title="This card has a description">
+            <span className="inline-flex" title={L("این کارت توضیح دارد", "This card has a description")}>
               <AlignLeft size={13} />
             </span>
           )}
           {card.checklist && card.checklist.length > 0 && (
-            <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${done === card.checklist.length ? "bg-[#f0fdf4] text-[#15803d]" : ""}`} title="Checklist">
+            <span className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-px ${done === card.checklist.length ? "bg-[#f0fdf4] text-[#15803d]" : ""}`} title={L("چک‌لیست", "Checklist")}>
               <SquareCheck size={12} /> {done}/{card.checklist.length}
             </span>
           )}
           {files + (card.attachments || []).length > 0 && (
-            <span className="inline-flex items-center gap-1" title={`${files + (card.attachments || []).length} file${files + (card.attachments || []).length > 1 ? "s" : ""} and links`}>
+            <span className="inline-flex items-center gap-1" title={L(`${files + (card.attachments || []).length} فایل و لینک`, `${files + (card.attachments || []).length} file${files + (card.attachments || []).length > 1 ? "s" : ""} and links`)}>
               <Paperclip size={12} /> {files + (card.attachments || []).length}
             </span>
           )}
-          {card.stale_approval && <Badge variant="pending">changed after approval</Badge>}
+          {card.stale_approval && <Badge variant="pending">{L("بعد از تأیید عوض شده", "changed after approval")}</Badge>}
           {nets.map((n) => (
             <NetChip key={n.key} k={n.key} state={(card.publish || {})[n.key]?.status} />
           ))}
@@ -219,8 +237,8 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
         <h2 className="m-0 flex-1 text-sm font-semibold text-ink" dir="auto">
           {list.name}
         </h2>
-        {list.role === "scheduled" && <CalendarDays size={14} className="text-muted" aria-label="Approved posts move here" />}
-        {list.role === "published" && <Check size={14} className="text-muted" aria-label="Posts move here once published" />}
+        {list.role === "scheduled" && <CalendarDays size={14} className="text-muted" aria-label={L("پست‌های تأییدشده به این‌جا می‌آیند", "Approved posts move here")} />}
+        {list.role === "published" && <Check size={14} className="text-muted" aria-label={L("پست‌ها بعد از انتشار به این‌جا می‌آیند", "Posts move here once published")} />}
         <span className="text-xs text-muted">{cards.length}</span>
         <ListMenu list={list} lists={board.lists} cards={cards} admin={admin} onOp={onListOp} onAddTop={() => (setAtTop(true), setAdding(true))} />
       </div>
@@ -231,24 +249,24 @@ function ListColumn({ list, cards, board, users, admin, onOpen, onAdd, onListOp 
           ))}
           {cards.length > shown && (
             <Button variant="outline" size="sm" onClick={() => setShown(shown + 100)}>
-              Show {Math.min(100, cards.length - shown)} more ({cards.length - shown} left)
+              {L(`${Math.min(100, cards.length - shown)} تای دیگر (${cards.length - shown} مانده)`, `Show ${Math.min(100, cards.length - shown)} more (${cards.length - shown} left)`)}
             </Button>
           )}
         </div>
       </SortableContext>
       {adding ? (
         <form onSubmit={submit} className="flex flex-col gap-1.5">
-          <Textarea id={`new-${list.id}`} className="min-h-[56px]" autoFocus placeholder="Card title" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submit(e)} />
+          <Textarea id={`new-${list.id}`} className="min-h-[56px]" autoFocus placeholder={L("عنوان کارت", "Card title")} value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submit(e)} />
           <div className="flex gap-1.5">
-            <Button size="sm">Add card</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)} aria-label="Cancel">
+            <Button size="sm">{L("افزودن کارت", "Add card")}</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)} aria-label={L("انصراف", "Cancel")}>
               <X />
             </Button>
           </div>
         </form>
       ) : (
         <Button variant="ghost" size="sm" className="justify-start text-muted" onClick={() => (setAtTop(false), setAdding(true))}>
-          <Plus /> Add a card
+          <Plus /> {L("افزودن کارت", "Add a card")}
         </Button>
       )}
     </section>
@@ -412,7 +430,7 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
   return (
     <div className={c.pmWrap}>
       <div className={c.pmGrid}>
-        {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
+        {(isFa() ? ["د", "س", "چ", "پ", "ج", "ش", "ی"] : ["M", "T", "W", "T", "F", "S", "S"]).map((d, i) => (
           <div key={i} className={c.pmDow}>
             {d}
           </div>
@@ -425,7 +443,7 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
               key={k}
               className={`${c.pmDay} ${d.getMonth() !== month ? c.pmOther : ""} ${k === today ? c.pmToday : ""} ${k === sel ? c.pmSel : ""}`}
               onClick={() => setPicked(k)}
-              aria-label={d.toDateString() + (list.length ? `, ${list.length} post${list.length > 1 ? "s" : ""}` : "")}
+              aria-label={d.toLocaleDateString(dateLocale(), { weekday: "long", month: "long", day: "numeric", year: "numeric" }) + (list.length ? L(`، ${list.length} پست`, `, ${list.length} post${list.length > 1 ? "s" : ""}`) : "")}
             >
               <span className={c.pmNum}>{d.getDate()}</span>
               <span className={c.pmDots}>
@@ -441,10 +459,10 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
       <section className={c.pmList}>
         <div className={c.agHead}>
           <span className={c.agNum}>{selDate.getDate()}</span>
-          <span>{selDate.toLocaleDateString([], { weekday: "long", month: "long" })}</span>
+          <span>{selDate.toLocaleDateString(dateLocale(), { weekday: "long", month: "long" })}</span>
           <span className={c.grow} />
           <button className={`${c.btn}`} onClick={() => onNew(new Date(selDate.getFullYear(), selDate.getMonth(), selDate.getDate(), 18).toISOString())}>
-            + Post this day
+            {L("+ پست برای این روز", "+ Post this day")}
           </button>
         </div>
         {posts.map((card) => (
@@ -452,10 +470,10 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
         ))}
         {due.map((card) => (
           <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
-            Due: {card.title}
+            {L("موعد: ", "Due: ")}{card.title}
           </span>
         ))}
-        {!posts.length && !due.length && <span className={c.muted}>Nothing planned on this day.</span>}
+        {!posts.length && !due.length && <span className={c.muted} dir={uiDir()}>{L("برای این روز چیزی برنامه‌ریزی نشده.", "Nothing planned on this day.")}</span>}
       </section>
     </div>
   );
@@ -474,7 +492,7 @@ function DayCell({ date, month, cards, dues, onOpen, onNew }) {
       ))}
       {dues.map((card) => (
         <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
-          Due: {card.title}
+          {L("موعد: ", "Due: ")}{card.title}
         </span>
       ))}
     </div>
@@ -486,10 +504,10 @@ function Unscheduled({ cards, onOpen }) {
   return (
     <aside ref={setNodeRef} className={c.side} style={isOver ? { background: "#fff4e5" } : undefined}>
       <div className={c.listHead}>
-        <span className={c.grow}>No publish date</span>
+        <span className={c.grow}>{L("بدون تاریخ انتشار", "No publish date")}</span>
         <span className={c.count}>{cards.length}</span>
       </div>
-      <span className={c.muted}>Drag a post onto a day to schedule it, or back here to unschedule.</span>
+      <span className={c.muted} dir={uiDir()}>{L("یک پست را روی یک روز بکش تا زمان‌بندی بشه، یا برگردون این‌جا تا زمانش برداشته بشه.", "Drag a post onto a day to schedule it, or back here to unschedule.")}</span>
       {cards.map((card) => (
         <Tile key={card.id} card={card} onOpen={onOpen} />
       ))}
@@ -533,23 +551,23 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
     if (!old || when.getTime() !== old.getTime()) onMove(card, { publish_at: when.toISOString() });
   };
   const narrow = useNarrow();
-  const title = anchor.toLocaleString([], { month: "long", year: "numeric" });
+  const title = anchor.toLocaleString(dateLocale(), { month: "long", year: "numeric" });
   return (
     <DndContext sensors={sensors} onDragStart={(e) => setActive(e.active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       <div className={c.bar} style={{ marginBottom: 8 }}>
-        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1))} aria-label="Previous month">
+        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1))} aria-label={L("ماه قبل", "Previous month")}>
           ‹
         </button>
         <button className={c.btn} onClick={() => setAnchor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>
-          Today
+          {L("امروز", "Today")}
         </button>
-        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1))} aria-label="Next month">
+        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1))} aria-label={L("ماه بعد", "Next month")}>
           ›
         </button>
         <strong style={{ fontSize: 17 }}>{title}</strong>
         <span className={c.grow} />
         <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input id="show-due" type="checkbox" checked={showDue} onChange={(e) => setShowDue(e.target.checked)} /> Show due dates
+          <input id="show-due" type="checkbox" checked={showDue} onChange={(e) => setShowDue(e.target.checked)} /> {L("نمایش موعدها", "Show due dates")}
         </label>
       </div>
       {narrow ? (
@@ -562,7 +580,7 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
         <Unscheduled cards={unscheduled} onOpen={onOpen} />
         <div className={c.gridScroll}>
           <div className={c.grid}>
-            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+            {(isFa() ? ["دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه", "یکشنبه"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]).map((d) => (
               <div key={d} className={c.dow}>
                 {d}
               </div>
@@ -636,7 +654,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   const saveTitle = () => title.trim() && title.trim() !== card.title && commit({ title: title.trim() });
   const close = async () => {
     if (card && title.trim() && title.trim() !== card.title) await commit({ title: title.trim() });
-    if (card && desc !== null && desc !== card.description && !window.confirm("Close without saving the description?")) return;
+    if (card && desc !== null && desc !== card.description && !window.confirm(L("بدون ذخیرهٔ توضیحات بسته بشه؟", "Close without saving the description?"))) return;
     onClose();
   };
   const action = async (a) => {
@@ -660,7 +678,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       setError(err.message);
     }
   };
-  const person = (id) => users.find((u) => u.id === id) || { id, name: id === "scheduler" ? "Scheduler" : String(id).startsWith("trello:") ? String(id).slice(7) : "Someone" };
+  const person = (id) => users.find((u) => u.id === id) || { id, name: id === "scheduler" ? L("زمان‌بند", "Scheduler") : String(id).startsWith("trello:") ? String(id).slice(7) : L("یک نفر", "Someone") };
   const toggle = (k, id) => commit({ [k]: (card[k] || []).includes(id) ? card[k].filter((x) => x !== id) : [...(card[k] || []), id] });
   const setCheck = (list) => commit({ checklist: list });
 
@@ -668,10 +686,10 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
     return (
       <div className={c.modalBg}>
         <div className={c.modal2} style={{ padding: 24 }}>
-          <p className={c.muted}>{error || "Loading…"}</p>
+          <p className={c.muted}>{error || L("در حال بارگذاری…", "Loading…")}</p>
           {error && (
             <button className={c.btn} onClick={onClose}>
-              Close
+              {L("بستن", "Close")}
             </button>
           )}
         </div>
@@ -695,16 +713,16 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       <Icon className="text-muted" /> {label}
     </Button>
   );
-  const popTitle = { labels: "Labels", members: "Members", dates: "Dates", links: "Links", move: "Move card" }[pop];
+  const popTitle = { labels: L("برچسب‌ها", "Labels"), members: L("اعضا", "Members"), dates: L("تاریخ‌ها", "Dates"), links: L("لینک‌ها", "Links"), move: L("جابه‌جایی کارت", "Move card") }[pop];
   const popover = pop && (
     <div
       className="z-20 flex flex-col gap-2.5 rounded-[12px] border border-solid border-border bg-surface p-3 shadow-[0_12px_32px_rgba(9,30,66,0.2)] max-md:fixed max-md:inset-x-3 max-md:bottom-3 max-md:max-h-[70dvh] max-md:overflow-y-auto md:absolute md:right-[calc(100%+8px)] md:top-0 md:w-72"
       role="dialog"
-      aria-label={pop}
+      aria-label={popTitle}
     >
       <div className="flex items-center justify-between text-sm font-semibold text-ink">
         {popTitle}
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setPop("")} aria-label="Close">
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setPop("")} aria-label={L("بستن", "Close")}>
           <X />
         </Button>
       </div>
@@ -732,21 +750,21 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       {pop === "dates" && (
         <>
           <label className="flex flex-col gap-1 text-[13px] text-muted">
-            Start
+            {L("شروع", "Start")}
             <Input id="start-at" type="datetime-local" value={toLocalInput(card.start_at)} onChange={(e) => commit({ start_at: fromLocalInput(e.target.value) })} />
           </label>
           <label className="flex flex-col gap-1 text-[13px] text-muted">
-            Due (ready by)
+            {L("موعد (آماده تا)", "Due (ready by)")}
             <Input id="due-at" type="datetime-local" value={toLocalInput(card.due_at)} onChange={(e) => commit({ due_at: fromLocalInput(e.target.value) })} />
           </label>
           {card.due_at && (
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4 accent-[var(--orange)]" checked={!!card.due_complete} onChange={(e) => commit({ due_complete: e.target.checked })} />
-              Mark as done
+              {L("انجام شد", "Mark as done")}
             </label>
           )}
           {(card.start_at || card.due_at) && <span className="text-[13px] text-muted">{pickerNote(toLocalInput(card.due_at || card.start_at))}</span>}
-          <span className="text-[13px] text-muted">The publish time is set in the post.</span>
+          <span className="text-[13px] text-muted" dir={uiDir()}>{L("زمان انتشار در خود پست تعیین می‌شه.", "The publish time is set in the post.")}</span>
         </>
       )}
       {pop === "links" && (
@@ -760,16 +778,16 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
         >
           {LINKS.map(([k, name]) => (
             <label key={k} className="flex flex-col gap-1 text-[13px] text-muted">
-              {name}
+              {L(name)}
               <Input id={`link-${k}`} placeholder="https://" value={links[k] || ""} onChange={(e) => setLinks({ ...links, [k]: e.target.value })} />
             </label>
           ))}
-          <Button>Save links</Button>
+          <Button>{L("ذخیرهٔ لینک‌ها", "Save links")}</Button>
         </form>
       )}
       {pop === "move" && (
         <label className="flex flex-col gap-1 text-[13px] text-muted">
-          List
+          {L("لیست", "List")}
           <select id="card-list" className="h-10 rounded-md border border-solid border-border bg-surface px-2 text-sm text-ink" value={card.list_id} onChange={(e) => (commit({ list_id: e.target.value }), setPop(""))}>
             {board.lists.map((l) => (
               <option key={l.id} value={l.id}>
@@ -800,7 +818,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
           // An inline gradient: Tailwind's gradient utilities need its global reset, which is off.
           style={cover ? { backgroundImage: `url(${cover})` } : card.media?.kind === "video" ? undefined : coverHex ? { background: coverHex } : { backgroundImage: "linear-gradient(135deg, #243b44, #32515d)" }}
         >
-          <Button variant="outline" size="icon" className="absolute left-3 top-3 h-9 w-9 rounded-full bg-white/90 md:left-auto md:right-3" onClick={close} aria-label="Close">
+          <Button variant="outline" size="icon" className="absolute left-3 top-3 h-9 w-9 rounded-full bg-white/90 md:left-auto md:right-3" onClick={close} aria-label={L("بستن", "Close")}>
             <X />
           </Button>
           {card.media?.kind === "video" && (
@@ -808,7 +826,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               <Play size={16} fill="currentColor" />
             </span>
           )}
-          {fileCount(card.media) > 1 && <span className="absolute bottom-2 left-3 rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-bold text-white">{fileCount(card.media)} files</span>}
+          {fileCount(card.media) > 1 && <span className="absolute bottom-2 left-3 rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-bold text-white">{L(`${fileCount(card.media)} فایل`, `${fileCount(card.media)} files`)}</span>}
         </div>
 
         <div className="flex flex-col gap-1 px-4 pb-1 pt-4 md:px-7 md:pt-5">
@@ -822,36 +840,36 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
             onChange={(e) => setTitle(e.target.value)}
             onBlur={saveTitle}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), e.currentTarget.blur())}
-            aria-label="Title"
+            aria-label={L("عنوان", "Title")}
           />
           <div className="flex items-center gap-2 px-1 text-[13px] text-muted">
             <span className="min-w-0 flex-1 truncate">
               <b className="font-semibold text-ink">{board.name}</b> / <span dir="auto">{list ? list.name : "?"}</span>
             </span>
             <button className="cursor-pointer border-0 bg-transparent p-1 font-[inherit] text-[15px] font-semibold text-primary hover:underline" onClick={() => setPop(pop === "move" ? "" : "move")}>
-              Move
+              {L("جابه‌جایی", "Move")}
             </button>
             <span className="hidden items-center gap-1.5 text-xs md:inline-flex" aria-live="polite">
-              {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? <><Check size={13} className="text-[#15803d]" /> Saved</> : null}
+              {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? L("در حال ذخیره…", "Saving…") : saving === "saved" ? <><Check size={13} className="text-[#15803d]" /> {L("ذخیره شد", "Saved")}</> : null}
             </span>
           </div>
           {card.trello && (
-            <div className="px-1 text-xs text-muted">
-              From Trello card #{card.trello.number}:{" "}
+            <div className="px-1 text-xs text-muted" dir={uiDir()}>
+              {L(`از کارت Trello شمارهٔ ${card.trello.number}:`, `From Trello card #${card.trello.number}:`)}{" "}
               <a className="text-primary" href={card.trello.url} target="_blank" rel="noreferrer">
-                open in Trello ↗
+                {L("باز کردن در Trello ↗", "open in Trello ↗")}
               </a>
-              {(card.trello.unmapped || []).length > 0 && <span dir="auto"> · members there: {card.trello.unmapped.join(", ")}</span>}
+              {(card.trello.unmapped || []).length > 0 && <span dir="auto">{L(" · اعضا در آن‌جا: ", " · members there: ")}{card.trello.unmapped.join(", ")}</span>}
             </div>
           )}
           {card.source && (
-            <div className="px-1 text-xs text-muted">
-              From {card.source.type === "project" ? "Video Editing" : "the Topic Engine"}: <b dir="auto">{card.source.title}</b>
+            <div className="px-1 text-xs text-muted" dir={uiDir()}>
+              {card.source.type === "project" ? L("از تدوین ویدیو", "From Video Editing") : L("از تاپیک انجین", "From the Topic Engine")}: <b dir="auto">{card.source.title}</b>
               {card.source.url && (
                 <>
                   {" "}
                   <a className="text-primary" href={card.source.url} target="_blank" rel="noreferrer">
-                    source ↗
+                    {L("منبع ↗", "source ↗")}
                   </a>
                 </>
               )}
@@ -862,18 +880,18 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
         <div className="flex flex-col gap-4 px-4 pb-6 pt-3 md:grid md:grid-cols-[minmax(0,1fr)_220px] md:gap-6 md:px-7">
           <aside className="relative order-first flex flex-col gap-1.5 rounded-[12px] border border-solid border-border bg-surface p-3 md:order-last md:border-0 md:bg-transparent md:p-0">
             <div className="mb-1 text-[15px] font-semibold text-ink md:text-xs md:font-medium md:text-muted">
-              <span className="md:hidden">Quick actions</span>
-              <span className="hidden md:inline">Add to card</span>
+              <span className="md:hidden">{L("کارهای سریع", "Quick actions")}</span>
+              <span className="hidden md:inline">{L("افزودن به کارت", "Add to card")}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 md:flex md:flex-col md:gap-1.5">
-              <SideBtn k="members" Icon={Users} label="Members" />
-              <SideBtn k="labels" Icon={Tag} label="Labels" />
-              <SideBtn k="check" Icon={SquareCheck} label="Checklist" onClick={() => document.getElementById("chk-new")?.focus()} />
-              <SideBtn k="dates" Icon={Clock} label="Dates" />
-              <SideBtn k="links" Icon={Link2} label="Links" />
-              <SideBtn k="compose" Icon={Pencil} label={onNetworks(card).length ? "Edit the post" : "Write the post"} onClick={() => onCompose(boardId, cardId)} />
-              <SideBtn k="move" Icon={ArrowRight} label="Move" />
-              <SideBtn k="archive" Icon={Archive} label="Archive" tone="text-[#b91c1c]" onClick={() => window.confirm("Archive this card?") && action("archive")} />
+              <SideBtn k="members" Icon={Users} label={L("اعضا", "Members")} />
+              <SideBtn k="labels" Icon={Tag} label={L("برچسب‌ها", "Labels")} />
+              <SideBtn k="check" Icon={SquareCheck} label={L("چک‌لیست", "Checklist")} onClick={() => document.getElementById("chk-new")?.focus()} />
+              <SideBtn k="dates" Icon={Clock} label={L("تاریخ‌ها", "Dates")} />
+              <SideBtn k="links" Icon={Link2} label={L("لینک‌ها", "Links")} />
+              <SideBtn k="compose" Icon={Pencil} label={onNetworks(card).length ? L("ویرایش پست", "Edit the post") : L("نوشتن پست", "Write the post")} onClick={() => onCompose(boardId, cardId)} />
+              <SideBtn k="move" Icon={ArrowRight} label={L("جابه‌جایی", "Move")} />
+              <SideBtn k="archive" Icon={Archive} label={L("بایگانی", "Archive")} tone="text-[#b91c1c]" onClick={() => window.confirm(L("این کارت بایگانی بشه؟", "Archive this card?")) && action("archive")} />
             </div>
             {popover}
           </aside>
@@ -883,12 +901,12 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               <div className="flex flex-wrap gap-x-6 gap-y-3">
                 {people.length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    <span className={metaLabel}>Members</span>
+                    <span className={metaLabel}>{L("اعضا", "Members")}</span>
                     <div className="flex items-center gap-1">
                       {people.map((u) => (
                         <Avatar key={u.id} user={u} size={30} />
                       ))}
-                      <Button variant="outline" size="icon" className="h-[30px] w-[30px] rounded-full border-dashed" onClick={() => setPop("members")} aria-label="Add a member">
+                      <Button variant="outline" size="icon" className="h-[30px] w-[30px] rounded-full border-dashed" onClick={() => setPop("members")} aria-label={L("افزودن عضو", "Add a member")}>
                         <Plus />
                       </Button>
                     </div>
@@ -896,7 +914,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                 )}
                 {labels.length > 0 && (
                   <div className="flex flex-col gap-1.5">
-                    <span className={metaLabel}>Labels</span>
+                    <span className={metaLabel}>{L("برچسب‌ها", "Labels")}</span>
                     <div className="flex flex-wrap items-center gap-1">
                       {labels.map((l) => {
                         const [bg, fg] = LABEL_TINT[l.color] || LABEL_TINT.gray;
@@ -906,7 +924,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                           </span>
                         );
                       })}
-                      <Button variant="secondary" size="icon" className="h-7 w-7" onClick={() => setPop("labels")} aria-label="Add a label">
+                      <Button variant="secondary" size="icon" className="h-7 w-7" onClick={() => setPop("labels")} aria-label={L("افزودن برچسب", "Add a label")}>
                         <Plus />
                       </Button>
                     </div>
@@ -914,19 +932,19 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                 )}
                 {(card.start_at || card.due_at) && (
                   <div className="flex flex-col gap-1.5">
-                    <span className={metaLabel}>Dates</span>
+                    <span className={metaLabel}>{L("تاریخ‌ها", "Dates")}</span>
                     <button className={`cursor-pointer rounded-md border-0 px-3 py-1.5 font-[inherit] text-[13px] font-medium ${dueTone}`} onClick={() => setPop("dates")} title={card.due_at ? whenAll(card.due_at) : whenAll(card.start_at)}>
                       {card.start_at ? shortWhen(card.start_at) : ""}
                       {card.start_at && card.due_at ? " – " : ""}
                       {card.due_at ? shortWhen(card.due_at) : ""}
-                      {card.due_complete ? " · done" : due === "late" ? " · late" : due === "soon" ? " · due soon" : ""}
+                      {card.due_complete ? L(" · انجام شد", " · done") : due === "late" ? L(" · دیر شده", " · late") : due === "soon" ? L(" · موعدش نزدیکه", " · due soon") : ""}
                     </button>
                   </div>
                 )}
               </div>
             )}
 
-            <Section Icon={AlignLeft} title="Description">
+            <Section Icon={AlignLeft} title={L("توضیحات", "Description")}>
               {desc === null ? (
                 <div
                   className={`cursor-pointer whitespace-pre-wrap rounded-[10px] border border-solid px-3.5 py-3 text-sm leading-relaxed ${card.description ? "border-border bg-surface text-ink" : "min-h-[52px] border-transparent bg-[#efebe3] text-muted"}`}
@@ -935,7 +953,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   role="button"
                   tabIndex={0}
                 >
-                  {card.description || "Add a more detailed description: notes, script, brief…"}
+                  {card.description || L("توضیح کامل‌تری اضافه کن: یادداشت، اسکریپت، بریف…", "Add a more detailed description: notes, script, brief…")}
                 </div>
               ) : (
                 <>
@@ -947,17 +965,17 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                         setDesc(null);
                       }}
                     >
-                      Save
+                      {L("ذخیره", "Save")}
                     </Button>
                     <Button variant="ghost" onClick={() => setDesc(null)}>
-                      Cancel
+                      {L("انصراف", "Cancel")}
                     </Button>
                   </div>
                 </>
               )}
             </Section>
 
-            <Section Icon={Megaphone} title="Post">
+            <Section Icon={Megaphone} title={L("پست", "Post")}>
               <div className="flex flex-col gap-2.5 rounded-[12px] border border-solid border-border bg-surface p-3.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusPill status={card.status} />
@@ -976,7 +994,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                     {captionOf(card).length > 320 ? "…" : ""}
                   </p>
                 ) : (
-                  <p className="m-0 text-sm text-muted">No caption yet.</p>
+                  <p className="m-0 text-sm text-muted">{L("هنوز کپشنی نیست.", "No caption yet.")}</p>
                 )}
                 {card.media && card.media.items && card.media.items.length > 1 && (
                   <div className="flex gap-1.5 overflow-x-auto">
@@ -989,14 +1007,14 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                 )}
                 <div>
                   <Button onClick={() => onCompose(boardId, cardId)}>
-                    <Pencil /> {onNetworks(card).length ? "Edit the post, schedule or publish" : "Write the post"}
+                    <Pencil /> {onNetworks(card).length ? L("ویرایش، زمان‌بندی یا انتشار پست", "Edit the post, schedule or publish") : L("نوشتن پست", "Write the post")}
                   </Button>
                 </div>
                 <PostFiles boardId={boardId} cardId={cardId} card={card} />
               </div>
             </Section>
 
-            <Section Icon={SquareCheck} title="Checklist">
+            <Section Icon={SquareCheck} title={L("چک‌لیست", "Checklist")}>
               {total > 0 && (
                 <div className="flex items-center gap-2.5 text-xs text-muted">
                   <span className="w-8">{Math.round((done / total) * 100)}%</span>
@@ -1011,7 +1029,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   <span dir="auto" className={`min-w-0 flex-1 ${i.done ? "text-muted line-through" : ""}`}>
                     {i.text}
                   </span>
-                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 max-md:opacity-100" onClick={(e) => (e.preventDefault(), setCheck(card.checklist.filter((_, j) => j !== n)))} aria-label="Remove item">
+                  <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 max-md:opacity-100" onClick={(e) => (e.preventDefault(), setCheck(card.checklist.filter((_, j) => j !== n)))} aria-label={L("حذف مورد", "Remove item")}>
                     <X />
                   </Button>
                 </label>
@@ -1025,17 +1043,17 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   setItem("");
                 }}
               >
-                <Input id="chk-new" className="flex-1" dir="auto" placeholder="Add an item" value={item} onChange={(e) => setItem(e.target.value)} />
-                <Button variant="outline">Add</Button>
+                <Input id="chk-new" className="flex-1" dir="auto" placeholder={L("افزودن یک مورد", "Add an item")} value={item} onChange={(e) => setItem(e.target.value)} />
+                <Button variant="outline">{L("افزودن", "Add")}</Button>
               </form>
             </Section>
 
             {Object.keys(card.links || {}).length > 0 && (
-              <Section Icon={Link2} title="Links">
+              <Section Icon={Link2} title={L("لینک‌ها", "Links")}>
                 <div className="flex flex-wrap gap-2">
                   {LINKS.filter(([k]) => card.links[k]).map(([k, name]) => (
                     <a key={k} className="rounded-md bg-primary-soft px-3 py-1.5 text-[13px] font-semibold text-primary-deep no-underline" href={card.links[k]} target="_blank" rel="noreferrer">
-                      {name} ↗
+                      {L(name)} ↗
                     </a>
                   ))}
                 </div>
@@ -1043,18 +1061,18 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
             )}
 
             {(card.attachments || []).length > 0 && (
-              <Section Icon={Paperclip} title={`Attachments (${card.attachments.length})`}>
+              <Section Icon={Paperclip} title={L(`پیوست‌ها (${card.attachments.length})`, `Attachments (${card.attachments.length})`)}>
                 <div className="flex flex-col gap-1.5">
                   {card.attachments.map((a) => (
                     <a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 rounded-lg border border-solid border-border bg-surface px-3 py-2 text-sm text-ink no-underline hover:border-primary">
-                      <span className="grid h-8 w-8 flex-none place-items-center rounded-md bg-[#efebe3] text-[10px] font-bold uppercase text-muted">{a.kind === "file" ? "file" : "link"}</span>
+                      <span className="grid h-8 w-8 flex-none place-items-center rounded-md bg-[#efebe3] text-[10px] font-bold uppercase text-muted">{a.kind === "file" ? L("فایل", "file") : L("لینک", "link")}</span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium" dir="auto">
                           {a.name}
                         </span>
                         <span className="block truncate text-xs text-muted">
                           {hostOf(a.url)}
-                          {a.kind === "file" ? " · stored on Trello" : ""}
+                          {a.kind === "file" ? L(" · ذخیره در Trello", " · stored on Trello") : ""}
                         </span>
                       </span>
                     </a>
@@ -1063,12 +1081,12 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               </Section>
             )}
 
-            <Section Icon={MessageSquare} title="Activity">
+            <Section Icon={MessageSquare} title={L("فعالیت", "Activity")}>
               <form onSubmit={addComment} className="flex items-center gap-2.5">
-                <Avatar user={me || { name: "Me" }} size={30} />
-                <Input id="comment" className="flex-1" dir="auto" placeholder="Write a comment…" value={comment} onChange={(e) => setComment(e.target.value)} />
+                <Avatar user={me || { name: L("من", "Me") }} size={30} />
+                <Input id="comment" className="flex-1" dir="auto" placeholder={L("یک نظر بنویس…", "Write a comment…")} value={comment} onChange={(e) => setComment(e.target.value)} />
                 <Button variant="outline" disabled={!comment.trim()}>
-                  Send
+                  {L("ارسال", "Send")}
                 </Button>
               </form>
               {[...comments].reverse().map((m) =>
@@ -1095,7 +1113,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               )}
             </Section>
             <div className="text-xs text-muted md:hidden" aria-live="polite">
-              {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? "Saving…" : saving === "saved" ? "All changes saved" : ""}
+              {error ? <span className="text-[#b91c1c]">{error}</span> : saving === "saving" ? L("در حال ذخیره…", "Saving…") : saving === "saved" ? L("همهٔ تغییرها ذخیره شد", "All changes saved") : ""}
             </div>
           </div>
         </div>
@@ -1117,17 +1135,17 @@ function SourcePicker({ sources, admin, onPick, onClose }) {
     <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={c.modal} style={{ width: "min(640px, 100%)" }}>
         <div className={c.bar}>
-          <strong className={c.grow}>Add a card from a topic or a video</strong>
-          <button className={`${c.btn} ${c.ghost}`} onClick={onClose} aria-label="Close">
+          <strong className={c.grow}>{L("افزودن کارت از یک موضوع یا ویدیو", "Add a card from a topic or a video")}</strong>
+          <button className={`${c.btn} ${c.ghost}`} onClick={onClose} aria-label={L("بستن", "Close")}>
             ✕
           </button>
         </div>
-        <input id="pick-q" className={c.input} placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+        <input id="pick-q" className={c.input} placeholder={L("جستجو", "Search")} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
         <div className={c.picker}>
           {sources.videos.filter((v) => match(v.title)).map((v) => (
             <button key={v.id} className={c.pickItem} onClick={() => onPick({ type: "project", key: v.id, title: v.title, url: v.url }, v)}>
               <b dir="auto">🎬 {v.title}</b>
-              <span className={c.muted}>Approved video, version {v.version}{v.topic ? ` · ${v.topic}` : ""}</span>
+              <span className={c.muted}>{L(`ویدیوی تأییدشده، نسخهٔ ${v.version}`, `Approved video, version ${v.version}`)}{v.topic ? ` · ${v.topic}` : ""}</span>
             </button>
           ))}
           {admin &&
@@ -1135,10 +1153,10 @@ function SourcePicker({ sources, admin, onPick, onClose }) {
               <button key={t.key} className={c.pickItem} onClick={() => onPick({ type: "topic", key: t.key, title: t.title, url: t.url })}>
                 <b dir="auto">{t.title}</b>
                 {t.title_fa && t.title_fa !== t.title && <span className={c.rtl} dir="rtl">{t.title_fa}</span>}
-                <span className={c.muted}>Topic · {t.status}{t.has.length ? ` · has ${t.has.join(", ")}` : ""}</span>
+                <span className={c.muted}>{L("موضوع", "Topic")} · {L(TOPIC_STATUS[t.status] || [t.status, t.status])}{t.has.length ? L(` · دارد: ${t.has.map((k) => L(MADE_NAMES[k] || [k, k])).join("، ")}`, ` · has ${t.has.map((k) => L(MADE_NAMES[k] || [k, k])).join(", ")}`) : ""}</span>
               </button>
             ))}
-          {!sources.videos.length && !(admin && sources.topics.length) && <p className={c.muted}>Nothing to add yet: approved videos and Topic Engine topics appear here.</p>}
+          {!sources.videos.length && !(admin && sources.topics.length) && <p className={c.muted} dir={uiDir()}>{L("هنوز چیزی برای افزودن نیست: ویدیوهای تأییدشده و موضوع‌های تاپیک انجین این‌جا می‌آیند.", "Nothing to add yet: approved videos and Topic Engine topics appear here.")}</p>}
         </div>
       </div>
     </div>
@@ -1150,34 +1168,35 @@ function ChannelsPanel({ channels, settings, onClose }) {
     <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={c.modal} style={{ width: "min(640px, 100%)" }}>
         <div className={c.bar}>
-          <strong className={c.grow}>Publishing channels</strong>
-          <button className={`${c.btn} ${c.ghost}`} onClick={onClose} aria-label="Close">
+          <strong className={c.grow}>{L("کانال‌های انتشار", "Publishing channels")}</strong>
+          <button className={`${c.btn} ${c.ghost}`} onClick={onClose} aria-label={L("بستن", "Close")}>
             ✕
           </button>
         </div>
-        {settings.dry_run && <div className={c.note}>Test mode is on: publishing only pretends (CALENDAR_DRY_RUN). The state below is the real one.</div>}
+        {settings.dry_run && <div className={c.note} dir={uiDir()}>{L("حالت آزمایشی روشنه: انتشار فقط وانمود می‌کنه (CALENDAR_DRY_RUN). وضعیت زیر وضعیت واقعیه.", "Test mode is on: publishing only pretends (CALENDAR_DRY_RUN). The state below is the real one.")}</div>}
         {!settings.platform_posting ? (
-          <div className={c.note}>Posting to the networks is switched off for now. A finished post leaves the app by download or Google Drive. Posting is turned on with CALENDAR_PLATFORM_POSTING after the credentials below are tested.</div>
+          <div className={c.note} dir={uiDir()}>{L("فعلاً پست کردن در شبکه‌ها خاموشه. پست آماده با دانلود یا Google Drive از برنامه بیرون می‌ره. بعد از آزمایش اطلاعات ورود زیر، با CALENDAR_PLATFORM_POSTING روشن می‌شه.", "Posting to the networks is switched off for now. A finished post leaves the app by download or Google Drive. Posting is turned on with CALENDAR_PLATFORM_POSTING after the credentials below are tested.")}</div>
         ) : (
-          !settings.autopublish && <div className={c.muted}>The publishing clock is off (CALENDAR_AUTOPUBLISH): approved cards go out only with “Publish now”.</div>
+          !settings.autopublish && <div className={c.muted} dir={uiDir()}>{L("ساعت انتشار خاموشه (CALENDAR_AUTOPUBLISH): کارت‌های تأییدشده فقط با «انتشار همین الان» منتشر می‌شن.", "The publishing clock is off (CALENDAR_AUTOPUBLISH): approved cards go out only with “Publish now”.")}</div>
         )}
-        {CH.map(([k, , name]) => {
+        {CH.map(([k]) => {
           const s = channels[k] || {};
+          const name = netName(k);
           return (
             <div key={k} className={c.channel}>
               <div className={c.bar}>
                 <b className={c.grow}>{name}</b>
-                <span className={`${c.badge} ${s.connected ? c.ok : c.warn}`}>{s.connected ? "connected" : "not connected"}</span>
+                <span className={`${c.badge} ${s.connected ? c.ok : c.warn}`}>{s.connected ? L("وصل", "connected") : L("وصل نیست", "not connected")}</span>
                 {s.connect && (
                   <a className={c.btn} href={`/api/calendar/connect/${k}`}>
-                    {s.connected ? "Reconnect" : "Connect"}
+                    {s.connected ? L("اتصال دوباره", "Reconnect") : L("اتصال", "Connect")}
                   </a>
                 )}
               </div>
               <span className={c.muted}>{s.detail}</span>
               {s.redirect && !s.connected && (
-                <span className={c.muted} style={{ wordBreak: "break-all" }}>
-                  Return address to register in the {name} developer settings, exactly: <code style={{ userSelect: "all", color: "var(--text)" }}>{s.redirect}</code>
+                <span className={c.muted} style={{ wordBreak: "break-all" }} dir={uiDir()}>
+                  {L(`نشانی بازگشت که باید دقیقاً همین‌طور در تنظیمات توسعه‌دهندهٔ ${name} ثبت بشه: `, `Return address to register in the ${name} developer settings, exactly: `)}<code dir="ltr" style={{ userSelect: "all", color: "var(--text)" }}>{s.redirect}</code>
                 </span>
               )}
             </div>
@@ -1209,67 +1228,67 @@ function BoardSettings({ board, onSave, onClose }) {
   return (
     <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={c.modal} style={{ width: "min(640px, 100%)" }}>
-        <strong>Lists and labels of {board.name}</strong>
+        <strong>{L(`لیست‌ها و برچسب‌های ${board.name}`, `Lists and labels of ${board.name}`)}</strong>
         <div className={c.section}>
-          <h3>Lists</h3>
+          <h3>{L("لیست‌ها", "Lists")}</h3>
           {lists.map((l, i) => (
             <div key={l.id || i} className={c.bar}>
               <input id={`list-${i}`} className={`${c.input} ${c.grow}`} value={l.name} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
-              <select id={`role-${i}`} className={c.select} value={l.role || ""} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, role: e.target.value } : x)))} title="Approved cards move to the 'scheduled' list; fully published cards to the 'published' list">
-                <option value="">Normal</option>
-                <option value="scheduled">Approved goes here</option>
-                <option value="published">Published goes here</option>
+              <select id={`role-${i}`} className={c.select} value={l.role || ""} onChange={(e) => setLists(lists.map((x, j) => (j === i ? { ...x, role: e.target.value } : x)))} title={L("کارت‌های تأییدشده به لیست «تأییدشده‌ها این‌جا» می‌روند و کارت‌هایی که کامل منتشر شده‌اند به لیست «منتشرشده‌ها این‌جا»", "Approved cards move to the 'scheduled' list; fully published cards to the 'published' list")}>
+                <option value="">{L("معمولی", "Normal")}</option>
+                <option value="scheduled">{L("تأییدشده‌ها این‌جا", "Approved goes here")}</option>
+                <option value="published">{L("منتشرشده‌ها این‌جا", "Published goes here")}</option>
               </select>
-              <button className={c.btn} disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
+              <button className={c.btn} disabled={i === 0} onClick={() => move(i, -1)} aria-label={L("بالا", "Move up")}>
                 ↑
               </button>
-              <button className={c.btn} disabled={i === lists.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
+              <button className={c.btn} disabled={i === lists.length - 1} onClick={() => move(i, 1)} aria-label={L("پایین", "Move down")}>
                 ↓
               </button>
-              <button className={`${c.btn} ${c.danger}`} onClick={() => setLists(lists.filter((_, j) => j !== i))} aria-label="Remove list">
+              <button className={`${c.btn} ${c.danger}`} onClick={() => setLists(lists.filter((_, j) => j !== i))} aria-label={L("حذف لیست", "Remove list")}>
                 ✕
               </button>
             </div>
           ))}
           <div>
-            <button className={c.btn} onClick={() => setLists([...lists, { name: "New list", role: "" }])}>
-              + Add a list
+            <button className={c.btn} onClick={() => setLists([...lists, { name: L("لیست جدید", "New list"), role: "" }])}>
+              {L("+ افزودن لیست", "+ Add a list")}
             </button>
           </div>
         </div>
         <div className={c.section}>
-          <h3>Labels</h3>
+          <h3>{L("برچسب‌ها", "Labels")}</h3>
           {labels.map((l, i) => (
             <div key={l.id || i} className={c.bar}>
               <span className={c.label} style={{ background: COLORS[l.color] }}>
-                {l.name || "label"}
+                {l.name || L("برچسب", "label")}
               </span>
               <input id={`label-${i}`} className={`${c.input} ${c.grow}`} value={l.name} onChange={(e) => setLabels(labels.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
               <select id={`color-${i}`} className={c.select} value={l.color} onChange={(e) => setLabels(labels.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}>
                 {Object.keys(COLORS).map((k) => (
                   <option key={k} value={k}>
-                    {k}
+                    {colorName(k)}
                   </option>
                 ))}
               </select>
-              <button className={`${c.btn} ${c.danger}`} onClick={() => setLabels(labels.filter((_, j) => j !== i))} aria-label="Remove label">
+              <button className={`${c.btn} ${c.danger}`} onClick={() => setLabels(labels.filter((_, j) => j !== i))} aria-label={L("حذف برچسب", "Remove label")}>
                 ✕
               </button>
             </div>
           ))}
           <div>
             <button className={c.btn} onClick={() => setLabels([...labels, { name: "", color: "gray" }])}>
-              + Add a label
+              {L("+ افزودن برچسب", "+ Add a label")}
             </button>
           </div>
         </div>
         {error && <div className={c.error}>{error}</div>}
         <div className={c.bar}>
           <button className={`${c.btn} ${c.primary}`} onClick={save}>
-            Save
+            {L("ذخیره", "Save")}
           </button>
           <button className={c.btn} onClick={onClose}>
-            Cancel
+            {L("انصراف", "Cancel")}
           </button>
         </div>
       </div>
@@ -1280,8 +1299,8 @@ function BoardSettings({ board, onSave, onClose }) {
 // ---- page ---------------------------------------------------------------------------------------
 
 const VIEWS = [
-  ["month", "Month"],
-  ["week", "Week"],
+  ["month", ["ماه", "Month"]],
+  ["week", ["هفته", "Week"]],
 ];
 
 function Calendar({ user }) {
@@ -1390,7 +1409,7 @@ function Calendar({ user }) {
   const quick = async (card, action) => {
     let note = "";
     if (action === "reject") {
-      note = window.prompt("What should change? (sent to the team with the post)");
+      note = window.prompt(L("چه چیزی باید عوض بشه؟ (همراه پست برای تیم فرستاده می‌شه)", "What should change? (sent to the team with the post)"));
       if (note === null) return;
     }
     try {
@@ -1429,12 +1448,12 @@ function Calendar({ user }) {
   // On a phone the left navigation becomes a bottom tab bar (as in Trello's app): the main places
   // one tap away, the rest in a sheet, instead of a strip of cut-off pills.
   const phoneSheetItems = sheet === "posts"
-    ? LIST_TABS.map(([k, label]) => ({ key: "list-" + k, label, n: counts[k], onClick: () => setView("list-" + k) }))
+    ? LIST_TABS.map(([k, label]) => ({ key: "list-" + k, label: L(label), n: counts[k], onClick: () => setView("list-" + k) }))
     : [
-        { key: "week", label: "Week", onClick: () => setView("week") },
-        { key: "source", label: "From a topic or video", onClick: () => setPanel("source") },
-        { key: "channels", label: "Channels", onClick: () => setPanel("channels") },
-        ...(admin ? [{ key: "settings", label: "Lists and labels", onClick: () => setPanel("settings") }] : []),
+        { key: "week", label: L("هفته", "Week"), onClick: () => setView("week") },
+        { key: "source", label: L("از یک موضوع یا ویدیو", "From a topic or video"), onClick: () => setPanel("source") },
+        { key: "channels", label: L("کانال‌ها", "Channels"), onClick: () => setPanel("channels") },
+        ...(admin ? [{ key: "settings", label: L("لیست‌ها و برچسب‌ها", "Lists and labels"), onClick: () => setPanel("settings") }] : []),
       ];
   const tab = (k, icon, label, on, onClick, disabled) => (
     <button key={k} className={`${p.tabItem} ${on ? p.tabOn : ""}`} onClick={onClick} disabled={disabled} aria-current={on ? "page" : undefined}>
@@ -1447,20 +1466,20 @@ function Calendar({ user }) {
     <div className={p.shell}>
       {phone && (
         <>
-          <nav className={p.tabBar} aria-label="Content calendar">
-            {tab("month", <CalendarDays size={22} />, "Month", view === "month" || view === "week", () => setView("month"))}
-            {tab("posts", <ListIcon size={22} />, "Posts", view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
-            <button className={p.tabNew} onClick={() => setSheet("start")} disabled={!ready} aria-label="New post">
+          <nav className={p.tabBar} aria-label={L("تقویم محتوا", "Content calendar")}>
+            {tab("month", <CalendarDays size={22} />, L("ماه", "Month"), view === "month" || view === "week", () => setView("month"))}
+            {tab("posts", <ListIcon size={22} />, L("پست‌ها", "Posts"), view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
+            <button className={p.tabNew} onClick={() => setSheet("start")} disabled={!ready} aria-label={L("پست جدید", "New post")}>
               <Plus size={26} aria-hidden />
             </button>
-            {tab("board", <Columns3 size={22} />, "Board", view === "board", () => setView("board"))}
-            {tab("more", <MenuIcon size={22} />, "More", false, () => setSheet(sheet === "more" ? "" : "more"), !ready)}
+            {tab("board", <Columns3 size={22} />, L("برد", "Board"), view === "board", () => setView("board"))}
+            {tab("more", <MenuIcon size={22} />, L("بیشتر", "More"), false, () => setSheet(sheet === "more" ? "" : "more"), !ready)}
           </nav>
           {sheet && sheet !== "start" && (
             <div className={p.sheetBg} onClick={() => setSheet("")}>
               <div className={p.sheet} onClick={(e) => e.stopPropagation()} role="menu">
                 <div className={p.sheetHandle} aria-hidden />
-                <div className={p.sheetTitle}>{sheet === "posts" ? "Posts" : "More"}</div>
+                <div className={p.sheetTitle}>{sheet === "posts" ? L("پست‌ها", "Posts") : L("بیشتر", "More")}</div>
                 {phoneSheetItems.map((it) => (
                   <button
                     key={it.key}
@@ -1483,16 +1502,17 @@ function Calendar({ user }) {
       {/* "+" first asks where the post comes from: written here, or made in the Topic Engine. */}
       {sheet === "start" && (
         <div className={`${p.sheetBg} ${p.startBg}`} onClick={() => setSheet("")}>
-          <div className={`${p.sheet} ${p.startSheet}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Start a post">
+          <div className={`${p.sheet} ${p.startSheet}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-label={L("شروع یک پست", "Start a post")}>
             <div className={p.sheetHandle} aria-hidden />
-            <div className={p.startTitle}>How do you want to start?</div>
+            <div className={p.startTitle}>{L("از کجا شروع کنیم؟", "How do you want to start?")}</div>
             {[
-              [Pencil, "New post from scratch", "Write the caption and add the files yourself.", () => newPost()],
-              [Newspaper, "Use something made in the Topic Engine", "A carousel, story, video, article or script you already made.", () => setPanel("source")],
-              [Rocket, "Make something new in the Topic Engine", "Pick a topic there and make a carousel, story or video, then send it here.", () => (window.location.href = "/")],
-            ].map(([Icon, title, sub, go]) => (
+              ["scratch", Pencil, L("پست جدید از صفر", "New post from scratch"), L("کپشن را خودت بنویس و فایل‌ها را خودت اضافه کن.", "Write the caption and add the files yourself."), () => newPost()],
+              ["made", Newspaper, L("استفاده از چیزی که در تاپیک انجین ساخته شده", "Use something made in the Topic Engine"), L("کاروسل، استوری، ویدیو، مقاله یا اسکریپتی که قبلاً ساختی.", "A carousel, story, video, article or script you already made."), () => setPanel("source")],
+              ["engine", Rocket, L("ساختن چیزی تازه در تاپیک انجین", "Make something new in the Topic Engine"), L("آن‌جا یک موضوع انتخاب کن و کاروسل، استوری یا ویدیو بساز، بعد بفرستش این‌جا.", "Pick a topic there and make a carousel, story or video, then send it here."), () => (window.location.href = "/")],
+            ].map(([key, Icon, title, sub, go]) => (
               <button
-                key={title}
+                key={key}
+                dir={uiDir()}
                 className={p.startItem}
                 onClick={() => {
                   setSheet("");
@@ -1504,39 +1524,39 @@ function Calendar({ user }) {
                   <b>{title}</b>
                   <span>{sub}</span>
                 </span>
-                <span className={p.startGo} aria-hidden>›</span>
+                <span className={p.startGo} aria-hidden>{isFa() ? "‹" : "›"}</span>
               </button>
             ))}
           </div>
         </div>
       )}
-      <nav className={p.side} aria-label="Content calendar" hidden={phone}>
+      <nav className={p.side} aria-label={L("تقویم محتوا", "Content calendar")} hidden={phone}>
         <button className={p.newPost} onClick={() => setSheet("start")} disabled={!ready}>
-          <Plus size={16} aria-hidden /> New post
+          <Plus size={16} aria-hidden /> {L("پست جدید", "New post")}
         </button>
-        <div className={p.navHead}>Publishing</div>
+        <div className={p.navHead}>{L("انتشار", "Publishing")}</div>
         {VIEWS.map(([v, label]) => (
-          <NavItem key={v} v={v} label={label} />
+          <NavItem key={v} v={v} label={L(label)} />
         ))}
-        <div className={p.navHead}>Posts</div>
+        <div className={p.navHead}>{L("پست‌ها", "Posts")}</div>
         {LIST_TABS.map(([k, label]) => (
-          <NavItem key={k} v={"list-" + k} label={label} n={counts[k]} />
+          <NavItem key={k} v={"list-" + k} label={L(label)} n={counts[k]} />
         ))}
-        <div className={p.navHead}>Planning</div>
-        <NavItem v="board" label="Board" />
+        <div className={p.navHead}>{L("برنامه‌ریزی", "Planning")}</div>
+        <NavItem v="board" label={L("برد", "Board")} />
         <button className={p.nav} onClick={() => setPanel("source")} disabled={!ready}>
           <Newspaper size={16} className={p.navIcon} aria-hidden />
-          <span className={p.navLabel}>From a topic or video</span>
+          <span className={p.navLabel}>{L("از یک موضوع یا ویدیو", "From a topic or video")}</span>
         </button>
-        <div className={p.navHead}>Settings</div>
+        <div className={p.navHead}>{L("تنظیمات", "Settings")}</div>
         <button className={p.nav} onClick={() => setPanel("channels")} disabled={!ready}>
           <Radio size={16} className={p.navIcon} aria-hidden />
-          <span className={p.navLabel}>Channels</span>
+          <span className={p.navLabel}>{L("کانال‌ها", "Channels")}</span>
         </button>
         {admin && (
           <button className={p.nav} onClick={() => setPanel("settings")} disabled={!ready}>
             <SlidersHorizontal size={16} className={p.navIcon} aria-hidden />
-            <span className={p.navLabel}>Lists and labels</span>
+            <span className={p.navLabel}>{L("لیست‌ها و برچسب‌ها", "Lists and labels")}</span>
           </button>
         )}
       </nav>
@@ -1544,25 +1564,25 @@ function Calendar({ user }) {
       <div className={p.main}>
         {q.get("connected") && <div className={c.note}>{q.get("connected")}</div>}
         <div className={c.bar}>
-          <h1 className="m-0 text-[22px] font-semibold tracking-tight text-ink">Content calendar</h1>
+          <h1 className="m-0 text-[22px] font-semibold tracking-tight text-ink">{L("تقویم محتوا", "Content calendar")}</h1>
           <span className={c.grow} />
-          {first && first.settings.dry_run && <span className={`${c.badge} ${c.warn}`}>Test mode: nothing is really posted</span>}
-          {first && !first.settings.platform_posting && <span className={`${c.badge} ${c.warn}`}>Posting to networks is off: download or save to Drive</span>}
+          {first && first.settings.dry_run && <span className={`${c.badge} ${c.warn}`} dir={uiDir()} style={{ display: "inline-block", maxWidth: "100%" }}>{L("حالت آزمایشی: هیچ چیز واقعاً پست نمی‌شه", "Test mode: nothing is really posted")}</span>}
+          {first && !first.settings.platform_posting && <span className={`${c.badge} ${c.warn}`} dir={uiDir()} style={{ display: "inline-block", maxWidth: "100%" }}>{L("پست در شبکه‌ها خاموشه: دانلود کن یا در Drive ذخیره کن", "Posting to networks is off: download or save to Drive")}</span>}
         </div>
         {view !== "board" ? (
           <div className={c.bar}>
-            <span className={c.muted}>Networks</span>
+            <span className={c.muted}>{L("شبکه‌ها", "Networks")}</span>
             {NETWORKS.map((n) => {
               const sel = nets.includes(n.key);
               return (
                 <button key={n.key} className={`${c.chip} ${sel ? c.on : ""}`} style={sel ? { background: n.color } : undefined} onClick={() => setNets(sel ? nets.filter((x) => x !== n.key) : [...nets, n.key])}>
-                  {n.name}
+                  {netName(n.key)}
                 </button>
               );
             })}
             {planBoard && (
-              <select id="label-filter-cal" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label="Filter by label">
-                <option value="">All labels</option>
+              <select id="label-filter-cal" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label={L("فیلتر بر اساس برچسب", "Filter by label")}>
+                <option value="">{L("همهٔ برچسب‌ها", "All labels")}</option>
                 {planBoard.board.labels.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
@@ -1571,14 +1591,14 @@ function Calendar({ user }) {
               </select>
             )}
             <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 8 }}>
-              <input id="mine" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only mine
+              <input id="mine" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> {L("فقط مال من", "Only mine")}
             </label>
           </div>
         ) : (
           planBoard && (
             <div className={c.bar}>
-              <select id="label-filter" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label="Filter by label">
-                <option value="">All labels</option>
+              <select id="label-filter" className={c.select} value={labelFilter} onChange={(e) => setLabelFilter(e.target.value)} aria-label={L("فیلتر بر اساس برچسب", "Filter by label")}>
+                <option value="">{L("همهٔ برچسب‌ها", "All labels")}</option>
                 {planBoard.board.labels.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
@@ -1586,7 +1606,7 @@ function Calendar({ user }) {
                 ))}
               </select>
               <label className={c.muted} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input id="mine-plan" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> Only my cards
+                <input id="mine-plan" type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} /> {L("فقط کارت‌های من", "Only my cards")}
               </label>
             </div>
           )
@@ -1594,7 +1614,7 @@ function Calendar({ user }) {
         {view !== "board" && <ZoneBanner />}
         {error && <div className={c.error}>{error}</div>}
         {!ready ? (
-          <p className={c.muted}>Loading…</p>
+          <p className={c.muted}>{L("در حال بارگذاری…", "Loading…")}</p>
         ) : view === "month" ? (
           <MonthView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
         ) : view === "week" ? (
@@ -1614,7 +1634,7 @@ function Calendar({ user }) {
           </div>
         ) : (
           <>
-            <h2 style={{ margin: 0, fontSize: 18 }}>{LIST_TABS.find(([k]) => "list-" + k === view)?.[1]}</h2>
+            <h2 style={{ margin: 0, fontSize: 18 }}>{L(LIST_TABS.find(([k]) => "list-" + k === view)?.[1] || ["", ""])}</h2>
             <PostList cards={cards} tab={view.slice(5)} admin={admin} onOpen={openPost} onAction={quick} />
           </>
         )}

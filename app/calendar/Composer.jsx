@@ -12,7 +12,8 @@ import { pickerNote } from "../../lib/tz";
 import { useEffect, useMemo, useState } from "react";
 import { apiAt } from "../editing/ui";
 import DrivePicker from "../DrivePicker";
-import { NETWORKS, NET, STATUS, effectiveCaption, thumbOf } from "./channels";
+import { NETWORKS, NET, effectiveCaption, thumbOf, statusName, netName, publishStateName } from "./channels";
+import { L, uiDir } from "../../lib/i18n";
 import { IG_ACCOUNTS } from "../../lib/calendar/igAccounts";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
@@ -32,15 +33,14 @@ const blank = () => ({
 // Soft tint with dark text, the same as the board's badges.
 const PILL = { draft: "draft", pending: "pending", approved: "scheduled", scheduled: "scheduled", publishing: "scheduled", published: "published", failed: "failed" };
 export function StatusPill({ status }) {
-  const s = STATUS[status] || STATUS.draft;
-  return <Badge variant={PILL[status] || "draft"}>{s.name}</Badge>;
+  return <Badge variant={PILL[status] || "draft"}>{statusName(status)}</Badge>;
 }
 
 export function NetChip({ k, state }) {
   const n = NET[k];
   const ring = state === "published" ? "0 0 0 2px #12a150" : ["failed", "unknown", "missed"].includes(state) ? "0 0 0 2px #e5484d" : "none";
   return (
-    <span className={c.chip} style={{ background: n.color, boxShadow: ring }} title={`${n.name}${state ? ": " + state : ""}`}>
+    <span className={c.chip} style={{ background: n.color, boxShadow: ring }} title={`${netName(k)}${state ? ": " + publishStateName(state) : ""}`}>
       {n.short}
     </span>
   );
@@ -95,7 +95,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
   // Save first, then the action, so an approval always covers exactly what is stored.
   const save = async () => {
     const f = body();
-    if (when === "schedule" && !f.publish_at) throw new Error("choose the date and time");
+    if (when === "schedule" && !f.publish_at) throw new Error(L("تاریخ و ساعت را انتخاب کن", "choose the date and time"));
     if (!id) {
       const r = await cal(`/boards/${bid}/cards`, { method: "POST", body: f });
       setId(r.card.id);
@@ -125,20 +125,20 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
     setBusy(false);
   };
   const reject = async () => {
-    const note = window.prompt("What should change? (sent to the team with the post)");
+    const note = window.prompt(L("چه چیزی باید عوض بشه؟ (همراه پست برای تیم فرستاده می‌شه)", "What should change? (sent to the team with the post)"));
     if (note === null) return;
     setBusy(true);
     try {
       await cal(`/boards/${bid}/cards/${id}/action`, { method: "POST", body: { action: "reject", note } });
       await reload(id);
-      setMsg({ kind: "ok", text: "Sent back to the team as a draft." });
+      setMsg({ kind: "ok", text: L("به‌صورت پیش‌نویس به تیم برگشت.", "Sent back to the team as a draft.") });
     } catch (e) {
       setMsg({ kind: "bad", text: e.message });
     }
     setBusy(false);
   };
   const close = () => {
-    if (dirty && (d.caption || on.length) && !window.confirm("Close without saving?")) return;
+    if (dirty && (d.caption || on.length) && !window.confirm(L("بدون ذخیره بسته بشه؟", "Close without saving?"))) return;
     onClose();
   };
 
@@ -153,11 +153,11 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
 
   return (
     <div className={c.bg} onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className={c.composer} role="dialog" aria-modal="true" aria-label="Post composer">
+      <div className={c.composer} role="dialog" aria-modal="true" aria-label={L("نوشتن پست", "Post composer")}>
         <div className={c.cHead}>
-          <h2>{id ? "Edit post" : "New post"}</h2>
+          <h2>{id ? L("ویرایش پست", "Edit post") : L("پست جدید", "New post")}</h2>
           <StatusPill status={status} />
-          {boards.length > 1 && <select id="cmp-board" className={c.select} value={bid} disabled={!!id} onChange={(e) => setBid(e.target.value)} aria-label="Board">
+          {boards.length > 1 && <select id="cmp-board" className={c.select} value={bid} disabled={!!id} onChange={(e) => setBid(e.target.value)} aria-label={L("برد", "Board")}>
             {boards.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -166,10 +166,10 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
           </select>}
           {id && onOpenCard && (
             <button className={c.btn} onClick={() => onOpenCard(bid, id)}>
-              Planning details
+              {L("جزئیات برنامه‌ریزی", "Planning details")}
             </button>
           )}
-          <button className={c.btn} onClick={close} aria-label="Close">
+          <button className={c.btn} onClick={close} aria-label={L("بستن", "Close")}>
             ✕
           </button>
         </div>
@@ -177,23 +177,23 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
         <div className={c.cBody}>
           <div className={c.cLeft}>
             {saved && saved.review && !saved.approved && (
-              <div className={`${c.banner} ${c.bWarn}`}>Waiting for Hamed's approval{saved.review.note ? `: ${saved.review.note}` : ""}.</div>
+              <div className={`${c.banner} ${c.bWarn}`} dir={uiDir()}>{L("در انتظار تأیید حامد", "Waiting for Hamed's approval")}{saved.review.note ? `: ${saved.review.note}` : ""}.</div>
             )}
             {saved && saved.approval && !saved.approved && (
-              <div className={`${c.banner} ${c.bWarn}`}>Changed after approval: it needs approving again.</div>
+              <div className={`${c.banner} ${c.bWarn}`} dir={uiDir()}>{L("بعد از تأیید عوض شده: دوباره باید تأیید بشه.", "Changed after approval: it needs approving again.")}</div>
             )}
-            {locked && <div className={`${c.banner} ${c.bInfo}`}>Already published or publishing: the text and media can no longer change.</div>}
+            {locked && <div className={`${c.banner} ${c.bInfo}`} dir={uiDir()}>{L("منتشر شده یا در حال انتشاره: متن و فایل‌ها دیگه عوض نمی‌شن.", "Already published or publishing: the text and media can no longer change.")}</div>}
 
             <div>
               <div className={c.label} style={{ marginBottom: 8 }}>
-                Publish to
+                {L("انتشار در", "Publish to")}
               </div>
               <div className={c.nets}>
                 {NETWORKS.map((n) => {
                   const sel = d.channels[n.key].on;
                   const st = channels[n.key];
                   return (
-                    <button key={n.key} className={`${c.netBtn} ${sel ? c.on : ""}`} style={{ background: n.color }} onClick={() => toggleNet(n.key)} title={`${n.name}${st && !st.connected ? " (not connected)" : ""}`} aria-pressed={sel} aria-label={n.name}>
+                    <button key={n.key} className={`${c.netBtn} ${sel ? c.on : ""}`} style={{ background: n.color }} onClick={() => toggleNet(n.key)} title={`${netName(n.key)}${st && !st.connected ? L(" (وصل نیست)", " (not connected)") : ""}`} aria-pressed={sel} aria-label={netName(n.key)}>
                       {n.short}
                       {sel && <span className={c.tick}><Check size={11} strokeWidth={3} aria-hidden /></span>}
                       {st && !st.connected && <span className={c.warnDot} />}
@@ -204,18 +204,18 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
             </div>
 
             <label className={c.row}>
-              <span className={c.label}>Post name</span>
-              <input id="cmp-title" className={`${c.input} ${c.grow}`} dir="auto" placeholder="For the team; not published" value={d.title || ""} onChange={(e) => setD({ ...d, title: e.target.value })} />
+              <span className={c.label}>{L("نام پست", "Post name")}</span>
+              <input id="cmp-title" className={`${c.input} ${c.grow}`} dir="auto" placeholder={L("برای تیم؛ منتشر نمی‌شه", "For the team; not published")} value={d.title || ""} onChange={(e) => setD({ ...d, title: e.target.value })} />
             </label>
 
             <div>
               <div className={c.tabs} role="tablist">
                 <button className={`${c.tab} ${tab === "original" ? c.on : ""}`} onClick={() => setTab("original")}>
-                  Original
+                  {L("اصلی", "Original")}
                 </button>
                 {on.map((n) => (
                   <button key={n.key} className={`${c.tab} ${tab === n.key ? c.on : ""}`} onClick={() => setTab(n.key)}>
-                    <NetChip k={n.key} /> {n.name}
+                    <NetChip k={n.key} /> {netName(n.key)}
                     {d.channels[n.key].custom ? " ✎" : ""}
                   </button>
                 ))}
@@ -224,24 +224,24 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                 <div className={c.row} style={{ padding: "8px 0" }}>
                   <label className={c.row} style={{ fontSize: 13 }}>
                     <input id="cmp-custom" type="checkbox" checked={!!editing.custom} disabled={locked} onChange={(e) => setCh(tab, { custom: e.target.checked, caption: e.target.checked && !editing.caption ? d.caption : editing.caption })} />
-                    Customize for {NET[tab].name}
+                    {L(`سفارشی برای ${netName(tab)}`, `Customize for ${netName(tab)}`)}
                   </label>
                   {tab === "instagram" && (
                     <select id="cmp-igformat" className={c.select} value={editing.format || "reel"} disabled={locked} onChange={(e) => setCh("instagram", { format: e.target.value })}>
-                      <option value="reel">Reel (video)</option>
-                      <option value="post">Feed post (image or carousel)</option>
-                      <option value="story">Stories (each file its own story)</option>
+                      <option value="reel">{L("ریلز (ویدیو)", "Reel (video)")}</option>
+                      <option value="post">{L("پست فید (عکس یا کاروسل)", "Feed post (image or carousel)")}</option>
+                      <option value="story">{L("استوری (هر فایل یک استوری)", "Stories (each file its own story)")}</option>
                     </select>
                   )}
                   {tab === "instagram" && (
-                    <select id="cmp-igaccount" className={c.select} value={editing.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })} title="Which Instagram page this post goes to">
-                      <option value="">Page: by market label (EU → Europe)</option>
+                    <select id="cmp-igaccount" className={c.select} value={editing.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })} title={L("این پست به کدام صفحه اینستاگرام برود", "Which Instagram page this post goes to")}>
+                      <option value="">{L("صفحه: بر اساس برچسب بازار (EU ← اروپا)", "Page: by market label (EU → Europe)")}</option>
                       {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
-                        <option key={k} value={k}>Page: {name}</option>
+                        <option key={k} value={k}>{L("صفحه", "Page")}: {name}</option>
                       ))}
                     </select>
                   )}
-                  {tab === "youtube" && <input id="cmp-yttitle" className={`${c.input} ${c.grow}`} dir="auto" placeholder="YouTube title" value={editing.title || ""} disabled={locked} onChange={(e) => setCh("youtube", { title: e.target.value })} />}
+                  {tab === "youtube" && <input id="cmp-yttitle" className={`${c.input} ${c.grow}`} dir="auto" placeholder={L("عنوان YouTube", "YouTube title")} value={editing.title || ""} disabled={locked} onChange={(e) => setCh("youtube", { title: e.target.value })} />}
                 </div>
               )}
               <div className={c.editor}>
@@ -249,12 +249,12 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   id="cmp-text"
                   dir="auto"
                   disabled={locked || (editing && !editing.custom)}
-                  placeholder={tab === "original" ? "What do you want to share? One caption for every network; customise a network in its tab." : ""}
+                  placeholder={tab === "original" ? L("چی می‌خوای به اشتراک بذاری؟ یک کپشن برای همهٔ شبکه‌ها؛ هر شبکه را در زبانهٔ خودش سفارشی کن.", "What do you want to share? One caption for every network; customise a network in its tab.") : ""}
                   value={tab === "original" ? d.caption || "" : effectiveCaption(d, tab)}
                   onChange={(e) => (tab === "original" ? setD({ ...d, caption: e.target.value }) : setCh(tab, { caption: e.target.value }))}
                 />
                 <div className={c.editorFoot}>
-                  {counts.length === 0 && <span>Choose a network above.</span>}
+                  {counts.length === 0 && <span>{L("بالا یک شبکه انتخاب کن.", "Choose a network above.")}</span>}
                   {counts.map(({ n, len }) => (
                     <span key={n.key} className={`${c.count} ${len > n.max ? c.bad : ""}`}>
                       <NetChip k={n.key} /> {len}/{n.max}
@@ -266,20 +266,23 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
 
             <div>
               <div className={c.label} style={{ marginBottom: 8 }}>
-                Media {needsVideo && <span className={c.muted}>· optional while it is an idea; a video is needed on {on.filter((n) => n.key !== "linkedin" && n.key !== "x").map((n) => n.name).join(", ")} before it can go out</span>}
+                {L("فایل‌ها", "Media")} {needsVideo && <span className={c.muted}>{L(
+                  `· تا وقتی ایده است اختیاریه؛ برای ${on.filter((n) => n.key !== "linkedin" && n.key !== "x").map((n) => netName(n.key)).join("، ")} قبل از انتشار ویدیو لازمه`,
+                  `· optional while it is an idea; a video is needed on ${on.filter((n) => n.key !== "linkedin" && n.key !== "x").map((n) => netName(n.key)).join(", ")} before it can go out`
+                )}</span>}
               </div>
               {album.length > 1 ? (
                 <div className={c.mediaBox}>
                   <div style={{ display: "flex", gap: 6, overflowX: "auto", flex: "1 1 auto", minWidth: 0 }}>
                     {album.map((m, i) => (
-                      <div key={i} className={c.thumb} style={m.kind === "image" ? { backgroundImage: `url(${m.url})`, flex: "0 0 auto" } : { flex: "0 0 auto" }} title={`${i + 1} of ${album.length}`}>
+                      <div key={i} className={c.thumb} style={m.kind === "image" ? { backgroundImage: `url(${m.url})`, flex: "0 0 auto" } : { flex: "0 0 auto" }} title={L(`${i + 1} از ${album.length}`, `${i + 1} of ${album.length}`)}>
                         {m.kind === "video" ? <Play size={14} fill="currentColor" aria-hidden /> : ""}
                       </div>
                     ))}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: "0 0 auto" }}>
-                    <span className={c.muted}>{album.length} files, posted together</span>
-                    {!locked && <button className={c.btn} onClick={() => setD({ ...d, media: { kind: "none", url: "" } })}>Remove the files</button>}
+                    <span className={c.muted}>{L(`${album.length} فایل، با هم پست می‌شن`, `${album.length} files, posted together`)}</span>
+                    {!locked && <button className={c.btn} onClick={() => setD({ ...d, media: { kind: "none", url: "" } })}>{L("حذف فایل‌ها", "Remove the files")}</button>}
                   </div>
                 </div>
               ) : (
@@ -295,12 +298,12 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       const ig = { ...d.channels.instagram, format: kind === "image" ? "post" : kind === "video" ? "reel" : d.channels.instagram.format };
                       setD({ ...d, media: { ...d.media, kind }, channels: { ...d.channels, instagram: ig } });
                     }}>
-                      <option value="none">No media</option>
-                      <option value="video">Video</option>
-                      <option value="image">Image</option>
+                      <option value="none">{L("بدون فایل", "No media")}</option>
+                      <option value="video">{L("ویدیو", "Video")}</option>
+                      <option value="image">{L("عکس", "Image")}</option>
                     </select>
                     {d.media.kind !== "none" && (
-                      <input id="cmp-murl" data-no-voice className={`${c.input} ${c.grow}`} placeholder="Google Drive link (Anyone with the link)" value={d.media.url || ""} disabled={locked} onChange={(e) => setD({ ...d, media: { ...d.media, url: e.target.value } })} />
+                      <input id="cmp-murl" data-no-voice className={`${c.input} ${c.grow}`} placeholder={L("لینک Google Drive (هر کسی که لینک را دارد)", "Google Drive link (Anyone with the link)")} value={d.media.url || ""} disabled={locked} onChange={(e) => setD({ ...d, media: { ...d.media, url: e.target.value } })} />
                     )}
                   </div>
                   {d.media.kind !== "none" && !locked && (
@@ -311,7 +314,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       const v = sources.videos.find((x) => x.id === e.target.value);
                       if (v) setD({ ...d, media: { kind: "video", url: v.url, project_id: v.id }, title: d.title || v.title });
                     }}>
-                      <option value="">Use an approved Video Editing video…</option>
+                      <option value="">{L("استفاده از یک ویدیوی تأییدشدهٔ تدوین ویدیو…", "Use an approved Video Editing video…")}</option>
                       {sources.videos.map((v) => (
                         <option key={v.id} value={v.id}>
                           {v.title} (v{v.version})
@@ -326,12 +329,12 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
 
             <div>
               <div className={c.label} style={{ marginBottom: 8 }}>
-                When
+                {L("زمان", "When")}
               </div>
               <div className={c.when}>
-                {[["none", "No date yet"], ["schedule", "Schedule"]].map(([k, label]) => (
+                {[["none", ["هنوز بدون تاریخ", "No date yet"]], ["schedule", ["زمان‌بندی", "Schedule"]]].map(([k, label]) => (
                   <button key={k} className={`${c.whenOpt} ${when === k ? c.on : ""}`} onClick={() => setWhen(k)}>
-                    {label}
+                    {L(label)}
                   </button>
                 ))}
                 {when === "schedule" && (
@@ -345,27 +348,27 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
 
             {saved && saved.id && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div className={c.label}>Take it with you</div>
-                {dirty && <span className={c.muted}>Save the draft first; the files below are the saved version.</span>}
+                <div className={c.label}>{L("بردن فایل‌ها", "Take it with you")}</div>
+                {dirty && <span className={c.muted} dir={uiDir()}>{L("اول پیش‌نویس را ذخیره کن؛ فایل‌های زیر نسخهٔ ذخیره‌شده‌اند.", "Save the draft first; the files below are the saved version.")}</span>}
                 <PostFiles boardId={bid} cardId={saved.id} card={saved} />
               </div>
             )}
 
             {saved && saved.publish && Object.keys(saved.publish).length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <div className={c.label}>Results</div>
+                <div className={c.label}>{L("نتیجه‌ها", "Results")}</div>
                 {Object.entries(saved.publish).map(([k, p]) => (
                   <div key={k} className={`${c.banner} ${p.status === "published" ? c.bOk : p.status === "publishing" ? c.bInfo : c.bBad}`}>
-                    <NetChip k={k} /> {NET[k].name}: {p.status}
+                    <NetChip k={k} /> {netName(k)}: {publishStateName(p.status)}
                     {p.url && (
                       <a href={p.url} target="_blank" rel="noreferrer">
-                        open the post
+                        {L("باز کردن پست", "open the post")}
                       </a>
                     )}
                     {(p.error || p.note) && <span>· {p.error || p.note}</span>}
                     {admin && ["failed", "unknown", "missed"].includes(p.status) && (
-                      <button className={c.btn} disabled={busy} onClick={() => run("Cleared; publish again when ready.", [{ action: "retry", channel: k }])}>
-                        Allow another try
+                      <button className={c.btn} disabled={busy} onClick={() => run(L("پاک شد؛ هر وقت آماده بود دوباره منتشر کن.", "Cleared; publish again when ready."), [{ action: "retry", channel: k }])}>
+                        {L("اجازهٔ یک تلاش دیگر", "Allow another try")}
                       </button>
                     )}
                   </div>
@@ -376,7 +379,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
 
           <div className={c.cRight}>
             <div className={c.row}>
-              <span className={c.label}>Preview</span>
+              <span className={c.label}>{L("پیش‌نمایش", "Preview")}</span>
               <div className={c.tabs} style={{ border: 0 }}>
                 {on.map((n) => (
                   <button key={n.key} className={`${c.tab} ${pv === n.key ? c.on : ""}`} onClick={() => setPv(n.key)}>
@@ -385,46 +388,46 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                 ))}
               </div>
             </div>
-            <div className={c.pvWrap}>{pv ? <Preview card={d} network={pv} /> : <p className={c.muted}>Choose a network to see how the post will look.</p>}</div>
-            {pv && <span className={c.muted}>The preview is approximate; each network crops and shortens in its own way.</span>}
+            <div className={c.pvWrap}>{pv ? <Preview card={d} network={pv} /> : <p className={c.muted} dir={uiDir()}>{L("یک شبکه انتخاب کن تا ببینی پست چه شکلی می‌شه.", "Choose a network to see how the post will look.")}</p>}</div>
+            {pv && <span className={c.muted} dir={uiDir()}>{L("پیش‌نمایش تقریبیه؛ هر شبکه به روش خودش برش می‌زنه و کوتاه می‌کنه.", "The preview is approximate; each network crops and shortens in its own way.")}</span>}
           </div>
         </div>
 
         {msg.text && (
-          <div className={`${c.banner} ${msg.kind === "ok" ? c.bOk : c.bBad}`} style={{ margin: "0 18px 8px" }}>
+          <div className={`${c.banner} ${msg.kind === "ok" ? c.bOk : c.bBad}`} style={{ margin: "0 18px 8px" }} dir={uiDir()}>
             {msg.text}
           </div>
         )}
         <div className={c.cFoot}>
-          <button className={c.btn} disabled={busy || locked || (!dirty && !!id)} onClick={() => run("Saved as a draft.", [])}>
-            Save draft
+          <button className={c.btn} disabled={busy || locked || (!dirty && !!id)} onClick={() => run(L("به‌صورت پیش‌نویس ذخیره شد.", "Saved as a draft."), [])}>
+            {L("ذخیرهٔ پیش‌نویس", "Save draft")}
           </button>
           <span className={c.grow} />
           {!admin && !locked && (
-            <button className={`${c.btn} ${c.primary}`} disabled={busy || !on.length} onClick={() => run("Sent to Hamed for approval.", [{ action: "request_review" }])}>
-              Send for approval
+            <button className={`${c.btn} ${c.primary}`} disabled={busy || !on.length} onClick={() => run(L("برای تأیید به حامد فرستاده شد.", "Sent to Hamed for approval."), [{ action: "request_review" }])}>
+              {L("ارسال برای تأیید", "Send for approval")}
             </button>
           )}
           {admin && saved && saved.review && !saved.approved && (
             <button className={`${c.btn} ${c.danger}`} disabled={busy} onClick={reject}>
-              Send back
+              {L("برگرداندن", "Send back")}
             </button>
           )}
           {admin && !locked && (
             <>
-              <button className={`${c.btn} ${c.blue}`} disabled={busy || !on.length} onClick={() => run(when === "schedule" ? "Approved and scheduled." : "Approved. Give it a time to schedule it.", [{ action: "approve" }])}>
-                {when === "schedule" ? "Approve & schedule" : "Approve"}
+              <button className={`${c.btn} ${c.blue}`} disabled={busy || !on.length} onClick={() => run(when === "schedule" ? L("تأیید و زمان‌بندی شد.", "Approved and scheduled.") : L("تأیید شد. برای زمان‌بندی یک زمان بهش بده.", "Approved. Give it a time to schedule it."), [{ action: "approve" }])}>
+                {when === "schedule" ? L("تأیید و زمان‌بندی", "Approve & schedule") : L("تأیید", "Approve")}
               </button>
               {settings.platform_posting !== false && (
-              <button className={`${c.btn} ${c.primary}`} disabled={busy || !on.length} onClick={() => window.confirm(`Publish now on ${on.map((n) => n.name).join(", ")}?`) && run("Publishing started; results appear here.", [{ action: "approve" }, { action: "publish_now" }])}>
-                Publish now
+              <button className={`${c.btn} ${c.primary}`} disabled={busy || !on.length} onClick={() => window.confirm(L(`همین الان در ${on.map((n) => netName(n.key)).join("، ")} منتشر بشه؟`, `Publish now on ${on.map((n) => netName(n.key)).join(", ")}?`)) && run(L("انتشار شروع شد؛ نتیجه‌ها همین‌جا می‌آیند.", "Publishing started; results appear here."), [{ action: "approve" }, { action: "publish_now" }])}>
+                {L("انتشار همین الان", "Publish now")}
               </button>
               )}
             </>
           )}
           {admin && saved && saved.approved && !locked && !dirty && (
-            <button className={c.btn} disabled={busy} onClick={() => run("Approval withdrawn.", [{ action: "unapprove" }])}>
-              Withdraw approval
+            <button className={c.btn} disabled={busy} onClick={() => run(L("تأیید پس گرفته شد.", "Approval withdrawn."), [{ action: "unapprove" }])}>
+              {L("پس گرفتن تأیید", "Withdraw approval")}
             </button>
           )}
         </div>

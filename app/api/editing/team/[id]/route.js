@@ -1,3 +1,4 @@
+import { Lfor } from "../../../../../lib/i18n";
 import { guard, setPassword, publicUser, json } from "../../../../../lib/editing/auth";
 import { cleanAccess } from "../../../../../lib/editing/access";
 import { update } from "../../../../../lib/editing/store";
@@ -15,7 +16,7 @@ export async function PATCH(request, { params }) {
   try {
     const id = checkId("u", params.id);
     const body = await request.json().catch(() => ({}));
-    if (id === g.user.id && (body.active === false || body.role === "member")) return json({ error: "you cannot lock yourself out" }, 400);
+    if (id === g.user.id && (body.active === false || body.role === "member")) return json({ error: Lfor(request)("نمی‌توانی دسترسی خودت را ببندی", "you cannot lock yourself out") }, 400);
     let user;
     if (body.temp_password) user = await setPassword(id, body.temp_password, { mustChange: true });
     const fields = {};

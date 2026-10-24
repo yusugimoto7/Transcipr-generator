@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { L } from "../lib/i18n";
 
 const SIZE = 26;
 
@@ -80,8 +81,8 @@ export default function CopyCorners() {
       type="button"
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => copy(el)}
-      aria-label="Copy this text"
-      title="Copy"
+      aria-label={L("کپی این متن", "Copy this text")}
+      title={L("کپی", "Copy")}
       style={{
         position: "fixed", top, left, width: SIZE, height: SIZE, zIndex: 2147482000, padding: 0,
         display: "grid", placeItems: "center", borderRadius: 7, cursor: "pointer",

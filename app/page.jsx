@@ -11,6 +11,7 @@ import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
+import { L, uiDir, isFa } from "../lib/i18n";
 import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
@@ -55,19 +56,22 @@ function alpha(hex, a) {
 // Each topic type gets its own color, so a type is recognisable at a glance
 // in the list, on the card and in the library.
 const FIELDS = {
-  "Work Permit": { emoji: "🛂", label: "Work Permit", color: "#0e8a99" },
+  "Work Permit": { emoji: "🛂", label: ["مجوز کار", "Work Permit"], color: "#0e8a99" },
   PNP: { emoji: "📍", label: "PNP", color: "#d9770a" },
   "Express Entry": { emoji: "⚡", label: "Express Entry", color: "#b8890b" },
-  Study: { emoji: "🎓", label: "Study / PGWP", color: "#6d5bd0" },
+  Study: { emoji: "🎓", label: ["تحصیل / PGWP", "Study / PGWP"], color: "#6d5bd0" },
   LMIA: { emoji: "📄", label: "LMIA", color: "#d6458f" },
-  Policy: { emoji: "📢", label: "Policy", color: "#2f6fd6" },
-  Court: { emoji: "⚖️", label: "Court", color: "#9a7a2c" },
-  Europe: { emoji: "🇪🇺", label: "Europe", color: "#4560d8" },
-  Citizenship: { emoji: "🪪", label: "Citizenship", color: "#12945e" },
-  Family: { emoji: "👪", label: "Family", color: "#d64f80" },
+  Policy: { emoji: "📢", label: ["سیاست‌ها", "Policy"], color: "#2f6fd6" },
+  Court: { emoji: "⚖️", label: ["دادگاه", "Court"], color: "#9a7a2c" },
+  Europe: { emoji: "🇪🇺", label: ["اروپا", "Europe"], color: "#4560d8" },
+  Citizenship: { emoji: "🪪", label: ["شهروندی", "Citizenship"], color: "#12945e" },
+  Family: { emoji: "👪", label: ["خانواده", "Family"], color: "#d64f80" },
 };
+// Labels are pairs; read in the chosen language each time a card is drawn.
 function fieldOf(t) {
-  return FIELDS[t && t.field] || { emoji: "•", label: (t && t.field) || "Topic", color: "#8fa3ab" };
+  const f = FIELDS[t && t.field];
+  if (f) return { ...f, label: L(f.label) };
+  return { emoji: "•", label: (t && t.field) || L("موضوع", "Topic"), color: "#8fa3ab" };
 }
 
 
@@ -452,7 +456,7 @@ export default function App() {
         body: JSON.stringify({ kind, topic, ...extra }),
       });
       const data = await res.json();
-      if (!res.ok || !data.job) throw new Error(data.error || "could not start");
+      if (!res.ok || !data.job) throw new Error(data.error || L("شروع نشد", "could not start"));
       patchJob(key, kind, { id: data.job.id, startedAt: data.job.startedAt });
     } catch (e) {
       patchJob(key, kind, { status: "error", error: String(e.message || e) });
@@ -468,7 +472,7 @@ export default function App() {
         // A job whose start request never completed has no id to ask about.
         if (!j.id) {
           if (Date.now() - (j.startedAt || 0) > 25000) {
-            patchJob(key, j.kind, { status: "error", error: "شروع نشد؛ دوباره امتحان کن." });
+            patchJob(key, j.kind, { status: "error", error: L("شروع نشد؛ دوباره امتحان کن.", "It did not start. Try again.") });
           }
           continue;
         }
@@ -488,7 +492,7 @@ export default function App() {
       const remote = byId.get(local.id);
       if (!remote) {
         if ((data.missing || []).includes(local.id)) {
-          patchJob(local.key, local.kind, { status: "error", error: "سرور در حین کار ری‌استارت شد. دوباره امتحان کن." });
+          patchJob(local.key, local.kind, { status: "error", error: L("سرور در حین کار ری‌استارت شد. دوباره امتحان کن.", "The server restarted mid-job. Try again.") });
         }
         continue;
       }
@@ -667,7 +671,7 @@ export default function App() {
     } catch (e) {
       // Ideas already on screen stay; only an empty list shows the error.
       if (!shown) {
-        setTopicError("نتونستم اخبار تازه رو بیارم. دوباره «Refresh» رو بزن.");
+        setTopicError(L("نتونستم اخبار تازه رو بیارم. دوباره «تازه‌سازی» رو بزن.", "Could not load fresh news. Press Refresh again."));
         setErrDetail(String(e?.message || e));
       }
     } finally {
@@ -958,7 +962,7 @@ export default function App() {
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
-      ? "نوشتن سناریو با خطا مواجه شد (" + (sj.error || "") + ")"
+      ? L("نوشتن سناریو با خطا مواجه شد (", "Writing the script failed (") + (sj.error || "") + ")"
       : scriptError;
   // The Telegram news post on screen: the newest job result this session
   // (write, save, picture, send), else the saved one.
@@ -1049,8 +1053,8 @@ export default function App() {
             me={{ loading: false, enabled: true, user: me }}
             actions={
               <>
-                <a href="/content-wizard" className={barStyles.actBtn} title="Content Wizard">
-                  <Sparkles size={16} aria-hidden /> <span className={barStyles.actLabel}>Wizard</span>
+                <a href="/content-wizard" className={barStyles.actBtn} title={L("ویزارد محتوا", "Content Wizard")}>
+                  <Sparkles size={16} aria-hidden /> <span className={barStyles.actLabel}>{L("ویزارد", "Wizard")}</span>
                 </a>
                 <button
                   className={barStyles.actBtn}
@@ -1060,10 +1064,10 @@ export default function App() {
                     loadWorkspace();
                   }}
                   disabled={loadingTopics || streaming}
-                  title="Get fresh topics"
+                  title={L("گرفتن موضوع‌های تازه", "Get fresh topics")}
                 >
                   <RefreshCw size={16} className={loadingTopics || streaming ? "ui-spin" : ""} aria-hidden />
-                  <span className={barStyles.actLabel}>{loadingTopics || streaming ? "Loading…" : "Refresh"}</span>
+                  <span className={barStyles.actLabel}>{loadingTopics || streaming ? L("در حال بارگذاری…", "Loading…") : L("تازه‌سازی", "Refresh")}</span>
                 </button>
               </>
             }
@@ -1081,11 +1085,11 @@ export default function App() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, overflow: "hidden" }}>
           <img src="/brand/logo-on-light.png" alt="Sugimoto Visa" style={{ height: 28, width: "auto", display: "block", flexShrink: 0 }} />
-          <div style={{ fontSize: 11.5, color: C.text3, fontWeight: 600, whiteSpace: "nowrap", borderLeft: `1px solid ${C.line}`, paddingLeft: 10 }}>Topic Engine</div>
+          <div dir={uiDir()} style={{ fontSize: 11.5, color: C.text3, fontWeight: 600, lineHeight: 1.2, minWidth: 0, borderLeft: `1px solid ${C.line}`, paddingLeft: 10 }}>{L("تاپیک انجین", "Topic Engine")}</div>
         </div>
         <nav style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          <a href="/content-wizard" className="ui-btn" aria-label="Content Wizard" title="Content Wizard" style={{ ...navBtn, textDecoration: "none", color: C.text }}>
-            ✨ <span className="ui-wide">Wizard</span>
+          <a href="/content-wizard" className="ui-btn" aria-label={L("ویزارد محتوا", "Content Wizard")} title={L("ویزارد محتوا", "Content Wizard")} style={{ ...navBtn, textDecoration: "none", color: C.text }}>
+            ✨ <span className="ui-wide">{L("ویزارد", "Wizard")}</span>
           </a>
           <AppMenu me={me} ax={ax} navBtn={navBtn} onSignOut={signOut} />
           <button
@@ -1096,12 +1100,12 @@ export default function App() {
             }}
             disabled={loadingTopics || streaming}
             className="ui-btn"
-            aria-label="Refresh topics"
-            title="Get fresh topics"
+            aria-label={L("تازه‌سازی موضوع‌ها", "Refresh topics")}
+            title={L("گرفتن موضوع‌های تازه", "Get fresh topics")}
             style={{ ...navBtn, opacity: loadingTopics || streaming ? 0.6 : 1, cursor: loadingTopics || streaming ? "default" : "pointer" }}
           >
             <span className={loadingTopics || streaming ? "ui-spin" : ""} style={{ display: "inline-block" }}>⟳</span>
-            <span className="ui-wide">{loadingTopics || streaming ? "Loading…" : "Refresh"}</span>
+            <span className="ui-wide">{loadingTopics || streaming ? L("در حال بارگذاری…", "Loading…") : L("تازه‌سازی", "Refresh")}</span>
           </button>
         </nav>
       </header>
@@ -1167,7 +1171,7 @@ export default function App() {
           ) : (
             <>
               {topicError && (
-                <div className="ui-fade" style={{ background: alpha(C.reject, 0.1), border: `1px solid ${alpha(C.reject, 0.35)}`, color: C.text, borderRadius: 14, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: "rtl", textAlign: "right" }}>
+                <div className="ui-fade" style={{ background: alpha(C.reject, 0.1), border: `1px solid ${alpha(C.reject, 0.35)}`, color: C.text, borderRadius: 14, padding: "11px 13px", fontSize: 12.5, marginBottom: 14, fontFamily: "'Vazirmatn', sans-serif", direction: uiDir(), textAlign: isFa() ? "right" : "left" }}>
                   {topicError}
                   {errDetail && (
                     <div dir="ltr" style={{ marginTop: 6, fontSize: 11, color: "rgba(18,26,36,0.7)", fontFamily: "monospace", textAlign: "left", wordBreak: "break-word" }}>
@@ -1181,8 +1185,8 @@ export default function App() {
               {!loadingTopics && <DeckWhy stats={deckStats} />}
 
               {streaming && !loadingTopics && (
-                <div dir="rtl" className="ui-progress ui-fade" style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text }}>
-                  <span className="ui-pulse">⏳</span> موضوع‌های تازه در حال اضافه شدن به فهرست…
+                <div dir={uiDir()} className="ui-progress ui-fade" style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, color: C.text }}>
+                  <span className="ui-pulse">⏳</span> {L("موضوع‌های تازه در حال اضافه شدن به فهرست…", "New topics are being added to the list…")}
                 </div>
               )}
 
@@ -1217,7 +1221,7 @@ export default function App() {
           scripts={viewScripts}
           initialArticle={EN ? savedEn.article || null : initialArticle}
           loading={viewLoading}
-          loadingText={loadingSaved && !(sj && sj.status === "running") ? "در حال بارگذاری محتوای ذخیره‌شده…" : ""}
+          loadingText={loadingSaved && !(sj && sj.status === "running") ? L("در حال بارگذاری محتوای ذخیره‌شده…", "Loading saved material…") : ""}
           error={viewError}
           tab={scriptTab}
           setTab={setScriptTab}
@@ -1256,9 +1260,9 @@ export default function App() {
 // or subject, news from their own links and pictures, and clients' visa results. Each tab lists
 // the topics it made (research topics carry `researched`).
 const STUDIO_TABS = [
-  ["research", Search, "تحقیق", "روی ایده یا موضوع"],
-  ["own", Link2, "منابع خودم", "از لینک و عکس"],
-  ["visa", Megaphone, "خبر ویزا", "نتایج ویزای مشتری‌ها"],
+  ["research", Search, ["تحقیق", "Research"], ["روی ایده یا موضوع", "On an idea or subject"]],
+  ["own", Link2, ["منابع خودم", "My sources"], ["از لینک و عکس", "From links and pictures"]],
+  ["visa", Megaphone, ["خبر ویزا", "Visa news"], ["نتایج ویزای مشتری‌ها", "Clients' visa results"]],
 ];
 function StudioSection({ topics, listProps, research, own }) {
   const [tab, setTabState] = useState("research");
@@ -1278,7 +1282,7 @@ function StudioSection({ topics, listProps, research, own }) {
   const listed = tab === "research" ? topics.filter((t) => t.researched) : tab === "own" ? topics.filter((t) => !t.researched) : [];
   return (
     <div>
-      <div dir="rtl" role="tablist" style={{ display: "grid", gridTemplateColumns: `repeat(${STUDIO_TABS.length}, 1fr)`, gap: 8, marginBottom: 14 }}>
+      <div dir={uiDir()} role="tablist" style={{ display: "grid", gridTemplateColumns: `repeat(${STUDIO_TABS.length}, 1fr)`, gap: 8, marginBottom: 14 }}>
         {STUDIO_TABS.map(([k, Ic, label, hint]) => {
           const on = tab === k;
           return (
@@ -1298,8 +1302,8 @@ function StudioSection({ topics, listProps, research, own }) {
               <span style={{ width: 34, height: 34, borderRadius: 11, display: "grid", placeItems: "center", background: on ? "rgba(255,255,255,0.16)" : alpha(C.orange, 0.08) }}>
                 <Ic size={18} aria-hidden />
               </span>
-              <span style={{ fontWeight: 800, fontSize: 13.5 }}>{label}</span>
-              <span style={{ fontSize: 11, opacity: on ? 0.85 : 0.6 }}>{hint}</span>
+              <span style={{ fontWeight: 800, fontSize: 13.5 }}>{L(label)}</span>
+              <span style={{ fontSize: 11, opacity: on ? 0.85 : 0.6 }}>{L(hint)}</span>
             </button>
           );
         })}
@@ -1310,8 +1314,8 @@ function StudioSection({ topics, listProps, research, own }) {
         {tab === "visa" && <VisaResults C={C} learn={{ Toggle: LearnToggle, teach }} />}
         {listed.length > 0 && (
           <>
-            <div dir="rtl" style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: fa }}>
-              {tab === "research" ? "موضوع‌هایی که از تحقیق ساخته شدن" : "خبرهایی که از منابع خودت ساخته شدن"}
+            <div dir={uiDir()} style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: fa }}>
+              {tab === "research" ? L("موضوع‌هایی که از تحقیق ساخته شدن", "Topics made from research") : L("خبرهایی که از منابع خودت ساخته شدن", "News made from your own sources")}
             </div>
             <IdeasList topics={listed} {...listProps} />
           </>
@@ -1324,7 +1328,7 @@ function StudioSection({ topics, listProps, research, own }) {
 // List (every topic, new and used) or the Lexbase newsletter section.
 // Steps made in the language chosen on the topic page (lib/jobs.js LANG_KINDS).
 const LANG_KINDS = ["article", "publish", "telegram_write", "telegram_save", "telegram_image", "telegram_send", "carousel", "carousel_slide", "carousel_send", "story", "story_draw", "story_photo", "story_page", "story_send"];
-const MODES = [["list", Newspaper, "News"], ["lexbase", Mail, "Lexbase"], ["ideas", Lightbulb, "Ideas"], ["studio", Images, "Studio"]];
+const MODES = [["list", Newspaper, ["خبرها", "News"]], ["lexbase", Mail, ["Lexbase", "Lexbase"]], ["ideas", Lightbulb, ["ایده‌ها", "Ideas"]], ["studio", Images, ["استودیو", "Studio"]]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
   return (
@@ -1351,7 +1355,7 @@ function ModeSwitch({ mode, onChange }) {
           }}
         >
           <Ic size={15} aria-hidden />
-          {label}
+          {L(label)}
         </button>
       ))}
     </div>
@@ -1394,18 +1398,18 @@ function openLinkProps(t, onOpen) {
 
 // What has been made from a topic, shown on its row so nobody makes it twice.
 const MATERIAL_BADGE = {
-  script: ["📝 Script", "Scripts written", "#12945e"],
-  article: ["📰 Article", "Blog article written", "#0e8a99"],
-  carousel: ["🖼 Carousel", "Carousel post made", "#6d5bd0"],
-  story: ["📱 Story", "Instagram story made", "#c2410c"],
-  video: ["🎬 Video", "Video requested", "#334155"],
+  script: [["📝 اسکریپت", "📝 Script"], ["اسکریپت نوشته شده", "Scripts written"], "#12945e"],
+  article: [["📰 مقاله", "📰 Article"], ["مقالهٔ بلاگ نوشته شده", "Blog article written"], "#0e8a99"],
+  carousel: [["🖼 کاروسل", "🖼 Carousel"], ["پست کاروسل ساخته شده", "Carousel post made"], "#6d5bd0"],
+  story: [["📱 استوری", "📱 Story"], ["استوری اینستاگرام ساخته شده", "Instagram story made"], "#c2410c"],
+  video: [["🎬 ویدیو", "🎬 Video"], ["ویدیو درخواست شده", "Video requested"], "#334155"],
 };
 const CATEGORIES = [
-  ["all", "همه", () => true],
-  ["ca", "🇨🇦 کانادا", (t) => t.page !== "EU"],
-  ["eu", "🇪🇺 اروپا", (t) => t.page === "EU"],
-  ["social", "شبکه‌های اجتماعی", (t) => isSocialTopic(t)],
-  ["web", "سایت‌ها", (t) => !isSocialTopic(t)],
+  ["all", ["همه", "All"], () => true],
+  ["ca", ["🇨🇦 کانادا", "🇨🇦 Canada"], (t) => t.page !== "EU"],
+  ["eu", ["🇪🇺 اروپا", "🇪🇺 Europe"], (t) => t.page === "EU"],
+  ["social", ["شبکه‌های اجتماعی", "Social media"], (t) => isSocialTopic(t)],
+  ["web", ["سایت‌ها", "Websites"], (t) => !isSocialTopic(t)],
 ];
 
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
@@ -1500,7 +1504,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
     <a
       href={topicHref(t)}
       {...openLinkProps(t, onOpen)}
-      aria-label="Open topic"
+      aria-label={L("باز کردن موضوع", "Open topic")}
       className="ui-btn"
       style={{
         display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 36, height: 36, padding: "0 11px",
@@ -1515,13 +1519,13 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
 
   return (
     <div>
-      <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
-        {chip("all", "همه")}
-        {chip("pending", "جدید")}
-        {chip("approved", "ساخته‌شده")}
-        {chip("rejected", "🗄 آرشیو")}
+      <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+        {chip("all", L("همه", "All"))}
+        {chip("pending", L("جدید", "New"))}
+        {chip("approved", L("ساخته‌شده", "Made"))}
+        {chip("rejected", L("🗄 بایگانی", "🗄 Archive"))}
       </div>
-      {!plain && <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+      {!plain && <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
         {CATEGORIES.map(([k, label]) => {
           const on = cat === k;
           return (
@@ -1536,7 +1540,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 display: "inline-flex", alignItems: "center", gap: 5,
               }}
             >
-              {label}
+              {L(label)}
               <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>
                 {catCounts[k]}
               </span>
@@ -1546,8 +1550,8 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
       </div>}
 
       {!rows.length && (
-        <div dir="rtl" className="ui-glass" style={{ textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontFamily: "'Vazirmatn', sans-serif", fontSize: 13 }}>
-          موردی در این دسته نیست.
+        <div dir={uiDir()} className="ui-glass" style={{ textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontFamily: "'Vazirmatn', sans-serif", fontSize: 13 }}>
+          {L("موردی در این دسته نیست.", "Nothing in this group.")}
         </div>
       )}
 
@@ -1578,7 +1582,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 <a
                   href={topicHref(t)}
                   {...openLinkProps(t, onOpen)}
-                  title={(t.title_en ? t.title_en + " — " : "") + "open (right-click: new tab)"}
+                  title={(t.title_en ? t.title_en + " — " : "") + L("باز کن (راست‌کلیک: تب جدید)", "open (right-click: new tab)")}
                   style={{
                     fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
                     color: C.text, cursor: "pointer",
@@ -1615,43 +1619,43 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                     </a>
                   )}
                   {(t._also || []).map((x) => (
-                    <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer" title={"Same story, also reported by " + (x.name || sourceHost(x.url))} style={{ color: C.teal, textDecoration: "none", borderLeft: `1px solid ${C.line}`, paddingLeft: 8 }}>
+                    <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer" title={L("همین خبر، گزارش‌شده در ", "Same story, also reported by ") + (x.name || sourceHost(x.url))} style={{ color: C.teal, textDecoration: "none", borderLeft: `1px solid ${C.line}`, paddingLeft: 8 }}>
                       + {sourceHost(x.url)} ↗
                     </a>
                   ))}
                   {t.grounding === "headline" && (
-                    <span style={{ color: C.orange, border: `1px solid ${alpha(C.orange, 0.5)}`, borderRadius: 99, padding: "0 6px" }}>headline only</span>
+                    <span style={{ color: C.orange, border: `1px solid ${alpha(C.orange, 0.5)}`, borderRadius: 99, padding: "0 6px" }}>{L("فقط تیتر", "headline only")}</span>
                   )}
                   {t.coverage > 1 && (
-                    <span title={"Also covered by: " + (t.outlets || []).join(", ")} style={{ color: "#c2410c", background: alpha("#f97316", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>🔥 {t.coverage} sources</span>
+                    <span title={L("پوشش‌داده‌شده در: ", "Also covered by: ") + (t.outlets || []).join(", ")} style={{ color: "#c2410c", background: alpha("#f97316", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>🔥 {L(`${t.coverage} منبع`, `${t.coverage} sources`)}</span>
                   )}
                   {t.newsletter === "lexbase" && (
-                    <span title={"From the Lexbase newsletter" + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 {t.citation || "Lexbase"}</span>
+                    <span title={L("از خبرنامهٔ Lexbase", "From the Lexbase newsletter") + (t.citation ? " — " + t.citation : "")} style={{ color: "#6d5bd0", background: alpha("#6d5bd0", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>📬 {t.citation || "Lexbase"}</span>
                   )}
                   {t.kind === "court" && (t.outcome === "allowed" || t.outcome === "dismissed") && (
                     <span
-                      title={t.outcome === "allowed" ? "The Court allowed the application" : "The Court dismissed the application"}
+                      title={t.outcome === "allowed" ? L("دادگاه درخواست رو پذیرفت", "The Court allowed the application") : L("دادگاه درخواست رو رد کرد", "The Court dismissed the application")}
                       style={{ color: t.outcome === "allowed" ? "#0f7b4b" : "#b42318", background: alpha(t.outcome === "allowed" ? "#12945e" : "#d92d20", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}
                     >
-                      {t.outcome === "allowed" ? "✓ Allowed · پذیرفته شد" : "✕ Dismissed · رد شد"}
+                      {t.outcome === "allowed" ? L("✓ پذیرفته شد", "✓ Allowed") : L("✕ رد شد", "✕ Dismissed")}
                     </span>
                   )}
                   {Object.entries(((ws[topicKey(t)] || {}).materials) || {}).map(([k, m]) => MATERIAL_BADGE[k] && (
-                    <span key={"m" + k} title={MATERIAL_BADGE[k][1]} style={{ color: "#fff", background: MATERIAL_BADGE[k][2], borderRadius: 99, padding: "1px 8px", fontWeight: 700 }}>
-                      {MATERIAL_BADGE[k][0]}
+                    <span key={"m" + k} title={L(MATERIAL_BADGE[k][1])} style={{ color: "#fff", background: MATERIAL_BADGE[k][2], borderRadius: 99, padding: "1px 8px", fontWeight: 700 }}>
+                      {L(MATERIAL_BADGE[k][0])}
                       {k === "carousel" && m && m.count ? " " + m.count : ""}
-                      {k === "carousel" && m && m.sent && m.sent.public ? " · 📢 published" : ""}
+                      {k === "carousel" && m && m.sent && m.sent.public ? L(" · 📢 منتشر شد", " · 📢 published") : ""}
                       {k === "story" && m && m.count > 1 ? " " + m.count : ""}
                     </span>
                   ))}
                   {t.evergreen && (
-                    <span title={"Evergreen idea" + (t.signals && t.signals.length ? " — " + t.signals.join(" · ") : "")} style={{ color: "#8a5a00", background: alpha("#f5a623", 0.16), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>💡 {t.format || "idea"}</span>
+                    <span title={L("ایدهٔ همیشگی", "Evergreen idea") + (t.signals && t.signals.length ? " — " + t.signals.join(" · ") : "")} style={{ color: "#8a5a00", background: alpha("#f5a623", 0.16), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>💡 {t.format || L("ایده", "idea")}</span>
                   )}
                   {(t.focus || []).map((k) => (
-                    <span key={k} style={{ color: "#b42318", background: alpha("#f04438", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>{FOCUS_LABEL[k] || k}</span>
+                    <span key={k} style={{ color: "#b42318", background: alpha("#f04438", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>{FOCUS_LABEL[k] ? L(FOCUS_LABEL[k]) : k}</span>
                   ))}
                   {t.social === "instagram" && (
-                    <span title="From a creator's Instagram post — check the claim before scripting" style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>📸 @{t.author}</span>
+                    <span title={L("از پست اینستاگرام یک تولیدکننده — قبل از نوشتن اسکریپت ادعا رو چک کن", "From a creator's Instagram post — check the claim before scripting")} style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>📸 @{t.author}</span>
                   )}
                   <span style={{ color: scoreColor, background: alpha(scoreColor === C.text2 ? C.text : scoreColor, 0.12), borderRadius: 6, padding: "1px 6px", fontWeight: 700 }}>{score}</span>
                 </div>
@@ -1662,8 +1666,8 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   <button
                     className="ui-btn"
                     onClick={() => togglePin(t)}
-                    aria-label={pins[topicKey(t)] ? "Unpin topic" : "Pin topic to the top"}
-                    title={pins[topicKey(t)] ? "برداشتن سنجاق" : "سنجاق به بالای فهرست"}
+                    aria-label={pins[topicKey(t)] ? L("برداشتن سنجاق", "Unpin topic") : L("سنجاق به بالای فهرست", "Pin topic to the top")}
+                    title={pins[topicKey(t)] ? L("برداشتن سنجاق", "Unpin topic") : L("سنجاق به بالای فهرست", "Pin topic to the top")}
                     style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${pins[topicKey(t)] ? alpha(C.orange, 0.6) : C.line}`, background: pins[topicKey(t)] ? alpha(C.orange, 0.12) : "transparent", color: pins[topicKey(t)] ? C.orange : C.text3, display: "grid", placeItems: "center", cursor: "pointer", padding: 0 }}
                   >
                     {pins[topicKey(t)] ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />}
@@ -1671,20 +1675,20 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 )}
                 {st === "pending" && (
                   <div style={{ display: "flex", gap: 6 }}>
-                    {smallBtn(<Check size={16} aria-hidden />, () => onApprove(t), "primary", "Approve topic")}
-                    {smallBtn(<X size={16} aria-hidden />, () => onReject(t), "danger", "Reject topic")}
+                    {smallBtn(<Check size={16} aria-hidden />, () => onApprove(t), "primary", L("تأیید موضوع", "Approve topic"))}
+                    {smallBtn(<X size={16} aria-hidden />, () => onReject(t), "danger", L("رد موضوع", "Reject topic"))}
                   </div>
                 )}
                 {st === "approved" && (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    {openBtn(t, job && job.status === "running" ? "باز کن ⏳" : "باز کن ✓")}
+                    {openBtn(t, job && job.status === "running" ? L("باز کن ⏳", "Open ⏳") : L("باز کن ✓", "Open ✓"))}
                     {job && job.status === "running" && (
-                      <span className="ui-pulse" style={{ fontSize: 11, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>در حال نوشتن…</span>
+                      <span className="ui-pulse" style={{ fontSize: 11, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>{L("در حال نوشتن…", "Writing…")}</span>
                     )}
-                    {job && job.status === "error" && smallBtn("⚠ دوباره", () => onRetry(t), "danger", "Retry")}
+                    {job && job.status === "error" && smallBtn(L("⚠ دوباره", "⚠ Retry"), () => onRetry(t), "danger", L("دوباره", "Retry"))}
                   </div>
                 )}
-                {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", "Restore topic")}
+                {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", L("برگردوندن موضوع", "Restore topic"))}
               </div>
             </div>
           );
@@ -1694,7 +1698,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   );
 }
 
-const FOCUS_LABEL = { iran: "⭐ Iran", study: "⭐ Study permit", startup: "⭐ Start-up Visa" };
+const FOCUS_LABEL = { iran: ["⭐ ایران", "⭐ Iran"], study: ["⭐ مجوز تحصیل", "⭐ Study permit"], startup: ["⭐ استارتاپ ویزا", "⭐ Start-up Visa"] };
 
 // The newsletter section: a card for every item of a Lexbase issue, policy
 // notes and court decisions alike, with the standing priorities (Iran, study
@@ -1704,10 +1708,10 @@ const FOCUS_LABEL = { iran: "⭐ Iran", study: "⭐ Study permit", startup: "⭐
 // platform and show at once; the server adds what is new.
 const LEX_KEY = "sugimoto_lexbase_v2";
 const LEX_GROUPS = [
-  ["all", "همه", () => true],
-  ["focus", "⭐ اولویت‌ها", (t) => (t.focus || []).length > 0],
-  ["policy", "📋 فکت‌ها و سیاست‌ها", (t) => t.kind !== "court"],
-  ["court", "⚖️ پرونده‌های دادگاه", (t) => t.kind === "court"],
+  ["all", ["همه", "All"], () => true],
+  ["focus", ["⭐ اولویت‌ها", "⭐ Priorities"], (t) => (t.focus || []).length > 0],
+  ["policy", ["📋 فکت‌ها و سیاست‌ها", "📋 Facts and policy"], (t) => t.kind !== "court"],
+  ["court", ["⚖️ پرونده‌های دادگاه", "⚖️ Court cases"], (t) => t.kind === "court"],
 ];
 
 function loadLexArchive() {
@@ -1826,37 +1830,37 @@ function LexbaseSection({ decisions, ...actions }) {
         </div>
       )}
 
-      <div dir="rtl" className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#6d5bd0", 0.3)}`, background: alpha("#6d5bd0", 0.06), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
+      <div dir={uiDir()} className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#6d5bd0", 0.3)}`, background: alpha("#6d5bd0", 0.06), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
         {iss && iss.total != null ? (
           <>
             <b>📬 {iss.subject || "Lexbase " + iss.key}</b>
             <br />
-            {iss.policy} فکت و سیاست · {iss.court} پرونده‌ی دادگاه · {iss.priority} مورد اولویت‌دار (ایران، مجوز تحصیل، استارتاپ ویزا)
+            {L(`${iss.policy} فکت و سیاست · ${iss.court} پروندهٔ دادگاه · ${iss.priority} مورد اولویت‌دار (ایران، مجوز تحصیل، استارتاپ ویزا)`, `${iss.policy} facts and policy · ${iss.court} court cases · ${iss.priority} priority items (Iran, study permits, Start-up Visa)`)}
             {writing && cards.length < iss.total ? (
               <div className="ui-pulse" style={{ color: "#6d5bd0", fontWeight: 700 }}>
-                ⏳ {cards.length} از {iss.total} موضوع نوشته شده…
+                ⏳ {L(`${cards.length} از ${iss.total} موضوع نوشته شده…`, `${cards.length} of ${iss.total} topics written…`)}
               </div>
             ) : null}
           </>
         ) : iss ? (
-          <span className="ui-pulse">⏳ <b>{iss.subject}</b> — در حال خواندن این شماره… (اولین بار حدود یک دقیقه)</span>
+          <span className="ui-pulse">⏳ <b>{iss.subject}</b> — {L("در حال خواندن این شماره… (اولین بار حدود یک دقیقه)", "Reading this issue… (about a minute the first time)")}</span>
         ) : data && data.pending ? (
-          <span className="ui-pulse">⏳ در حال خواندن خبرنامه از ایمیل…</span>
+          <span className="ui-pulse">⏳ {L("در حال خواندن خبرنامه از ایمیل…", "Reading the newsletter from email…")}</span>
         ) : data ? (
-          <span>هیچ شماره‌ای از Lexbase در ایمیل پیدا نشد. {data.mailbox}</span>
+          <span>{L("هیچ شماره‌ای از Lexbase در ایمیل پیدا نشد.", "No Lexbase issue found in the mailbox.")} {data.mailbox}</span>
         ) : (
-          <span className="ui-pulse">⏳ در حال بارگذاری…</span>
+          <span className="ui-pulse">⏳ {L("در حال بارگذاری…", "Loading…")}</span>
         )}
         {err && <div dir="ltr" style={{ fontSize: 11, color: C.reject, textAlign: "left" }}>{err}</div>}
       </div>
 
       {cards.length > 0 && (
-        <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+        <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
           {LEX_GROUPS.map(([k, label, test]) => {
             const on = group === k;
             return (
               <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                {label}
+                {L(label)}
                 <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{visible.filter(test).length}</span>
               </button>
             );
@@ -1882,12 +1886,12 @@ function LexbaseSection({ decisions, ...actions }) {
 // grounded on an official page. Batches are made on the server about weekly
 // and kept for everyone; the button asks for a new batch now.
 const IDEA_GROUPS = [
-  ["all", "همه", () => true],
-  ["study", "🎓 تحصیل", (t) => t.subject === "study" || t.subject === "pgwp"],
-  ["work", "🛂 کار", (t) => t.subject === "work"],
-  ["family", "👪 خانواده", (t) => t.subject === "family"],
-  ["pr", "⚡ اقامت و شهروندی", (t) => ["express", "pnp", "citizenship", "suv"].includes(t.subject)],
-  ["other", "🌐 ویزا و پرونده", (t) => ["visit", "refusal"].includes(t.subject)],
+  ["all", ["همه", "All"], () => true],
+  ["study", ["🎓 تحصیل", "🎓 Study"], (t) => t.subject === "study" || t.subject === "pgwp"],
+  ["work", ["🛂 کار", "🛂 Work"], (t) => t.subject === "work"],
+  ["family", ["👪 خانواده", "👪 Family"], (t) => t.subject === "family"],
+  ["pr", ["⚡ اقامت و شهروندی", "⚡ PR and citizenship"], (t) => ["express", "pnp", "citizenship", "suv"].includes(t.subject)],
+  ["other", ["🌐 ویزا و پرونده", "🌐 Visas and files"], (t) => ["visit", "refusal"].includes(t.subject)],
 ];
 
 // The last ideas seen on this device show at once; the server's answer
@@ -1947,7 +1951,7 @@ function IdeasSection({ decisions, ...actions }) {
   }, [asking]);
 
   const refresh = async () => {
-    if (!window.confirm("Ask for a new batch of ideas now? (one model call, a few cents)")) return;
+    if (!window.confirm(L("الان یه دستهٔ تازه ایده بسازه؟ (یک بار صدا زدن مدل، چند سنت)", "Ask for a new batch of ideas now? (one model call, a few cents)"))) return;
     setAsking(true);
     try {
       const r = await fetch("/api/ideas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh: true }) });
@@ -1964,34 +1968,37 @@ function IdeasSection({ decisions, ...actions }) {
 
   return (
     <div>
-      <div dir="rtl" className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#f5a623", 0.45)}`, background: alpha("#f5a623", 0.07), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
-        <b>💡 ایده‌های همیشگی</b> — سؤال‌هایی که مردم همیشه می‌پرسند، نه خبر.
+      <div dir={uiDir()} className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#f5a623", 0.45)}`, background: alpha("#f5a623", 0.07), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
+        <b>💡 {L("ایده‌های همیشگی", "Evergreen ideas")}</b> — {L("سؤال‌هایی که مردم همیشه می‌پرسند، نه خبر.", "Questions people keep asking, not news.")}
         {sig ? (
           <div style={{ color: C.text2 }}>
-            منبع ایده‌ها: {sig.google} جست‌وجوی گوگل و یوتیوب (فارسی و انگلیسی) · {sig.helpcentre} سؤال مرکز راهنمای اداره مهاجرت کانادا · {sig.reddit} پرسش ردیت · مقایسه با {sig.covered} مطلب سایت · برداشت {when(sig.at)}
-            {sig.pages < sig.pagesTotal ? ` · ${sig.pages} از ${sig.pagesTotal} صفحهٔ رسمی آماده` : ""}
+            {L(
+              `منبع ایده‌ها: ${sig.google} جست‌وجوی گوگل و یوتیوب (فارسی و انگلیسی) · ${sig.helpcentre} سؤال مرکز راهنمای اداره مهاجرت کانادا · ${sig.reddit} پرسش ردیت · مقایسه با ${sig.covered} مطلب سایت · برداشت ${when(sig.at)}`,
+              `Sources: ${sig.google} Google and YouTube searches (Persian and English) · ${sig.helpcentre} IRCC Help Centre questions · ${sig.reddit} Reddit questions · compared with ${sig.covered} site posts · harvested ${when(sig.at)}`
+            )}
+            {sig.pages < sig.pagesTotal ? L(` · ${sig.pages} از ${sig.pagesTotal} صفحهٔ رسمی آماده`, ` · ${sig.pages} of ${sig.pagesTotal} official pages ready`) : ""}
           </div>
         ) : data ? (
-          <div style={{ color: C.orangeDeep }}>هنوز سیگنالی برداشت نشده؛ بعد از اولین اجرای روزانهٔ برداشت‌کننده ایده‌ها ساخته می‌شود.</div>
+          <div style={{ color: C.orangeDeep }}>{L("هنوز سیگنالی برداشت نشده؛ بعد از اولین اجرای روزانهٔ برداشت‌کننده ایده‌ها ساخته می‌شود.", "No signals harvested yet; ideas are made after the first daily harvest.")}</div>
         ) : null}
-        {data && data.generating && <div className="ui-pulse" style={{ color: "#8a5a00", fontWeight: 700 }}>⏳ در حال ساختن ایده‌های تازه… (حدود یک دقیقه)</div>}
+        {data && data.generating && <div className="ui-pulse" style={{ color: "#8a5a00", fontWeight: 700 }}>⏳ {L("در حال ساختن ایده‌های تازه… (حدود یک دقیقه)", "Making new ideas… (about a minute)")}</div>}
         {data && data.error && !data.generating && <div dir="ltr" style={{ fontSize: 11, color: C.reject, textAlign: "left" }}>{data.error}</div>}
         {err && <div dir="ltr" style={{ fontSize: 11, color: C.reject, textAlign: "left" }}>{err}</div>}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-          {data && data.generatedAt && <span style={{ color: C.text3, fontSize: 11.5 }}>آخرین دسته: {when(data.generatedAt)}</span>}
+          {data && data.generatedAt && <span style={{ color: C.text3, fontSize: 11.5 }}>{L("آخرین دسته: ", "Last batch: ")}{when(data.generatedAt)}</span>}
           <button className="ui-btn" disabled={asking || (data && data.generating) || !sig} onClick={refresh} style={{ ...font, padding: "5px 11px", borderRadius: 99, cursor: "pointer", border: `1px solid ${alpha("#f5a623", 0.6)}`, background: C.surface, color: "#8a5a00", fontSize: 12, fontWeight: 700, opacity: asking || (data && data.generating) || !sig ? 0.5 : 1 }}>
-            ✨ ایده‌های تازه
+            ✨ {L("ایده‌های تازه", "New ideas")}
           </button>
         </div>
       </div>
 
       {ideas.length > 0 && (
-        <div dir="rtl" style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+        <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
           {IDEA_GROUPS.map(([k, label, test]) => {
             const on = group === k;
             return (
               <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                {label}
+                {L(label)}
                 <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{ideas.filter(test).length}</span>
               </button>
             );
@@ -2008,8 +2015,8 @@ function IdeasSection({ decisions, ...actions }) {
       ) : ideas.length ? (
         <IdeasList topics={rows} decisions={decisions} plain {...actions} />
       ) : (
-        <div dir="rtl" className="ui-glass" style={{ ...font, textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontSize: 13 }}>
-          هنوز ایده‌ای ساخته نشده.
+        <div dir={uiDir()} className="ui-glass" style={{ ...font, textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontSize: 13 }}>
+          {L("هنوز ایده‌ای ساخته نشده.", "No ideas made yet.")}
         </div>
       )}
     </div>
@@ -2079,22 +2086,22 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
   const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontSize: 13, lineHeight: 1.7, resize: "vertical", background: C.surface };
 
   return (
-    <div dir="rtl" className="ui-glass" style={{ marginBottom: 12, borderRadius: 14, border: `1px solid ${alpha(C.teal, 0.35)}`, background: alpha(C.teal, 0.05), fontFamily: fa }}>
+    <div dir={uiDir()} className="ui-glass" style={{ marginBottom: 12, borderRadius: 14, border: `1px solid ${alpha(C.teal, 0.35)}`, background: alpha(C.teal, 0.05), fontFamily: fa }}>
       <button
         className="ui-btn"
         onClick={() => setOpen((v) => !v)}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 13px", background: "transparent", border: "none", cursor: "pointer", fontFamily: fa, fontSize: 13.5, fontWeight: 800, color: C.text }}
       >
-        <span>🔗 ساخت خبر از لینک‌ها و عکس‌های خودت</span>
-        <span style={{ color: C.text3, fontSize: 12 }}>{running ? "⏳ در حال ساخت…" : open ? "▲" : "▼"}</span>
+        <span>🔗 {L("ساخت خبر از لینک‌ها و عکس‌های خودت", "Make news from your own links and pictures")}</span>
+        <span style={{ color: C.text3, fontSize: 12 }}>{running ? L("⏳ در حال ساخت…", "⏳ Making…") : open ? "▲" : "▼"}</span>
       </button>
       {(open || running || failed || done) && (
         <div style={{ padding: "0 13px 13px" }}>
           {!running && (
             <>
-              <div style={{ fontSize: 12, color: C.text2, marginBottom: 6 }}>لینک‌ها (هر لینک در یک خط، حداکثر ۵)</div>
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 6 }}>{L("لینک‌ها (هر لینک در یک خط، حداکثر ۵)", "Links (one per line, up to 5)")}</div>
               <textarea dir="ltr" value={links} onChange={(e) => setLinks(e.target.value)} rows={3} placeholder={"https://www.canada.ca/…\nhttps://www.cicnews.com/…"} style={{ ...field, fontFamily: "'Geist', monospace", fontSize: 12.5 }} />
-              <div style={{ fontSize: 12, color: C.text2, margin: "10px 0 6px" }}>عکس‌ها (اسکرین‌شات خبر، نامه، پست — حداکثر ۵)</div>
+              <div style={{ fontSize: 12, color: C.text2, margin: "10px 0 6px" }}>{L("عکس‌ها (اسکرین‌شات خبر، نامه، پست — حداکثر ۵)", "Pictures (screenshots of news, letters, posts — up to 5)")}</div>
               <div
                 onDragOver={(e) => {
                   e.preventDefault();
@@ -2117,7 +2124,7 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
                       <div key={i} style={{ position: "relative", width: 72, height: 72, borderRadius: 9, overflow: "hidden", border: `1px solid ${C.line}` }}>
                         <img src={im.data} alt={im.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                         <button
-                          aria-label="Remove picture"
+                          aria-label={L("حذف عکس", "Remove picture")}
                           onClick={(e) => {
                             e.stopPropagation();
                             setImages((prev) => prev.filter((_, j) => j !== i));
@@ -2133,38 +2140,41 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
                     )}
                   </div>
                 ) : (
-                  <>🖼 عکس‌ها را اینجا بکشید و رها کنید، بزنید تا انتخاب کنید، یا Ctrl+V</>
+                  <>🖼 {L("عکس‌ها رو اینجا بکش و رها کن، بزن تا انتخاب کنی، یا Ctrl+V", "Drop pictures here, tap to choose, or Ctrl+V")}</>
                 )}
                 <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
               </div>
-              <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>متن داخل عکس‌ها کلمه‌به‌کلمه خوانده می‌شود و خبر فقط از همان نوشته می‌شود.</div>
-              <div style={{ fontSize: 12, color: C.text2, margin: "8px 0 6px" }}>یادداشت (اختیاری) — زاویه و تأکید؛ فکت‌ها فقط از خود لینک‌ها می‌آیند</div>
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="مثلاً: روی اثرش برای دانشجوهای ایرانی تمرکز کن، تاریخ اجرا را برجسته کن…" style={{ ...field, fontFamily: fa }} />
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{L("متن داخل عکس‌ها کلمه‌به‌کلمه خوانده می‌شود و خبر فقط از همان نوشته می‌شود.", "The text in the pictures is read word for word, and the news is written only from it.")}</div>
+              <div style={{ fontSize: 12, color: C.text2, margin: "8px 0 6px" }}>{L("یادداشت (اختیاری) — زاویه و تأکید؛ فکت‌ها فقط از خود لینک‌ها می‌آیند", "Note (optional) — angle and emphasis; facts come only from the links themselves")}</div>
+              <textarea dir="auto" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={L("مثلاً: روی اثرش برای دانشجوهای ایرانی تمرکز کن، تاریخ اجرا را برجسته کن…", "e.g. focus on what it means for Iranian students, highlight the start date…")} style={{ ...field, fontFamily: fa }} />
               <button
                 className="ui-btn ui-glow-orange"
                 disabled={!ready}
                 onClick={() => onStart(links, note.trim(), images)}
                 style={{ marginTop: 10, width: "100%", background: ready ? C.teal : alpha(C.teal, 0.4), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", fontFamily: fa }}
               >
-                ساخت خبر از {[count ? `${count} لینک` : "", images.length ? `${images.length} عکس` : ""].filter(Boolean).join(" و ") || "لینک یا عکس"}
+                {L(
+                  "ساخت خبر از " + ([count ? `${count} لینک` : "", images.length ? `${images.length} عکس` : ""].filter(Boolean).join(" و ") || "لینک یا عکس"),
+                  "Make news from " + ([count ? `${count} link${count > 1 ? "s" : ""}` : "", images.length ? `${images.length} picture${images.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ") || "links or pictures")
+                )}
               </button>
             </>
           )}
           {running && (
             <div className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(C.teal, 0.08), fontSize: 13 }}>
-              <span className="ui-pulse">⏳</span> در حال خواندن صفحه‌ها و عکس‌ها و نوشتن خبر… می‌تونی از این صفحه بری.
+              <span className="ui-pulse">⏳</span> {L("در حال خواندن صفحه‌ها و عکس‌ها و نوشتن خبر… می‌تونی از این صفحه بری.", "Reading the pages and pictures and writing the news… You can leave this page.")}
             </div>
           )}
           {failed && !running && <div dir="ltr" style={{ marginTop: 8, fontSize: 12, color: C.reject, textAlign: "left" }}>⚠️ {failed}</div>}
           {done && !running && (
             <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: alpha(C.success, 0.08), border: `1px solid ${alpha(C.success, 0.3)}`, fontSize: 13 }}>
-              ✓ خبر ساخته شد و به فهرست اضافه شد:{" "}
+              ✓ {L("خبر ساخته شد و به فهرست اضافه شد:", "The news was made and added to the list:")}{" "}
               <a href={"/?t=" + encodeURIComponent(topicKey(job.result.topic))} onClick={(e) => { e.preventDefault(); onOpen(job.result.topic); }} style={{ color: C.teal, fontWeight: 700 }}>
                 {job.result.topic.title_fa}
               </a>
               {(job.result.skipped || []).length > 0 && (
                 <div dir="ltr" style={{ marginTop: 6, fontSize: 11.5, color: C.orangeDeep, textAlign: "left" }}>
-                  Not used: {job.result.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
+                  {L("استفاده نشد: ", "Not used: ")}{job.result.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
                 </div>
               )}
             </div>
@@ -2196,47 +2206,48 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
   const btn = (on) => ({ flex: 1, minWidth: 150, background: on ? tone : alpha(tone, 0.35), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 13.5, cursor: on ? "pointer" : "default", fontFamily: fa });
   const ideas = job && job.status === "running" ? null : job && job.result;
   return (
-    <div dir="rtl" className="ui-glass" style={{ marginBottom: 12, borderRadius: 14, border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.05), fontFamily: fa }}>
+    <div dir={uiDir()} className="ui-glass" style={{ marginBottom: 12, borderRadius: 14, border: `1px solid ${alpha(tone, 0.35)}`, background: alpha(tone, 0.05), fontFamily: fa }}>
       <button
         className="ui-btn"
         onClick={() => setOpen((v) => !v)}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 13px", background: "transparent", border: "none", cursor: "pointer", fontFamily: fa, fontSize: 13.5, fontWeight: 800, color: C.text }}
       >
-        <span>🔎 تحقیق روی ایده یا موضوع</span>
-        <span style={{ color: C.text3, fontSize: 12 }}>{running ? "⏳ در حال تحقیق…" : open ? "▲" : "▼"}</span>
+        <span>🔎 {L("تحقیق روی ایده یا موضوع", "Research an idea or subject")}</span>
+        <span style={{ color: C.text3, fontSize: 12 }}>{running ? L("⏳ در حال تحقیق…", "⏳ Researching…") : open ? "▲" : "▼"}</span>
       </button>
       {(open || running || failed || done) && (
         <div style={{ padding: "0 13px 13px" }}>
           {!running && (
             <>
-              <div style={{ fontSize: 12, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>ایده‌ای که به ذهنت رسیده، یا موضوعی که می‌خوای براش ایده‌ی پست پیدا بشه. خالی بذاری، از موضوع‌های همیشگی ما می‌گرده.</div>
+              <div style={{ fontSize: 12, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>{L("ایده‌ای که به ذهنت رسیده، یا موضوعی که می‌خوای براش ایده‌ی پست پیدا بشه. خالی بذاری، از موضوع‌های همیشگی ما می‌گرده.", "An idea you had, or a subject to find post ideas for. Left empty, it searches our standing subjects.")}</div>
               <textarea
+                dir="auto"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 rows={3}
-                placeholder="مثلاً: ویزای همراه برای همسر دانشجو هنوز ممکنه؟ — یا: اسپانسرشیپ والدین"
+                placeholder={L("مثلاً: ویزای همراه برای همسر دانشجو هنوز ممکنه؟ — یا: اسپانسرشیپ والدین", "e.g. Can a student's spouse still get an open work permit? — or: parent sponsorship")}
                 style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontSize: 13, lineHeight: 1.7, resize: "vertical", background: C.surface, fontFamily: fa }}
               />
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                 <button className="ui-btn" disabled={q.trim().length < 4} onClick={() => onStart("idea", q.trim())} style={btn(q.trim().length >= 4)}>
-                  تحقیق روی این ایده
+                  {L("تحقیق روی این ایده", "Research this idea")}
                 </button>
                 <button className="ui-btn" onClick={() => onStart("ideas", q.trim())} style={btn(true)}>
-                  {q.trim() ? "ایده‌های تازه در این موضوع" : "ایده‌های تازه (موضوع‌های همیشگی)"}
+                  {q.trim() ? L("ایده‌های تازه در این موضوع", "New ideas on this subject") : L("ایده‌های تازه (موضوع‌های همیشگی)", "New ideas (standing subjects)")}
                 </button>
               </div>
-              <div style={{ fontSize: 11, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>جستجو فقط صفحه‌ها رو پیدا می‌کنه؛ هر کارت فقط از متن همون صفحه‌ها نوشته می‌شه. ایده‌های تازه: تا ۶ کارت.</div>
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("جستجو فقط صفحه‌ها رو پیدا می‌کنه؛ هر کارت فقط از متن همون صفحه‌ها نوشته می‌شه. ایده‌های تازه: تا ۶ کارت.", "The search only finds pages; each card is written only from their text. New ideas: up to 6 cards.")}</div>
             </>
           )}
           {running && (
             <div className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(tone, 0.08), fontSize: 13 }}>
-              <span className="ui-pulse">⏳</span> در حال جستجو، خواندن صفحه‌ها و نوشتن کارت… می‌تونی از این صفحه بری.
+              <span className="ui-pulse">⏳</span> {L("در حال جستجو، خواندن صفحه‌ها و نوشتن کارت… می‌تونی از این صفحه بری.", "Searching, reading pages and writing cards… You can leave this page.")}
             </div>
           )}
           {failed && !running && <div dir="ltr" style={{ marginTop: 8, fontSize: 12, color: C.reject, textAlign: "left" }}>⚠️ {failed}</div>}
           {done && !running && ideas && (
             <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: alpha(C.success, 0.08), border: `1px solid ${alpha(C.success, 0.3)}`, fontSize: 13, lineHeight: 1.8 }}>
-              ✓ {ideas.topics.length > 1 ? `${ideas.topics.length} کارت ساخته شد و به فهرست اضافه شد:` : "کارت ساخته شد و به فهرست اضافه شد:"}
+              ✓ {ideas.topics.length > 1 ? L(`${ideas.topics.length} کارت ساخته شد و به فهرست اضافه شد:`, `${ideas.topics.length} cards made and added to the list:`) : L("کارت ساخته شد و به فهرست اضافه شد:", "Card made and added to the list:")}
               {ideas.topics.map((t) => (
                 <div key={topicKey(t)}>
                   •{" "}
@@ -2247,7 +2258,7 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
               ))}
               {(ideas.skipped || []).length > 0 && (
                 <div dir="ltr" style={{ marginTop: 6, fontSize: 11.5, color: C.orangeDeep, textAlign: "left" }}>
-                  Not used: {ideas.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
+                  {L("استفاده نشد: ", "Not used: ")}{ideas.skipped.map((x) => x.url + " (" + x.error + ")").join("; ")}
                 </div>
               )}
             </div>
@@ -2262,7 +2273,7 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
 // already moved on from. Tap a finished one to open it.
 function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
   if (!rows.length) return null;
-  const KIND = { script: "سناریو", article: "مقاله", carousel: "کاروسل", video: "ویدیو انگلیسی" };
+  const KIND = { script: L("اسکریپت", "script"), article: L("مقاله", "article"), carousel: L("کاروسل", "carousel"), video: L("ویدیو انگلیسی", "English video") };
   return (
     // Pinned under the header so a finished or failed job is seen wherever
     // you are on the page.
@@ -2275,7 +2286,7 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
         return (
           <div
             key={j.key + ":" + j.kind}
-            dir="rtl"
+            dir={uiDir()}
             className={"ui-glass ui-fade" + (running ? " ui-progress" : "")}
             style={{
               display: "flex", alignItems: "center", gap: 10, padding: "9px 10px 9px 12px", borderRadius: 14,
@@ -2292,8 +2303,8 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, color: tone }}>
                 {running
-                  ? writing ? "سناریوها تقریباً آماده‌اند…" : j.kind === "video" ? "در حال ارسال به ورک‌فلوی ویدیو…" : `در حال نوشتن ${KIND[j.kind]}…`
-                  : failed ? `${KIND[j.kind]} نشد` : j.kind === "video" ? "ویدیو درخواست شد" : `${KIND[j.kind]} آماده است`}
+                  ? writing ? L("اسکریپت‌ها تقریباً آماده‌اند…", "Scripts are almost ready…") : j.kind === "video" ? L("در حال ارسال به ورک‌فلوی ویدیو…", "Sending to the video workflow…") : L(`در حال نوشتن ${KIND[j.kind]}…`, `Writing the ${KIND[j.kind]}…`)
+                  : failed ? L(`${KIND[j.kind]} نشد`, `The ${KIND[j.kind]} failed`) : j.kind === "video" ? L("ویدیو درخواست شد", "Video requested") : L(`${KIND[j.kind]} آماده است`, `The ${KIND[j.kind]} is ready`)}
               </div>
               <div style={{ color: C.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {j.topic.title_fa || j.topic.title_en}
@@ -2301,16 +2312,16 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
             </div>
             {!running && !failed && (
               <button className="ui-btn" onClick={() => onOpen(j)} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
-                باز کن
+                {L("باز کن", "Open")}
               </button>
             )}
             {failed && (
               <button className="ui-btn" onClick={() => onRetry(j)} style={{ background: "transparent", color: C.text, border: `1px solid ${alpha(C.reject, 0.5)}`, borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
-                دوباره
+                {L("دوباره", "Retry")}
               </button>
             )}
             {!running && (
-              <button className="ui-btn" onClick={() => onDismiss(j)} aria-label="close" style={{ background: "transparent", color: C.text3, border: "none", fontSize: 18, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
+              <button className="ui-btn" onClick={() => onDismiss(j)} aria-label={L("بستن", "Close")} style={{ background: "transparent", color: C.text3, border: "none", fontSize: 18, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
                 ×
               </button>
             )}
@@ -2345,13 +2356,13 @@ function DeckWhy({ stats }) {
   const ago = (iso) => {
     const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
     if (!Number.isFinite(m)) return "";
-    return m < 90 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+    return m < 90 ? L(`${m} دقیقه پیش`, `${m} min ago`) : L(`${Math.round(m / 60)} ساعت پیش`, `${Math.round(m / 60)} h ago`);
   };
   const src = stats.harvest
-    ? `harvested ${ago(stats.harvest.at)}`
+    ? L(`برداشت ${ago(stats.harvest.at)}`, `harvested ${ago(stats.harvest.at)}`)
     : stats.liveFetch && !stats.liveFetch.failed
-      ? `live: ${stats.liveFetch.feedsOk}/${stats.liveFetch.feedsTotal} feeds`
-      : "no source reachable";
+      ? L(`زنده: ${stats.liveFetch.feedsOk}/${stats.liveFetch.feedsTotal} فید`, `live: ${stats.liveFetch.feedsOk}/${stats.liveFetch.feedsTotal} feeds`)
+      : L("هیچ منبعی در دسترس نیست", "no source reachable");
   const full = (stats.written || 0) - (stats.headlineOnly || 0);
   const row = (k, v) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -2360,27 +2371,27 @@ function DeckWhy({ stats }) {
     </div>
   );
   return (
-    <details className="ui-glass" style={{ fontSize: 11.5, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif", marginBottom: 12, direction: "ltr", border: `1px solid ${C.line}`, borderRadius: 12, padding: "8px 12px" }}>
+    <details className="ui-glass" style={{ fontSize: 11.5, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif", marginBottom: 12, direction: uiDir(), border: `1px solid ${C.line}`, borderRadius: 12, padding: "8px 12px" }}>
       <summary style={{ cursor: "pointer", listStyle: "none", display: "flex", alignItems: "center", gap: 8 }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: "50%", background: C.success, boxShadow: `0 0 0 3px ${alpha(C.success, 0.2)}`, flexShrink: 0 }} />
         <span style={{ flex: 1 }}>
-          <b style={{ color: C.text }}>{stats.eligible ?? 0}</b> fresh topics · <b style={{ color: C.text }}>{stats.written ?? 0}</b> cards ({full} full text) · {src}
+          <b style={{ color: C.text }}>{stats.eligible ?? 0}</b> {L("موضوع تازه", "fresh topics")} · <b style={{ color: C.text }}>{stats.written ?? 0}</b> {L(`کارت (${full} با متن کامل)`, `cards (${full} full text)`)} · {src}
         </span>
         <span aria-hidden style={{ color: C.text3 }}>▾</span>
       </summary>
       <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, display: "grid", gap: 3 }}>
-        {row("Articles in pool", stats.pool ?? 0)}
-        {row("…of which Instagram posts", stats.socialPosts ?? 0)}
-        {row("…of which Lexbase items", stats.newsletterItems ?? 0)}
-        {row("Already approved or rejected", stats.alreadyUsed ?? 0)}
-        {row("Already has a card (not written again)", stats.alreadyShown ?? 0)}
-        {row("Off-topic or draw results", stats.offTopic ?? 0)}
-        {row("Untrusted sources dropped", stats.untrusted ?? 0)}
-        {row("Same story, other outlet", stats.duplicateStories ?? 0)}
-        {row("Fresh candidates", stats.eligible ?? 0)}
-        {row("Chosen by the editor model", stats.selected ?? 0)}
-        {row("Cards written", stats.written ?? 0)}
-        {row("…headline only (check source)", stats.headlineOnly ?? 0)}
+        {row(L("خبرهای موجود در مخزن", "Articles in pool"), stats.pool ?? 0)}
+        {row(L("…از این‌ها پست اینستاگرام", "…of which Instagram posts"), stats.socialPosts ?? 0)}
+        {row(L("…از این‌ها مورد Lexbase", "…of which Lexbase items"), stats.newsletterItems ?? 0)}
+        {row(L("قبلاً تأیید یا رد شده", "Already approved or rejected"), stats.alreadyUsed ?? 0)}
+        {row(L("قبلاً کارت داره (دوباره نوشته نمی‌شه)", "Already has a card (not written again)"), stats.alreadyShown ?? 0)}
+        {row(L("بی‌ربط یا نتیجهٔ قرعه‌کشی", "Off-topic or draw results"), stats.offTopic ?? 0)}
+        {row(L("منابع نامعتبر کنار گذاشته شد", "Untrusted sources dropped"), stats.untrusted ?? 0)}
+        {row(L("همون خبر، رسانهٔ دیگه", "Same story, other outlet"), stats.duplicateStories ?? 0)}
+        {row(L("گزینه‌های تازه", "Fresh candidates"), stats.eligible ?? 0)}
+        {row(L("انتخاب‌شده توسط مدل ویراستار", "Chosen by the editor model"), stats.selected ?? 0)}
+        {row(L("کارت‌های نوشته‌شده", "Cards written"), stats.written ?? 0)}
+        {row(L("…فقط تیتر (منبع رو چک کن)", "…headline only (check source)"), stats.headlineOnly ?? 0)}
       </div>
     </details>
   );
@@ -2482,15 +2493,15 @@ function OriginalText({ topic }) {
   };
   const copyBtn = (k, text) => (
     <button className="ui-btn" onClick={() => copy(k, text)} style={{ background: copied === k ? C.success : alpha(C.orange, 0.14), color: copied === k ? "#06281c" : C.orange, border: `1px solid ${copied === k ? C.success : alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "'Geist', sans-serif" }}>
-      {copied === k ? "Copied ✓" : "Copy"}
+      {copied === k ? L("کپی شد ✓", "Copied ✓") : L("کپی", "Copy")}
     </button>
   );
-  const label = { lexbase: "Lexbase newsletter — this item", article: "Source article", snippet: "Source excerpt" }[state.kind] || "Source";
+  const label = L({ lexbase: ["خبرنامهٔ Lexbase — همین مورد", "Lexbase newsletter — this item"], article: ["خبر منبع", "Source article"], snippet: ["بخشی از منبع", "Source excerpt"] }[state.kind] || ["منبع", "Source"]);
   const isLex = state.kind === "lexbase" || topic.newsletter === "lexbase";
   const body = { fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" };
 
   if (state.loading) {
-    return <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, padding: "30px 0", textAlign: "center" }}>Loading the original text…</div>;
+    return <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, padding: "30px 0", textAlign: "center" }}>{L("در حال بارگذاری متن اصلی…", "Loading the original text…")}</div>;
   }
   return (
     <div dir="ltr">
@@ -2513,17 +2524,17 @@ function OriginalText({ topic }) {
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: `1px solid ${C.line}` }}>
           {!whole ? (
             <button className="ui-btn" onClick={loadWhole} style={{ width: "100%", padding: "11px", borderRadius: 12, border: `1px solid ${alpha("#6d5bd0", 0.4)}`, background: alpha("#6d5bd0", 0.08), color: "#6d5bd0", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
-              📬 Show the whole newsletter
+              📬 {L("نمایش کل خبرنامه", "Show the whole newsletter")}
             </button>
           ) : whole.loading ? (
-            <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, textAlign: "center" }}>Loading the whole newsletter…</div>
+            <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, textAlign: "center" }}>{L("در حال بارگذاری کل خبرنامه…", "Loading the whole newsletter…")}</div>
           ) : whole.error ? (
             <div style={{ fontSize: 13, color: C.reject }}>{whole.error}</div>
           ) : (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Whole newsletter
+                  {L("کل خبرنامه", "Whole newsletter")}
                   <div style={{ textTransform: "none", letterSpacing: 0, color: C.text2, fontWeight: 600, marginTop: 2 }}>{whole.title}</div>
                 </div>
                 {copyBtn("whole", whole.text)}
@@ -2554,7 +2565,8 @@ const FONT = "'Geist', 'Vazirmatn', sans-serif";
 const FA_FONT = "'Vazirmatn', sans-serif";
 
 // A titled block on the topic page.
-function Section({ title, hint, children, innerRef, dir = "rtl" }) {
+function Section({ title, hint, children, innerRef, dir }) {
+  dir = dir || uiDir();
   return (
     <section ref={innerRef} style={{ marginTop: 18, scrollMarginTop: 90 }}>
       {title && (
@@ -2582,20 +2594,20 @@ function AppMenu({ me, ax, navBtn, onSignOut }) {
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
   const items = [
-    (!me || ax.includes("calendar")) && ["/calendar", "📅", "Content calendar"],
-    (!me || ax.includes("editing")) && ["/editing", "🎬", "Video Editing"],
-    ax.includes("team") && ["/editing/team", "👥", "Team · who can open what"],
-    me && ["/editing/password", "🔑", "Change password"],
+    (!me || ax.includes("calendar")) && ["/calendar", "📅", L("تقویم محتوا", "Content calendar")],
+    (!me || ax.includes("editing")) && ["/editing", "🎬", L("تدوین ویدیو", "Video Editing")],
+    ax.includes("team") && ["/editing/team", "👥", L("تیم · چه کسی به چه چیزی دسترسی داره", "Team · who can open what")],
+    me && ["/editing/password", "🔑", L("تغییر رمز عبور", "Change password")],
   ].filter(Boolean);
-  const row = { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, color: C.text, textDecoration: "none", fontSize: 14, fontWeight: 600, fontFamily: FONT, background: "none", border: "none", width: "100%", cursor: "pointer", textAlign: "left" };
+  const row = { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, color: C.text, textDecoration: "none", fontSize: 14, fontWeight: 600, fontFamily: FONT, background: "none", border: "none", width: "100%", cursor: "pointer", textAlign: "start" };
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="ui-btn" onClick={() => setOpen((o) => !o)} aria-label="Apps and account" title="Calendar, Video Editing, Team" style={{ ...navBtn, fontWeight: 800, color: me ? C.orange : C.text }}>
+      <button className="ui-btn" onClick={() => setOpen((o) => !o)} aria-label={L("بخش‌ها و حساب", "Apps and account")} title={L("تقویم، تدوین ویدیو، تیم", "Calendar, Video Editing, Team")} style={{ ...navBtn, fontWeight: 800, color: me ? C.orange : C.text }}>
         {me ? String(me.name || "?").trim().charAt(0).toUpperCase() : "☰"}
       </button>
       {open && (
-        <div role="menu" style={{ position: "absolute", right: 0, top: 44, zIndex: 50, minWidth: 230, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 12px 32px rgba(16,24,40,0.16)", padding: 6, direction: "ltr" }}>
-          {me && <div style={{ padding: "8px 12px 10px", fontSize: 12.5, color: C.text3, borderBottom: `1px solid ${C.line}`, marginBottom: 4, fontFamily: FONT }}>Signed in as <b style={{ color: C.text }}>{me.name}</b></div>}
+        <div role="menu" style={{ position: "absolute", right: 0, top: 44, zIndex: 50, minWidth: 230, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: "0 12px 32px rgba(16,24,40,0.16)", padding: 6, direction: uiDir() }}>
+          {me && <div style={{ padding: "8px 12px 10px", fontSize: 12.5, color: C.text3, borderBottom: `1px solid ${C.line}`, marginBottom: 4, fontFamily: FONT }}>{L("وارد شده به‌عنوان ", "Signed in as ")}<b style={{ color: C.text }}>{me.name}</b></div>}
           {items.map(([href, icon, label]) => (
             <a key={href} href={href} role="menuitem" style={row}>
               <span style={{ width: 20, textAlign: "center" }}>{icon}</span>
@@ -2605,7 +2617,7 @@ function AppMenu({ me, ax, navBtn, onSignOut }) {
           {me && (
             <button role="menuitem" onClick={onSignOut} style={{ ...row, color: C.reject }}>
               <span style={{ width: 20, textAlign: "center" }}>↩</span>
-              Sign out
+              {L("خروج", "Sign out")}
             </button>
           )}
         </div>
@@ -2631,7 +2643,7 @@ function ActionTile({ icon, title, sub, tone, status, onClick, disabled }) {
         <span aria-hidden style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", background: alpha(tone, 0.13), fontSize: 18, flexShrink: 0 }}>{icon}</span>
         <span style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.25 }}>{title}</span>
       </div>
-      <div dir="rtl" style={{ fontFamily: FA_FONT, fontSize: 11.5, color: C.text2, lineHeight: 1.6, textAlign: "right" }}>{sub}</div>
+      <div dir={uiDir()} style={{ fontFamily: FA_FONT, fontSize: 11.5, color: C.text2, lineHeight: 1.6, textAlign: isFa() ? "right" : "left" }}>{sub}</div>
       <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: s.tone || C.text3 }}>
         <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: s.tone || C.text3, flexShrink: 0 }} className={s.running ? "ui-pulse" : ""} />
         <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</span>
@@ -2779,70 +2791,70 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
   const tiles = [
     caps.publishing !== false && {
-      k: "telegram", icon: <Send size={18} />, title: "Telegram post", tone: C.teal,
-      sub: "ویرایش همین‌جا، با تصویر، ارسال به @sugimotovisa",
+      k: "telegram", icon: <Send size={18} />, title: L("پست تلگرام", "Telegram post"), tone: C.teal,
+      sub: L("ویرایش همین‌جا، با تصویر، ارسال به @sugimotovisa", "Edit here, with a picture, send to @sugimotovisa"),
       onClick: openTelegram,
       status:
-        tgRunning ? { label: tgJob.kind === "telegram_send" ? "Sending…" : tgJob.kind === "telegram_image" ? "Drawing…" : tgJob.kind === "telegram_save" ? "Saving…" : "Writing…", tone: C.orange, running: true }
-        : tgPost && tgPost.sent && tgPost.sent_to === "public" ? { label: "Sent · " + when(tgPost.sent), tone: C.success, done: true }
-        : tgPost && tgPost.text ? { label: "Ready to edit", tone: C.success, done: true }
-        : tgJob && tgJob.status === "error" ? { label: "Failed — tap to retry", tone: C.reject }
-        : { label: "Not made", tone: C.text3 },
+        tgRunning ? { label: tgJob.kind === "telegram_send" ? L("در حال ارسال…", "Sending…") : tgJob.kind === "telegram_image" ? L("در حال کشیدن…", "Drawing…") : tgJob.kind === "telegram_save" ? L("در حال ذخیره…", "Saving…") : L("در حال نوشتن…", "Writing…"), tone: C.orange, running: true }
+        : tgPost && tgPost.sent && tgPost.sent_to === "public" ? { label: L("ارسال شد · ", "Sent · ") + when(tgPost.sent), tone: C.success, done: true }
+        : tgPost && tgPost.text ? { label: L("آمادهٔ ویرایش", "Ready to edit"), tone: C.success, done: true }
+        : tgJob && tgJob.status === "error" ? { label: L("نشد — بزن تا دوباره", "Failed — tap to retry"), tone: C.reject }
+        : { label: L("ساخته نشده", "Not made"), tone: C.text3 },
     },
     {
-      k: "article", icon: <FileText size={18} />, title: "Blog article", tone: "#0e8a99",
-      sub: "مقاله سئو برای سایت + پیش‌نویس وردپرس",
+      k: "article", icon: <FileText size={18} />, title: L("مقالهٔ وبلاگ", "Blog article"), tone: "#0e8a99",
+      sub: L("مقالهٔ سئو برای سایت + پیش‌نویس وردپرس", "SEO article for the site + WordPress draft"),
       onClick: () => {
         if (artState === "idle" || artState === "error") generateArticle();
         reveal(articleRef);
       },
       status:
-        artState === "generating" ? { label: "Writing…", tone: C.orange, running: true }
-        : artState === "ready" ? { label: pubState === "done" ? "Draft on the site" : "Ready", tone: C.success, done: true }
-        : artState === "error" ? { label: "Failed — tap to retry", tone: C.reject }
-        : { label: "Not made", tone: C.text3 },
+        artState === "generating" ? { label: L("در حال نوشتن…", "Writing…"), tone: C.orange, running: true }
+        : artState === "ready" ? { label: pubState === "done" ? L("پیش‌نویس روی سایت", "Draft on the site") : L("آماده", "Ready"), tone: C.success, done: true }
+        : artState === "error" ? { label: L("نشد — بزن تا دوباره", "Failed — tap to retry"), tone: C.reject }
+        : { label: L("ساخته نشده", "Not made"), tone: C.text3 },
     },
     {
-      k: "carousel", icon: <GalleryHorizontal size={18} />, title: "Carousel post", tone: "#6d5bd0",
-      sub: "اسلایدهای اینستاگرام با تصویر",
+      k: "carousel", icon: <GalleryHorizontal size={18} />, title: L("پست کاروسل", "Carousel post"), tone: "#6d5bd0",
+      sub: L("اسلایدهای اینستاگرام با تصویر", "Instagram slides with pictures"),
       onClick: () => {
         if (!slides.length && !carRunning) setCarouselOpen((n) => n + 1);
         reveal(carouselRef);
       },
       status:
-        carRunning ? { label: (carouselJob.result && carouselJob.result.stage === "drawing") ? "Drawing slides…" : "Writing slides…", tone: C.orange, running: true }
-        : slides.length ? { label: slides.length + " slides" + (carousel.sent && carousel.sent.public ? " · published" : ""), tone: C.success, done: true }
-        : carouselJob && carouselJob.status === "error" ? { label: "Failed", tone: C.reject }
-        : { label: "Not made", tone: C.text3 },
+        carRunning ? { label: (carouselJob.result && carouselJob.result.stage === "drawing") ? L("در حال کشیدن اسلایدها…", "Drawing slides…") : L("در حال نوشتن اسلایدها…", "Writing slides…"), tone: C.orange, running: true }
+        : slides.length ? { label: L(`${slides.length} اسلاید`, `${slides.length} slides`) + (carousel.sent && carousel.sent.public ? L(" · منتشر شد", " · published") : ""), tone: C.success, done: true }
+        : carouselJob && carouselJob.status === "error" ? { label: L("نشد", "Failed"), tone: C.reject }
+        : { label: L("ساخته نشده", "Not made"), tone: C.text3 },
     },
     {
-      k: "story", icon: <Smartphone size={18} />, title: "Story", tone: "#c2410c",
-      sub: "استوری فکت با اسکرین‌شات از منبع اصلی",
+      k: "story", icon: <Smartphone size={18} />, title: L("استوری", "Story"), tone: "#c2410c",
+      sub: L("استوری فکت با اسکرین‌شات از منبع اصلی", "Fact story with a screenshot of the original source"),
       onClick: () => {
         if (!storyPages.length && !stRunning) setStoryOpen((n) => n + 1);
         reveal(storyRef);
       },
       status:
-        stRunning ? { label: stStage === "screenshots" ? "Taking screenshots…" : stStage === "drawing" ? "Drawing…" : "Writing…", tone: C.orange, running: true }
-        : storyPages.length ? { label: (storyPages.length === 1 ? "1 page" : storyPages.length + " pages") + (story.sent && story.sent.public ? " · published" : ""), tone: C.success, done: true }
-        : storyJob && storyJob.status === "error" ? { label: "Failed", tone: C.reject }
-        : caps.story === false ? { label: "HCTI not set", tone: C.text3 }
-        : { label: "Not made", tone: C.text3 },
+        stRunning ? { label: stStage === "screenshots" ? L("در حال گرفتن اسکرین‌شات…", "Taking screenshots…") : stStage === "drawing" ? L("در حال کشیدن…", "Drawing…") : L("در حال نوشتن…", "Writing…"), tone: C.orange, running: true }
+        : storyPages.length ? { label: (storyPages.length === 1 ? L("۱ صفحه", "1 page") : L(`${storyPages.length} صفحه`, `${storyPages.length} pages`)) + (story.sent && story.sent.public ? L(" · منتشر شد", " · published") : ""), tone: C.success, done: true }
+        : storyJob && storyJob.status === "error" ? { label: L("نشد", "Failed"), tone: C.reject }
+        : caps.story === false ? { label: L("مرورگر سرور آماده نیست", "No browser on the server"), tone: C.text3 }
+        : { label: L("ساخته نشده", "Not made"), tone: C.text3 },
     },
     {
-      k: "video", icon: <Clapperboard size={18} />, title: "English video", tone: C.orangeDeep,
-      sub: "ویدیوی آواتار HeyGen از اسکریپت انگلیسی",
+      k: "video", icon: <Clapperboard size={18} />, title: L("ویدیوی انگلیسی", "English video"), tone: C.orangeDeep,
+      sub: L("ویدیوی آواتار HeyGen از اسکریپت انگلیسی", "HeyGen avatar video from the English script"),
       disabled: !hasScripts,
       onClick: () => setComposer(true),
       status:
-        !hasScripts ? { label: "Write the scripts first", tone: C.text3 }
-        : vStatus === "sending" ? { label: "Sending…", tone: C.orange, running: true }
-        : vStatus === "requested" ? { label: "Requested", tone: C.orange, running: true }
-        : vStatus === "rendering" ? { label: "Rendering…", tone: C.orange, running: true }
-        : vStatus === "done" ? { label: "Ready to watch", tone: C.success, done: true }
-        : vStatus === "failed" || vStatus === "error" ? { label: "Failed", tone: C.reject }
-        : !caps.video ? { label: "Workflow not connected", tone: C.text3 }
-        : { label: "Not made", tone: C.text3 },
+        !hasScripts ? { label: L("اول اسکریپت‌ها رو بنویس", "Write the scripts first"), tone: C.text3 }
+        : vStatus === "sending" ? { label: L("در حال ارسال…", "Sending…"), tone: C.orange, running: true }
+        : vStatus === "requested" ? { label: L("درخواست شد", "Requested"), tone: C.orange, running: true }
+        : vStatus === "rendering" ? { label: L("در حال ساخت ویدیو…", "Rendering…"), tone: C.orange, running: true }
+        : vStatus === "done" ? { label: L("آمادهٔ تماشا", "Ready to watch"), tone: C.success, done: true }
+        : vStatus === "failed" || vStatus === "error" ? { label: L("نشد", "Failed"), tone: C.reject }
+        : !caps.video ? { label: L("ورک‌فلو وصل نیست", "Workflow not connected"), tone: C.text3 }
+        : { label: L("ساخته نشده", "Not made"), tone: C.text3 },
     },
   ];
 
@@ -2852,16 +2864,16 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
   return (
     <div style={{ width: "100%", maxWidth: 640, flex: 1, display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <BackBtn onClick={onBack} label="All topics" />
+        <BackBtn onClick={onBack} label={L("همهٔ موضوع‌ها", "All topics")} />
       </div>
 
       {/* The topic */}
       <div className="ui-fade" style={{ ...card, position: "relative", overflow: "hidden", borderRadius: 22, padding: "16px 18px 16px", background: `linear-gradient(165deg, ${alpha(f.color, 0.13)} 0%, ${C.surface} 58%)` }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
           <span style={pill(alpha(f.color, 0.16), C.ink)}>{f.label}</span>
-          <span style={pill(C.surface, topic.page === "EU" ? C.slate : C.orangeDeep)}>{topic.page === "EU" ? "🇪🇺 Europe" : "🇨🇦 Canada"}</span>
+          <span style={pill(C.surface, topic.page === "EU" ? C.slate : C.orangeDeep)}>{topic.page === "EU" ? L("🇪🇺 اروپا", "🇪🇺 Europe") : L("🇨🇦 کانادا", "🇨🇦 Canada")}</span>
           {formatNewsDate(topic.date) && <span style={pill(C.surface, C.text2)}>📅 {formatNewsDate(topic.date)}</span>}
-          {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 Explainer</span>}
+          {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 {L("توضیحی", "Explainer")}</span>}
         </div>
         <div dir="rtl" style={{ fontFamily: FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "right", lineHeight: 1.65, unicodeBidi: "plaintext" }}>
           {topic.title_fa || topic.title_en}
@@ -2888,15 +2900,15 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       </div>
 
       {/* Scripts and the original text */}
-      <Section title="سناریو و متن اصلی">
+      <Section title={L("اسکریپت و متن اصلی", "Script and original text")}>
         <div className="ui-fade" style={{ ...card, padding: 14, minHeight: 260 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <Segmented value={tab} onChange={setTab} items={[["fa", "فارسی", FA_FONT], ["en", "English"], ["src", "متن اصلی", FA_FONT]]} />
+              <Segmented value={tab} onChange={setTab} items={[["fa", "فارسی", FA_FONT], ["en", "English"], ["src", L("متن اصلی", "Original"), FA_FONT]]} />
             </div>
             {tab !== "src" && active && !loading && !(tab === "en" && (enInFarsi || enRunning)) && (
               <button className="ui-btn" onClick={() => onCopy(tab)} style={{ ...smallBtn(copied === tab ? C.success : C.orange), flexShrink: 0 }}>
-                {copied === tab ? "Copied ✓" : "Copy"}
+                {copied === tab ? L("کپی شد ✓", "Copied ✓") : L("کپی", "Copy")}
               </button>
             )}
           </div>
@@ -2906,46 +2918,46 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
           ) : loading ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 220, gap: 14 }}>
               <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
-              <div style={{ fontFamily: FA_FONT, fontSize: 13, color: C.text2, direction: "rtl" }}>{loadingText || "در حال نوشتن سناریوی فارسی و انگلیسی…"}</div>
+              <div style={{ fontFamily: FA_FONT, fontSize: 13, color: C.text2, direction: uiDir() }}>{loadingText || L("در حال نوشتن اسکریپت فارسی و انگلیسی…", "Writing the Persian and English scripts…")}</div>
             </div>
           ) : error ? (
-            <div dir="rtl" style={{ fontFamily: FA_FONT, fontSize: 13.5, color: C.reject, textAlign: "right" }}>
+            <div dir={uiDir()} style={{ fontFamily: FA_FONT, fontSize: 13.5, color: C.reject, textAlign: isFa() ? "right" : "left" }}>
               {error}
               {onWrite && (
                 <div style={{ marginTop: 14 }}>
                   <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "11px 18px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: FA_FONT }}>
-                    ↻ دوباره بنویس
+                    ↻ {L("دوباره بنویس", "Write again")}
                   </button>
                 </div>
               )}
             </div>
           ) : !hasScripts ? (
             // Opened before approval: read the original first, then write.
-            <div dir="rtl" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 200, fontFamily: FA_FONT, textAlign: "center" }}>
-              <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.8 }}>هنوز سناریویی برای این موضوع نوشته نشده.<br />متن خبر در «متن اصلی» هست.</div>
+            <div dir={uiDir()} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, minHeight: 200, fontFamily: FA_FONT, textAlign: "center" }}>
+              <div style={{ fontSize: 13, color: C.text2, lineHeight: 1.8 }}>{L("هنوز اسکریپتی برای این موضوع نوشته نشده.", "No script has been written for this topic yet.")}<br />{L("متن خبر در «متن اصلی» هست.", "The news text is under “Original”.")}</div>
               {onWrite && (
                 <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: FA_FONT }}>
-                  ✍️ نوشتن سناریو (فارسی و انگلیسی)
+                  ✍️ {L("نوشتن اسکریپت (فارسی و انگلیسی)", "Write the scripts (Persian and English)")}
                 </button>
               )}
             </div>
           ) : tab === "en" && (enRunning || enInFarsi || !scripts.en) ? (
             // The English script is missing, came back in Persian, or is
             // being rewritten: say so instead of showing Persian as English.
-            <div dir="ltr" style={{ fontFamily: FONT }}>
+            <div dir={uiDir()} style={{ fontFamily: FONT }}>
               {enRunning ? (
                 <div className="ui-progress" style={{ padding: "12px 14px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, fontSize: 13 }}>
-                  <span className="ui-pulse">⏳</span> Writing the English script…
+                  <span className="ui-pulse">⏳</span> {L("در حال نوشتن اسکریپت انگلیسی…", "Writing the English script…")}
                 </div>
               ) : (
                 <div style={{ padding: "12px 14px", borderRadius: 12, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.35)}`, fontSize: 13, lineHeight: 1.6 }}>
-                  <b>{enInFarsi ? "This “English” script came out in Persian." : "The English script is missing."}</b>
+                  <b>{enInFarsi ? L("این اسکریپت «انگلیسی» به فارسی نوشته شده.", "This “English” script came out in Persian.") : L("اسکریپت انگلیسی نیست.", "The English script is missing.")}</b>
                   <div style={{ color: C.text2, marginTop: 2 }}>
-                    Rewrite it in English from the same source text{enInFarsi ? "; the Persian version stays in the Farsi tab" : ""}.
+                    {L("از همون متن منبع به انگلیسی بازنویسی‌اش کن", "Rewrite it in English from the same source text")}{enInFarsi ? L("؛ نسخهٔ فارسی در تب فارسی می‌مونه", "; the Persian version stays in the Farsi tab") : ""}.
                   </div>
                   {(enFailed || (!scripts.en && enError)) && <div style={{ color: C.reject, fontSize: 12, marginTop: 6 }}>⚠️ {enFailed || enError}</div>}
                   <button className="ui-btn ui-glow-orange" onClick={() => onJob("script_en", { script: scripts.en || scripts.fa })} style={{ marginTop: 10, background: C.orange, color: "#fff", border: "none", borderRadius: 10, padding: "9px 14px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    ✍️ Write it in English
+                    ✍️ {L("به انگلیسی بنویس", "Write it in English")}
                   </button>
                 </div>
               )}
@@ -2963,16 +2975,16 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
       {/* What to make from it */}
       {!loading && !error && (
-        <Section title="ساخت از این موضوع" hint="هر کدوم جدا؛ هیچ‌چیز خودکار ارسال نمی‌شه">
+        <Section title={L("ساخت از این موضوع", "Make from this topic")} hint={L("هر کدوم جدا؛ هیچ‌چیز خودکار ارسال نمی‌شه", "Each one separately; nothing is sent automatically")}>
           {/* Chosen before anything is made: the post, article, carousel and story below are
               written in this language, and each language keeps its own versions. */}
           <div style={{ marginBottom: 12 }}>
-            <div dir="rtl" style={{ fontFamily: FA_FONT, fontSize: 12.5, fontWeight: 700, color: C.text2, marginBottom: 6, textAlign: "right" }}>زبان محتوا · Content language</div>
+            <div dir={uiDir()} style={{ fontFamily: FA_FONT, fontSize: 12.5, fontWeight: 700, color: C.text2, marginBottom: 6, textAlign: isFa() ? "right" : "left" }}>{L("زبان محتوا", "Content language")}</div>
             <Segmented value={lang} onChange={setLang} items={[["fa", "فارسی", FA_FONT], ["en", "English"]]} />
-            <div dir={lang === "en" ? "ltr" : "rtl"} style={{ fontFamily: lang === "en" ? FONT : FA_FONT, fontSize: 11.5, color: C.text3, marginTop: 6, textAlign: lang === "en" ? "left" : "right" }}>
+            <div dir={uiDir()} style={{ fontFamily: FA_FONT, fontSize: 11.5, color: C.text3, marginTop: 6, textAlign: isFa() ? "right" : "left" }}>
               {lang === "en"
-                ? "Telegram post, blog article, carousel and story are made in English. The Persian versions stay as they are."
-                : "پست تلگرام، مقاله، کاروسل و استوری به فارسی ساخته می‌شن. نسخه‌های انگلیسی جدا نگه داشته می‌شن."}
+                ? L("پست تلگرام، مقاله، کاروسل و استوری به انگلیسی ساخته می‌شن. نسخه‌های فارسی همون‌طور می‌مونن.", "Telegram post, blog article, carousel and story are made in English. The Persian versions stay as they are.")
+                : L("پست تلگرام، مقاله، کاروسل و استوری به فارسی ساخته می‌شن. نسخه‌های انگلیسی جدا نگه داشته می‌شن.", "Telegram post, blog article, carousel and story are made in Persian. The English versions are kept apart.")}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
@@ -2990,17 +3002,17 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
       {/* Blog article */}
       {!loading && !error && artState !== "idle" && (
-        <Section title={lang === "en" ? "مقاله وبلاگ · English" : "مقاله وبلاگ"} innerRef={articleRef}>
+        <Section title={L("مقالهٔ وبلاگ", "Blog article") + (lang === "en" ? L(" · انگلیسی", " · English") : "")} innerRef={articleRef}>
           {artState === "generating" && (
-            <div dir="rtl" className="ui-progress" style={{ ...card, padding: "12px 14px", fontFamily: FA_FONT, fontSize: 13 }}>
-              <span className="ui-pulse">⏳</span> در حال نوشتن مقاله…
-              <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+            <div dir={uiDir()} className="ui-progress" style={{ ...card, padding: "12px 14px", fontFamily: FA_FONT, fontSize: 13 }}>
+              <span className="ui-pulse">⏳</span> {L("در حال نوشتن مقاله…", "Writing the article…")}
+              <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>{L("می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.", "You can leave this page; the work carries on on the server.")}</div>
             </div>
           )}
           {artState === "error" && (
             <div style={{ ...card, padding: 12, textAlign: "center" }}>
               <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr", fontFamily: FONT, marginBottom: 8 }}>{artMsg}</div>
-              <button className="ui-btn" onClick={generateArticle} style={smallBtn(C.teal)}>دوباره امتحان کن</button>
+              <button className="ui-btn" onClick={generateArticle} style={smallBtn(C.teal)}>{L("دوباره امتحان کن", "Try again")}</button>
             </div>
           )}
 
@@ -3018,7 +3030,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
               <div style={{ ...card, padding: "16px 18px" }}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10, fontSize: 11, fontFamily: FONT }}>
                   {article.focus_keyword && <span dir="rtl" style={{ background: alpha(C.teal, 0.14), color: C.teal, borderRadius: 99, padding: "3px 10px", fontFamily: FA_FONT, fontWeight: 600 }}>🔑 {article.focus_keyword}</span>}
-                  {!article.parse_ok && <span style={{ color: C.orange }}>⚠️ خروجی ناقص — قبل از انتشار بررسی کن</span>}
+                  {!article.parse_ok && <span dir={uiDir()} style={{ color: C.orange }}>⚠️ {L("خروجی ناقص — قبل از انتشار بررسی کن", "Incomplete output — check before publishing")}</span>}
                 </div>
                 <div style={{ maxHeight: 360, overflowY: "auto" }}>
                   <div dir={article.lang === "en" ? "ltr" : "rtl"} style={{ fontFamily: article.lang === "en" ? FONT : FA_FONT, fontWeight: 800, fontSize: 18, color: C.ink, lineHeight: 1.6, marginBottom: 10, unicodeBidi: "plaintext" }}>
@@ -3044,7 +3056,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                     opacity: pubState === "publishing" ? 0.6 : 1, fontFamily: FONT,
                   }}
                 >
-                  {pubState === "publishing" ? "در حال ساخت پیش‌نویس…" : pubState === "error" ? "دوباره امتحان کن — انتشار پیش‌نویس" : "⬆ انتشار پیش‌نویس در سایت (Publish draft)"}
+                  {pubState === "publishing" ? L("در حال ساخت پیش‌نویس…", "Making the draft…") : pubState === "error" ? L("دوباره امتحان کن — انتشار پیش‌نویس", "Try again — publish draft") : L("⬆ انتشار پیش‌نویس در سایت", "⬆ Publish draft to the site")}
                 </button>
               ) : (
                 <a
@@ -3056,7 +3068,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
                     borderRadius: 12, padding: "13px", fontWeight: 700, fontSize: 14, textDecoration: "none", fontFamily: FONT,
                   }}
                 >
-                  ✓ پیش‌نویس ساخته شد — ویرایش در وردپرس ↗
+                  ✓ {L("پیش‌نویس ساخته شد — ویرایش در وردپرس", "Draft made — edit in WordPress")} ↗
                 </a>
               )}
               {pubState === "error" && (
@@ -3066,7 +3078,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
               {/* Word file — generated in the app, no Google account needed. */}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button className="ui-btn" onClick={downloadDoc} style={{ ...smallBtn(C.teal), flex: 1, padding: "11px", color: C.text }}>
-                  {docState === "downloaded" ? "دانلود شد ✓" : "📄 دانلود فایل Word"}
+                  {docState === "downloaded" ? L("دانلود شد ✓", "Downloaded ✓") : L("📄 دانلود فایل Word", "📄 Download Word file")}
                 </button>
 
               </div>
@@ -3075,7 +3087,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
               )}
 
               <button className="ui-btn" onClick={generateArticle} style={{ width: "100%", marginTop: 6, background: "transparent", color: C.text2, border: "none", cursor: "pointer", fontSize: 12, fontFamily: FONT, padding: 8 }}>
-                ↻ بازنویسی مقاله
+                ↻ {L("بازنویسی مقاله", "Rewrite the article")}
               </button>
             </div>
           )}
@@ -3098,7 +3110,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
       {/* English video */}
       {!loading && !error && (videoJob || video) && (
-        <Section title="ویدیوی انگلیسی" innerRef={videoRef}>
+        <Section title={L("ویدیوی انگلیسی", "English video")} innerRef={videoRef}>
           <VideoPanel job={videoJob} video={video} onRefresh={onRefreshVideo} onOpen={() => setComposer(true)} />
         </Section>
       )}
@@ -3142,7 +3154,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         className="ui-btn"
         style={{ display: "block", width: "100%", boxSizing: "border-box", textAlign: "center", marginTop: 22, background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 14, padding: "12px", fontWeight: 600, fontSize: 13.5, cursor: "pointer", fontFamily: FONT }}
       >
-        ← All topics
+        ← {L("همهٔ موضوع‌ها", "All topics")}
       </button>
     </div>
   );
@@ -3209,7 +3221,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
   const start = (textOnly) => {
-    if (slides.length && !window.confirm("A new carousel replaces the current one. Continue?")) return;
+    if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
     setForm(false);
     onJob("carousel", { count, notes: notes.trim(), template, ...(textOnly ? { mode: "text" } : {}) });
   };
@@ -3231,12 +3243,12 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 
   if (!slides.length && !running && !form && !failed) return null;
   return (
-    <Section title={lang === "en" ? "پست کاروسل · English" : "پست کاروسل"}>
+    <Section title={L("پست کاروسل", "Carousel post") + (lang === "en" ? L(" · انگلیسی", " · English") : "")}>
 
       {form && !running && (
-        <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
-          <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>🖼 کاروسل از این موضوع</div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تعداد اسلاید</div>
+        <div dir={uiDir()} className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
+          <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>🖼 {L("کاروسل از این موضوع", "Carousel from this topic")}</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("تعداد اسلاید", "Number of slides")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
             {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
               <button key={n} className="ui-btn" onClick={() => setCount(n)} style={{ minWidth: 38, height: 34, borderRadius: 10, cursor: "pointer", border: `1px solid ${count === n ? "#6d5bd0" : C.line}`, background: count === n ? alpha("#6d5bd0", 0.14) : C.surface, color: count === n ? "#6d5bd0" : C.text, fontWeight: 700, fontFamily: font }}>
@@ -3244,44 +3256,48 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>یادداشت‌ها (اختیاری)</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
           <textarea
+            dir="auto"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="مثلاً: روی دانشجوها تمرکز کن، اسلاید مقایسه نذار، رنگ‌ها روشن باشه…"
+            placeholder={L("مثلاً: روی دانشجوها تمرکز کن، اسلاید مقایسه نذار، رنگ‌ها روشن باشه…", "e.g. focus on students, no comparison slide, keep the colours light…")}
             style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
           />
           <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px" }}>
-            متن اسلایدها فقط از متن خبر نوشته می‌شه و هر اسلاید با GPT Image 2 طراحی می‌شه (حدود ۵ سنت برای هر اسلاید، چند دقیقه طول می‌کشه). «نوشتن متن» اول فقط متن رو می‌نویسه تا تیتر و بدنهٔ هر اسلاید رو عوض کنی، بعد طراحی می‌شه.
+            {L(
+              "متن اسلایدها فقط از متن خبر نوشته می‌شه و هر اسلاید با GPT Image 2 طراحی می‌شه (حدود ۵ سنت برای هر اسلاید، چند دقیقه طول می‌کشه). «نوشتن متن» اول فقط متن رو می‌نویسه تا تیتر و بدنهٔ هر اسلاید رو عوض کنی، بعد طراحی می‌شه.",
+              "The slide text is written only from the news text and each slide is designed with GPT Image 2 (about 5 cents a slide, takes a few minutes). “Write the text” writes only the text first, so you can change each slide's heading and body before it is designed."
+            )}
           </div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تمپلت اسلایدها</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("قالب اسلایدها", "Slide template")}</div>
           <TemplatePicker value={template} onChange={setTemplate} font={fa} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="ui-btn" onClick={() => start(true)} disabled={!caps.carousel} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
-              ✍️ نوشتن متن {count} اسلاید
+              ✍️ {L(`نوشتن متن ${count} اسلاید`, `Write the text of ${count} slides`)}
             </button>
             <button className="ui-btn ui-glow-orange" onClick={() => start(false)} disabled={!caps.carousel} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
-              ساخت {count} اسلاید
+              {L(`ساخت ${count} اسلاید`, `Make ${count} slides`)}
             </button>
             <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
-              انصراف
+              {L("انصراف", "Cancel")}
             </button>
           </div>
         </div>
       )}
 
       {running && (
-        <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha("#6d5bd0", 0.08), border: `1px solid ${alpha("#6d5bd0", 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
+        <div dir={uiDir()} className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha("#6d5bd0", 0.08), border: `1px solid ${alpha("#6d5bd0", 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span>{" "}
           {mode === "save"
-            ? "در حال ذخیره…"
+            ? L("در حال ذخیره…", "Saving…")
             : stage === "writing"
-            ? "در حال نوشتن متن اسلایدها…"
+            ? L("در حال نوشتن متن اسلایدها…", "Writing the slide text…")
             : slides.length
-              ? `در حال طراحی اسلایدها… ${drawn} از ${slides.length}`
-              : "در حال طراحی اسلاید…"}
-          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+              ? L(`در حال طراحی اسلایدها… ${drawn} از ${slides.length}`, `Designing the slides… ${drawn} of ${slides.length}`)
+              : L("در حال طراحی اسلاید…", "Designing the slide…")}
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>{L("می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.", "You can leave this page; the work carries on on the server.")}</div>
         </div>
       )}
       {failed && !running && (
@@ -3308,20 +3324,20 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
 
       {slides.length > 0 && !(isDraft && !running) && !textOpen && (
         <div>
-          <div dir="rtl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
-            <b style={{ fontSize: 14.5 }}>🖼 کاروسل · {slides.length} اسلاید</b>
+          <div dir={uiDir()} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
+            <b style={{ fontSize: 14.5 }}>🖼 {L(`کاروسل · ${slides.length} اسلاید`, `Carousel · ${slides.length} slides`)}</b>
             {!running && (
               <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                 {drawn > 0 && (
                   <button className="ui-btn" onClick={() => downloadSlides(slides, topic)} style={{ background: alpha(C.teal, 0.1), border: `1px solid ${alpha(C.teal, 0.4)}`, borderRadius: 9, padding: "5px 10px", color: C.text, cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
-                    ⬇ دانلود همه ({drawn})
+                    ⬇ {L(`دانلود همه (${drawn})`, `Download all (${drawn})`)}
                   </button>
                 )}
                 <button className="ui-btn" onClick={() => setTextOpen(true)} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 9, padding: "5px 10px", color: "#6d5bd0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
-                  ✍️ متن اسلایدها
+                  ✍️ {L("متن اسلایدها", "Slide text")}
                 </button>
                 <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
-                  ↻ از نو (بدون نسخه قبلی)
+                  ↻ {L("از نو (بدون نسخهٔ قبلی)", "Start over (without the last version)")}
                 </button>
               </span>
             )}
@@ -3330,26 +3346,26 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
             {slides.map((sl) => (
               <div key={sl.num} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
                 {sl.image_url ? (
-                  <button onClick={() => setPreview(sl.num)} aria-label={"Preview slide " + sl.num} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
-                    <img src={sl.image_url} alt={"Slide " + sl.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover", background: C.surfaceHi }} />
+                  <button onClick={() => setPreview(sl.num)} aria-label={L("پیش‌نمایش اسلاید ", "Preview slide ") + sl.num} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
+                    <img src={sl.image_url} alt={L("اسلاید ", "Slide ") + sl.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover", background: C.surfaceHi }} />
                   </button>
                 ) : (
                   <div className={running ? "ui-skeleton" : ""} style={{ aspectRatio: "4 / 5", display: "grid", placeItems: "center", background: C.surfaceHi, color: C.text3, fontSize: 12, padding: 8, textAlign: "center", fontFamily: font }}>
-                    {running ? "…" : "⚠️ " + (sl.error ? sl.error.slice(0, 80) : "no image")}
+                    {running ? "…" : "⚠️ " + (sl.error ? sl.error.slice(0, 80) : L("بدون تصویر", "no image"))}
                   </div>
                 )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", fontSize: 11.5, fontFamily: font, color: C.text2 }}>
                   <span title={sl.content} style={{ fontWeight: 700 }}>{sl.num}/{slides.length}</span>
                   {busySlide === sl.num ? (
-                    <span className="ui-pulse" style={{ fontSize: 11.5, color: C.orangeDeep }}>⏳ working…</span>
+                    <span className="ui-pulse" style={{ fontSize: 11.5, color: C.orangeDeep }}>⏳ {L("در حال کار…", "working…")}</span>
                   ) : !running && (
                     <span style={{ display: "inline-flex", gap: 4 }}>
                       {sl.image_url && (
-                        <button className="ui-btn" onClick={() => setEditing(sl.num)} title="Change only this slide" aria-label={"Edit slide " + sl.num} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: "#6d5bd0" }}>
+                        <button className="ui-btn" onClick={() => setEditing(sl.num)} title={L("فقط همین اسلاید عوض بشه", "Change only this slide")} aria-label={L("ویرایش اسلاید ", "Edit slide ") + sl.num} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: "#6d5bd0" }}>
                           ✏️
                         </button>
                       )}
-                      <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: sl.num })} title="Draw this slide again from scratch" style={{ background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: C.text2 }}>
+                      <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: sl.num })} title={L("این اسلاید از اول دوباره کشیده بشه", "Draw this slide again from scratch")} style={{ background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "2px 8px", cursor: "pointer", fontSize: 11.5, color: C.text2 }}>
                         ↻
                       </button>
                     </span>
@@ -3363,18 +3379,19 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
           </div>
 
           {slides.some((sl) => sl.kept === "memory") && (
-            <div dir="rtl" style={{ marginTop: 8, fontSize: 11.5, color: C.orangeDeep, fontFamily: fa, lineHeight: 1.7 }}>
-              ⚠️ بعضی تصاویر در وردپرس ذخیره نشدن و فقط تا ری‌استارت بعدی سرور می‌مونن. اگه لازمشون داری دانلودشون کن یا به تلگرام بفرست.
+            <div dir={uiDir()} style={{ marginTop: 8, fontSize: 11.5, color: C.orangeDeep, fontFamily: fa, lineHeight: 1.7 }}>
+              ⚠️ {L("بعضی تصاویر در وردپرس ذخیره نشدن و فقط تا ری‌استارت بعدی سرور می‌مونن. اگه لازمشون داری دانلودشون کن یا به تلگرام بفرست.", "Some pictures were not saved in WordPress and last only until the server's next restart. Download them if you need them.")}
             </div>
           )}
           {!running && (
-            <div dir="rtl" style={{ marginTop: 14, background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 14, padding: 12, fontFamily: fa }}>
-              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6 }}>✏️ یادداشت برای نسخه بعد</div>
+            <div dir={uiDir()} style={{ marginTop: 14, background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 14, padding: 12, fontFamily: fa }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6 }}>✏️ {L("یادداشت برای نسخهٔ بعد", "Note for the next version")}</div>
               <textarea
+                dir="auto"
                 value={revNotes}
                 onChange={(e) => setRevNotes(e.target.value)}
                 rows={3}
-                placeholder="چه چیزی عوض بشه؟ مثلاً: اسلاید ۲ کوتاه‌تر، تیتر اسلاید اول درشت‌تر، عکس واقعی‌تر، رنگ‌ها روشن‌تر…"
+                placeholder={L("چه چیزی عوض بشه؟ مثلاً: اسلاید ۲ کوتاه‌تر، تیتر اسلاید اول درشت‌تر، عکس واقعی‌تر، رنگ‌ها روشن‌تر…", "What should change? e.g. slide 2 shorter, a bigger heading on slide 1, a more real photo, lighter colours…")}
                 style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -3387,9 +3404,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                   }}
                   style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
                 >
-                  ↻ ساخت دوباره با این یادداشت
+                  ↻ {L("ساخت دوباره با این یادداشت", "Make again with this note")}
                 </button>
-                <span style={{ fontSize: 11.5, color: C.text3 }}>نسخه فعلی پایه کار می‌مونه؛ فقط چیزهایی که نوشتی عوض می‌شه.</span>
+                <span style={{ fontSize: 11.5, color: C.text3 }}>{L("نسخهٔ فعلی پایهٔ کار می‌مونه؛ فقط چیزهایی که نوشتی عوض می‌شه.", "The current version stays the base; only what you wrote changes.")}</span>
               </div>
               <LearnToggle on={learnRev} setOn={setLearnRev} />
             </div>
@@ -3397,7 +3414,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
           {preview > 0 && <SlidePreview slides={slides.filter((x) => x.image_url)} start={preview} onClose={() => setPreview(0)} />}
           {editing > 0 && slides.some((x) => x.num === editing) && (
             <EditPictureSheet
-              title={`Slide ${editing} of ${slides.length}`}
+              title={L(`اسلاید ${editing} از ${slides.length}`, `Slide ${editing} of ${slides.length}`)}
               item={slides.find((x) => x.num === editing)}
               text={slides.find((x) => x.num === editing).content}
               ratio="4 / 5"
@@ -3412,17 +3429,17 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
           )}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("carousel_slide", { num: "missing" })} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
-              طراحی {missing} اسلاید باقی‌مانده
+              {L(`طراحی ${missing} اسلاید باقی‌مانده`, `Design the ${missing} remaining slides`)}
             </button>
           )}
 
           {carousel.caption && (
             <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>CAPTION</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>{L("کپشن", "CAPTION")}</span>
                 <span style={{ display: "inline-flex", gap: 6 }}>
                 {!running && !capOpen && (
-                  <button className="ui-btn" onClick={() => { setCapText(carousel.caption); setCapOpen(true); }} title="Edit the caption" aria-label="Edit the caption" style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", fontSize: 11.5, color: "#6d5bd0" }}>
+                  <button className="ui-btn" onClick={() => { setCapText(carousel.caption); setCapOpen(true); }} title={L("ویرایش کپشن", "Edit the caption")} aria-label={L("ویرایش کپشن", "Edit the caption")} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 8, padding: "3px 8px", cursor: "pointer", fontSize: 11.5, color: "#6d5bd0" }}>
                     ✏️
                   </button>
                 )}
@@ -3435,7 +3452,7 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                   }}
                   style={{ background: copiedCap ? C.success : alpha(C.orange, 0.14), color: copiedCap ? "#fff" : C.orange, border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
                 >
-                  {copiedCap ? "Copied ✓" : "Copy"}
+                  {copiedCap ? L("کپی شد ✓", "Copied ✓") : L("کپی", "Copy")}
                 </button>
                 </span>
               </div>
@@ -3443,9 +3460,9 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
                 <div dir={textDir}>
                   <textarea value={capText} onChange={(e) => setCapText(e.target.value)} rows={8} style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, resize: "vertical" }} />
                   <div style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <button className="ui-btn" onClick={saveCaption} disabled={!capText.trim()} style={{ ...btn("#6d5bd0", "#fff", "none"), padding: "7px 14px", opacity: capText.trim() ? 1 : 0.5 }}>ذخیره کپشن</button>
-                    <button className="ui-btn" onClick={() => setCapOpen(false)} style={{ ...btn("transparent", C.text2, `1px solid ${C.line}`), padding: "7px 14px" }}>انصراف</button>
-                    <span style={{ fontSize: 11.5, color: C.text3, fontFamily: fa }}>حداکثر ۳ هشتگ نگه داشته می‌شه.</span>
+                    <button className="ui-btn" onClick={saveCaption} disabled={!capText.trim()} style={{ ...btn("#6d5bd0", "#fff", "none"), padding: "7px 14px", opacity: capText.trim() ? 1 : 0.5 }}>{L("ذخیرهٔ کپشن", "Save caption")}</button>
+                    <button className="ui-btn" onClick={() => setCapOpen(false)} style={{ ...btn("transparent", C.text2, `1px solid ${C.line}`), padding: "7px 14px" }}>{L("انصراف", "Cancel")}</button>
+                    <span dir={uiDir()} style={{ fontSize: 11.5, color: C.text3, fontFamily: fa }}>{L("حداکثر ۳ هشتگ نگه داشته می‌شه.", "At most 3 hashtags are kept.")}</span>
                   </div>
                 </div>
               ) : (
@@ -3475,7 +3492,7 @@ function TemplatePicker({ value, onChange, font }) {
       {TEMPLATES.map((t) => {
         const on = Number(value) === t.id;
         return (
-          <button key={t.id} type="button" className="ui-btn" onClick={() => onChange(t.id)} aria-pressed={on} style={{ textAlign: "right", padding: 8, borderRadius: 12, cursor: "pointer", border: `${on ? 2 : 1}px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.08) : C.surface, fontFamily: font }}>
+          <button key={t.id} type="button" className="ui-btn" onClick={() => onChange(t.id)} aria-pressed={on} style={{ textAlign: "start", padding: 8, borderRadius: 12, cursor: "pointer", border: `${on ? 2 : 1}px solid ${on ? "#6d5bd0" : C.line}`, background: on ? alpha("#6d5bd0", 0.08) : C.surface, fontFamily: font }}>
             {t.cover ? (
               <img src={t.cover} alt="" loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}`, marginBottom: 6, background: t.swatch[0] }} />
             ) : (
@@ -3485,8 +3502,8 @@ function TemplatePicker({ value, onChange, font }) {
                 ))}
               </div>
             )}
-            <div style={{ fontSize: 12, fontWeight: 800, color: on ? "#6d5bd0" : C.text }}>{t.id}. {t.fa}</div>
-            <div style={{ fontSize: 10.5, color: C.text3, direction: "ltr", textAlign: "right" }}>{t.name}</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: on ? "#6d5bd0" : C.text }}>{t.id}. {L(t.fa, t.name)}</div>
+            {isFa() && <div style={{ fontSize: 10.5, color: C.text3, direction: "ltr", textAlign: "right" }}>{t.name}</div>}
           </button>
         );
       })}
@@ -3502,35 +3519,35 @@ function SlideTextEditor({ draft, setDraft, template, setTemplate, caption, setC
   const field = { width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${C.line}`, padding: 9, fontFamily: fa, fontSize: 13, lineHeight: 1.7, background: C.surface, color: C.text };
   const any = draft.some((d) => d.title.trim() || d.body.trim());
   return (
-    <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa, marginBottom: 12 }}>
+    <div dir={uiDir()} className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa, marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <b style={{ fontSize: 14.5 }}>✍️ متن اسلایدها · {draft.length} اسلاید</b>
+        <b style={{ fontSize: 14.5 }}>✍️ {L(`متن اسلایدها · ${draft.length} اسلاید`, `Slide text · ${draft.length} slides`)}</b>
         {onClose && (
           <button className="ui-btn" onClick={onClose} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
-            بستن
+            {L("بستن", "Close")}
           </button>
         )}
       </div>
-      <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10 }}>تیتر و بدنهٔ هر اسلاید رو عوض کن؛ بعد «طراحی» بزن. {drawnBefore ? "فقط اسلایدهایی که متنشون عوض شده دوباره طراحی می‌شن (با تمپلت جدید، همه)." : ""}</div>
+      <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10 }}>{L("تیتر و بدنهٔ هر اسلاید رو عوض کن؛ بعد «طراحی اسلایدها» رو بزن.", "Change each slide's heading and body, then press “Design slides”.")} {drawnBefore ? L("فقط اسلایدهایی که متنشون عوض شده دوباره طراحی می‌شن (با قالب جدید، همه).", "Only slides whose text changed are designed again (all of them with a new template).") : ""}</div>
       {draft.map((d, i) => (
         <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, marginBottom: 8, background: C.surfaceHi }}>
-          <div style={{ fontSize: 11.5, fontWeight: 800, color: "#6d5bd0", marginBottom: 6 }}>اسلاید {i + 1}{i === 0 ? " (کاور)" : i === draft.length - 1 ? " (آخر)" : ""}</div>
-          <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>تیتر</div>
-          <input value={d.title} onChange={(e) => set(i, "title", e.target.value)} style={{ ...field, fontWeight: 700, marginBottom: 6 }} />
-          <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>بدنه</div>
-          <textarea value={d.body} onChange={(e) => set(i, "body", e.target.value)} rows={Math.min(8, Math.max(3, d.body.split("\n").length + 1))} style={{ ...field, resize: "vertical" }} />
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: "#6d5bd0", marginBottom: 6 }}>{L("اسلاید ", "Slide ")}{i + 1}{i === 0 ? L(" (کاور)", " (cover)") : i === draft.length - 1 ? L(" (آخر)", " (last)") : ""}</div>
+          <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>{L("تیتر", "Heading")}</div>
+          <input dir="auto" value={d.title} onChange={(e) => set(i, "title", e.target.value)} style={{ ...field, fontWeight: 700, marginBottom: 6 }} />
+          <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>{L("بدنه", "Body")}</div>
+          <textarea dir="auto" value={d.body} onChange={(e) => set(i, "body", e.target.value)} rows={Math.min(8, Math.max(3, d.body.split("\n").length + 1))} style={{ ...field, resize: "vertical" }} />
         </div>
       ))}
-      <div style={{ fontSize: 12.5, color: C.text2, margin: "10px 0 4px" }}>کپشن (حداکثر ۳ هشتگ)</div>
-      <textarea value={caption} onChange={(e) => setCaption(e.target.value)} rows={6} style={{ ...field, resize: "vertical", marginBottom: 12 }} />
-      <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تمپلت اسلایدها</div>
+      <div style={{ fontSize: 12.5, color: C.text2, margin: "10px 0 4px" }}>{L("کپشن (حداکثر ۳ هشتگ)", "Caption (at most 3 hashtags)")}</div>
+      <textarea dir="auto" value={caption} onChange={(e) => setCaption(e.target.value)} rows={6} style={{ ...field, resize: "vertical", marginBottom: 12 }} />
+      <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("قالب اسلایدها", "Slide template")}</div>
       <TemplatePicker value={template} onChange={setTemplate} font={fa} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="ui-btn ui-glow-orange" onClick={onDraw} disabled={!any || (drawnBefore && !changed)} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, minWidth: 150, opacity: any && (!drawnBefore || changed) ? 1 : 0.5 }}>
-          🎨 طراحی اسلایدها
+          🎨 {L("طراحی اسلایدها", "Design slides")}
         </button>
         <button className="ui-btn" onClick={onSave} disabled={!any || !changed} style={{ ...btn("transparent", C.text, `1px solid ${C.line}`), opacity: any && changed ? 1 : 0.5 }}>
-          💾 ذخیره متن
+          💾 {L("ذخیرهٔ متن", "Save text")}
         </button>
       </div>
     </div>
@@ -3575,6 +3592,9 @@ async function saveStoryImage(url, name) {
 
 // The same names as STORY_BACKGROUNDS in lib/story/index.js.
 const STORY_BGS = [["purple", "#8a3893"], ["black", "#000000"], ["blue", "#2f6fed"], ["red", "#e53935"], ["green", "#0e7a4f"], ["white", "#ffffff"]];
+const BG_NAMES = { purple: ["بنفش", "Purple"], black: ["مشکی", "Black"], blue: ["آبی", "Blue"], red: ["قرمز", "Red"], green: ["سبز", "Green"], white: ["سفید", "White"] };
+// English names for the story templates, whose own list (lib/story/templates.js) holds only Persian.
+const STORY_TEMPLATE_EN = { simple: "Simple (default)", c2: "News card on a photo", c3: "News site page", c4: "Attention", c5: "Breaking news", c6: "Formal and calm", c7: "Local news", c8: "Did you know? Dark", c9: "Did you know? Bold", c10: "Did you know? Paper", c11: "Magazine", c12: "Warning", c16: "Bulletin", c17: "Red wave", c18: "Navy update", c19: "Tabloid" };
 function BgSwatches({ value, onPick, disabled }) {
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -3583,8 +3603,8 @@ function BgSwatches({ value, onPick, disabled }) {
           key={k}
           className="ui-btn"
           disabled={disabled}
-          aria-label={k}
-          title={k}
+          aria-label={BG_NAMES[k] ? L(BG_NAMES[k]) : k}
+          title={BG_NAMES[k] ? L(BG_NAMES[k]) : k}
           onClick={() => onPick(k)}
           style={{ width: 34, height: 34, borderRadius: 99, background: hex, cursor: disabled ? "default" : "pointer", border: value === k ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxShadow: value === k ? `0 0 0 2px #fff inset` : "none" }}
         />
@@ -3605,11 +3625,11 @@ function StoryTemplatePicker({ value, onPick, disabled }) {
             className="ui-btn"
             disabled={disabled}
             onClick={() => onPick(t.key)}
-            title={t.name}
+            title={L(t.name, STORY_TEMPLATE_EN[t.key] || t.name)}
             style={{ flex: "0 0 auto", width: 76, padding: 0, background: "none", cursor: disabled ? "default" : "pointer", border: "none", textAlign: "center" }}
           >
             <img src={`/story-templates/${t.key}.jpg`} alt="" loading="lazy" style={{ display: "block", width: 76, height: 135, objectFit: "cover", borderRadius: 10, border: on ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxSizing: "border-box" }} />
-            <div style={{ fontSize: 10.5, marginTop: 4, fontWeight: on ? 800 : 500, color: on ? STORY_TONE : C.text2, fontFamily: "'Vazirmatn', sans-serif", lineHeight: 1.3 }}>{t.name}</div>
+            <div style={{ fontSize: 10.5, marginTop: 4, fontWeight: on ? 800 : 500, color: on ? STORY_TONE : C.text2, fontFamily: "'Vazirmatn', sans-serif", lineHeight: 1.3 }}>{L(t.name, STORY_TEMPLATE_EN[t.key] || t.name)}</div>
           </button>
         );
       })}
@@ -3651,7 +3671,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
       const img = await new Promise((ok, bad) => {
         const im = new Image();
         im.onload = () => ok(im);
-        im.onerror = () => bad(new Error("this file is not a picture"));
+        im.onerror = () => bad(new Error(L("این فایل عکس نیست", "this file is not a picture")));
         im.src = URL.createObjectURL(file);
       });
       const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
@@ -3661,7 +3681,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
       cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
       const res = await fetch("/api/story/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: cv.toDataURL("image/jpeg", 0.88) }) });
       const j = await res.json();
-      if (!res.ok || !j.url) throw new Error(j.error || "upload failed");
+      if (!res.ok || !j.url) throw new Error(j.error || L("آپلود نشد", "upload failed"));
       onJob("story_photo", { num, url: j.url });
     } catch (e) {
       setUploadErr(String(e.message || e));
@@ -3672,7 +3692,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const isLex = topic && (topic.newsletter === "lexbase" || /\/api\/lexbase\//.test(topic.source_url || ""));
 
   const start = () => {
-    if (pages.length && !window.confirm("A new story replaces the current one. Continue?")) return;
+    if (pages.length && !window.confirm(L("استوری جدید جای استوری فعلی رو می‌گیره. ادامه بدیم؟", "A new story replaces the current one. Continue?"))) return;
     setForm(false);
     onJob("story", { count, notes: notes.trim(), bg, template });
   };
@@ -3680,11 +3700,11 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
 
   if (!pages.length && !running && !form && !failed) return null;
   return (
-    <Section title={lang === "en" ? "استوری · English" : "استوری"}>
+    <Section title={L("استوری", "Story") + (lang === "en" ? L(" · انگلیسی", " · English") : "")}>
       {form && !running && (
-        <div dir="rtl" className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
-          <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>📱 استوری فکت از این موضوع</div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>تعداد صفحه</div>
+        <div dir={uiDir()} className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
+          <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>📱 {L("استوری فکت از این موضوع", "Fact story from this topic")}</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("تعداد صفحه", "Number of pages")}</div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
             {[1, 2, 3, 4].map((n) => (
               <button key={n} className="ui-btn" onClick={() => setCount(n)} style={{ minWidth: 44, height: 34, borderRadius: 10, cursor: "pointer", border: `1px solid ${count === n ? STORY_TONE : C.line}`, background: count === n ? alpha(STORY_TONE, 0.12) : C.surface, color: count === n ? STORY_TONE : C.text, fontWeight: 700, fontFamily: font }}>
@@ -3694,55 +3714,59 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           </div>
           {STORY_TEMPLATES.length > 1 && (
             <>
-              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>قالب</div>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("قالب", "Template")}</div>
               <div style={{ marginBottom: 12 }}>
                 <StoryTemplatePicker value={template} onPick={setTemplate} />
               </div>
             </>
           )}
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>رنگ پس‌زمینه</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("رنگ پس‌زمینه", "Background colour")}</div>
           <div style={{ marginBottom: 12 }}>
             <BgSwatches value={bg} onPick={setBg} />
           </div>
-          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>یادداشت‌ها (اختیاری)</div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
           <textarea
+            dir="auto"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            placeholder="مثلاً: روی عدد اصلی تمرکز کن، صفحه دوم درباره مهلت باشه…"
+            placeholder={L("مثلاً: روی عدد اصلی تمرکز کن، صفحهٔ دوم دربارهٔ مهلت باشه…", "e.g. focus on the main number, make page 2 about the deadline…")}
             style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
           />
           <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px", lineHeight: 1.7 }}>
-            هر صفحه یک واقعیت از متن منبع + اسکرین‌شات واقعی از {isLex ? "PDF اصلی لکس‌بیس" : "صفحه منبع"} که جمله‌اش هایلایت شده. اسکرین‌شات فقط برای همین موضوع گرفته می‌شه.
+            {L(
+              `هر صفحه یک واقعیت از متن منبع + اسکرین‌شات واقعی از ${isLex ? "PDF اصلی لکس‌بیس" : "صفحهٔ منبع"} که جمله‌اش هایلایت شده. اسکرین‌شات فقط برای همین موضوع گرفته می‌شه.`,
+              `Each page is one fact from the source text + a real screenshot of ${isLex ? "the original Lexbase PDF" : "the source page"} with its sentence highlighted. Screenshots are taken only for this topic.`
+            )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="ui-btn ui-glow-orange" onClick={start} disabled={caps.story === false} style={{ ...btn(STORY_TONE, "#fff", "none"), flex: 1, opacity: caps.story === false ? 0.5 : 1 }}>
-              ساخت استوری {count === 1 ? "تک‌صفحه" : count + " صفحه‌ای"}
+              {count === 1 ? L("ساخت استوری تک‌صفحه", "Make a one-page story") : L(`ساخت استوری ${count} صفحه‌ای`, `Make a ${count}-page story`)}
             </button>
             <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
-              انصراف
+              {L("انصراف", "Cancel")}
             </button>
           </div>
-          {caps.story === false && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 8 }}>HCTI_USER_ID / HCTI_API_KEY روی سرور تنظیم نشده.</div>}
+          {caps.story === false && <div style={{ fontSize: 11.5, color: C.reject, marginTop: 8 }}>{L("مرورگر Chromium روی سرور نصب نیست (و کلید HCTI هم نیست)؛ استوری کشیده نمی‌شود.", "No Chromium on the server (and no HCTI keys), so stories cannot be drawn.")}</div>}
         </div>
       )}
 
       {running && (
-        <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(STORY_TONE, 0.07), border: `1px solid ${alpha(STORY_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
+        <div dir={uiDir()} className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(STORY_TONE, 0.07), border: `1px solid ${alpha(STORY_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span>{" "}
-          {stage === "writing" ? "در حال نوشتن متن استوری…" : stage === "screenshots" ? "در حال گرفتن اسکرین‌شات از منبع اصلی…" : stage === "photos" ? "در حال ساخت عکس‌ها با هوش مصنوعی…" : `در حال طراحی صفحه‌ها… ${drawn} از ${pages.length}`}
-          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+          {stage === "writing" ? L("در حال نوشتن متن استوری…", "Writing the story text…") : stage === "screenshots" ? L("در حال گرفتن اسکرین‌شات از منبع اصلی…", "Taking screenshots of the original source…") : stage === "photos" ? L("در حال ساخت عکس‌ها با هوش مصنوعی…", "Making the photos with AI…") : L(`در حال طراحی صفحه‌ها… ${drawn} از ${pages.length}`, `Designing the pages… ${drawn} of ${pages.length}`)}
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>{L("می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.", "You can leave this page; the work carries on on the server.")}</div>
         </div>
       )}
       {failed && !running && <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>}
 
       {pages.length > 0 && (
         <div>
-          <div dir="rtl" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
-            <b style={{ fontSize: 14.5 }}>📱 استوری · {pages.length} صفحه</b>
+          <div dir={uiDir()} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, fontFamily: fa }}>
+            <b style={{ fontSize: 14.5 }}>📱 {L(`استوری · ${pages.length} صفحه`, `Story · ${pages.length} ${pages.length === 1 ? "page" : "pages"}`)}</b>
             {!running && (
               <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
-                ↻ از نو (بدون نسخه قبلی)
+                ↻ {L("از نو (بدون نسخهٔ قبلی)", "Start over (without the last version)")}
               </button>
             )}
           </div>
@@ -3750,17 +3774,17 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             {pages.map((pg) => (
               <div key={pg.num} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
                 {pg.image_url ? (
-                  <button onClick={() => setPreview(pg.num)} aria-label={"Preview page " + pg.num} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
-                    <img src={pg.image_url} alt={"Story page " + pg.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover", background: C.surfaceHi }} />
+                  <button onClick={() => setPreview(pg.num)} aria-label={L("پیش‌نمایش صفحهٔ ", "Preview page ") + pg.num} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
+                    <img src={pg.image_url} alt={L("صفحهٔ استوری ", "Story page ") + pg.num} loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "9 / 16", objectFit: "cover", background: C.surfaceHi }} />
                   </button>
                 ) : (
                   <div className={running ? "ui-skeleton" : ""} style={{ aspectRatio: "9 / 16", display: "grid", placeItems: "center", background: C.surfaceHi, color: C.text3, fontSize: 12, padding: 8, textAlign: "center", fontFamily: font }}>
-                    {running ? "…" : "⚠️ " + (pg.error ? pg.error.slice(0, 80) : "no image")}
+                    {running ? "…" : "⚠️ " + (pg.error ? pg.error.slice(0, 80) : L("بدون تصویر", "no image"))}
                   </div>
                 )}
-                <div dir="rtl" style={{ padding: "6px 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2 }}>
+                <div dir={uiDir()} style={{ padding: "6px 8px 8px", fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, color: C.text2 }}>
                   {busyPage === pg.num ? (
-                    <div className="ui-pulse" style={{ marginBottom: 6, fontSize: 11.5, color: C.orangeDeep }}>⏳ در حال تغییر…</div>
+                    <div className="ui-pulse" style={{ marginBottom: 6, fontSize: 11.5, color: C.orangeDeep }}>⏳ {L("در حال تغییر…", "Changing…")}</div>
                   ) : pg.image_url && (
                     <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
                       <button
@@ -3768,27 +3792,27 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                         onClick={() => saveStoryImage(pg.image_url, `sugimoto-story-${pg.num}.png`)}
                         style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: fa }}
                       >
-                        ⬇ ذخیره
+                        ⬇ {L("ذخیره", "Save")}
                       </button>
                       {!running && (
-                        <button className="ui-btn" onClick={() => setEditing(pg.num)} title="Change only this page" aria-label={"Edit page " + pg.num} style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer" }}>
+                        <button className="ui-btn" onClick={() => setEditing(pg.num)} title={L("فقط همین صفحه عوض بشه", "Change only this page")} aria-label={L("ویرایش صفحهٔ ", "Edit page ") + pg.num} style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer" }}>
                           ✏️
                         </button>
                       )}
                       {!running && pg.shot_url && (
-                        <button className="ui-btn" onClick={() => setDesigning(designing === pg.num ? 0 : pg.num)} title="Lay this page out by hand" aria-label={"Design page " + pg.num} style={{ background: designing === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: designing === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
-                          طراحی
+                        <button className="ui-btn" onClick={() => setDesigning(designing === pg.num ? 0 : pg.num)} title={L("چیدن این صفحه با دست", "Lay this page out by hand")} aria-label={L("طراحی صفحهٔ ", "Design page ") + pg.num} style={{ background: designing === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: designing === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
+                          {L("طراحی", "Design")}
                         </button>
                       )}
                     </div>
                   )}
                   {hasPhoto && !running && pg.image_url && (
                     <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
-                      <button className="ui-btn" onClick={() => { setPhotoFor(photoFor === pg.num ? 0 : pg.num); setPhotoNote(""); }} title="Make this page's photo again" style={{ background: photoFor === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: photoFor === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
-                        🖼 عکس جدید
+                      <button className="ui-btn" onClick={() => { setPhotoFor(photoFor === pg.num ? 0 : pg.num); setPhotoNote(""); }} title={L("دوباره ساختن عکس این صفحه", "Make this page's photo again")} style={{ background: photoFor === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: photoFor === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
+                        🖼 {L("عکس جدید", "New photo")}
                       </button>
-                      <label title="Use your own picture" style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
-                        ⬆ آپلود عکس
+                      <label title={L("استفاده از عکس خودت", "Use your own picture")} style={{ background: alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
+                        ⬆ {L("آپلود عکس", "Upload photo")}
                         <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) uploadPhoto(pg.num, f); }} />
                       </label>
                     </div>
@@ -3796,20 +3820,21 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   {photoFor === pg.num && !running && (
                     <div style={{ marginBottom: 6 }}>
                       <textarea
+                        dir="auto"
                         value={photoNote}
                         onChange={(e) => setPhotoNote(e.target.value)}
                         rows={2}
-                        placeholder="چه عکسی؟ (اختیاری) مثلاً: فرودگاه ونکوور، بدون آدم"
+                        placeholder={L("چه عکسی؟ (اختیاری) مثلاً: فرودگاه ونکوور، بدون آدم", "What photo? (optional) e.g. Vancouver airport, no people")}
                         style={{ width: "100%", boxSizing: "border-box", borderRadius: 8, border: `1px solid ${C.line}`, padding: 6, fontFamily: fa, fontSize: 11.5, lineHeight: 1.6, resize: "vertical" }}
                       />
                       <button className="ui-btn" onClick={() => { onJob("story_photo", { num: pg.num, note: photoNote.trim() }); setPhotoFor(0); }} style={{ marginTop: 4, width: "100%", background: STORY_TONE, color: "#fff", border: "none", borderRadius: 8, padding: "5px 8px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: fa }}>
-                        ساخت عکس جدید
+                        {L("ساخت عکس جدید", "Make a new photo")}
                       </button>
                     </div>
                   )}
-                  {pg.photo_error && hasPhoto && <div style={{ color: C.orangeDeep, marginBottom: 4 }}>⚠️ عکس ساخته نشد؛ «عکس جدید» را بزنید.</div>}
-                  <b style={{ color: C.text }}>{pg.headline}</b>
-                  {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحه دیگه استفاده شد.</div>}
+                  {pg.photo_error && hasPhoto && <div style={{ color: C.orangeDeep, marginBottom: 4 }}>⚠️ {L("عکس ساخته نشد؛ «عکس جدید» رو بزن.", "The photo was not made; press “New photo”.")}</div>}
+                  <b dir="auto" style={{ color: C.text, display: "block" }}>{pg.headline}</b>
+                  {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ {L("اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحهٔ دیگه استفاده شد.", "No screenshot of this sentence was found; another page's screenshot was used.")}</div>}
                 </div>
               </div>
             ))}
@@ -3817,7 +3842,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
 
           {designing > 0 && pages.some((x) => x.num === designing) && (
             <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 14, padding: 12 }}>
-              <div dir="rtl" style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8, fontFamily: fa }}>طراحی دستی · صفحه {designing}</div>
+              <div dir={uiDir()} style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8, fontFamily: fa }}>{L(`طراحی دستی · صفحهٔ ${designing}`, `Design by hand · page ${designing}`)}</div>
               <StoryDesigner
                 key={designing}
                 page={pages.find((x) => x.num === designing)}
@@ -3830,32 +3855,33 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             </div>
           )}
           {!running && (
-            <div dir="rtl" style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2, flexWrap: "wrap" }}>
-              <span>رنگ پس‌زمینه:</span>
+            <div dir={uiDir()} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2, flexWrap: "wrap" }}>
+              <span>{L("رنگ پس‌زمینه:", "Background colour:")}</span>
               <BgSwatches value={story.bg || "purple"} onPick={(k) => k !== (story.bg || "purple") && onJob("story_draw", { bg: k })} />
             </div>
           )}
           {!running && STORY_TEMPLATES.length > 1 && (
-            <div dir="rtl" style={{ marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2 }}>
-              <div style={{ marginBottom: 6 }}>قالب (متن عوض نمی‌شه، فقط صفحه‌ها دوباره کشیده می‌شن):</div>
+            <div dir={uiDir()} style={{ marginTop: 12, fontFamily: fa, fontSize: 12.5, color: C.text2 }}>
+              <div style={{ marginBottom: 6 }}>{L("قالب (متن عوض نمی‌شه، فقط صفحه‌ها دوباره کشیده می‌شن):", "Template (the text stays, only the pages are drawn again):")}</div>
               <StoryTemplatePicker value={story.template || "simple"} onPick={(k) => k !== (story.template || "simple") && onJob("story_draw", { template: k })} />
             </div>
           )}
           {uploadErr && <div style={{ fontSize: 12, color: C.reject, marginTop: 8, direction: "ltr" }}>⚠️ {uploadErr}</div>}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("story_draw", {})} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
-              طراحی {missing} صفحه باقی‌مانده
+              {L(`طراحی ${missing} صفحهٔ باقی‌مانده`, `Design the ${missing} remaining pages`)}
             </button>
           )}
 
           {!running && (
-            <div dir="rtl" style={{ marginTop: 14, background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 14, padding: 12, fontFamily: fa }}>
-              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6 }}>✏️ یادداشت برای نسخه بعد</div>
+            <div dir={uiDir()} style={{ marginTop: 14, background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 14, padding: 12, fontFamily: fa }}>
+              <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 6 }}>✏️ {L("یادداشت برای نسخهٔ بعد", "Note for the next version")}</div>
               <textarea
+                dir="auto"
                 value={revNotes}
                 onChange={(e) => setRevNotes(e.target.value)}
                 rows={3}
-                placeholder="چه چیزی عوض بشه؟ مثلاً: تیتر کوتاه‌تر، عدد رو در تیتر بیار…"
+                placeholder={L("چه چیزی عوض بشه؟ مثلاً: تیتر کوتاه‌تر، عدد رو در تیتر بیار…", "What should change? e.g. a shorter headline, put the number in the headline…")}
                 style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
               />
               <button
@@ -3867,7 +3893,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                 }}
                 style={{ ...btn(STORY_TONE, "#fff", "none"), width: "100%", marginTop: 8, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}
               >
-                ↻ ساخت دوباره با این یادداشت
+                ↻ {L("ساخت دوباره با این یادداشت", "Make again with this note")}
               </button>
               <LearnToggle on={learnRev} setOn={setLearnRev} />
             </div>
@@ -3889,7 +3915,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           {story.caption && (
             <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>CAPTION</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text3, letterSpacing: 0.5 }}>{L("کپشن", "CAPTION")}</span>
                 <button
                   className="ui-btn"
                   onClick={() => {
@@ -3899,7 +3925,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   }}
                   style={{ background: copiedCap ? C.success : alpha(C.orange, 0.14), color: copiedCap ? "#fff" : C.orange, border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
                 >
-                  {copiedCap ? "Copied ✓" : "Copy"}
+                  {copiedCap ? L("کپی شد ✓", "Copied ✓") : L("کپی", "Copy")}
                 </button>
               </div>
               <div dir={lang === "en" ? "ltr" : "rtl"} style={{ fontFamily: fa, fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{story.caption}</div>
@@ -3937,7 +3963,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob, lang = "fa" }) {
   // An English post goes only to the English channel (TELEGRAM_PUBLIC_CHANNEL_ID_EN).
   const en = lang === "en";
   const publicOk = en ? !!caps.telegram?.english : caps.telegram?.public !== false;
-  const where = en ? "the English channel" : "@sugimotovisa";
+  const where = en ? L("کانال انگلیسی", "the English channel") : "@sugimotovisa";
 
   // What the server has, unless someone is typing over it.
   useEffect(() => {
@@ -3956,78 +3982,78 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob, lang = "fa" }) {
   };
   const send = () => {
     if (!text.trim()) return;
-    const again = post && post.sent && post.sent_to === "public" ? "\n\nIt was already sent on " + when(post.sent) + "." : "";
-    if (!window.confirm((image ? `Send this post with its picture to ${where} now?` : `Send this post to ${where} now, without a picture?`) + again)) return;
+    const again = post && post.sent && post.sent_to === "public" ? L("\n\nقبلاً در " + when(post.sent) + " ارسال شده.", "\n\nIt was already sent on " + when(post.sent) + ".") : "";
+    if (!window.confirm((image ? L(`این پست با تصویرش همین الان به ${where} ارسال بشه؟`, `Send this post with its picture to ${where} now?`) : L(`این پست بدون تصویر همین الان به ${where} ارسال بشه؟`, `Send this post to ${where} now, without a picture?`)) + again)) return;
     setDirty(false);
     onJob("telegram_send", { text, link });
   };
   const rewrite = () => {
-    if (dirty && !window.confirm("Your edits will be replaced by the rewrite. Continue?")) return;
+    if (dirty && !window.confirm(L("بازنویسی جای ویرایش‌هات رو می‌گیره. ادامه بدیم؟", "Your edits will be replaced by the rewrite. Continue?"))) return;
     setDirty(false);
     onJob("telegram_write", { notes: notes.trim(), revise: !!(post && post.text) });
     if (learnRev) teach({ topic, scope: "telegram", note: notes.trim(), context: text });
     setNotes("");
   };
   const fullLen = text.length + (link ? (link.title || "").length + 6 : 0);
-  const label = { telegram_write: "در حال نوشتن پست…", telegram_image: "در حال طراحی تصویر…", telegram_send: `در حال ارسال به ${where}…`, telegram_save: "در حال ذخیره…" }[kind] || "…";
+  const label = { telegram_write: L("در حال نوشتن پست…", "Writing the post…"), telegram_image: L("در حال طراحی تصویر…", "Designing the picture…"), telegram_send: L(`در حال ارسال به ${where}…`, `Sending to ${where}…`), telegram_save: L("در حال ذخیره…", "Saving…") }[kind] || "…";
 
   return (
-    <Section title={en ? "پست تلگرام · English" : "پست تلگرام"}>
+    <Section title={L("پست تلگرام", "Telegram post") + (en ? L(" · انگلیسی", " · English") : "")}>
       {running && (
-        <div dir="rtl" className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(TG_TONE, 0.07), border: `1px solid ${alpha(TG_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
+        <div dir={uiDir()} className="ui-progress" style={{ padding: "10px 12px", borderRadius: 12, background: alpha(TG_TONE, 0.07), border: `1px solid ${alpha(TG_TONE, 0.3)}`, fontFamily: fa, fontSize: 13, marginBottom: 10 }}>
           <span className="ui-pulse">⏳</span> {label}
-          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.</div>
+          <div style={{ fontSize: 11.5, color: C.text3, marginTop: 2 }}>{L("می‌تونی از این صفحه بری؛ کار روی سرور ادامه پیدا می‌کنه.", "You can leave this page; the work carries on on the server.")}</div>
         </div>
       )}
       {failed && !running && <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>}
       {post && post.sent && post.sent_to === "public" && (
-        <div dir="rtl" style={{ fontSize: 12.5, color: C.success, marginBottom: 10, fontFamily: fa }}>✓ ارسال شد به {where} · {when(post.sent)}</div>
+        <div dir={uiDir()} style={{ fontSize: 12.5, color: C.success, marginBottom: 10, fontFamily: fa }}>✓ {L(`ارسال شد به ${where}`, `Sent to ${where}`)} · {when(post.sent)}</div>
       )}
 
       {!text && !running && !(post && post.text) ? (
         <div style={{ textAlign: "center" }}>
-          <button className="ui-btn ui-glow-orange" onClick={() => onJob("telegram_write", {})} style={{ ...btn(TG_TONE, "#fff", "none"), padding: "12px 20px" }}>{en ? "✍️ Write the English Telegram post" : "✍️ نوشتن پست تلگرام"}</button>
+          <button className="ui-btn ui-glow-orange" onClick={() => onJob("telegram_write", {})} style={{ ...btn(TG_TONE, "#fff", "none"), padding: "12px 20px" }}>{en ? L("✍️ نوشتن پست تلگرام انگلیسی", "✍️ Write the English Telegram post") : L("✍️ نوشتن پست تلگرام", "✍️ Write the Telegram post")}</button>
         </div>
       ) : (
-        <div dir="rtl" style={{ display: "flex", flexDirection: "column", gap: 12, fontFamily: fa }}>
+        <div dir={uiDir()} style={{ display: "flex", flexDirection: "column", gap: 12, fontFamily: fa }}>
           {/* the picture */}
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
             <div style={{ width: 170, flexShrink: 0, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.line}`, background: C.surfaceHi }}>
               {image ? (
-                <button onClick={() => setPreview(true)} aria-label="Preview the picture" style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
-                  <img src={image} alt="Telegram post picture" style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover" }} />
+                <button onClick={() => setPreview(true)} aria-label={L("پیش‌نمایش تصویر", "Preview the picture")} style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "zoom-in" }}>
+                  <img src={image} alt={L("تصویر پست تلگرام", "Telegram post picture")} style={{ display: "block", width: "100%", aspectRatio: "4 / 5", objectFit: "cover" }} />
                 </button>
               ) : (
                 <div className={running && kind === "telegram_image" ? "ui-skeleton" : ""} style={{ aspectRatio: "4 / 5", display: "grid", placeItems: "center", color: C.text3, fontSize: 12, padding: 10, textAlign: "center" }}>
-                  {running && kind === "telegram_image" ? "…" : "بدون تصویر"}
+                  {running && kind === "telegram_image" ? "…" : L("بدون تصویر", "No picture")}
                 </div>
               )}
             </div>
             <div style={{ flex: "1 1 160px", display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-              <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.7 }}>یک تصویر ۴:۵ با تیتر پست، در سبک کاروسل‌های برند و با لوگو.</div>
+              <div style={{ fontSize: 12, color: C.text2, lineHeight: 1.7 }}>{L("یک تصویر ۴:۵ با تیتر پست، در سبک کاروسل‌های برند و با لوگو.", "One 4:5 picture with the post's headline, in the brand's carousel style, with the logo.")}</div>
               {!running && (
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   {image ? (
                     <>
-                      <button className="ui-btn" onClick={() => setEditPic(true)} style={small} title="Change only this picture">✏️ ویرایش تصویر</button>
-                      <button className="ui-btn" onClick={() => onJob("telegram_image", { text })} style={small} title="Draw a new picture">↻ طراحی دوباره</button>
-                      <a className="ui-btn" href={"/api/carousel/download?url=" + encodeURIComponent(image) + "&name=" + encodeURIComponent("sugimoto-telegram.jpg")} style={{ ...small, textDecoration: "none" }}>⬇ دانلود</a>
+                      <button className="ui-btn" onClick={() => setEditPic(true)} style={small} title={L("فقط همین تصویر عوض بشه", "Change only this picture")}>✏️ {L("ویرایش تصویر", "Edit picture")}</button>
+                      <button className="ui-btn" onClick={() => onJob("telegram_image", { text })} style={small} title={L("کشیدن یک تصویر تازه", "Draw a new picture")}>↻ {L("طراحی دوباره", "Design again")}</button>
+                      <a className="ui-btn" href={"/api/carousel/download?url=" + encodeURIComponent(image) + "&name=" + encodeURIComponent("sugimoto-telegram.jpg")} style={{ ...small, textDecoration: "none" }}>⬇ {L("دانلود", "Download")}</a>
                     </>
                   ) : (
-                    <button className="ui-btn" onClick={() => onJob("telegram_image", { text })} disabled={!caps.carousel} style={{ ...small, opacity: caps.carousel ? 1 : 0.5 }}>🎨 ساخت تصویر</button>
+                    <button className="ui-btn" onClick={() => onJob("telegram_image", { text })} disabled={!caps.carousel} style={{ ...small, opacity: caps.carousel ? 1 : 0.5 }}>🎨 {L("ساخت تصویر", "Make picture")}</button>
                   )}
                 </div>
               )}
-              {post && post.kept === "memory" && <div style={{ fontSize: 11, color: C.orangeDeep }}>⚠️ این تصویر در وردپرس ذخیره نشد و فقط تا ری‌استارت بعدی سرور می‌مونه.</div>}
+              {post && post.kept === "memory" && <div style={{ fontSize: 11, color: C.orangeDeep }}>⚠️ {L("این تصویر در وردپرس ذخیره نشد و فقط تا ری‌استارت بعدی سرور می‌مونه.", "This picture was not saved in WordPress and lasts only until the server's next restart.")}</div>}
             </div>
           </div>
 
           {/* the text */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <b style={{ fontSize: 13.5 }}>متن پست</b>
-              <span style={{ fontSize: 11, color: fullLen > 1000 ? C.text3 : C.success, direction: "ltr" }}>
-                {fullLen} chars · {fullLen > 1000 ? "picture, then the text under it" : "one message with the picture"}
+              <b style={{ fontSize: 13.5 }}>{L("متن پست", "Post text")}</b>
+              <span style={{ fontSize: 11, color: fullLen > 1000 ? C.text3 : C.success, direction: uiDir() }}>
+                {L(`${fullLen} حرف`, `${fullLen} chars`)} · {fullLen > 1000 ? L("تصویر، بعد متن زیرش", "picture, then the text under it") : L("یک پیام همراه تصویر", "one message with the picture")}
               </span>
             </div>
             <textarea
@@ -4040,42 +4066,43 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob, lang = "fa" }) {
               disabled={running && kind === "telegram_write"}
               style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${dirty ? alpha(TG_TONE, 0.6) : C.line}`, padding: 12, fontFamily: en ? font : fa, fontSize: 13.5, lineHeight: 1.9, resize: "vertical", direction: en ? "ltr" : "rtl", unicodeBidi: "plaintext" }}
             />
-            <div style={{ fontSize: 11.5, color: C.text3, marginTop: 4 }}>برای متن پررنگ دو ستاره بذار: **متن**</div>
+            <div style={{ fontSize: 11.5, color: C.text3, marginTop: 4 }}>{L("برای متن پررنگ دو ستاره بذار: **متن**", "For bold text use two stars: **text**")}</div>
           </div>
 
           {link && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 10px", borderRadius: 10, background: C.surfaceHi, border: `1px solid ${C.line}` }}>
               <span>📎</span>
               <a href={link.url} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{link.title || link.url}</a>
-              <button className="ui-btn" onClick={() => { setLink(null); setDirty(true); }} title="Remove the link" style={{ background: "transparent", border: "none", color: C.text3, cursor: "pointer", fontSize: 14 }}>✕</button>
+              <button className="ui-btn" onClick={() => { setLink(null); setDirty(true); }} title={L("حذف لینک", "Remove the link")} style={{ background: "transparent", border: "none", color: C.text3, cursor: "pointer", fontSize: 14 }}>✕</button>
             </div>
           )}
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="ui-btn" disabled={!dirty || running} onClick={save} style={{ ...btn("transparent", C.text, `1px solid ${C.line}`), flex: "0 0 auto", opacity: dirty && !running ? 1 : 0.5 }}>
-              💾 ذخیره
+              💾 {L("ذخیره", "Save")}
             </button>
             <button className="ui-btn ui-glow-orange" disabled={running || !text.trim() || !publicOk} onClick={send} style={{ ...btn(TG_TONE, "#fff", "none"), flex: 1, minWidth: 180, opacity: running || !text.trim() || !publicOk ? 0.5 : 1 }}>
-              📢 ارسال به {where}
+              📢 {L(`ارسال به ${where}`, `Send to ${where}`)}
             </button>
           </div>
           {/* The send's outcome right under the button, where the eye is. */}
-          {kind === "telegram_send" && running && <div className="ui-pulse" style={{ fontSize: 12.5, color: C.text2, textAlign: "center" }}>⏳ در حال ارسال به {where}…</div>}
-          {kind === "telegram_send" && failed && !running && <div style={{ fontSize: 12.5, color: C.reject, direction: "ltr", textAlign: "center" }}>⚠️ Not sent: {failed}</div>}
-          {kind === "telegram_send" && job.status === "done" && <div style={{ fontSize: 12.5, color: C.success, textAlign: "center" }}>✓ ارسال شد به {where}</div>}
-          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: "ltr" }}>{en ? "No English Telegram channel is set (TELEGRAM_PUBLIC_CHANNEL_ID_EN), or your account has no publishing access. The post can still be written, saved and copied." : "The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID), or your account has no publishing access."}</div>}
+          {kind === "telegram_send" && running && <div className="ui-pulse" style={{ fontSize: 12.5, color: C.text2, textAlign: "center" }}>⏳ {L(`در حال ارسال به ${where}…`, `Sending to ${where}…`)}</div>}
+          {kind === "telegram_send" && failed && !running && <div style={{ fontSize: 12.5, color: C.reject, direction: "ltr", textAlign: "center" }}>⚠️ {L("ارسال نشد: ", "Not sent: ")}{failed}</div>}
+          {kind === "telegram_send" && job.status === "done" && <div style={{ fontSize: 12.5, color: C.success, textAlign: "center" }}>✓ {L(`ارسال شد به ${where}`, `Sent to ${where}`)}</div>}
+          {!publicOk && <div style={{ fontSize: 11.5, color: C.reject, direction: uiDir() }}>{en ? L("کانال تلگرام انگلیسی تنظیم نشده (TELEGRAM_PUBLIC_CHANNEL_ID_EN)، یا حسابت دسترسی انتشار نداره. پست رو هنوز می‌شه نوشت، ذخیره کرد و کپی کرد.", "No English Telegram channel is set (TELEGRAM_PUBLIC_CHANNEL_ID_EN), or your account has no publishing access. The post can still be written, saved and copied.") : L("کانال عمومی تنظیم نشده (TELEGRAM_PUBLIC_CHANNEL_ID)، یا حسابت دسترسی انتشار نداره.", "The public channel is not configured (TELEGRAM_PUBLIC_CHANNEL_ID), or your account has no publishing access.")}</div>}
 
           <div style={{ background: C.surface, border: `1px solid ${alpha(TG_TONE, 0.3)}`, borderRadius: 14, padding: 12 }}>
-            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>✏️ بازنویسی با یادداشت</div>
+            <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 6 }}>✏️ {L("بازنویسی با یادداشت", "Rewrite with a note")}</div>
             <textarea
+              dir="auto"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              placeholder="مثلاً: کوتاه‌تر، تاریخ رو در تیتر بیار، پاراگراف آخر رو حذف کن…"
+              placeholder={L("مثلاً: کوتاه‌تر، تاریخ رو در تیتر بیار، پاراگراف آخر رو حذف کن…", "e.g. shorter, put the date in the headline, remove the last paragraph…")}
               style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
             />
             <button className="ui-btn" disabled={running || !notes.trim()} onClick={rewrite} style={{ ...btn(alpha(TG_TONE, 0.1), C.text, `1px solid ${alpha(TG_TONE, 0.4)}`), width: "100%", marginTop: 8, opacity: running || !notes.trim() ? 0.5 : 1 }}>
-              ↻ بازنویسی پست
+              ↻ {L("بازنویسی پست", "Rewrite the post")}
             </button>
             <LearnToggle on={learnRev} setOn={setLearnRev} />
           </div>
@@ -4085,7 +4112,7 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob, lang = "fa" }) {
       {preview && image && <SlidePreview slides={[{ num: 1, image_url: image }]} start={1} onClose={() => setPreview(false)} />}
       {editPic && image && (
         <EditPictureSheet
-          title="Telegram picture"
+          title={L("تصویر تلگرام", "Telegram picture")}
           item={{ image_url: image, edits: (post && post.image_edits) || [] }}
           ratio="4 / 5"
           tone={TG_TONE}
@@ -4150,16 +4177,16 @@ function teach({ topic, scope, note, context = "" }) {
     try {
       const r = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "learn", topic, scope, note, context }) });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d.job) throw new Error(d.error || "could not start");
+      if (!r.ok || !d.job) throw new Error(d.error || L("شروع نشد", "could not start"));
       for (let i = 0; i < 60; i++) {
         await new Promise((ok) => setTimeout(ok, 2500));
         const q = await fetch(`/api/jobs?ids=${d.job.id}`, { cache: "no-store" }).then((x) => x.json()).catch(() => null);
         const j = q && q.jobs && q.jobs[0];
         if (!j) continue;
         if (j.status === "done") return say({ state: "done", ...(j.result || {}) });
-        if (j.status === "error") throw new Error(j.error || "failed");
+        if (j.status === "error") throw new Error(j.error || L("نشد", "failed"));
       }
-      throw new Error("no answer yet; it may still finish");
+      throw new Error(L("هنوز جوابی نیومده؛ شاید هنوز تموم بشه", "no answer yet; it may still finish"));
     } catch (e) {
       say({ state: "error", error: String(e.message || e) });
     }
@@ -4170,7 +4197,7 @@ function LearnToggle({ on, setOn }) {
   return (
     <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, fontSize: 12.5, color: C.text2, lineHeight: 1.7, cursor: "pointer" }}>
       <input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} style={{ marginTop: 4 }} />
-      <b style={{ color: C.text }}>🧠 از این یادداشت یاد بگیر</b>
+      <b style={{ color: C.text }}>🧠 {L("از این یادداشت یاد بگیر", "Learn from this note")}</b>
     </label>
   );
 }
@@ -4188,12 +4215,12 @@ function LearnNotice() {
   }, [n]);
   if (!n) return null;
   const text =
-    n.state === "working" ? "🧠 دارم یادداشت رو بررسی می‌کنم…"
-    : n.state === "error" ? `🧠 یاد گرفتن انجام نشد: ${n.error}`
-    : n.learned ? `🧠 یاد گرفتم: ${(n.lesson && (n.lesson.rule_fa || n.lesson.rule_en)) || ""}`
-    : `🧠 قانون تازه‌ای ثبت نشد: ${n.why || ""}`;
+    n.state === "working" ? L("🧠 دارم یادداشت رو بررسی می‌کنم…", "🧠 Checking the note…")
+    : n.state === "error" ? L(`🧠 یاد گرفتن انجام نشد: ${n.error}`, `🧠 Learning did not happen: ${n.error}`)
+    : n.learned ? L("🧠 یاد گرفتم: ", "🧠 Learned: ") + ((n.lesson && (isFa() ? n.lesson.rule_fa || n.lesson.rule_en : n.lesson.rule_en || n.lesson.rule_fa)) || "")
+    : L(`🧠 قانون تازه‌ای ثبت نشد: ${n.why || ""}`, `🧠 No new rule was saved: ${n.why || ""}`);
   return (
-    <div dir="rtl" role="status" onClick={() => setN(null)} style={{ position: "fixed", left: 16, right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 90, maxWidth: 560, margin: "0 auto", background: "#1f2a30", color: "#fff", borderRadius: 14, padding: "12px 14px", fontSize: 13, lineHeight: 1.8, fontFamily: "'Vazirmatn', sans-serif", boxShadow: "0 10px 30px rgba(0,0,0,.25)", cursor: "pointer" }}>
+    <div dir={uiDir()} role="status" onClick={() => setN(null)} style={{ position: "fixed", left: 16, right: 16, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", zIndex: 90, maxWidth: 560, margin: "0 auto", background: "#1f2a30", color: "#fff", borderRadius: 14, padding: "12px 14px", fontSize: 13, lineHeight: 1.8, fontFamily: "'Vazirmatn', sans-serif", boxShadow: "0 10px 30px rgba(0,0,0,.25)", cursor: "pointer" }}>
       {text}
     </div>
   );
@@ -4206,26 +4233,27 @@ function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.or
   const edits = (item && item.edits) || [];
   return (
     <Sheet onClose={onClose}>
-      <div dir="rtl" style={{ fontFamily: fa }}>
+      <div dir={uiDir()} style={{ fontFamily: fa }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <b style={{ fontSize: 15 }}>✏️ ویرایش همین تصویر <span style={{ fontWeight: 500, color: C.text3, fontSize: 12.5, direction: "ltr", unicodeBidi: "isolate" }}>{title}</span></b>
-          <button className="ui-btn" onClick={onClose} aria-label="Close" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
+          <b style={{ fontSize: 15 }}>✏️ {L("ویرایش همین تصویر", "Edit this picture")} <span style={{ fontWeight: 500, color: C.text3, fontSize: 12.5, direction: "ltr", unicodeBidi: "isolate" }}>{title}</span></b>
+          <button className="ui-btn" onClick={onClose} aria-label={L("بستن", "Close")} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
           <img src={item.image_url} alt="" style={{ width: 150, aspectRatio: ratio, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>چه چیزی در این تصویر عوض بشه؟ فقط همین تصویر از روی خودش تغییر می‌کنه؛ بقیه دست نمی‌خورن.</div>
+            <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>{L("چه چیزی در این تصویر عوض بشه؟ فقط همین تصویر از روی خودش تغییر می‌کنه؛ بقیه دست نمی‌خورن.", "What should change in this picture? Only this picture changes, starting from itself; the others are not touched.")}</div>
             <textarea
               autoFocus
+              dir="auto"
               value={ask}
               onChange={(e) => setAsk(e.target.value)}
               rows={5}
-              placeholder="مثلاً: عکس سمت چپ رو با یک پاسپورت و بلیط هواپیما عوض کن، تیتر بزرگ‌تر بشه، رنگ پس‌زمینه روشن‌تر…"
+              placeholder={L("مثلاً: عکس سمت چپ رو با یک پاسپورت و بلیط هواپیما عوض کن، تیتر بزرگ‌تر بشه، رنگ پس‌زمینه روشن‌تر…", "e.g. replace the photo on the left with a passport and a plane ticket, a bigger headline, a lighter background…")}
               style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.8, resize: "vertical" }}
             />
             {edits.length > 0 && (
               <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>
-                تغییرهای قبلی: {edits.map((e, i) => <div key={i}>• {e}</div>)}
+                {L("تغییرهای قبلی: ", "Earlier changes: ")}{edits.map((e, i) => <div key={i}>• {e}</div>)}
               </div>
             )}
           </div>
@@ -4233,17 +4261,17 @@ function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.or
         <LearnToggle on={learn} setOn={setLearn} />
         {text && (
           <details style={{ marginTop: 10, fontSize: 12, color: C.text2 }}>
-            <summary style={{ cursor: "pointer" }}>متن روی تصویر</summary>
-            <div style={{ whiteSpace: "pre-line", lineHeight: 1.8, marginTop: 6 }}>{text}</div>
+            <summary style={{ cursor: "pointer" }}>{L("متن روی تصویر", "Text on the picture")}</summary>
+            <div dir="auto" style={{ whiteSpace: "pre-line", lineHeight: 1.8, marginTop: 6 }}>{text}</div>
           </details>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button className="ui-btn ui-glow-orange" disabled={!ask.trim()} onClick={() => onSubmit(ask.trim(), learn)} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ask.trim() ? "pointer" : "default", opacity: ask.trim() ? 1 : 0.5, fontFamily: fa }}>
-            اعمال تغییر روی همین تصویر
+            {L("اعمال تغییر روی همین تصویر", "Apply the change to this picture")}
           </button>
-          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>انصراف</button>
+          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>{L("انصراف", "Cancel")}</button>
         </div>
-        <div style={{ fontSize: 11, color: C.text3, marginTop: 8 }}>حدود ۵ سنت، کمتر از یک دقیقه.</div>
+        <div style={{ fontSize: 11, color: C.text3, marginTop: 8 }}>{L("حدود ۵ سنت، کمتر از یک دقیقه.", "About 5 cents, under a minute.")}</div>
       </div>
     </Sheet>
   );
@@ -4264,30 +4292,30 @@ function StoryPageSheet({ page, total, onClose, onSubmit }) {
   const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.8, resize: "vertical" };
   return (
     <Sheet onClose={onClose}>
-      <div dir="rtl" style={{ fontFamily: fa }}>
+      <div dir={uiDir()} style={{ fontFamily: fa }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <b style={{ fontSize: 15 }}>✏️ ویرایش صفحه {page.num} از {total}</b>
-          <button className="ui-btn" onClick={onClose} aria-label="Close" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
+          <b style={{ fontSize: 15 }}>✏️ {L(`ویرایش صفحهٔ ${page.num} از ${total}`, `Edit page ${page.num} of ${total}`)}</b>
+          <button className="ui-btn" onClick={onClose} aria-label={L("بستن", "Close")} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
           <img src={page.image_url} alt="" style={{ width: 120, aspectRatio: "9 / 16", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
           <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             <label style={{ fontSize: 12.5, color: C.text2 }}>
-              تیتر
-              <textarea value={headline} onChange={(e) => setHeadline(e.target.value)} rows={2} style={{ ...field, marginTop: 4 }} />
+              {L("تیتر", "Headline")}
+              <textarea dir="auto" value={headline} onChange={(e) => setHeadline(e.target.value)} rows={2} style={{ ...field, marginTop: 4 }} />
             </label>
             <label style={{ fontSize: 12.5, color: C.text2 }}>
-              متن زیر اسکرین‌شات
-              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} style={{ ...field, marginTop: 4 }} />
+              {L("متن زیر اسکرین‌شات", "Text under the screenshot")}
+              <textarea dir="auto" value={body} onChange={(e) => setBody(e.target.value)} rows={3} style={{ ...field, marginTop: 4 }} />
             </label>
           </div>
         </div>
         <label style={{ display: "block", fontSize: 12.5, color: C.text2, marginTop: 10 }}>
-          یا بنویس چه چیزی عوض بشه (از روی متن منبع بازنویسی می‌شه)
-          <textarea value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder="مثلاً: عدد اصلی رو بیار توی تیتر، متن کوتاه‌تر…" style={{ ...field, marginTop: 4 }} />
+          {L("یا بنویس چه چیزی عوض بشه (از روی متن منبع بازنویسی می‌شه)", "Or write what should change (rewritten from the source text)")}
+          <textarea dir="auto" value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder={L("مثلاً: عدد اصلی رو بیار توی تیتر، متن کوتاه‌تر…", "e.g. put the main number in the headline, shorter text…")} style={{ ...field, marginTop: 4 }} />
         </label>
         {ask.trim() && <LearnToggle on={learn} setOn={setLearn} />}
-        <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>اسکرین‌شات همون عکس واقعی منبع می‌مونه و جمله هایلایت‌شده عوض نمی‌شه؛ فقط متن همین صفحه تغییر می‌کنه و همین صفحه دوباره ساخته می‌شه.</div>
+        <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("اسکرین‌شات همون عکس واقعی منبع می‌مونه و جملهٔ هایلایت‌شده عوض نمی‌شه؛ فقط متن همین صفحه تغییر می‌کنه و همین صفحه دوباره ساخته می‌شه.", "The screenshot stays the real photo of the source and the highlighted sentence does not change; only this page's text changes and only this page is made again.")}</div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button
             className="ui-btn ui-glow-orange"
@@ -4295,9 +4323,9 @@ function StoryPageSheet({ page, total, onClose, onSubmit }) {
             onClick={() => onSubmit({ headline: headline.trim(), body: body.trim(), ...(ask.trim() ? { instruction: ask.trim() } : {}) }, learn && !!ask.trim())}
             style={{ flex: 1, background: STORY_TONE, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5, fontFamily: fa }}
           >
-            اعمال روی همین صفحه
+            {L("اعمال روی همین صفحه", "Apply to this page")}
           </button>
-          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>انصراف</button>
+          <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>{L("انصراف", "Cancel")}</button>
         </div>
       </div>
     </Sheet>
@@ -4340,7 +4368,7 @@ function SlidePreview({ slides, start, onClose }) {
   return (
     <div
       role="dialog"
-      aria-label="Slide preview"
+      aria-label={L("پیش‌نمایش اسلاید", "Slide preview")}
       onClick={onClose}
       onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
       onTouchEnd={(e) => {
@@ -4352,14 +4380,14 @@ function SlidePreview({ slides, start, onClose }) {
       style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(10,14,20,0.88)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 16, boxSizing: "border-box" }}
     >
       <div style={{ position: "relative", maxWidth: "min(92vw, 640px)" }} onClick={(e) => e.stopPropagation()}>
-        <img src={s.image_url} alt={"Slide " + s.num} style={{ display: "block", maxWidth: "100%", maxHeight: "80vh", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }} />
-        {slides.length > 1 && arrow(-1, "Previous slide")}
-        {slides.length > 1 && arrow(1, "Next slide")}
+        <img src={s.image_url} alt={L("اسلاید ", "Slide ") + s.num} style={{ display: "block", maxWidth: "100%", maxHeight: "80vh", borderRadius: 12, boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }} />
+        {slides.length > 1 && arrow(-1, L("اسلاید قبلی", "Previous slide"))}
+        {slides.length > 1 && arrow(1, L("اسلاید بعدی", "Next slide"))}
       </div>
       <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 14, color: "#fff", fontSize: 13, fontFamily: "'Geist', sans-serif" }}>
         <span>{i + 1} / {slides.length}</span>
-        <a href={s.image_url} target="_blank" rel="noopener noreferrer" style={{ color: "#fff", opacity: 0.85 }}>Open full size ↗</a>
-        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "none", borderRadius: 99, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Close ✕</button>
+        <a href={s.image_url} target="_blank" rel="noopener noreferrer" style={{ color: "#fff", opacity: 0.85 }}>{L("نمایش در اندازهٔ کامل", "Open full size")} ↗</a>
+        <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", color: "#fff", border: "none", borderRadius: 99, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>{L("بستن", "Close")} ✕</button>
       </div>
     </div>
   );
@@ -4371,7 +4399,7 @@ function SlidePreview({ slides, start, onClose }) {
 // benchmark video and the format), starts a server job that hands it over,
 // and then shows what the workflow reports back.
 
-const VIDEO_LENGTHS = [[30, "30 sec"], [45, "45 sec"], [60, "1 min"], [90, "1 min 30"], [120, "2 min"], [150, "2 min 30"], [180, "3 min"]];
+const VIDEO_LENGTHS = [[30, ["۳۰ ثانیه", "30 sec"]], [45, ["۴۵ ثانیه", "45 sec"]], [60, ["۱ دقیقه", "1 min"]], [90, ["۱ دقیقه و ۳۰", "1 min 30"]], [120, ["۲ دقیقه", "2 min"]], [150, ["۲ دقیقه و ۳۰", "2 min 30"]], [180, ["۳ دقیقه", "3 min"]]];
 // Spoken English at the presenter's pace (the same rate the server uses).
 const WORDS_PER_SEC = 2.5;
 
@@ -4379,7 +4407,7 @@ function fmtDur(sec) {
   sec = Math.max(0, Math.round(sec || 0));
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return m ? `${m}:${String(s).padStart(2, "0")}` : `${s}s`;
+  return m ? `${m}:${String(s).padStart(2, "0")}` : L(`${s} ثانیه`, `${s}s`);
 }
 
 function wordCount(t) {
@@ -4403,18 +4431,18 @@ function BenchmarkPicker({ value, ratio, onPick }) {
   }, []);
   // Videos that suit the chosen format first.
   const videos = state.videos.slice().sort((a, b) => (b.ratio === ratio) - (a.ratio === ratio));
-  const tag = (v) => (v.orientation === "vertical" ? "▯ Vertical" : v.orientation === "horizontal" ? "▭ Horizontal" : v.orientation === "square" ? "□ Square" : "");
+  const tag = (v) => (v.orientation === "vertical" ? L("▯ عمودی", "▯ Vertical") : v.orientation === "horizontal" ? L("▭ افقی", "▭ Horizontal") : v.orientation === "square" ? L("□ مربع", "□ Square") : "");
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11.5, color: C.text3, marginBottom: 8 }}>
-        <span>From the Benchmarks folder</span>
-        {state.folder && <a href={state.folder} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none", fontWeight: 600 }}>Open folder ↗</a>}
+        <span>{L("از پوشهٔ Benchmarks", "From the Benchmarks folder")}</span>
+        {state.folder && <a href={state.folder} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none", fontWeight: 600 }}>{L("باز کردن پوشه", "Open folder")} ↗</a>}
         <button className="ui-btn" onClick={() => load(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 11.5, padding: 0 }}>
-          {state.loading ? "Loading…" : "↻ Refresh"}
+          {state.loading ? L("در حال بارگذاری…", "Loading…") : L("↻ تازه‌سازی", "↻ Refresh")}
         </button>
       </div>
       {state.error && <div style={{ fontSize: 11.5, color: C.reject, marginBottom: 6 }}>{state.error}</div>}
-      {!state.loading && !state.videos.length && !state.error && <div style={{ fontSize: 11.5, color: C.text3 }}>No videos in the folder yet.</div>}
+      {!state.loading && !state.videos.length && !state.error && <div style={{ fontSize: 11.5, color: C.text3 }}>{L("هنوز ویدیویی در پوشه نیست.", "No videos in the folder yet.")}</div>}
       <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
         {videos.map((v) => {
           const on = value === v.url;
@@ -4444,7 +4472,7 @@ function BenchmarkPicker({ value, ratio, onPick }) {
   );
 }
 
-const LINK_KINDS = { google_drive: "Google Drive", heygen: "HeyGen", youtube: "YouTube", instagram: "Instagram", other: "Video link" };
+const LINK_KINDS = { google_drive: "Google Drive", heygen: "HeyGen", youtube: "YouTube", instagram: "Instagram", other: ["لینک ویدیو", "Video link"] };
 function linkKind(url) {
   const u = String(url || "").toLowerCase();
   if (!u) return "";
@@ -4515,15 +4543,15 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
   const fits = Math.abs(off) <= 0.15;
   const persian = faShare(d.script) > 0.2;
   const bench = d.benchmark.trim();
-  const benchErr = bench && !/^https?:\/\/\S+$/i.test(bench) ? "Paste the full link, starting with https://" : "";
+  const benchErr = bench && !/^https?:\/\/\S+$/i.test(bench) ? L("لینک کامل رو بذار، با https:// شروع بشه", "Paste the full link, starting with https://") : "";
   const kind = linkKind(bench);
-  const lenErr = seconds < 10 ? "At least 10 seconds" : seconds > 600 ? "At most 10 minutes" : "";
+  const lenErr = seconds < 10 ? L("حداقل ۱۰ ثانیه", "At least 10 seconds") : seconds > 600 ? L("حداکثر ۱۰ دقیقه", "At most 10 minutes") : "";
 
   const blocker = !enabled
-    ? "The video workflow is not connected yet (VIDEO_WORKFLOW_URL on Render)."
-    : words < 10 ? "The script is empty."
-    : persian ? "The script is in Persian. Rewrite it in English first."
-    : lenErr || benchErr || (fitting ? "Wait for the rewrite to finish." : "");
+    ? L("ورک‌فلوی ویدیو هنوز وصل نیست (VIDEO_WORKFLOW_URL روی Render).", "The video workflow is not connected yet (VIDEO_WORKFLOW_URL on Render).")
+    : words < 10 ? L("اسکریپت خالیه.", "The script is empty.")
+    : persian ? L("اسکریپت فارسیه. اول به انگلیسی بازنویسی‌اش کن.", "The script is in Persian. Rewrite it in English first.")
+    : lenErr || benchErr || (fitting ? L("صبر کن بازنویسی تموم بشه.", "Wait for the rewrite to finish.") : "");
 
   const submit = () => {
     if (blocker) return;
@@ -4548,35 +4576,35 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
   const block = { padding: "14px 16px", borderTop: `1px solid ${C.line}` };
 
   return (
-    <div className="ui-sheet-wrap" role="dialog" aria-modal="true" aria-label="English video" onClick={onClose}>
-      <div className="ui-sheet" dir="ltr" onClick={(e) => e.stopPropagation()} style={{ fontFamily: FONT, color: C.text }}>
+    <div className="ui-sheet-wrap" role="dialog" aria-modal="true" aria-label={L("ویدیوی انگلیسی", "English video")} onClick={onClose}>
+      <div className="ui-sheet" dir={uiDir()} onClick={(e) => e.stopPropagation()} style={{ fontFamily: FONT, color: C.text }}>
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px 12px" }}>
           <span aria-hidden style={{ width: 36, height: 36, borderRadius: 11, display: "grid", placeItems: "center", background: alpha(C.orangeDeep, 0.13), fontSize: 18, flexShrink: 0 }}>🎬</span>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15.5 }}>English video</div>
-            <div style={{ fontSize: 12, color: C.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{topic.title_en || topic.title_fa}</div>
+            <div style={{ fontWeight: 800, fontSize: 15.5 }}>{L("ویدیوی انگلیسی", "English video")}</div>
+            <div dir="auto" style={{ fontSize: 12, color: C.text2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{topic.title_en || topic.title_fa}</div>
           </div>
-          <button className="ui-btn" onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: 99, border: `1px solid ${C.line}`, background: C.surface, cursor: "pointer", fontSize: 15, color: C.text2 }}>✕</button>
+          <button className="ui-btn" onClick={onClose} aria-label={L("بستن", "Close")} style={{ width: 34, height: 34, borderRadius: 99, border: `1px solid ${C.line}`, background: C.surface, cursor: "pointer", fontSize: 15, color: C.text2 }}>✕</button>
         </div>
 
         <div style={{ overflowY: "auto", flex: 1 }}>
           {/* 1. length */}
           <div style={block}>
-            <div style={label}>1 · Length</div>
+            <div style={label}>1 · {L("مدت", "Length")}</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {VIDEO_LENGTHS.map(([s, l]) => (
-                <button key={s} className="ui-btn" onClick={() => set({ length: s })} style={chip(d.length === s)}>{l}</button>
+                <button key={s} className="ui-btn" onClick={() => set({ length: s })} style={chip(d.length === s)}>{L(l)}</button>
               ))}
-              <button className="ui-btn" onClick={() => set({ length: "custom" })} style={chip(d.length === "custom")}>Custom…</button>
+              <button className="ui-btn" onClick={() => set({ length: "custom" })} style={chip(d.length === "custom")}>{L("دلخواه…", "Custom…")}</button>
             </div>
             {d.length === "custom" && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
-                <input inputMode="numeric" value={d.customMin} onChange={(e) => set({ customMin: e.target.value.replace(/\D/g, "").slice(0, 2) })} style={{ ...field, width: 70, textAlign: "center" }} aria-label="Minutes" />
-                <span style={hint}>min</span>
-                <input inputMode="numeric" value={d.customSec} onChange={(e) => set({ customSec: e.target.value.replace(/\D/g, "").slice(0, 2) })} style={{ ...field, width: 70, textAlign: "center" }} aria-label="Seconds" />
-                <span style={hint}>sec</span>
-                {lenErr && <span style={{ fontSize: 12, color: C.reject, marginLeft: 4 }}>{lenErr}</span>}
+                <input inputMode="numeric" value={d.customMin} onChange={(e) => set({ customMin: e.target.value.replace(/\D/g, "").slice(0, 2) })} style={{ ...field, width: 70, textAlign: "center" }} aria-label={L("دقیقه", "Minutes")} />
+                <span style={hint}>{L("دقیقه", "min")}</span>
+                <input inputMode="numeric" value={d.customSec} onChange={(e) => set({ customSec: e.target.value.replace(/\D/g, "").slice(0, 2) })} style={{ ...field, width: 70, textAlign: "center" }} aria-label={L("ثانیه", "Seconds")} />
+                <span style={hint}>{L("ثانیه", "sec")}</span>
+                {lenErr && <span style={{ fontSize: 12, color: C.reject, marginInlineStart: 4 }}>{lenErr}</span>}
               </div>
             )}
           </div>
@@ -4584,9 +4612,9 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
           {/* 2. script */}
           <div style={block}>
             <div style={{ ...label, justifyContent: "space-between" }}>
-              <span>2 · Script <span style={hint}>· edit freely, this is what the presenter says</span></span>
+              <span>2 · {L("اسکریپت", "Script")} <span style={hint}>· {L("آزادانه ویرایش کن، این همون چیزیه که گوینده می‌گه", "edit freely, this is what the presenter says")}</span></span>
               {savedScript && d.script !== savedScript && (
-                <button className="ui-btn" onClick={() => set({ script: savedScript })} style={{ background: "transparent", border: "none", color: C.text2, fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>↺ Reset</button>
+                <button className="ui-btn" onClick={() => set({ script: savedScript })} style={{ background: "transparent", border: "none", color: C.text2, fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>↺ {L("برگردوندن", "Reset")}</button>
               )}
             </div>
             <textarea
@@ -4600,33 +4628,33 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
             <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 8, fontSize: 12 }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, color: !seconds ? C.text3 : fits ? C.success : C.orangeDeep }}>
                 <span aria-hidden style={{ width: 7, height: 7, borderRadius: 99, background: !seconds ? C.text3 : fits ? C.success : C.orange }} />
-                {words} words · about {fmtDur(spoken)} spoken
+                {L(`${words} کلمه · حدود ${fmtDur(spoken)} گفتار`, `${words} words · about ${fmtDur(spoken)} spoken`)}
               </span>
-              {seconds > 0 && <span style={{ color: C.text3 }}>target {fmtDur(seconds)} ≈ {targetWords} words{!fits && words ? (off > 0 ? " · too long" : " · too short") : ""}</span>}
+              {seconds > 0 && <span style={{ color: C.text3 }}>{L(`هدف ${fmtDur(seconds)} ≈ ${targetWords} کلمه`, `target ${fmtDur(seconds)} ≈ ${targetWords} words`)}{!fits && words ? (off > 0 ? L(" · زیادی بلند", " · too long") : L(" · زیادی کوتاه", " · too short")) : ""}</span>}
               {(persian || (!fits && seconds >= 10 && words >= 10)) && (
                 <button
                   className="ui-btn"
                   disabled={fitting}
                   onClick={() => onFit({ script: d.script, seconds, notes: d.notes.trim() })}
-                  style={{ marginLeft: "auto", background: alpha(C.orange, 0.12), color: C.orangeDeep, border: `1px solid ${alpha(C.orange, 0.4)}`, borderRadius: 9, padding: "6px 11px", fontSize: 12, fontWeight: 700, cursor: fitting ? "default" : "pointer", fontFamily: FONT }}
+                  style={{ marginInlineStart: "auto", background: alpha(C.orange, 0.12), color: C.orangeDeep, border: `1px solid ${alpha(C.orange, 0.4)}`, borderRadius: 9, padding: "6px 11px", fontSize: 12, fontWeight: 700, cursor: fitting ? "default" : "pointer", fontFamily: FONT }}
                 >
-                  {fitting ? "Rewriting…" : persian ? `✍️ Rewrite in English (${fmtDur(seconds)})` : `✂️ Fit to ${fmtDur(seconds)}`}
+                  {fitting ? L("در حال بازنویسی…", "Rewriting…") : persian ? L(`✍️ بازنویسی به انگلیسی (${fmtDur(seconds)})`, `✍️ Rewrite in English (${fmtDur(seconds)})`) : L(`✂️ اندازه کردن با ${fmtDur(seconds)}`, `✂️ Fit to ${fmtDur(seconds)}`)}
                 </button>
               )}
             </div>
-            {fitting && <div className="ui-pulse" style={{ marginTop: 6, fontSize: 11.5, color: C.text3 }}>Rewriting from the source text only; nothing invented to fill time.</div>}
+            {fitting && <div className="ui-pulse" style={{ marginTop: 6, fontSize: 11.5, color: C.text3 }}>{L("فقط از روی متن منبع بازنویسی می‌شه؛ برای پر کردن وقت چیزی ساخته نمی‌شه.", "Rewriting from the source text only; nothing invented to fill time.")}</div>}
             {fitError && <div style={{ marginTop: 6, fontSize: 11.5, color: C.reject }}>⚠️ {fitError}</div>}
 
             {/* Change the script with a note: rewritten from the source text, at the length chosen above. */}
             <div style={{ marginTop: 12, padding: 10, borderRadius: 12, border: `1px dashed ${alpha(C.orange, 0.45)}`, background: alpha(C.orange, 0.04) }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>✏️ Change the script <span style={hint}>· e.g. "more detail on who qualifies", "simpler words", "start with the deadline"</span></div>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>✏️ {L("تغییر اسکریپت", "Change the script")} <span style={hint}>· {L("مثلاً «جزئیات بیشتر دربارهٔ اینکه کی واجد شرایطه»، «کلمه‌های ساده‌تر»، «با مهلت شروع کن»", 'e.g. "more detail on who qualifies", "simpler words", "start with the deadline"')}</span></div>
               <textarea
                 value={change}
                 onChange={(e) => setChange(e.target.value)}
                 rows={2}
                 dir="auto"
                 disabled={fitting}
-                placeholder="What should change?"
+                placeholder={L("چه چیزی عوض بشه؟", "What should change?")}
                 style={{ ...field, lineHeight: 1.6, resize: "vertical" }}
               />
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
@@ -4636,35 +4664,35 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
                   onClick={() => onFit({ script: d.script, seconds, notes: "CHANGE REQUESTED BY THE EDITOR (apply it): " + change.trim() + (d.notes.trim() ? "\nVideo notes: " + d.notes.trim() : "") })}
                   style={{ background: change.trim() && !fitting ? C.orange : alpha(C.orange, 0.35), color: "#fff", border: "none", borderRadius: 9, padding: "7px 13px", fontSize: 12.5, fontWeight: 700, cursor: change.trim() && !fitting ? "pointer" : "default", fontFamily: FONT }}
                 >
-                  {fitting ? "Rewriting…" : "↻ Regenerate script"}
+                  {fitting ? L("در حال بازنویسی…", "Rewriting…") : L("↻ ساخت دوبارهٔ اسکریپت", "↻ Regenerate script")}
                 </button>
-                <span style={{ fontSize: 11.5, color: C.text3 }}>Length follows the choice above ({seconds ? fmtDur(seconds) : "not set"}); facts only from the source.</span>
+                <span style={{ fontSize: 11.5, color: C.text3 }}>{L(`مدت طبق انتخاب بالاست (${seconds ? fmtDur(seconds) : "تعیین نشده"})؛ فکت‌ها فقط از منبع.`, `Length follows the choice above (${seconds ? fmtDur(seconds) : "not set"}); facts only from the source.`)}</span>
               </div>
             </div>
           </div>
 
           {/* 3. notes */}
           <div style={block}>
-            <div style={label}>3 · Notes <span style={hint}>optional</span></div>
+            <div style={label}>3 · {L("یادداشت‌ها", "Notes")} <span style={hint}>{L("اختیاری", "optional")}</span></div>
             <textarea
               value={d.notes}
               onChange={(e) => set({ notes: e.target.value })}
               rows={3}
               dir="auto"
-              placeholder="Who it's for, tone, what to stress, on-screen text, B-roll ideas…"
+              placeholder={L("برای چه کسیه، لحن، روی چی تأکید بشه، متن روی صفحه، ایده‌های B-roll…", "Who it's for, tone, what to stress, on-screen text, B-roll ideas…")}
               style={{ ...field, lineHeight: 1.6, resize: "vertical" }}
             />
           </div>
 
           {/* 4. benchmark */}
           <div style={block}>
-            <div style={label}>4 · Benchmark video <span style={hint}>optional · the style to match</span></div>
+            <div style={label}>4 · {L("ویدیوی نمونه", "Benchmark video")} <span style={hint}>{L("اختیاری · سبکی که باید شبیهش بشه", "optional · the style to match")}</span></div>
             <BenchmarkPicker
               value={d.benchmark}
               ratio={d.ratio}
               onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}) })}
             />
-            <div style={{ ...hint, margin: "10px 0 6px" }}>Or a new benchmark video from Google Drive, or its link:</div>
+            <div style={{ ...hint, margin: "10px 0 6px" }}>{L("یا یک ویدیوی نمونهٔ تازه از Google Drive، یا لینکش:", "Or a new benchmark video from Google Drive, or its link:")}</div>
             <div style={{ marginBottom: 8 }}>
               <DrivePicker kind="video" onPick={(file) => set({ benchmark: file.url })} />
             </div>
@@ -4672,36 +4700,37 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
               <input
                 value={d.benchmark}
                 onChange={(e) => set({ benchmark: e.target.value })}
-                placeholder="Google Drive or HeyGen link"
+                dir="ltr"
+                placeholder={L("لینک Google Drive یا HeyGen", "Google Drive or HeyGen link")}
                 inputMode="url"
                 style={{ ...field, paddingRight: kind ? 110 : 12, borderColor: benchErr ? C.reject : C.line }}
               />
               {kind && !benchErr && (
                 <span style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, fontWeight: 700, color: C.teal, background: alpha(C.teal, 0.12), borderRadius: 99, padding: "3px 9px" }}>
-                  {LINK_KINDS[kind]}
+                  {L(LINK_KINDS[kind])}
                 </span>
               )}
             </div>
             <div style={{ ...hint, marginTop: 6, lineHeight: 1.5 }}>
-              {benchErr ? <span style={{ color: C.reject }}>{benchErr}</span> : "Sent to the workflow as the reference for look, pacing and framing. A Drive file must be shared as “Anyone with the link”."}
+              {benchErr ? <span style={{ color: C.reject }}>{benchErr}</span> : L("به‌عنوان مرجع ظاهر، ریتم و کادربندی برای ورک‌فلو فرستاده می‌شه. فایل Drive باید با «Anyone with the link» به اشتراک گذاشته شده باشه.", "Sent to the workflow as the reference for look, pacing and framing. A Drive file must be shared as “Anyone with the link”.")}
             </div>
           </div>
 
           {/* 5. format */}
           <div style={block}>
-            <div style={label}>5 · Format</div>
+            <div style={label}>5 · {L("قالب", "Format")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
-              {[["9:16", "Reel / Short", "9:16"], ["16:9", "YouTube", "16:9"], ["1:1", "Feed", "1:1"]].map(([v, l, sub]) => (
+              {[["9:16", ["ریلز / شورتز", "Reel / Short"], "9:16"], ["16:9", "YouTube", "16:9"], ["1:1", ["فید", "Feed"], "1:1"]].map(([v, l, sub]) => (
                 <button key={v} className="ui-btn" onClick={() => set({ ratio: v })} style={{ ...chip(d.ratio === v), height: "auto", padding: "8px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                  <span>{l}</span>
+                  <span>{L(l)}</span>
                   <span style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.7 }}>{sub}</span>
                 </button>
               ))}
             </div>
             <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-              <button className="ui-btn" onClick={() => set({ captions: !d.captions })} style={chip(d.captions)}>{d.captions ? "✓ " : ""}Burn in captions</button>
-              <button className="ui-btn" onClick={() => set({ voice: "primary" })} style={chip(d.voice === "primary")}>Voice: main clone</button>
-              <button className="ui-btn" onClick={() => set({ voice: "secondary" })} style={chip(d.voice === "secondary")}>Voice: second clone</button>
+              <button className="ui-btn" onClick={() => set({ captions: !d.captions })} style={chip(d.captions)}>{d.captions ? "✓ " : ""}{L("زیرنویس روی ویدیو", "Burn in captions")}</button>
+              <button className="ui-btn" onClick={() => set({ voice: "primary" })} style={chip(d.voice === "primary")}>{L("صدا: کلون اصلی", "Voice: main clone")}</button>
+              <button className="ui-btn" onClick={() => set({ voice: "secondary" })} style={chip(d.voice === "secondary")}>{L("صدا: کلون دوم", "Voice: second clone")}</button>
             </div>
           </div>
         </div>
@@ -4715,9 +4744,9 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
             disabled={!!blocker}
             style={{ width: "100%", background: blocker ? C.surfaceHi : C.orange, color: blocker ? C.text3 : "#fff", border: "none", borderRadius: 13, padding: "14px", fontWeight: 800, fontSize: 14.5, cursor: blocker ? "default" : "pointer", fontFamily: FONT }}
           >
-            🎬 Generate {seconds >= 10 ? fmtDur(seconds) + " " : ""}video
+            🎬 {L(`ساخت ویدیو${seconds >= 10 ? " " + fmtDur(seconds) : ""}`, `Generate ${seconds >= 10 ? fmtDur(seconds) + " " : ""}video`)}
           </button>
-          <div style={{ ...hint, textAlign: "center", marginTop: 7 }}>The workflow renders in HeyGen and sends the result to Telegram for approval.</div>
+          <div style={{ ...hint, textAlign: "center", marginTop: 7 }}>{L("ورک‌فلو ویدیو رو در HeyGen می‌سازه و نتیجه رو برای تأیید به تلگرام می‌فرسته.", "The workflow renders in HeyGen and sends the result to Telegram for approval.")}</div>
         </div>
       </div>
     </div>
@@ -4742,21 +4771,21 @@ function VideoPanel({ job, video, onRefresh, onOpen }) {
   const req = (video && video.request) || {};
   const tone = sendErr || st === "failed" ? C.reject : st === "done" ? C.success : C.orange;
   const title = sending
-    ? "Sending to the video workflow…"
-    : sendErr ? "Could not reach the video workflow"
-    : st === "requested" ? "Requested · waiting for the workflow"
-    : st === "rendering" ? "Rendering in HeyGen…"
-    : st === "done" ? "Video ready"
-    : st === "failed" ? "The workflow reported a failure"
-    : "Video";
+    ? L("در حال ارسال به ورک‌فلوی ویدیو…", "Sending to the video workflow…")
+    : sendErr ? L("به ورک‌فلوی ویدیو وصل نشد", "Could not reach the video workflow")
+    : st === "requested" ? L("درخواست شد · در انتظار ورک‌فلو", "Requested · waiting for the workflow")
+    : st === "rendering" ? L("در حال ساخت در HeyGen…", "Rendering in HeyGen…")
+    : st === "done" ? L("ویدیو آماده است", "Video ready")
+    : st === "failed" ? L("ورک‌فلو خطا گزارش داد", "The workflow reported a failure")
+    : L("ویدیو", "Video");
   const link = { display: "inline-flex", alignItems: "center", gap: 6, borderRadius: 11, padding: "9px 13px", fontSize: 13, fontWeight: 700, textDecoration: "none", fontFamily: FONT };
 
   return (
-    <div dir="ltr" className={"ui-fade" + (sending || waiting ? " ui-progress" : "")} style={{ ...card, padding: 14, fontFamily: FONT, borderColor: alpha(tone, 0.4) }}>
+    <div dir={uiDir()} className={"ui-fade" + (sending || waiting ? " ui-progress" : "")} style={{ ...card, padding: 14, fontFamily: FONT, borderColor: alpha(tone, 0.4) }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span aria-hidden className={sending || waiting ? "ui-pulse" : ""} style={{ width: 9, height: 9, borderRadius: 99, background: tone, flexShrink: 0 }} />
         <b style={{ fontSize: 14 }}>{title}</b>
-        {video && video.requested_at > 0 && <span style={{ marginLeft: "auto", fontSize: 11.5, color: C.text3 }}>{when(video.requested_at)}</span>}
+        {video && video.requested_at > 0 && <span style={{ marginInlineStart: "auto", fontSize: 11.5, color: C.text3 }}>{when(video.requested_at)}</span>}
       </div>
       {(sendErr || (st === "failed" && video.error)) && (
         <div style={{ marginTop: 6, fontSize: 12, color: C.reject }}>⚠️ {sendErr || video.error}</div>
@@ -4764,26 +4793,26 @@ function VideoPanel({ job, video, onRefresh, onOpen }) {
       {req.duration_sec > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, fontSize: 11.5, color: C.text2 }}>
           <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>⏱ {fmtDur(req.duration_sec)}</span>
-          {req.format && <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>▭ {req.format.aspect_ratio}{req.format.captions ? " · captions" : ""}</span>}
-          {req.script_en && <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>{wordCount(req.script_en)} words</span>}
+          {req.format && <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>▭ {req.format.aspect_ratio}{req.format.captions ? L(" · زیرنویس", " · captions") : ""}</span>}
+          {req.script_en && <span style={{ background: C.surfaceHi, borderRadius: 99, padding: "3px 9px" }}>{L(`${wordCount(req.script_en)} کلمه`, `${wordCount(req.script_en)} words`)}</span>}
           {req.benchmark && req.benchmark.url && (
             <a href={req.benchmark.url} target="_blank" rel="noopener noreferrer" style={{ background: alpha(C.teal, 0.1), color: C.teal, borderRadius: 99, padding: "3px 9px", textDecoration: "none", fontWeight: 600 }}>
-              benchmark ↗
+              {L("نمونه", "benchmark")} ↗
             </a>
           )}
         </div>
       )}
-      {waiting && <div style={{ marginTop: 8, fontSize: 11.5, color: C.text3 }}>HeyGen usually takes a few minutes. You can leave this page; the result is saved with the topic.</div>}
+      {waiting && <div style={{ marginTop: 8, fontSize: 11.5, color: C.text3 }}>{L("HeyGen معمولاً چند دقیقه طول می‌کشه. می‌تونی از این صفحه بری؛ نتیجه با موضوع ذخیره می‌شه.", "HeyGen usually takes a few minutes. You can leave this page; the result is saved with the topic.")}</div>}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
         {st === "done" && video.video_url && (
-          <a href={video.video_url} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ ...link, background: C.orange, color: "#fff" }}>▶ Watch / download</a>
+          <a href={video.video_url} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ ...link, background: C.orange, color: "#fff" }}>▶ {L("تماشا / دانلود", "Watch / download")}</a>
         )}
         {video && video.page_url && (
-          <a href={video.page_url} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ ...link, background: C.surface, color: C.text, border: `1px solid ${C.line}` }}>Open in HeyGen ↗</a>
+          <a href={video.page_url} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ ...link, background: C.surface, color: C.text, border: `1px solid ${C.line}` }}>{L("باز کردن در HeyGen", "Open in HeyGen")} ↗</a>
         )}
         {!sending && (
           <button className="ui-btn" onClick={onOpen} style={{ ...link, background: "transparent", color: C.text2, border: `1px solid ${C.line}`, cursor: "pointer" }}>
-            {st === "done" ? "↻ Make another version" : sendErr || st === "failed" ? "↻ Try again" : "✎ Edit and send again"}
+            {st === "done" ? L("↻ ساخت یک نسخهٔ دیگه", "↻ Make another version") : sendErr || st === "failed" ? L("↻ دوباره امتحان کن", "↻ Try again") : L("✎ ویرایش و ارسال دوباره", "✎ Edit and send again")}
           </button>
         )}
       </div>
@@ -4791,7 +4820,8 @@ function VideoPanel({ job, video, onRefresh, onOpen }) {
   );
 }
 
-function BackBtn({ onClick, label = "Deck" }) {
+function BackBtn({ onClick, label }) {
+  label = label || L("فهرست", "Deck");
   return (
     <button className="ui-btn ui-glass" onClick={onClick} style={{ border: `1px solid ${C.line}`, color: C.text, cursor: "pointer", fontSize: 12.5, fontWeight: 600, fontFamily: "'Geist', 'Vazirmatn', sans-serif", borderRadius: 99, padding: "7px 14px", display: "inline-flex", alignItems: "center", gap: 6 }}>
       ← {label}

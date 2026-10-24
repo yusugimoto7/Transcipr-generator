@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { Button } from "../components/ui/button";
+import { L, uiDir } from "../lib/i18n";
 
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const MIME = {
@@ -28,7 +29,7 @@ function script(src) {
       el.onload = resolve;
       el.onerror = () => {
         delete g.scripts[src];
-        reject(new Error("Google's picker did not load; check the connection"));
+        reject(new Error(L("انتخابگر Google بارگذاری نشد؛ اتصال اینترنت رو چک کن", "Google's picker did not load; check the connection")));
       };
       document.head.appendChild(el);
     });
@@ -55,11 +56,11 @@ function requestToken(cfg) {
       client_id: cfg.clientId,
       scope: SCOPE,
       callback: (r) => {
-        if (r.error) return reject(new Error(r.error === "access_denied" ? "Google sign-in was cancelled" : r.error));
+        if (r.error) return reject(new Error(r.error === "access_denied" ? L("ورود به Google لغو شد", "Google sign-in was cancelled") : r.error));
         g.token = { value: r.access_token, expires: Date.now() + Number(r.expires_in || 3600) * 1000 };
         resolve(r.access_token);
       },
-      error_callback: (e) => reject(new Error(e && e.type === "popup_closed" ? "Google sign-in was closed" : "Google sign-in did not open; allow pop-ups for this site")),
+      error_callback: (e) => reject(new Error(e && e.type === "popup_closed" ? L("پنجرهٔ ورود به Google بسته شد", "Google sign-in was closed") : L("ورود به Google باز نشد؛ پاپ‌آپ‌ها رو برای این سایت مجاز کن", "Google sign-in did not open; allow pop-ups for this site"))),
     });
     client.requestAccessToken({ prompt: "" });
   });
@@ -134,8 +135,8 @@ async function shareByLink(token, id) {
   const msg = (body.error && body.error.message) || "";
   throw new Error(
     res.status === 403
-      ? "Drive did not allow sharing this file by link (a shared drive or its owner blocks it). Share it as “Anyone with the link” in Drive, then paste its link."
-      : "could not share the file by link" + (msg ? ": " + msg : "")
+      ? L("Drive اجازه نداد این فایل با لینک به اشتراک گذاشته بشه (درایو مشترک یا صاحبش جلوش رو گرفته). در Drive اون رو روی «Anyone with the link» بذار، بعد لینکش رو این‌جا بچسبون.", "Drive did not allow sharing this file by link (a shared drive or its owner blocks it). Share it as “Anyone with the link” in Drive, then paste its link.")
+      : L("اشتراک‌گذاری فایل با لینک نشد", "could not share the file by link") + (msg ? ": " + msg : "")
   );
 }
 
@@ -150,7 +151,7 @@ async function driveError(res, what) {
   const body = await res.json().catch(() => ({}));
   const msg = (body.error && body.error.message) || "";
   if (res.status === 401) g.token = null;
-  throw new Error(`${what}${msg ? ": " + msg : ` (error ${res.status})`}`);
+  throw new Error(`${what}${msg ? ": " + msg : L(` (خطا ${res.status})`, ` (error ${res.status})`)}`);
 }
 
 async function makeFolder(token, name) {
@@ -159,7 +160,7 @@ async function makeFolder(token, name) {
     headers: { ...authHeader(token), "Content-Type": "application/json" },
     body: JSON.stringify({ name, mimeType: "application/vnd.google-apps.folder" }),
   });
-  if (!res.ok) await driveError(res, "could not make the folder in Drive");
+  if (!res.ok) await driveError(res, L("ساختن پوشه در Drive نشد", "could not make the folder in Drive"));
   return (await res.json()).id;
 }
 
@@ -170,11 +171,11 @@ async function uploadFile(token, name, blob, parent) {
     headers: { ...authHeader(token), "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": type },
     body: JSON.stringify({ name, parents: [parent] }),
   });
-  if (!init.ok) await driveError(init, `could not start uploading ${name}`);
+  if (!init.ok) await driveError(init, L(`آپلود ${name} شروع نشد`, `could not start uploading ${name}`));
   const where = init.headers.get("Location");
-  if (!where) throw new Error(`Drive gave no upload address for ${name}`);
+  if (!where) throw new Error(L(`Drive برای ${name} آدرس آپلود نداد`, `Drive gave no upload address for ${name}`));
   const put = await fetch(where, { method: "PUT", headers: { "Content-Type": type }, body: blob });
-  if (!put.ok) await driveError(put, `could not upload ${name}`);
+  if (!put.ok) await driveError(put, L(`آپلود ${name} نشد`, `could not upload ${name}`));
 }
 
 const fileName = (res, fallback) => {
@@ -187,7 +188,8 @@ const fileName = (res, fallback) => {
 };
 
 // `urls` are this app's own download links (they carry the person's sign-in).
-export function DriveSaveButton({ urls, folderName, disabled, label = "Save to Google Drive" }) {
+export function DriveSaveButton({ urls, folderName, disabled, label }) {
+  label = label || L("ذخیره در Google Drive", "Save to Google Drive");
   const [cfg, setCfg] = useState(null);
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState({ error: "", ok: "", link: "" });
@@ -201,22 +203,23 @@ export function DriveSaveButton({ urls, folderName, disabled, label = "Save to G
   }, []);
   if (!cfg) return null;
   if (!cfg.enabled)
-    return <small className="text-muted">Saving to Google Drive needs the Google keys (GOOGLE_PICKER_*) on the server.</small>;
+    return <small className="text-muted">{L("برای ذخیره در Google Drive، کلیدهای Google (GOOGLE_PICKER_*) باید روی سرور تنظیم بشن.", "Saving to Google Drive needs the Google keys (GOOGLE_PICKER_*) on the server.")}</small>;
   const click = () => {
     setNote({ error: "", ok: "", link: "" });
     const tokenP = requestToken(cfg); // inside the click, or phones block Google's popup
-    setBusy("Signing in to Google…");
+    setBusy(L("در حال ورود به Google…", "Signing in to Google…"));
     tokenP
       .then(async (token) => {
         const folder = await makeFolder(token, folderName);
         let n = 0;
         for (const u of urls) {
-          setBusy(`Saving ${++n} of ${urls.length}…`);
+          ++n;
+          setBusy(L(`در حال ذخیرهٔ ${n} از ${urls.length}…`, `Saving ${n} of ${urls.length}…`));
           const res = await fetch(u, { cache: "no-store" });
-          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `could not read a file (error ${res.status})`);
-          await uploadFile(token, fileName(res, `file ${n}`), await res.blob(), folder);
+          if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || L(`خوندن یه فایل نشد (خطا ${res.status})`, `could not read a file (error ${res.status})`));
+          await uploadFile(token, fileName(res, L(`فایل ${n}`, `file ${n}`)), await res.blob(), folder);
         }
-        if (alive.current) setNote({ error: "", ok: `Saved ${urls.length} file${urls.length > 1 ? "s" : ""} to the Drive folder “${folderName}”.`, link: `https://drive.google.com/drive/folders/${folder}` });
+        if (alive.current) setNote({ error: "", ok: L(`${urls.length} فایل در پوشهٔ «${folderName}» در Drive ذخیره شد.`, `Saved ${urls.length} file${urls.length > 1 ? "s" : ""} to the Drive folder “${folderName}”.`), link: `https://drive.google.com/drive/folders/${folder}` });
       })
       .catch((e) => alive.current && setNote({ error: e.message, ok: "", link: "" }))
       .finally(() => alive.current && setBusy(""));
@@ -232,7 +235,7 @@ export function DriveSaveButton({ urls, folderName, disabled, label = "Save to G
         <small className="text-[#067647]">
           {note.ok}{" "}
           <a href={note.link} target="_blank" rel="noreferrer" className="font-semibold underline">
-            Open the folder
+            {L("باز کردن پوشه", "Open the folder")}
           </a>
         </small>
       )}
@@ -255,7 +258,7 @@ function DriveMark() {
 
 export default function DrivePicker({ kind = "any", mode = "pick", onPick, disabled, label }) {
   const upload = mode === "upload";
-  label = label || (upload ? "Upload from this phone" : "Choose from Google Drive");
+  label = label || (upload ? L("آپلود از همین گوشی", "Upload from this phone") : L("انتخاب از Google Drive", "Choose from Google Drive"));
   const [cfg, setCfg] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState({ error: "", ok: "" });
@@ -276,7 +279,7 @@ export default function DrivePicker({ kind = "any", mode = "pick", onPick, disab
           {upload ? <Upload size={16} aria-hidden /> : <DriveMark />}
           {label}
         </Button>
-        {!upload && <small className="max-w-[260px] text-muted">Both buttons need the Google keys (GOOGLE_PICKER_*) on the server. Until then, paste a link below.</small>}
+        {!upload && <small className="max-w-[260px] text-muted" dir={uiDir()}>{L("هر دو دکمه به کلیدهای Google (GOOGLE_PICKER_*) روی سرور نیاز دارن. تا اون موقع، لینک رو پایین بچسبون.", "Both buttons need the Google keys (GOOGLE_PICKER_*) on the server. Until then, paste a link below.")}</small>}
       </span>
     );
   const click = () => {
@@ -290,7 +293,7 @@ export default function DrivePicker({ kind = "any", mode = "pick", onPick, disab
         await shareByLink(token, doc.id);
         const file = { id: doc.id, name: doc.name, mimeType: doc.mimeType, url: `https://drive.google.com/file/d/${doc.id}/view` };
         onPick(file);
-        if (alive.current) setNote({ error: "", ok: `${doc.name}: shared as “Anyone with the link”` });
+        if (alive.current) setNote({ error: "", ok: L(`${doc.name}: روی «Anyone with the link» به اشتراک گذاشته شد`, `${doc.name}: shared as “Anyone with the link”`) });
       })
       .catch((e) => {
         if (/invalid|expired|401/i.test(String(e.message))) g.token = null;
@@ -309,7 +312,7 @@ export default function DrivePicker({ kind = "any", mode = "pick", onPick, disab
           <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
           <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
         </svg>
-        {busy ? "Opening Google Drive…" : label}
+        {busy ? L("در حال باز کردن Google Drive…", "Opening Google Drive…") : label}
       </Button>
       {note.error && <small className="text-[#b91c1c]">{note.error}</small>}
       {note.ok && <small className="text-[#067647]">{note.ok}</small>}

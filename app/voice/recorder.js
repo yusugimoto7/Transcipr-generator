@@ -5,6 +5,7 @@
 // which one it got.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { L } from "../../lib/i18n";
 
 const MAX_S = 300;
 
@@ -44,7 +45,7 @@ export function useRecorder() {
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
-      throw new Error("the microphone is blocked: allow it for this site in the browser settings");
+      throw new Error(L("میکروفون بسته است: در تنظیمات مرورگر برای این سایت اجازه بده", "the microphone is blocked: allow it for this site in the browser settings"));
     }
     const type = pickType();
     const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
@@ -79,7 +80,7 @@ export async function sendAudio(url, blob) {
   form.append("audio", blob, `note.${ext}`);
   const res = await fetch(url, { method: "POST", body: form, cache: "no-store" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.error) throw new Error(data.error || `the note could not be read (${res.status})`);
+  if (!res.ok || data.error) throw new Error(data.error || L(`یادداشت خوانده نشد (${res.status})`, `the note could not be read (${res.status})`));
   return data;
 }
 

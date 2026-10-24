@@ -1,3 +1,4 @@
+import { Lfor } from "../../../lib/i18n";
 import { startJob, getJobs, publicJob, topicKeyOf, JOB_KINDS } from "../../../lib/jobs";
 import { currentUser } from "../../../lib/editing/auth";
 import { accessOf, PUBLISH_JOBS } from "../../../lib/editing/access";
@@ -21,13 +22,13 @@ export async function POST(request) {
     if (process.env.APP_LOGIN === "all" && PUBLISH_JOBS.includes(kind.replace(/@en$/, ""))) {
       const user = await currentUser(request).catch(() => null);
       if (!accessOf(user).includes("publishing")) {
-        return Response.json({ error: "your account cannot send to Telegram or WordPress; ask Hamed" }, { status: 403 });
+        return Response.json({ error: Lfor(request)("حسابت اجازهٔ ارسال به تلگرام یا وردپرس ندارد؛ از حامد بخواه", "your account cannot send to Telegram or WordPress; ask Hamed") }, { status: 403 });
       }
     }
     // Teaching the app a rule changes what everyone's content is made with: the admin's alone.
     if (kind === "learn") {
       const user = await currentUser(request).catch(() => null);
-      if (!user || !accessOf(user).includes("learn")) return Response.json({ error: "teaching the app a rule needs \"Teach the app\" on the Team page" }, { status: 403 });
+      if (!user || !accessOf(user).includes("learn")) return Response.json({ error: Lfor(request)("یاد دادن قاعده به برنامه نیاز به تیک «یاد دادن به برنامه» در صفحهٔ تیم دارد", "teaching the app a rule needs \"Teach the app\" on the Team page") }, { status: 403 });
       body.by = user.id;
     }
     const needsArticle = kind === "publish" || kind === "docfile";

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Mic, Square } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { canRecord, clock, sendAudio, useRecorder } from "./voice/recorder";
+import { L, uiDir } from "../lib/i18n";
 
 const TYPES = ["text", "search", ""];
 
@@ -120,7 +121,7 @@ export default function VoiceDictation() {
       setBusy(true);
       const { text } = await sendAudio("/api/voice/transcribe", blob);
       if (text) insert(el, text);
-      else setMsg("No words heard");
+      else setMsg(L("کلمه‌ای شنیده نشد", "No words heard"));
     } catch (e) {
       setMsg(e.message);
     } finally {
@@ -129,7 +130,7 @@ export default function VoiceDictation() {
   };
 
   const recording = rec.state === "recording";
-  const label = recording ? "Stop and write it" : busy ? "Writing…" : "Speak instead of typing (Farsi or English)";
+  const label = recording ? L("توقف و نوشتن", "Stop and write it") : busy ? L("در حال نوشتن…", "Writing…") : L("به‌جای تایپ حرف بزن (فارسی یا انگلیسی)", "Speak instead of typing (Farsi or English)");
   return (
     <>
       <div style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 2147483000 }}>
@@ -153,6 +154,7 @@ export default function VoiceDictation() {
       {(recording || busy || msg) && (
         <div
           role="status"
+          dir={uiDir()}
           style={{
             position: "fixed",
             top: pos.top + pos.size + 6,
@@ -167,7 +169,7 @@ export default function VoiceDictation() {
             boxShadow: "0 2px 8px rgba(16,24,40,0.2)",
           }}
         >
-          {msg || (recording ? `Listening ${clock(rec.seconds)} · tap ■ when done` : "Writing what you said…")}
+          {msg || (recording ? L(`در حال گوش دادن ${clock(rec.seconds)} · وقتی تموم شد ■ رو بزن`, `Listening ${clock(rec.seconds)} · tap ■ when done`) : L("در حال نوشتن حرف‌هات…", "Writing what you said…"))}
         </div>
       )}
     </>
