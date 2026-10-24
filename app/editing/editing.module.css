@@ -97,7 +97,11 @@ h2.h2 { font-size: 16px; margin: 0; }
 /* Lists are as tall as the window and scroll their cards inside, so the sideways scrollbar sits at the bottom of the screen where it can be seen and dragged, instead of far below a long column. */
 .kb { display: flex; gap: 12px; overflow-x: auto; align-items: flex-start; padding-bottom: 10px; scroll-snap-type: x proximity; scrollbar-width: thin; }
 .kbList { flex: 0 0 280px; background: #f3f0ea; border: 1px solid var(--line); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 8px; scroll-snap-align: start; max-height: max(320px, calc(100vh - 240px)); }
-@media (max-width: 600px) { .kbList { flex-basis: 84vw; max-height: max(320px, calc(100dvh - 260px)); } }
+/* On a phone one swipe moves exactly one list, centred, as on the calendar's board; never left half between two. */
+@media (max-width: 600px) {
+  .kb { scroll-snap-type: x mandatory; scroll-padding: 0 12px; overscroll-behavior-x: contain; }
+  .kbList { flex-basis: 84vw; max-height: max(320px, calc(100dvh - 260px)); scroll-snap-align: center; scroll-snap-stop: always; }
+}
 .kbHead { display: flex; align-items: center; gap: 8px; padding: 6px 8px; font-weight: 600; font-size: 14px; }
 .kbCount { color: var(--text-2); font-weight: 600; font-size: 12px; background: rgba(9, 30, 66, 0.08); border-radius: 99px; padding: 1px 8px; }
 .kbDot { width: 10px; height: 10px; border-radius: 50%; flex: none; }

@@ -12,6 +12,7 @@ import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
 import { L, uiDir, isFa } from "../lib/i18n";
+import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
@@ -4584,6 +4585,7 @@ function videoDraftFrom(script, last) {
     ratio: (last && last.format && last.format.aspect_ratio) || "9:16",
     captions: last && last.format ? last.format.captions !== false : true,
     voice: (last && last.voice) || "primary",
+    look: (last && isLook(last.look_id) && last.look_id) || DEFAULT_LOOK,
   };
 }
 
@@ -4650,6 +4652,7 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
       aspect_ratio: d.ratio,
       captions: d.captions,
       voice: d.voice,
+      look_id: d.look,
     });
   };
 
@@ -4777,7 +4780,7 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
             <BenchmarkPicker
               value={d.benchmark}
               ratio={d.ratio}
-              onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}) })}
+              onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}), ...(lookForBenchmark(v.url) ? { look: lookForBenchmark(v.url) } : {}) })}
             />
             <div style={{ ...hint, margin: "10px 0 6px" }}>{L("یا یک ویدیوی نمونهٔ تازه از Google Drive، یا لینکش:", "Or a new benchmark video from Google Drive, or its link:")}</div>
             <div style={{ marginBottom: 8 }}>
@@ -4799,13 +4802,33 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
               )}
             </div>
             <div style={{ ...hint, marginTop: 6, lineHeight: 1.5 }}>
-              {benchErr ? <span style={{ color: C.reject }}>{benchErr}</span> : L("به‌عنوان مرجع ظاهر، ریتم و کادربندی برای ورک‌فلو فرستاده می‌شه. فایل Drive باید با «Anyone with the link» به اشتراک گذاشته شده باشه.", "Sent to the workflow as the reference for look, pacing and framing. A Drive file must be shared as “Anyone with the link”.")}
+              {benchErr ? <span style={{ color: C.reject }}>{benchErr}</span> : L("به‌عنوان مرجع ریتم و کادربندی برای ورک‌فلو فرستاده می‌شه؛ لباس و جا رو بخش ۵ تعیین می‌کنه. فایل Drive باید با «Anyone with the link» به اشتراک گذاشته شده باشه.", "Sent to the workflow as the reference for pacing and framing; the outfit and place come from section 5. A Drive file must be shared as “Anyone with the link”.")}
             </div>
           </div>
 
-          {/* 5. format */}
+          {/* 5. look: the outfit and place HeyGen renders; a sample only shows one */}
           <div style={block}>
-            <div style={label}>5 · {L("قالب", "Format")}</div>
+            <div style={label}>5 · {L("ظاهر حامد در ویدیو", "Hamed's look in the video")} <span style={hint}>{L("لباس و جایی که ویدیو توش ساخته می‌شه", "the outfit and place the video is made in")}</span></div>
+            {bench && !lookForBenchmark(bench) && (
+              <div dir={uiDir()} style={{ fontSize: 12, lineHeight: 1.7, color: C.orangeDeep, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+                {L("از لباس این ویدیوی نمونه هنوز ظاهری در HeyGen ساخته نشده، پس ویدیو با ظاهری که این‌جا انتخاب می‌کنی ساخته می‌شه؛ نمونه فقط قالب و ریتم رو مشخص می‌کنه.", "HeyGen has no look of the outfit in this sample yet, so the video is made in the look you choose here; the sample only sets the format and pacing.")}
+              </div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+              {LOOKS.map((lk) => (
+                <button key={lk.id} type="button" className="ui-btn" onClick={() => set({ look: lk.id })} aria-pressed={d.look === lk.id} style={{ padding: 0, borderRadius: 12, overflow: "hidden", cursor: "pointer", background: C.surface, border: `2px solid ${d.look === lk.id ? C.teal : C.line}`, textAlign: "start", fontFamily: FONT }}>
+                  <img src={lk.picture} alt="" loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "9 / 14", objectFit: "cover" }} />
+                  <div dir={uiDir()} style={{ padding: "6px 7px", fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: C.text }}>
+                    {d.look === lk.id ? "✓ " : ""}{L(lk.name)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 6. format */}
+          <div style={block}>
+            <div style={label}>6 · {L("قالب", "Format")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
               {[["9:16", ["ریلز / شورتز", "Reel / Short"], "9:16"], ["16:9", "YouTube", "16:9"], ["1:1", ["فید", "Feed"], "1:1"]].map(([v, l, sub]) => (
                 <button key={v} className="ui-btn" onClick={() => set({ ratio: v })} style={{ ...chip(d.ratio === v), height: "auto", padding: "8px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>

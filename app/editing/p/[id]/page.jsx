@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
 import VoiceCorrections from "./VoiceCorrections";
+import MicButton from "../../../voice/MicButton";
 import { L, uiDir } from "../../../../lib/i18n";
 
 // Display names are pairs (lib/i18n.js), read with L() when drawn.
@@ -259,6 +260,7 @@ function CorrectionForm({ project, run, busy, act, general = false }) {
           <ImagePlus size={16} aria-hidden /> {shots.length ? L(`اسکرین‌شات (${shots.length}/3)`, `Screenshot (${shots.length}/3)`) : L("افزودن اسکرین‌شات", "Add screenshot")}
           <input type="file" accept="image/*" multiple hidden disabled={shots.length >= 3} onChange={(e) => add([...e.target.files]).then(() => (e.target.value = ""))} />
         </label>
+        <MicButton className={s.btn} onText={(t) => setNote((n) => (n.trim() ? n.trimEnd() + " " + t : t))} />
         {shots.map((u, i) => (
           <span key={i} className={s.shotThumb}>
             <img src={u} alt={L(`اسکرین‌شات ${i + 1}`, `Screenshot ${i + 1}`)} />
