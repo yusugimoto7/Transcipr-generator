@@ -203,6 +203,19 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               </div>
             </div>
 
+            {/* Which of the three Instagram pages, chosen up front where the networks are picked. */}
+            {d.channels.instagram.on && (
+              <label className={c.row}>
+                <span className={c.label}>{L("صفحه اینستاگرام", "Instagram page")}</span>
+                <select id="cmp-igaccount" className={`${c.select} ${c.grow}`} value={d.channels.instagram.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })}>
+                  <option value="">{L("بر اساس برچسب بازار (EU ← اروپا، بقیه ← @sugimotovisa)", "By market label (EU → Europe, the rest → @sugimotovisa)")}</option>
+                  {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
+                    <option key={k} value={k}>{name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <label className={c.row}>
               <span className={c.label}>{L("نام پست", "Post name")}</span>
               <input id="cmp-title" className={`${c.input} ${c.grow}`} dir="auto" placeholder={L("برای تیم؛ منتشر نمی‌شه", "For the team; not published")} value={d.title || ""} onChange={(e) => setD({ ...d, title: e.target.value })} />
@@ -231,14 +244,6 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       <option value="reel">{L("ریلز (ویدیو)", "Reel (video)")}</option>
                       <option value="post">{L("پست فید (عکس یا کاروسل)", "Feed post (image or carousel)")}</option>
                       <option value="story">{L("استوری (هر فایل یک استوری)", "Stories (each file its own story)")}</option>
-                    </select>
-                  )}
-                  {tab === "instagram" && (
-                    <select id="cmp-igaccount" className={c.select} value={editing.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })} title={L("این پست به کدام صفحه اینستاگرام برود", "Which Instagram page this post goes to")}>
-                      <option value="">{L("صفحه: بر اساس برچسب بازار (EU ← اروپا)", "Page: by market label (EU → Europe)")}</option>
-                      {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
-                        <option key={k} value={k}>{L("صفحه", "Page")}: {name}</option>
-                      ))}
                     </select>
                   )}
                   {tab === "youtube" && <input id="cmp-yttitle" className={`${c.input} ${c.grow}`} dir="auto" placeholder={L("عنوان YouTube", "YouTube title")} value={editing.title || ""} disabled={locked} onChange={(e) => setCh("youtube", { title: e.target.value })} />}
