@@ -14,6 +14,7 @@ import { apiAt } from "../editing/ui";
 import DrivePicker from "../DrivePicker";
 import { NETWORKS, NET, effectiveCaption, thumbOf, statusName, netName, publishStateName } from "./channels";
 import { L, uiDir } from "../../lib/i18n";
+import { IG_ACCOUNTS } from "../../lib/calendar/igAccounts";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
 
@@ -230,6 +231,14 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                       <option value="reel">{L("ریلز (ویدیو)", "Reel (video)")}</option>
                       <option value="post">{L("پست فید (عکس یا کاروسل)", "Feed post (image or carousel)")}</option>
                       <option value="story">{L("استوری (هر فایل یک استوری)", "Stories (each file its own story)")}</option>
+                    </select>
+                  )}
+                  {tab === "instagram" && (
+                    <select id="cmp-igaccount" className={c.select} value={editing.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })} title={L("این پست به کدام صفحه اینستاگرام برود", "Which Instagram page this post goes to")}>
+                      <option value="">{L("صفحه: بر اساس برچسب بازار (EU ← اروپا)", "Page: by market label (EU → Europe)")}</option>
+                      {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
+                        <option key={k} value={k}>{L("صفحه", "Page")}: {name}</option>
+                      ))}
                     </select>
                   )}
                   {tab === "youtube" && <input id="cmp-yttitle" className={`${c.input} ${c.grow}`} dir="auto" placeholder={L("عنوان YouTube", "YouTube title")} value={editing.title || ""} disabled={locked} onChange={(e) => setCh("youtube", { title: e.target.value })} />}
