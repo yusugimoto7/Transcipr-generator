@@ -14,7 +14,7 @@ import { apiAt } from "../editing/ui";
 import DrivePicker from "../DrivePicker";
 import { NETWORKS, NET, effectiveCaption, thumbOf, statusName, netName, publishStateName } from "./channels";
 import { L, uiDir } from "../../lib/i18n";
-import { IG_ACCOUNTS } from "../../lib/calendar/igAccounts";
+import { IG_ACCOUNTS, IG_ACCOUNT_NOTES } from "../../lib/calendar/igAccounts";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
 
@@ -208,9 +208,9 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
               <label className={c.row}>
                 <span className={c.label}>{L("صفحه اینستاگرام", "Instagram page")}</span>
                 <select id="cmp-igaccount" className={`${c.select} ${c.grow}`} value={d.channels.instagram.account || ""} disabled={locked} onChange={(e) => setCh("instagram", { account: e.target.value })}>
-                  <option value="">{L("بر اساس برچسب بازار (EU ← اروپا، بقیه ← @sugimotovisa)", "By market label (EU → Europe, the rest → @sugimotovisa)")}</option>
+                  <option value="">{L("خودکار (انگلیسی ← @sugimoto.visa، فارسی EU ← اروپا، بقیه ← @sugimotovisa)", "Automatic (English → @sugimoto.visa, Persian EU → Europe, the rest → @sugimotovisa)")}</option>
                   {Object.entries(IG_ACCOUNTS).map(([k, name]) => (
-                    <option key={k} value={k}>{name}</option>
+                    <option key={k} value={k}>{name} · {L(...IG_ACCOUNT_NOTES[k])}</option>
                   ))}
                 </select>
               </label>
