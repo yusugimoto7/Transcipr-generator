@@ -2496,9 +2496,12 @@ function OriginalText({ topic }) {
       {copied === k ? L("کپی شد ✓", "Copied ✓") : L("کپی", "Copy")}
     </button>
   );
-  const label = L({ lexbase: ["خبرنامهٔ Lexbase — همین مورد", "Lexbase newsletter — this item"], article: ["خبر منبع", "Source article"], snippet: ["بخشی از منبع", "Source excerpt"] }[state.kind] || ["منبع", "Source"]);
+  // A video link's text is its transcript (lib/video-transcript.js), shown under its own name.
+  const isTranscript = /^\[Video transcript\]/.test(String(state.text || ""));
+  const label = isTranscript ? L("متن گفته‌شده در ویدیو", "What the video says (transcript)") : L({ lexbase: ["خبرنامهٔ Lexbase — همین مورد", "Lexbase newsletter — this item"], article: ["خبر منبع", "Source article"], snippet: ["بخشی از منبع", "Source excerpt"] }[state.kind] || ["منبع", "Source"]);
   const isLex = state.kind === "lexbase" || topic.newsletter === "lexbase";
-  const body = { fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word" };
+  // Each paragraph takes its own direction, so a Persian transcript or article reads right to left.
+  const body = { fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", unicodeBidi: "plaintext", textAlign: "start" };
 
   if (state.loading) {
     return <div className="ui-pulse" style={{ fontSize: 13, color: C.text3, padding: "30px 0", textAlign: "center" }}>{L("در حال بارگذاری متن اصلی…", "Loading the original text…")}</div>;
@@ -2516,7 +2519,7 @@ function OriginalText({ topic }) {
             </div>
             {copyBtn("item", state.text)}
           </div>
-          <div style={body}>{state.text}</div>
+          <div style={body}>{isTranscript ? String(state.text).replace(/^\[Video transcript\]\n?/, "") : state.text}</div>
         </>
       )}
 
