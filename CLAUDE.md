@@ -57,7 +57,7 @@ There is no test suite. Diagnostics live in the deployed app instead:
 | Durable memory (Google Sheet via Apps Script) | `lib/sheet.js`, `google-apps-script.gs` |
 | Draws auto-poster (separate system) | `lib/draws/**`, `app/api/draws/**` |
 | Keep-awake + deck warm-up (every 10 min, GitHub Actions → `/api/topics?warm=1`) | `.github/workflows/keepwarm.yml` |
-| Instagram creators (list / reader / health page) | `lib/creators.js`, `lib/social/instagram.js`, `/api/social` |
+| Instagram creators (list / reader / health page). Each post carries `outlier`: its engagement (views, else likes + 3×comments) over the median of that account's last 12 posts (`withOutliers`); 2× and up gets a boost in the topic ranking, a note to the selector and a «📈 ×معمول» badge on the card | `lib/creators.js`, `lib/social/instagram.js`, `/api/social` |
 | Lexbase newsletter from Gmail (IMAP, read-only; PDF → items) | `lib/newsletter/lexbase.js`, `/api/lexbase` |
 | Background jobs (script, Telegram, article, draft, Word file, carousel, video run server-side) | `lib/jobs.js`, `app/api/jobs/route.js` |
 | Shared workspace — every used/archived topic and what was made from it, for the whole team (Sheet "Library" tab, replaces the old Library view) | `lib/workspace.js`, `app/api/workspace/route.js` |

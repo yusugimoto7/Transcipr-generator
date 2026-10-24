@@ -339,7 +339,9 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         Math.min((c.coverage || 1) - 1, 3) * heatWeight(c.published_ms, nowMs) +
         (sourceTier(c) > 0 || c.newsletter ? 3 : 0) +
         // Iranians, study permits, Start-up Visa: the audience's own files.
-        (focusOf(c).length ? 5 : 0),
+        (focusOf(c).length ? 5 : 0) +
+        // A creator's post that far beat that account's usual is something the audience wants.
+        (c.outlier >= 3 ? 6 : c.outlier >= 2 ? 3 : 0),
     }))
     .sort((a, b) => b.rank - a.rank);
   for (const { c } of byRank) {
@@ -387,6 +389,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     c.brief =
       (c.newsletter ? "[Lexbase newsletter, " + c.kind + (c.citation ? " " + c.citation : "") + "] " : "") +
       (focusOf(c).length ? "[priority: " + focusOf(c).join(", ") + "] " : "") +
+      (c.outlier >= 2 ? `[did ${c.outlier}x this account's usual engagement] ` : "") +
       (c.coverage > 1 && heatWeight(c.published_ms, nowMs) > 0
         ? `[covered by ${c.coverage} sources: ${c.outlets.slice(0, 4).join(", ")}] `
         : "") +
@@ -479,7 +482,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
           snippet: (p.groundText || src.snippet || "").slice(0, 1500),
           grounding: grounded ? "full" : "headline",
           score: p.score,
-          ...(src.social ? { social: src.social, author: src.author } : {}),
+          ...(src.social ? { social: src.social, author: src.author, ...(src.outlier >= 2 ? { outlier: src.outlier } : {}) } : {}),
           ...(src.newsletter ? { newsletter: src.newsletter, citation: src.citation || "", outcome: src.outcome || "", focus: src.focus || [], kind: src.kind, issue: src.issue, n: src.n } : {}),
           ...(src.coverage > 1 ? { coverage: src.coverage, outlets: src.outlets.slice(0, 6) } : {}),
         };
