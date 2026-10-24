@@ -150,6 +150,8 @@ undefined-identifier eslint check after editing `lib/carousel.js`.
 
 - **English carousels end with the bio link** (Hamed, Oct 24 2026): the last slide's only call to action is "Tap the link in our bio to book a consultation with Sugimoto Visa." (`CTA_TEXT_EN` in `lib/wizardPrompts.js`); never "comment the word", no Persian word in an English slide. The first English carousel said: comment "مشاوره".
 
+- **Carousel shape** (Hamed, Oct 24 2026, from the instagram-agent-skill review; `carouselShape` in `lib/carousel.js`): cover headline at most 6 English / 8 Persian words; other slides aim for about 25 English / 35 Persian words, but completeness wins and a fact is never dropped; with 6 slides or more the second-to-last is a stand-alone RECAP (the screenshot slide) and the last stays closing line + consultation line. Each slide's text goes to Instagram as its alt text.
+
 ## 8. Story (Instagram fact story)
 
 Full detail in `instagram-story`. Essentials:
