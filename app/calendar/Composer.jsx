@@ -7,6 +7,7 @@
 
 import { Check, Clock, Play, Plus } from "lucide-react";
 import PostFiles from "./PostFiles";
+import CaptionCheck from "./CaptionCheck";
 import { Badge } from "../../components/ui/badge";
 import { pickerNote } from "../../lib/tz";
 import { useEffect, useMemo, useState } from "react";
@@ -273,6 +274,7 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                   ))}
                 </div>
               </div>
+              {d.channels.instagram && d.channels.instagram.on && d.channels.instagram.format !== "story" && <CaptionCheck caption={effectiveCaption(d, "instagram")} c={c} />}
             </div>
 
             <div>
