@@ -841,7 +841,7 @@ export default function App() {
         if (!entry || openKeyRef.current !== key) return;
         const m = entry.materials || {};
         if (!only) {
-          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "" });
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [] });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
@@ -953,7 +953,7 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "" } : { ...scripts };
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [] } : { ...scripts };
   // A rewritten English script (into English, or to a length) replaces the
   // one on screen, unless it was a draft for the video editor only.
   const enJob = svJobs.script_en;
@@ -2431,6 +2431,30 @@ function formatNewsDate(d) {
 // Farsi + English lines don't get visually scrambled by a single forced base
 // direction. Each line resolves its own direction from its first strong char
 // and aligns to that direction.
+// Three other opening lines for the script (lib/hooks.js), each with what would make it lose the
+// viewer. The script itself is untouched: these are options to say instead of its first line.
+function HookOptions({ hooks, lang }) {
+  if (!hooks || !hooks.length) return null;
+  const en = lang === "en";
+  return (
+    <div dir={en ? "ltr" : "rtl"} style={{ marginBottom: 14, padding: "10px 12px", borderRadius: 12, background: alpha(C.orange, 0.06), border: `1px solid ${alpha(C.orange, 0.3)}` }}>
+      <div dir={uiDir()} style={{ fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 6, fontFamily: FONT }}>
+        {L("سه جملهٔ شروع دیگه (به‌جای جملهٔ اول سناریو)", "Three other opening lines (instead of the script's first line)")}
+      </div>
+      <ol style={{ margin: 0, paddingInlineStart: 20, display: "grid", gap: 6 }}>
+        {hooks.map((h, i) => (
+          <li key={i} style={{ fontFamily: en ? FONT : FA_FONT, fontSize: 13.5, lineHeight: 1.7, color: C.text }}>
+            <span data-copy>{h.line}</span>
+            <div dir={uiDir()} style={{ fontSize: 11.5, fontFamily: FONT, color: h.problems && h.problems.length ? C.orangeDeep : C.success }}>
+              {h.problems && h.problems.length ? "⚠ " + h.problems.join(" · ") : L("✓ مشکلی پیدا نشد", "✓ no problem found")}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function ScriptBody({ text, tab }) {
   const font = tab === "fa" ? "'Vazirmatn', sans-serif" : "'Geist', 'Vazirmatn', sans-serif";
   const lines = (text || " ").split("\n");
@@ -2971,7 +2995,10 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
               )}
             </div>
           ) : (
-            <ScriptBody text={active} tab={tab} />
+            <>
+              <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
+              <ScriptBody text={active} tab={tab} />
+            </>
           )}
         </div>
       </Section>
