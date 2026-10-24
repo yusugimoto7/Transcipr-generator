@@ -182,6 +182,7 @@ Full detail in `instagram-story`. Essentials:
   until a restart and the page says so.
 
 ## 11. Publishing and the calendar
+- **Three Instagram pages** (Hamed, Oct 24 2026): @sugimotovisa (Persian, Canada), @sugimotovisa.europe (Persian, Europe), @sugimoto.visa (English, Canada and Europe). English content goes to @sugimoto.visa by default; the composer's Instagram page field can change it.
 
 - Under carousels and stories: **🗓 Schedule** / **🚀 Post right away** to the content calendar
   (`app/CalendarButtons.jsx`), not Telegram buttons (Oct 2026). Hamed's click approves after a
