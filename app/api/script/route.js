@@ -1,5 +1,6 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiScript } from "../../../lib/openai";
+import { cleanText } from "../../../lib/clean-text";
 import { scriptPrompt, englishScriptRewritePrompt, persianShare } from "../../../lib/prompts";
 import { sourceTextFor } from "../../../lib/grounding";
 import { editorNoteBlock } from "../../../lib/custom-news";
@@ -58,7 +59,7 @@ export async function POST(request) {
       else throw new Error("the English script came back in Persian twice; try again");
     }
 
-    return Response.json({ text, provider });
+    return Response.json({ text: cleanText(text, { lang }), provider });
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
   }
