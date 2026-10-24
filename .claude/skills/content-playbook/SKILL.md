@@ -148,6 +148,8 @@ Parser is tolerant of Persian digits/markdown around `===SLIDE n===`, with retri
 model — a carousel once failed entirely because helper functions were deleted by accident: run the
 undefined-identifier eslint check after editing `lib/carousel.js`.
 
+- **English carousels end with the bio link** (Hamed, Oct 24 2026): the last slide's only call to action is "Tap the link in our bio to book a consultation with Sugimoto Visa." (`CTA_TEXT_EN` in `lib/wizardPrompts.js`); never "comment the word", no Persian word in an English slide. The first English carousel said: comment "مشاوره".
+
 ## 8. Story (Instagram fact story)
 
 Full detail in `instagram-story`. Essentials:
