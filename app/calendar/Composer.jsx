@@ -14,7 +14,7 @@ import { apiAt } from "../editing/ui";
 import DrivePicker from "../DrivePicker";
 import { NETWORKS, NET, effectiveCaption, thumbOf, statusName, netName, publishStateName } from "./channels";
 import { L, uiDir } from "../../lib/i18n";
-import { IG_ACCOUNTS, IG_ACCOUNT_NOTES } from "../../lib/calendar/igAccounts";
+import { IG_ACCOUNTS, IG_ACCOUNT_NOTES, igPageOf } from "../../lib/calendar/igAccounts";
 import { publishStateOf } from "../../lib/calendar/publishState";
 import { Preview } from "./Previews";
 import c from "./publishing.module.css";
@@ -214,6 +214,11 @@ export default function Composer({ boards, boardId, cardId, start, me, channels,
                     <option key={k} value={k}>{name} · {L(...IG_ACCOUNT_NOTES[k])}</option>
                   ))}
                 </select>
+                {!d.channels.instagram.account && (
+                  <span className={c.muted}>
+                    → {IG_ACCOUNTS[igPageOf(d, ((boards || []).find((b) => b.id === bid) || {}).labels)]}
+                  </span>
+                )}
               </label>
             )}
 
