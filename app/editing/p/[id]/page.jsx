@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Film, ImagePlus, Sparkles, Subtitles, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Film, ImagePlus, Lock, Sparkles, Subtitles, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -635,7 +635,7 @@ function Project({ id }) {
           setD(x);
           setError("");
         })
-        .catch((e) => setError(e.status === 403 ? L("این پروژه مال کس دیگه‌ایه.", "This project belongs to someone else.") : e.message)),
+        .catch((e) => setError(e.status === 403 ? L("این پروژه با تو به اشتراک گذاشته نشده.", "This project is not shared with you.") : e.message)),
     [id]
   );
   useEffect(() => {
@@ -671,14 +671,15 @@ function Project({ id }) {
             <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
               <Film size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> {L("فیلم خام", "raw footage")} ↗
             </a>
-            {d.owner && d.me.role === "admin" && (
+            {d.owner && (
               <span className={s.kbBadge} style={{ background: "none", padding: 0, gap: 6 }}>
-                <Avatar user={d.owner} size={22} /> {d.owner.name}
+                <Avatar user={d.owner} size={22} /> {L("صاحب پروژه: ", "Owner: ")}{d.owner.id === d.me.id ? L("خودت", "you") : d.owner.name}
               </span>
             )}
           </div>
         </div>
       </div>
+      <ProjectAccess id={p.id} d={d} reload={load} />
       <Steps runs={d.runs} />
       {d.runs.length > 1 && (
         <div className={s.seg} role="tablist" aria-label={L("نسخه‌ها", "Versions")}>
@@ -692,6 +693,90 @@ function Project({ id }) {
       {run.id === latest.id && <NextSteps project={p} stages={d.next_stages || []} reload={load} />}
       {error && <div className={s.error}>{error}</div>}
       {run && <RunView key={run.id} run={run} project={p} isLatest={run.id === latest.id} corrections={run.id === latest.id ? d.corrections : []} canApprove={d.can_approve} me={d.me} reload={load} />}
+    </div>
+  );
+}
+
+// Who sees the project. Open to the whole team by default; its owner and Hamed can narrow it to
+// chosen people (Oct 26 2026).
+function ProjectAccess({ id, d, reload }) {
+  const a = d.access || { team: true, members: [] };
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState(a);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const names = Object.fromEntries((d.team || []).map((u) => [u.id, u.name]));
+  const label = a.team
+    ? L("همهٔ تیم می‌تونن ویرایش کنن", "The whole team can edit")
+    : a.members.length
+      ? L("ویرایش فقط با: ", "Only these can edit: ") + a.members.map((m) => names[m] || "?").join("، ")
+      : L("فقط صاحب پروژه و حامد", "Only its owner and Hamed");
+  const Icon = a.team ? Users : Lock;
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/projects/${id}/access`, { method: "POST", body: f });
+      setOpen(false);
+      await reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        type="button"
+        className={s.kbBadge}
+        style={{ border: 0, cursor: d.can_share ? "pointer" : "default", gap: 6 }}
+        disabled={!d.can_share}
+        onClick={() => {
+          setF(a);
+          setOpen(!open);
+        }}
+        aria-expanded={open}
+      >
+        <Icon size={13} aria-hidden /> {label}
+        {d.can_share && <ChevronDown size={13} aria-hidden />}
+      </button>
+      {open && (
+        <div className={s.card} style={{ marginTop: 8, maxWidth: 460 }}>
+          <label className={s.row} style={{ fontSize: 14 }}>
+            <input type="radio" name="pa-mode" checked={f.team} onChange={() => setF({ ...f, team: true })} />
+            <span>{L("همهٔ تیم (هر کی به تدوین ویدیو دسترسی داره)", "The whole team (everyone with Video Editing)")}</span>
+          </label>
+          <label className={s.row} style={{ fontSize: 14 }}>
+            <input type="radio" name="pa-mode" checked={!f.team} onChange={() => setF({ ...f, team: false })} />
+            <span>{L("فقط این آدم‌ها:", "Only these people:")}</span>
+          </label>
+          {!f.team && (
+            <div style={{ paddingInlineStart: 24 }}>
+              {(d.team || []).length ? (
+                d.team.map((u) => (
+                  <label key={u.id} className={s.row} style={{ fontSize: 14 }}>
+                    <input
+                      type="checkbox"
+                      checked={f.members.includes(u.id)}
+                      onChange={(e) => setF({ ...f, members: e.target.checked ? [...f.members, u.id] : f.members.filter((x) => x !== u.id) })}
+                    />
+                    <span>{u.name}</span>
+                  </label>
+                ))
+              ) : (
+                <p className={s.muted}>{L("هنوز کسی جز خودت تو تیم نیست.", "No one else on the team yet.")}</p>
+              )}
+            </div>
+          )}
+          <p className={s.muted} style={{ fontSize: 13 }}>{L("کسایی که دسترسی دارن می‌تونن اصلاح بنویسن، نسخهٔ تازه بسازن و مرحلهٔ بعد رو شروع کنن. صاحب پروژه و حامد همیشه دسترسی دارن. دسترسی‌ها رو صاحب پروژه و حامد عوض می‌کنن؛ تأیید نسخه‌ها مثل قبله.", "People with access can write corrections, make a new version and start the next step. Its owner and Hamed always have access. The owner and Hamed change access; approving versions works as before.")}</p>
+          {error && <div className={s.error}>{error}</div>}
+          <div className={s.row}>
+            <Button onClick={save} disabled={busy}>{busy ? L("در حال ذخیره…", "Saving…") : L("ذخیره", "Save")}</Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>{L("بستن", "Close")}</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

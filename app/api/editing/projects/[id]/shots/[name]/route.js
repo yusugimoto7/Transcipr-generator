@@ -5,7 +5,7 @@ import { loadProject, shotOf } from "../../../../../../../lib/editing/projects";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// A correction's screenshot, for its project's owner and the admin only.
+// A correction's screenshot, for whoever may see its project (loadProject).
 export async function GET(request, { params }) {
   const g = await guard(request);
   if (g.res) return g.res;
