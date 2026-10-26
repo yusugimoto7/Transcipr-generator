@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Film, ImagePlus, Lock, Sparkles, Subtitles, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Sparkles, Subtitles, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -745,6 +745,7 @@ function Project({ id }) {
         </div>
       </div>
       <ProjectAccess id={p.id} d={d} reload={load} />
+      <ApprovedFiles p={p} files={d.approved || []} />
       <Steps runs={d.runs} project={p} />
       {d.runs.length > 1 && (
         <div className={s.seg} role="tablist" aria-label={L("نسخه‌ها", "Versions")}>
@@ -758,6 +759,50 @@ function Project({ id }) {
       {run.id === latest.id && <NextSteps project={p} stages={d.next_stages || []} reload={load} />}
       {error && <div className={s.error}>{error}</div>}
       {run && <RunView key={run.id} run={run} project={p} isLatest={run.id === latest.id} corrections={run.id === latest.id ? d.corrections : []} canApprove={d.can_approve} me={d.me} reload={load} />}
+    </div>
+  );
+}
+
+// Every stage's approved file, each its own file in Drive (the cut, the dub, the subtitled file, the
+// graphics file), one click away; and "continue in a new project" for any of them (Hamed, 26 Oct 2026).
+function ApprovedFiles({ p, files }) {
+  if (!files.length && !p.from) return null;
+  return (
+    <div className={s.card} style={{ marginBottom: 12 }}>
+      {p.from && (
+        <p className={s.muted} style={{ marginTop: 0 }}>
+          {L("ادامهٔ ", "Continues ")}
+          <Link href={`/editing/p/${p.from.project_id}`}>{p.from.title}</Link>
+          {" · "}
+          {L(STAGE[p.from.stage])} {L(`نسخهٔ ${p.from.version}`, `version ${p.from.version}`)}
+        </p>
+      )}
+      {files.length > 0 && (
+        <>
+          <h2 className={s.h2}>
+            <FileCheck size={16} aria-hidden style={{ verticalAlign: "-3px" }} /> {L("فایل‌های تأییدشده", "Approved files")}
+          </h2>
+          <ul className={s.list}>
+            {files.map((x) => (
+              <li key={x.run_id} className={s.row} style={{ flexWrap: "wrap" }}>
+                <b>{L(STAGE[x.stage])}</b>
+                <span className={s.muted}>{L(`نسخهٔ ${x.version}`, `version ${x.version}`)}</span>
+                <a className={s.kbBadge} href={x.view} target="_blank" rel="noreferrer">
+                  <Film size={13} aria-hidden /> {L("باز کردن ویدیو", "Open the video")}
+                </a>
+                {x.folder && (
+                  <a className={s.kbBadge} href={x.folder} target="_blank" rel="noreferrer">
+                    <FolderOpen size={13} aria-hidden /> {L("پوشه", "Folder")}
+                  </a>
+                )}
+                <Link className={s.kbBadge} href={`/editing/new?from=${p.id}&run=${x.run_id}&tab=${x.stage === "cut" ? "subtitles" : "dub"}`}>
+                  <Copy size={13} aria-hidden /> {L("ادامه در پروژهٔ جدید", "Continue in a new project")}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
