@@ -50,7 +50,7 @@ function Projects({ user }) {
   return (
     <div dir={uiDir()} style={{ display: "contents" }}>
       <div className={s.row}>
-        <h1 className={`${s.title} ${s.grow}`}>{admin ? L("همهٔ پروژه‌ها", "All projects") : L("پروژه‌های من", "My projects")}</h1>
+        <h1 className={`${s.title} ${s.grow}`}>{L("پروژه‌های تیم", "Team projects")}</h1>
         {admin && (
           <select id="owner" className={s.select} value={owner} onChange={(e) => setOwner(e.target.value)} aria-label={L("صاحب پروژه", "Owner")}>
             <option value="">{L("همه", "Everyone")}</option>
@@ -105,7 +105,7 @@ function Projects({ user }) {
                         <span className={s.kbBadge}><Clock size={12} aria-hidden /> {when(p.latest?.updated_at || p.created_at)}</span>
                         {ACTIVE.includes(st) && <span className={`${s.kbBadge} ${s.pulse}`}>{L("در حال کار…", "working…")}</span>}
                         <span className={s.grow} />
-                        {admin && <Avatar user={owner} size={24} />}
+                        <Avatar user={owner} size={24} />
                       </span>
                     </Link>
                   );
