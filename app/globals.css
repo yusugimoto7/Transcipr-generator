@@ -19,6 +19,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind's base layer (which sets these) is not loaded while the old screens keep their own reset,
+   so every transform utility (centred sheets, rotated arrows) was dropped as invalid CSS. */
+:root {
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+}
+
 :root {
   --font-geist-sans: "Geist";
   --ground: #f7f5f0;
