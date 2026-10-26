@@ -24,6 +24,6 @@ export async function GET(request) {
   out.videos = projects
     .filter((p) => p.latest && p.latest.status === "approved" && p.latest.delivery)
     // the latest approved stage is the finished video: with graphics, with subtitles, or the clean cut
-    .map((p) => ({ id: p.id, title: p.title + ({ subtitles: " (subtitles)", graphics: " (motion graphics)" }[p.latest.stage] || ""), topic: p.topic || "", url: p.latest.delivery.view, version: p.latest.version }));
+    .map((p) => ({ id: p.id, title: p.title + ({ dub: " (dub)", subtitles: " (subtitles)", graphics: " (motion graphics)" }[p.latest.stage] || ""), topic: p.topic || "", url: p.latest.delivery.view, version: p.latest.version }));
   return json(out);
 }
