@@ -13,6 +13,7 @@ import StoryDesigner from "./StoryDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
+import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
 import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
 
 /* ============================================================
@@ -3723,25 +3724,42 @@ async function saveStoryImage(url, name) {
   }
 }
 
-// The same names as STORY_BACKGROUNDS in lib/story/index.js.
-const STORY_BGS = [["purple", "#8a3893"], ["black", "#000000"], ["blue", "#2f6fed"], ["red", "#e53935"], ["green", "#0e7a4f"], ["white", "#ffffff"]];
-const BG_NAMES = { purple: ["بنفش", "Purple"], black: ["مشکی", "Black"], blue: ["آبی", "Blue"], red: ["قرمز", "Red"], green: ["سبز", "Green"], white: ["سفید", "White"] };
 // English names for the story templates, whose own list (lib/story/templates.js) holds only Persian.
 const STORY_TEMPLATE_EN = { simple: "Simple (default)", c2: "News card on a photo", c3: "News site page", c4: "Attention", c5: "Breaking news", c6: "Formal and calm", c7: "Local news", c8: "Did you know? Dark", c9: "Did you know? Bold", c10: "Did you know? Paper", c11: "Magazine", c12: "Warning", c16: "Bulletin", c17: "Red wave", c18: "Navy update", c19: "Tabloid" };
+// The ten preset backgrounds (lib/story/colours.js) and a colour wheel for any other: the picked
+// colour travels as its hex and is drawn with text colours that follow its brightness.
 function BgSwatches({ value, onPick, disabled }) {
+  const picked = isHexColour(value) ? value.toLowerCase() : "";
+  const wheel = useRef(null);
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      {STORY_BGS.map(([k, hex]) => (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      {STORY_BG_ORDER.map((k) => (
         <button
           key={k}
           className="ui-btn"
           disabled={disabled}
-          aria-label={BG_NAMES[k] ? L(BG_NAMES[k]) : k}
-          title={BG_NAMES[k] ? L(BG_NAMES[k]) : k}
+          aria-label={L(STORY_BG_NAMES[k])}
+          title={L(STORY_BG_NAMES[k])}
           onClick={() => onPick(k)}
-          style={{ width: 34, height: 34, borderRadius: 99, background: hex, cursor: disabled ? "default" : "pointer", border: value === k ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxShadow: value === k ? `0 0 0 2px #fff inset` : "none" }}
+          style={{ width: 34, height: 34, borderRadius: 99, background: STORY_BACKGROUNDS[k].bg, cursor: disabled ? "default" : "pointer", border: value === k ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxShadow: value === k ? `0 0 0 2px #fff inset` : "none" }}
         />
       ))}
+      <label
+        title={L("رنگ دلخواه", "Any colour")}
+        style={{ position: "relative", width: 34, height: 34, borderRadius: 99, cursor: disabled ? "default" : "pointer", border: picked ? `3px solid ${STORY_TONE}` : `1px solid ${C.line}`, boxShadow: picked ? "0 0 0 2px #fff inset" : "none", background: picked ? picked : "conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)", display: "grid", placeItems: "center", fontSize: 14, color: picked ? "transparent" : "#fff", textShadow: "0 0 3px rgba(0,0,0,.6)" }}
+      >
+        {picked ? "" : "+"}
+        <input
+          ref={wheel}
+          type="color"
+          disabled={disabled}
+          value={picked || "#8a3893"}
+          aria-label={L("انتخاب رنگ دلخواه", "Pick any colour")}
+          onChange={(e) => onPick(String(e.target.value).toLowerCase())}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "inherit" }}
+        />
+      </label>
+      {picked && <span dir="ltr" style={{ fontSize: 11.5, color: C.text3, fontFamily: "monospace" }}>{picked}</span>}
     </div>
   );
 }
