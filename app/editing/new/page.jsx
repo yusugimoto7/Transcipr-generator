@@ -6,11 +6,13 @@ import { api, s, Shell } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import { L, uiDir } from "../../../lib/i18n";
 
-// Three ways in (Hamed, Oct 26 2026): raw footage to edit, a finished video that only needs
-// subtitles, or one that only needs motion graphics. The last two start the project at that stage;
-// review, corrections and approval work as for any version.
+// Four ways in (Hamed, Oct 26 2026): raw footage to edit, a video to dub (Farsi to English or English
+// to Farsi, english-sugimotovisa's dub pipeline), a finished video that only needs subtitles, or one
+// that only needs motion graphics. All but the first start the project at that stage; review,
+// corrections and approval work as for any version.
 const TABS = [
   ["cut", ["تدوین", "Edit"]],
+  ["dub", ["دوبله", "Dub"]],
   ["subtitles", ["فقط زیرنویس", "Subtitles only"]],
   ["graphics", ["فقط موشن‌گرافیک", "Motion graphics only"]],
 ];
@@ -26,6 +28,7 @@ function NewProject() {
   const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
   const [sub, setSub] = useState({ size: "", height: "", words: "" });
   const [gfx, setGfx] = useState({ amount: "normal", brief: "", with_subtitles: false });
+  const [dubTo, setDubTo] = useState("en");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -46,7 +49,7 @@ function NewProject() {
       words_per_group: Number(sub.words) || 0,
     };
     const { touched, ...fields } = f;
-    const body = { ...fields, start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx } }) };
+    const body = { ...fields, start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo } } }) };
     try {
       const { project } = await api("/projects", { method: "POST", body });
       router.push(`/editing/p/${project.id}`);
@@ -97,6 +100,8 @@ function NewProject() {
       <p className={s.muted}>
         {tab === "cut"
           ? L("دستگاه تدوین فقط مکث‌ها، شروع‌های اشتباه و برداشت‌های تکراری رو حذف می‌کنه. قبل از هر تأییدی، خودت نتیجه رو بازبینی می‌کنی.", "The editing machine removes pauses, false starts and retakes only. You review the result before anything is approved.")
+          : tab === "dub"
+            ? L("ویدیو با صدای خود حامد به زبان دیگه دوبله می‌شه و لب‌ها با صدای جدید هماهنگ می‌شن (همون فرایند دوبلهٔ تأییدشده). ترجمه فقط از حرف‌های خود ویدیوئه و دعوت به اقدام همیشه «لینک رو بزنید و وقت مشاوره بگیرید» هست. قبل از تأیید، نتیجه رو می‌بینی و اصلاح می‌دی.", "The video is dubbed into the other language in Hamed's own voice and the lips are synced to it (the approved dub process). The translation uses only what the video says, and the call to action is always to tap the link and book a consultation. You review and correct before approving.")
           : tab === "subtitles"
             ? L("برای ویدیوی تدوین‌شده و آماده: چیزی بریده نمی‌شه، فقط زیرنویس کلمه‌به‌کلمه (کلمهٔ گفته‌شده زرد) اضافه می‌شه. قبل از تأیید، نتیجه رو می‌بینی و اصلاح می‌دی.", "For a finished, edited video: nothing is cut, only word-by-word subtitles are added (the spoken word turns yellow). You review and correct before approving.")
             : L("برای ویدیوی تدوین‌شده و آماده: اول یک طرح (استوری‌بورد با چند فریم) می‌بینی و تأیید می‌کنی، بعد موشن‌گرافیک ساخته می‌شه. هر نوشته روی صفحه فقط از حرف‌های خود ویدیوئه.", "For a finished, edited video: you first see and approve a plan (storyboard with still frames), then the graphics are rendered. Every word on screen comes from the video itself.")}
@@ -106,7 +111,7 @@ function NewProject() {
         <input id="title" className={s.input} value={f.title} onChange={set("title")} placeholder={L("اسپانسرشیپ داخل کانادا یا خارج از کانادا", "Inland vs overseas sponsorship")} required />
       </label>
       <div className={s.field}>
-        <label htmlFor="source_url">{tab === "cut" ? L("ویدیوی خام در Google Drive", "Raw video in Google Drive") : L("ویدیوی تدوین‌شده در Google Drive", "The edited video in Google Drive")}</label>
+        <label htmlFor="source_url">{tab === "cut" ? L("ویدیوی خام در Google Drive", "Raw video in Google Drive") : tab === "dub" ? L("ویدیویی که دوبله می‌شه، در Google Drive", "The video to dub, in Google Drive") : L("ویدیوی تدوین‌شده در Google Drive", "The edited video in Google Drive")}</label>
         <div className={s.row} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
           <DrivePicker kind="video" mode="upload" onPick={picked} />
           <DrivePicker kind="video" onPick={picked} />
@@ -128,6 +133,15 @@ function NewProject() {
             <option value="course">{L("درس دوره", "Course lesson")}</option>
           </select>
         </label>
+        {tab === "dub" ? (
+        <label className={`${s.field} ${s.grow}`}>
+          <span>{L("دوبله", "Dub")}</span>
+          <select id="dub_to" className={s.select} value={dubTo} onChange={(e) => setDubTo(e.target.value)}>
+            <option value="en">{L("از فارسی به انگلیسی", "Farsi to English")}</option>
+            <option value="fa">{L("از انگلیسی به فارسی", "English to Farsi")}</option>
+          </select>
+        </label>
+        ) : (
         <label className={`${s.field} ${s.grow}`}>
           <span>{L("زبان گفتار", "Spoken language")}</span>
           <select id="language" className={s.select} value={f.language} onChange={(e) => setF({ ...f, language: e.target.value, touched: true })}>
@@ -136,7 +150,17 @@ function NewProject() {
             <option value="en">{L("انگلیسی", "English")}</option>
           </select>
         </label>
+        )}
       </div>
+
+      {tab === "dub" && dubTo === "fa" && (
+        <small className={s.muted}>
+          {L(
+            "انگلیسی به فارسی: زیرنویس و کارت پایانی کشیده نمی‌شه؛ بعد از تأیید، زیرنویس فارسی رو با مرحلهٔ «زیرنویس» اضافه کن. هنوز کلون فارسیِ صدای حامد نداریم، پس فعلاً همون کلون انگلیسی فارسی حرف می‌زنه. ویدیو بهتره زیرنویسِ چسبیده نداشته باشه.",
+            "English to Farsi: no subtitles or end card are drawn; add Farsi subtitles with the Subtitles step after approval. There is no Farsi clone of Hamed's voice yet, so his English clone speaks the Farsi for now. Best with a video that has no burned-in subtitles."
+          )}
+        </small>
+      )}
 
       {tab === "subtitles" && subtitleFields}
 
@@ -178,6 +202,8 @@ function NewProject() {
             ? L("در حال بررسی لینک…", "Checking the link…")
             : tab === "cut"
               ? L("شروع تدوین", "Start editing")
+              : tab === "dub"
+                ? L("شروع دوبله", "Start the dub")
               : tab === "subtitles"
                 ? L("شروع زیرنویس", "Start the subtitles")
                 : L("شروع موشن‌گرافیک", "Start the motion graphics")}
