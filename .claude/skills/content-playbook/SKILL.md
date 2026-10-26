@@ -45,8 +45,8 @@ as the change**, in the team's own words where possible, with the date.
   «اکسپرس اینتری» (the site's main spelling, not «انتری»), visitor visa is «ویزای توریستی», job
   offer is «پیشنهاد شغلی» (spoken «جاب‌آفر»), draw is «قرعه‌کشی», stream is «استریم», work
   experience is «سابقه کار», ECA is «ارزیابی مدرک تحصیلی».
-- The team edits the glossary in the Google Sheet's **Glossary** tab, not in code; the file is the
-  seed and the fallback. Every writing step appends `await glossaryBlock(lang)` after the lessons;
+- The team edits the glossary in its own Google Sheet («Sugimoto Visa – Glossary», the id in
+  `lib/glossary.js`, shared by link, read as CSV), not in code; the file is the seed and the fallback. Every writing step appends `await glossaryBlock(lang)` after the lessons;
   the synchronous prompt builders carry only `TERM_RULE` (`lib/prompts.js`). English output gets
   the official English names and acronyms from the same list. A new term goes into the Sheet (or,
   for a new deploy, into `BUILTIN` and then `POST /api/glossary {seed:true}`), never into one

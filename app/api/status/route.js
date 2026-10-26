@@ -189,7 +189,7 @@ async function checkSheet() {
       const g = glossaryStatus();
       return [
         { name: "Google Sheet", ok: true, detail: `workspace reachable (${data.items.length} records)` },
-        { name: "Glossary", ok: g.source === "sheet", detail: g.source === "sheet" ? `${g.terms} terms from the Glossary tab` : `built-in list (${g.terms} terms)${g.error ? " — " + g.error : ""}; details at /api/glossary` },
+        { name: "Glossary", ok: g.source !== "builtin", detail: g.source !== "builtin" ? `${g.terms} terms from the ${g.tab} tab (${g.source})` : `built-in list (${g.terms} terms)${g.error ? " — " + g.error : ""}; details at /api/glossary` },
       ];
     }
     if (data && data.error) {

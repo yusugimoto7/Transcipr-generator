@@ -88,11 +88,12 @@ Render Cron Job, cron-job.org, GitHub Actions — hit
 `/api/draws/run?key=$DRAWS_CRON_SECRET`. Required if you run more than one
 instance, since the built-in scheduler assumes a single one.)
 
-The same Sheet carries the team's **Glossary** tab (one Persian name per immigration
-term, read before every piece the app writes; see `lib/glossary.js`). It needs the
-current `google-apps-script.gs` (version 4): paste it in, re-deploy the web app, and
-the app fills the tab with its built-in terms the first time it finds it empty.
-`/api/status` shows whether the terms come from the tab or from the built-in list.
+The team's **glossary** (one Persian name per immigration term, read before every
+piece the app writes; `lib/glossary.js`) lives in its own Google Sheet, "Sugimoto Visa –
+Glossary", shared as "anyone with the link can view" and read as CSV with no key
+(`GLOSSARY_SHEET_ID` / `GLOSSARY_SHEET_TAB` to point at another). A Glossary tab in the
+memory sheet works too, through the current `google-apps-script.gs` (version 4).
+`/api/status` shows where the terms come from.
 
 Already-posted draws are remembered in your existing Google Sheet, as records in
 the **Library** tab — this uses the Apps Script endpoints you already have
