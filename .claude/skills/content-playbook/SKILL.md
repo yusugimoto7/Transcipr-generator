@@ -66,6 +66,15 @@ as the change**, in the team's own words where possible, with the date.
   fact on the card. A page of menus and links counts as unreadable (`hasSubstance` in
   `lib/news.js`), and court decision pages (decisions.fct-cf / fca-caf / scc-csc) are read
   through their `?iframe=true` view, which holds the whole decision.
+- **A thin page gets more trusted material, not a hollow post** (Oct 26 2026: a card on proving a
+  genuine relationship rested on a canada.ca page that lists no documents, and the script only said
+  so: "if that page doesn't have it, research related pages on IRCC's site or other reliable sites
+  like CIC News and Immigration News, and name the sources at the bottom"). Before a topic's first
+  piece is written, a model judges whether its own text answers what the card promises; if not,
+  the search model finds 2-4 pages on `TRUSTED_HOSTS` only (`lib/supplement.js`), the app reads
+  them, and every writing step uses them after the main source. The script shows the search while
+  it runs and lists the extra sources under it; if even those fall short, it says what is missing.
+  Older scripts get a «نوشتن دوباره، با تحقیق بیشتر» button; a script note rewrite runs the check too.
 - Topic links `/?t=<key>` open in a new tab; Back/Forward stay in the app.
 
 ## 3. Lexbase newsletter

@@ -842,7 +842,7 @@ export default function App() {
         if (!entry || openKeyRef.current !== key) return;
         const m = entry.materials || {};
         if (!only) {
-          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [] });
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, before_check: !("sources" in m.script) });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
@@ -954,7 +954,7 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [] } : { ...scripts };
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null } : { ...scripts };
   // A rewritten English script (into English, or to a length) replaces the
   // one on screen, unless it was a draft for the video editor only.
   const enJob = svJobs.script_en;
@@ -1233,7 +1233,11 @@ export default function App() {
           scripts={viewScripts}
           initialArticle={EN ? savedEn.article || null : initialArticle}
           loading={viewLoading}
-          loadingText={loadingSaved && !(sj && sj.status === "running") ? L("در حال بارگذاری محتوای ذخیره‌شده…", "Loading saved material…") : ""}
+          loadingText={
+            sj && sj.status === "running" && sj.result && sj.result.stage === "supplement"
+              ? L("صفحهٔ اصلی جواب کامل رو نداشت؛ در حال پیدا کردن مطالب تکمیلی از منابع معتبر…", "The main page did not have the full answer; finding more from trusted sources…")
+              : loadingSaved && !(sj && sj.status === "running") ? L("در حال بارگذاری محتوای ذخیره‌شده…", "Loading saved material…") : ""
+          }
           error={viewError}
           tab={scriptTab}
           setTab={setScriptTab}
@@ -2722,6 +2726,33 @@ function Segmented({ value, onChange, items }) {
   );
 }
 
+// The trusted pages added because the topic's own page did not answer what the card promises
+// (lib/supplement.js). Every piece made from the topic was written from them too.
+function ExtraSources({ sources = [], supplement = null }) {
+  if (!sources.length && !(supplement && !supplement.enough)) return null;
+  return (
+    <div dir={uiDir()} style={{ marginTop: 14, padding: "10px 12px", borderRadius: 12, background: alpha(C.teal, 0.06), border: `1px solid ${alpha(C.teal, 0.25)}`, fontFamily: FA_FONT, fontSize: 12.5, lineHeight: 1.8 }}>
+      {sources.length > 0 && (
+        <>
+          <b>📚 {L("صفحهٔ اصلی کافی نبود؛ مطالب تکمیلی از این منابع پیدا شد:", "The main page was not enough; more material came from these sources:")}</b>
+          {sources.map((x) => (
+            <div key={x.url} dir="ltr" style={{ textAlign: isFa() ? "right" : "left" }}>
+              <a href={x.url} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, fontWeight: 700, wordBreak: "break-all" }}>{x.host}</a>{" "}
+              <span style={{ color: C.text3, fontSize: 11 }}>{x.url.replace(/^https?:\/\/(www\.)?[^/]+/, "").slice(0, 70)}</span>
+            </div>
+          ))}
+        </>
+      )}
+      {supplement && !supplement.enough && (
+        <div style={{ color: C.orangeDeep, marginTop: sources.length ? 6 : 0 }}>
+          ⚠️ {L("حتی منابع معتبر هم همهٔ چیزی رو که این موضوع لازم داره نداشتن: ", "Even the trusted sources did not hold everything this topic needs: ")}
+          <span dir="ltr">{supplement.missing}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // A note under the script, like the ones under the post, carousel and story: the script in this
 // tab is rewritten by it from the same source (job script_fix, script_fix@en for English), and the
 // note can teach a rule for every later script.
@@ -3055,6 +3086,12 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             <>
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
               <ScriptBody text={active} tab={tab} />
+              <ExtraSources sources={scripts.sources} supplement={scripts.supplement} />
+              {scripts.before_check && onWrite && (
+                <button className="ui-btn" onClick={() => window.confirm(L("اسکریپت فارسی و انگلیسی از نو نوشته می‌شن؛ اگه صفحهٔ اصلی کافی نباشه، اول از منابع معتبر مطلب تکمیلی پیدا می‌شه. ادامه بدیم؟", "Both scripts are written again; if the main page is not enough, more material is found from trusted sources first. Continue?")) && onWrite()} style={{ marginTop: 12, width: "100%", padding: "10px 14px", borderRadius: 12, border: `1px solid ${alpha(C.teal, 0.4)}`, background: alpha(C.teal, 0.08), color: C.text, fontWeight: 700, fontSize: 13, fontFamily: FA_FONT, cursor: "pointer" }}>
+                  🔎 {L("نوشتن دوباره، با تحقیق بیشتر اگه صفحهٔ اصلی کافی نباشه", "Write again, researching more if the main page is not enough")}
+                </button>
+              )}
               <ScriptNote key={tab} topic={topic} tab={tab} script={active} job={fixJobs[tab]} onJob={onJob} />
             </>
           )}
