@@ -62,7 +62,7 @@ export async function POST(request) {
     // Ground the script in the REAL article text so it's about the actual news,
     // not an invented topic. Falls back to the stored snippet if the fetch
     // fails (cached, so the parallel fa+en calls don't double-fetch).
-    const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
+    const sourceText = await sourceTextFor(topic, { maxChars: 6000 });
 
     const prompt = revise
       ? revisePrompt(topic, lang, sourceText, revise.script, revise.note) + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))

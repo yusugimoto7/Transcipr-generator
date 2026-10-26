@@ -3016,6 +3016,14 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
 
       {/* Scripts and the original text */}
       <Section title={L("اسکریپت و متن اصلی", "Script and original text")}>
+        {Array.isArray(topic.outline) && topic.outline.length > 0 && (
+          <div dir={uiDir()} style={{ ...card, padding: "10px 14px", marginBottom: 10, fontFamily: FA_FONT, fontSize: 12.5, lineHeight: 1.8 }}>
+            <b>🧭 {L("بخش‌هایی که این موضوع باید پوشش بده (از تحقیق):", "What this subject covers (from the research):")}</b>
+            <ol dir="ltr" style={{ margin: "4px 0 0", paddingInlineStart: 20, textAlign: "left", color: C.text2 }}>
+              {topic.outline.map((x, i) => <li key={i}>{x}</li>)}
+            </ol>
+          </div>
+        )}
         <div className="ui-fade" style={{ ...card, padding: 14, minHeight: 260 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
