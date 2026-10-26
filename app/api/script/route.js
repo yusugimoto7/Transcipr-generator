@@ -6,6 +6,7 @@ import { scriptPrompt, englishScriptRewritePrompt, persianShare } from "../../..
 import { sourceTextFor } from "../../../lib/grounding";
 import { editorNoteBlock } from "../../../lib/custom-news";
 import { lessonsBlock } from "../../../lib/learning";
+import { glossaryBlock } from "../../../lib/glossary";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,21 +65,23 @@ export async function POST(request) {
     // fails (cached, so the parallel fa+en calls don't double-fetch).
     const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
 
-    const prompt = revise
+    // The glossary goes last, after the lessons: one Persian name per term in every script.
+    const glossary = await glossaryBlock(lang === "en" ? "en" : "fa");
+    const prompt = (revise
       ? revisePrompt(topic, lang, sourceText, revise.script, revise.note) + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))
       : rewrite
       ? englishScriptRewritePrompt(topic, rewrite.script, sourceText, {
           seconds: Math.max(0, Math.min(600, Number(rewrite.seconds) || 0)),
           notes: String(rewrite.notes || "").slice(0, 1500),
         })
-      : scriptPrompt(topic, lang, sourceText) + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang));
+      : scriptPrompt(topic, lang, sourceText) + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))) + glossary;
 
     let { text, provider } = await write(prompt);
 
     // One corrective pass: translate the Farsi draft into English, grounded on
     // the same source, rather than show Farsi under "English script".
     if (lang === "en" && notEnglish(text)) {
-      const again = await write(englishScriptRewritePrompt(topic, text, sourceText));
+      const again = await write(englishScriptRewritePrompt(topic, text, sourceText) + glossary);
       if (again.text && !notEnglish(again.text)) ({ text, provider } = again);
       else throw new Error("the English script came back in Persian twice; try again");
     }

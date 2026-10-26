@@ -1,6 +1,7 @@
 import { callClaude } from "../../../lib/anthropic";
 import { openaiEnabled, openaiTopics, openaiRewrite } from "../../../lib/openai";
 import { sheetEnabled, getSeen, normalizeUrl } from "../../../lib/sheet";
+import { glossaryBlock } from "../../../lib/glossary";
 import {
   fetchFeedItems,
   fetchArticleText,
@@ -452,7 +453,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
       const toWrite = chunk.map((p) => ({ ...p.item, groundText: p.groundText || "" }));
       let written = [];
       try {
-        written = parseTopics(await rewrite(writeCardsPrompt(toWrite, today), 1500)) || [];
+        written = parseTopics(await rewrite(writeCardsPrompt(toWrite, today) + (await glossaryBlock("fa")), 1500)) || [];
       } catch (e) {
         console.log("[topics] write batch failed:", String(e?.message || e));
         return;

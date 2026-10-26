@@ -1,3 +1,4 @@
+import { glossaryStatus } from "../../../lib/glossary";
 import {
   wordpressEnabled,
   whoAmI,
@@ -185,7 +186,11 @@ async function checkSheet() {
     );
     const data = await r.json().catch(() => ({}));
     if (data && Array.isArray(data.items)) {
-      return [{ name: "Google Sheet", ok: true, detail: `workspace reachable (${data.items.length} records)` }];
+      const g = glossaryStatus();
+      return [
+        { name: "Google Sheet", ok: true, detail: `workspace reachable (${data.items.length} records)` },
+        { name: "Glossary", ok: g.source === "sheet", detail: g.source === "sheet" ? `${g.terms} terms from the Glossary tab` : `built-in list (${g.terms} terms)${g.error ? " — " + g.error : ""}; details at /api/glossary` },
+      ];
     }
     if (data && data.error) {
       return [{ name: "Google Sheet", ok: false, detail: String(data.error) + " (secret mismatch?)" }];

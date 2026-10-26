@@ -22,6 +22,14 @@
  * After that, every topic the app shows is appended as a row here, and it
  * will never show the same article twice — on any device, forever.
  *
+ * GLOSSARY (Oct 2026): the "Glossary" tab is the team's dictionary of immigration terms
+ * (columns en | abbr | fa | spoken | avoid | group | note | active). The app fills it with its
+ * built-in list the first time it finds the tab empty, then reads it before every piece it
+ * writes, so a term is named the same way in scripts, posts, articles, carousels, stories and
+ * video graphics. Edit the Persian in the `fa` column; put forms never to use in `avoid`;
+ * set `active` to "no" to drop a term. After pasting this version, re-deploy the web app
+ * (Deploy -> Manage deployments -> edit -> New version) or the app reports an old script.
+ *
  * OPTIONAL — "Make Google Doc" button (turns a generated article into a Google
  * Doc in your Drive): enable the Advanced Drive Service once. In the Apps Script
  * editor, click "Services" (the + next to Services in the left sidebar), pick
@@ -33,9 +41,11 @@ const SECRET = "CHANGE-ME-to-a-long-random-string";
 const SHEET_NAME = "Seen";
 const LIBRARY_SHEET = "Library";
 const POSTED_DRAWS_SHEET = "PostedDraws";
+const GLOSSARY_SHEET = "Glossary";
+const GLOSSARY_HEADER = ["en", "abbr", "fa", "spoken", "avoid", "group", "note", "active"];
 // Bump when editing so the live deployment can be identified via ?ping=1
 // (no secret needed; exposes nothing but this number).
-const SCRIPT_VERSION = 3;
+const SCRIPT_VERSION = 4;
 
 function doGet(e) {
   // Version probe — open <exec-url>?ping=1 in a browser to see which code is
@@ -89,6 +99,19 @@ function doGet(e) {
     }
   }
 
+  // Glossary: every row of the Glossary tab, keyed by the header row (so columns may be reordered).
+  if (e.parameter.type === "glossary") {
+    const values = getGlossarySheet().getDataRange().getValues();
+    const header = (values[0] || []).map(function (h) { return String(h || "").trim().toLowerCase(); });
+    const items = [];
+    values.slice(1).forEach(function (r) {
+      var o = {};
+      header.forEach(function (h, i) { if (h) o[h] = String(r[i] == null ? "" : r[i]).trim(); });
+      if (o.en || o.fa) items.push(o);
+    });
+    return json({ items: items, version: SCRIPT_VERSION });
+  }
+
   // Draw dedup memory: return every dedup key already posted.
   if (e.parameter.type === "posted_draws") {
     const rows = getPostedDrawsSheet().getDataRange().getValues().slice(1);
@@ -129,6 +152,26 @@ function doPost(e) {
       ]);
     });
     return json({ ok: true, added: body.library.length });
+  }
+
+  // Glossary seed: add the app's built-in terms the tab does not have yet (matched on `en`).
+  // Rows the team edited or switched off are never touched.
+  if (body.glossary_seed) {
+    const sh = getGlossarySheet();
+    const values = sh.getDataRange().getValues();
+    const header = (values[0] || []).map(function (h) { return String(h || "").trim().toLowerCase(); });
+    const enCol = header.indexOf("en");
+    const have = {};
+    if (enCol >= 0) values.slice(1).forEach(function (r) { var k = String(r[enCol] || "").trim().toLowerCase(); if (k) have[k] = true; });
+    const rows = [];
+    body.glossary_seed.forEach(function (it) {
+      var k = String(it.en || "").trim().toLowerCase();
+      if (!k || have[k]) return;
+      have[k] = true;
+      rows.push(header.map(function (h) { return h === "active" ? "yes" : String(it[h] == null ? "" : it[h]); }));
+    });
+    if (rows.length) sh.getRange(sh.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
+    return json({ ok: true, added: rows.length });
   }
 
   // Draw dedup memory: append the keys of draws that were just posted.
@@ -180,6 +223,17 @@ function getLibrarySheet() {
   if (!sh) {
     sh = ss.insertSheet(LIBRARY_SHEET);
     sh.appendRow(["timestamp", "id", "type", "title_fa", "title_en", "json"]);
+  }
+  return sh;
+}
+
+function getGlossarySheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(GLOSSARY_SHEET);
+  if (!sh) {
+    sh = ss.insertSheet(GLOSSARY_SHEET);
+    sh.appendRow(GLOSSARY_HEADER);
+    sh.setFrozenRows(1);
   }
   return sh;
 }

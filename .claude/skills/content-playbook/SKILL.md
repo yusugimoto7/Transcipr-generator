@@ -33,9 +33,24 @@ as the change**, in the team's own words where possible, with the date.
 
 - **Persian names first, English in parentheses the first time** (Oct 2026: "always name the
   Farsi names for specific words like IRCC, it should be اداره مهاجرت کانادا, put the English
-  names in parenthesis if needed"). The shared glossary is `FARSI_TERMS` in `lib/prompts.js`
-  (IRCC → اداره مهاجرت کانادا (IRCC), PNP → برنامه نامزدی استانی (PNP), ITA → دعوت‌نامه اقدام
-  (ITA), PGWP, LMIA, Start-up Visa…). Add new terms there, never in one prompt only.
+  names in parenthesis if needed").
+- **One glossary for every part** (Hamed, Oct 26 2026: "when we say work permit in English, in
+  Farsi call it اجازه کار; do not use other words"; it must cover scripts, posts, carousels, video
+  editing, motion graphics, everything). `lib/glossary.js`: ~285 terms taken from the site's own
+  pages (sugimotovisa.com/pr/, /pr/pnp/, /immigrate-to-canada/) plus the legal and European terms
+  already in use. Each term has one Persian name (`fa`), an acronym (`abbr`), a spoken short form
+  allowed after the first full mention (`spoken`), and forms never to use (`avoid`). Decisions
+  taken when the list was made, to change in the Sheet if Hamed wants otherwise: permits are
+  «اجازه» (اجازه کار، اجازه تحصیل، اجازه کار پس از تحصیل، اجازه کار آزاد), Express Entry is
+  «اکسپرس اینتری» (the site's main spelling, not «انتری»), visitor visa is «ویزای توریستی», job
+  offer is «پیشنهاد شغلی» (spoken «جاب‌آفر»), draw is «قرعه‌کشی», stream is «استریم», work
+  experience is «سابقه کار», ECA is «ارزیابی مدرک تحصیلی».
+- The team edits the glossary in the Google Sheet's **Glossary** tab, not in code; the file is the
+  seed and the fallback. Every writing step appends `await glossaryBlock(lang)` after the lessons;
+  the synchronous prompt builders carry only `TERM_RULE` (`lib/prompts.js`). English output gets
+  the official English names and acronyms from the same list. A new term goes into the Sheet (or,
+  for a new deploy, into `BUILTIN` and then `POST /api/glossary {seed:true}`), never into one
+  prompt only. Voice samples in the prompts are tone only and may still show older forms.
 - In scripts, specialised vocabulary keeps the original English phrase in parentheses.
 - Never a bare English acronym as the name of something. People's names stay as written.
 - Express Entry draw results are not topics (covered elsewhere).
@@ -111,7 +126,8 @@ as the change**, in the team's own words where possible, with the date.
 
 ## 5. Scripts (Farsi + English)
 
-- Farsi script: spoken, specific, the fact first; English terms in parentheses; glossary names.
+- Farsi script: spoken, specific, the fact first; English terms in parentheses; glossary names
+  (`glossaryBlock`, also on the English script, the hook options and the note rewrites).
 - Voice reference for news scripts: the team's own on-camera Farsi (corrected subtitles of the
   "Inland vs overseas" video, `VOICE_SAMPLE_FA` in `lib/prompts.js`): short spoken sentences, the
   Persian term then its English name, step-by-step explanation. Style only, never facts. Add more

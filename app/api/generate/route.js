@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateText } from "../../../lib/wizardOpenai.js";
+import { glossaryBlock } from "../../../lib/glossary.js";
 import {
   carouselPrompt,    parseCarousel,
   infographicPrompt, parseInfographic,
@@ -39,7 +40,8 @@ export async function POST(req) {
     );
   }
 
-  const prompt = handler.prompt(topic, sourceText || "");
+  // The Wizard writes in Persian unless the topic asks for English; either way the glossary names every term.
+  const prompt = handler.prompt(topic, sourceText || "") + (await glossaryBlock(topic.language === "english" ? "en" : "fa"));
 
   console.log("[generate] topic:", JSON.stringify({ title: topic.title, country: topic.country, format: topic.format }));
   console.log("[generate] prompt length:", prompt.length);
