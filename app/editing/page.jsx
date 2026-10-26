@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock } from "lucide-react";
+import { Clock, FileCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, when, ACTIVE, Avatar } from "./ui";
@@ -22,6 +22,8 @@ const EMPTY = {
   approved: ["هنوز ویدیوی تأییدشده‌ای نیست.", "No approved videos yet."],
   failed: ["چیزی ناموفق نبوده.", "Nothing failed."],
 };
+
+const STAGE = { cut: ["برش", "Cut"], dub: ["دوبله", "Dub"], subtitles: ["زیرنویس", "Subtitles"], graphics: ["موشن‌گرافیک", "Motion graphics"] };
 
 function Projects({ user }) {
   const admin = user.role === "admin";
@@ -98,6 +100,27 @@ function Projects({ user }) {
                         <span className={`${s.kbLabel} ${s["k_" + p.kind] || ""}`}>{KIND[p.kind] ? L(KIND[p.kind]) : p.kind}</span>
                       </span>
                       <span className={s.kbTitle} dir="auto">{p.title}</span>
+                      {(p.approved || []).length > 0 && (
+                        // one tap to each stage's approved file in Drive (a button, not a link: the card is one)
+                        <span className={s.kbBadges} title={L("فایل‌های تأییدشده", "Approved files")}>
+                          <FileCheck size={13} aria-hidden />
+                          {p.approved.map((x) => (
+                            <button
+                              key={x.run_id}
+                              type="button"
+                              className={s.kbBadge}
+                              style={{ border: 0, cursor: "pointer", color: "var(--green, #1a7f37)" }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                window.open(x.view, "_blank", "noopener");
+                              }}
+                            >
+                              {L(STAGE[x.stage])} v{x.version}
+                            </button>
+                          ))}
+                        </span>
+                      )}
                       {p.topic && <span className={`${s.kbTopic} ${/[\u0600-\u06FF]/.test(p.topic) ? s.rtl : ""}`}>{p.topic}</span>}
                       <span className={s.kbBadges}>
                         {st && <Pill status={st} />}

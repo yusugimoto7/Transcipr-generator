@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, s, Shell } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import { L, uiDir } from "../../../lib/i18n";
@@ -19,12 +19,35 @@ const TABS = [
 
 // Subtitle choices in words, turned into pixels for the frame (portrait 1080x1920, landscape
 // 1920x1080). 0 keeps the approved style; the worker keeps every value inside its safe bounds.
+// The approved files a project can be started from, in stage order (lib/editing/projects.js STAGES).
+const STAGE = { cut: ["برش", "Cut"], dub: ["دوبله", "Dub"], subtitles: ["زیرنویس", "Subtitles"], graphics: ["موشن‌گرافیک", "Motion graphics"] };
+
 const SIZES = { portrait: { small: 64, large: 88 }, landscape: { small: 54, large: 74 } };
 const HEIGHTS = { portrait: { higher: 1100, lower: 1400 }, landscape: { higher: 800, lower: 960 } };
 
 function NewProject() {
   const router = useRouter();
-  const [tab, setTab] = useState("cut");
+  const q = useSearchParams();
+  const [tab, setTab] = useState(q.get("tab") && q.get("tab") in STAGE ? q.get("tab") : "cut");
+  // The video can be another project's approved file instead of a Drive link (Hamed, 26 Oct 2026:
+  // "use the existing card"): the cut of one project becomes the video to dub or subtitle in a new one.
+  const [mode, setMode] = useState(q.get("from") ? "project" : "link");
+  const [projects, setProjects] = useState(null);
+  const [from, setFrom] = useState({ project_id: q.get("from") || "", run_id: q.get("run") || "" });
+  useEffect(() => {
+    if (mode !== "project" || projects) return;
+    api("/projects")
+      .then((d) => setProjects(d.projects.filter((p) => (p.approved || []).length)))
+      .catch(() => setProjects([]));
+  }, [mode, projects]);
+  const origin = (projects || []).find((p) => p.id === from.project_id);
+  useEffect(() => {
+    // the latest stage's file is the usual choice; the title follows the project it came from
+    if (!origin) return;
+    const files = origin.approved || [];
+    if (!files.some((x) => x.run_id === from.run_id)) setFrom((x) => ({ ...x, run_id: files[files.length - 1].run_id }));
+    setF((x) => ({ ...x, title: x.title || origin.title, kind: origin.kind || x.kind }));
+  }, [origin, from.run_id]);
   const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
   const [sub, setSub] = useState({ size: "", height: "", words: "" });
   const [gfx, setGfx] = useState({ amount: "normal", brief: "", with_subtitles: false });
@@ -49,7 +72,12 @@ function NewProject() {
       words_per_group: Number(sub.words) || 0,
     };
     const { touched, ...fields } = f;
-    const body = { ...fields, start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo } } }) };
+    if (mode === "project" && !(from.project_id && from.run_id)) {
+      setError(L("یک پروژه و یکی از فایل‌های تأییدشده‌ش رو انتخاب کن.", "Choose a project and one of its approved files."));
+      setBusy(false);
+      return;
+    }
+    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo } } }) };
     try {
       const { project } = await api("/projects", { method: "POST", body });
       router.push(`/editing/p/${project.id}`);
@@ -110,6 +138,50 @@ function NewProject() {
         <span>{L("عنوان", "Title")}</span>
         <input id="title" className={s.input} value={f.title} onChange={set("title")} placeholder={L("اسپانسرشیپ داخل کانادا یا خارج از کانادا", "Inland vs overseas sponsorship")} required />
       </label>
+      <div className={s.row} role="radiogroup" aria-label={L("ویدیو از کجا", "Where the video comes from")}>
+        <label className={s.row} style={{ fontSize: 14 }}>
+          <input type="radio" name="src-mode" checked={mode === "link"} onChange={() => setMode("link")} />
+          <span>{L("ویدیو از Google Drive", "A video from Google Drive")}</span>
+        </label>
+        <label className={s.row} style={{ fontSize: 14 }}>
+          <input type="radio" name="src-mode" checked={mode === "project"} onChange={() => setMode("project")} />
+          <span>{L("از یک پروژهٔ موجود", "From an existing project")}</span>
+        </label>
+      </div>
+      {mode === "project" && (
+        <div className={s.field}>
+          <span>{L("پروژه و فایل تأییدشده‌ای که ادامه داده می‌شه", "The project and the approved file to continue from")}</span>
+          {!projects ? (
+            <p className={s.muted}>{L("در حال خواندن پروژه‌ها…", "Reading the projects…")}</p>
+          ) : !projects.length ? (
+            <p className={s.muted}>{L("هنوز پروژه‌ای با فایل تأییدشده نیست.", "No project has an approved file yet.")}</p>
+          ) : (
+            <div className={s.row} style={{ flexWrap: "wrap" }}>
+              <select id="from_project" className={`${s.select} ${s.grow}`} value={from.project_id} onChange={(e) => setFrom({ project_id: e.target.value, run_id: "" })}>
+                <option value="">{L("انتخاب پروژه…", "Choose a project…")}</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+              {origin && (
+                <select id="from_run" className={`${s.select} ${s.grow}`} value={from.run_id} onChange={(e) => setFrom({ ...from, run_id: e.target.value })}>
+                  {(origin.approved || []).map((x) => (
+                    <option key={x.run_id} value={x.run_id}>
+                      {L(STAGE[x.stage])} · {L(`نسخهٔ ${x.version}`, `version ${x.version}`)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+          <small className={s.muted}>
+            {L("پروژهٔ جدیدی ساخته می‌شه که همون فایل رو ادامه می‌ده؛ پروژهٔ قبلی و فایل‌هاش دست نمی‌خورن.", "A new project is made that continues that file; the project it came from and its files are left as they are.")}
+          </small>
+        </div>
+      )}
+      {mode === "link" && (
       <div className={s.field}>
         <label htmlFor="source_url">{tab === "cut" ? L("ویدیوی خام در Google Drive", "Raw video in Google Drive") : tab === "dub" ? L("ویدیویی که دوبله می‌شه، در Google Drive", "The video to dub, in Google Drive") : L("ویدیوی تدوین‌شده در Google Drive", "The edited video in Google Drive")}</label>
         <div className={s.row} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -124,6 +196,7 @@ function NewProject() {
           )}
         </small>
       </div>
+      )}
       <div className={s.row}>
         <label className={`${s.field} ${s.grow}`}>
           <span>{L("نوع", "Kind")}</span>
@@ -214,5 +287,14 @@ function NewProject() {
 }
 
 export default function Page() {
-  return <Shell>{() => <NewProject />}</Shell>;
+  // useSearchParams needs a Suspense boundary for the static build
+  return (
+    <Shell>
+      {() => (
+        <Suspense fallback={null}>
+          <NewProject />
+        </Suspense>
+      )}
+    </Shell>
+  );
 }
