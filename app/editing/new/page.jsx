@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, s, Shell } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import { L, uiDir } from "../../../lib/i18n";
+import { Sheet, SheetContent } from "../../../components/ui/sheet";
+import { Button } from "../../../components/ui/button";
+import { Play, Check } from "lucide-react";
 
 // Four ways in (Hamed, Oct 26 2026): raw footage to edit, a video to dub (Farsi to English or English
 // to Farsi, english-sugimotovisa's dub pipeline), a finished video that only needs subtitles, or one
@@ -22,6 +25,48 @@ const TABS = [
 // The approved files a project can be started from, in stage order (lib/editing/projects.js STAGES).
 const STAGE = { cut: ["برش", "Cut"], dub: ["دوبله", "Dub"], subtitles: ["زیرنویس", "Subtitles"], graphics: ["موشن‌گرافیک", "Motion graphics"] };
 
+const fmt = (sec) => {
+  const n = Math.round(Number(sec) || 0);
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+};
+
+// One approved file as a picture: the preview's thumbnail from Drive, the project's title, the stage
+// and version. A tap on the picture plays it in place; "Choose" takes it (Hamed, 26 Oct 2026: a
+// picker with previews, not a list of names).
+function FileCard({ project, file, chosen, onChoose }) {
+  const [playing, setPlaying] = useState(false);
+  const pv = file.preview;
+  return (
+    <div className={s.card} style={{ padding: 0, overflow: "hidden", border: chosen ? "2px solid var(--orange)" : undefined }}>
+      {playing && pv ? (
+        <iframe src={pv.embed} allow="autoplay" title={project.title} style={{ width: "100%", aspectRatio: project.kind === "reel" ? "9 / 16" : "16 / 9", border: 0, display: "block", background: "#000" }} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => pv && setPlaying(true)}
+          aria-label={L("پخش پیش‌نمایش", "Play the preview")}
+          style={{ display: "grid", placeItems: "center", width: "100%", aspectRatio: project.kind === "reel" ? "9 / 16" : "16 / 9", border: 0, padding: 0, cursor: pv ? "pointer" : "default",
+            background: pv ? `#0b0f14 url(https://drive.google.com/thumbnail?id=${pv.id}&sz=w600) center / cover no-repeat` : "#0b0f14" }}
+        >
+          {pv ? <span className={s.play}><Play size={16} /></span> : <span className={s.muted} style={{ color: "#aaa", fontSize: 13 }}>{L("پیش‌نمایشی نیست", "No preview")}</span>}
+        </button>
+      )}
+      <div style={{ padding: "8px 10px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <span className={s.kbTitle} dir="auto">{project.title}</span>
+        <span className={s.kbBadges}>
+          <span className={s.kbBadge}>{L(STAGE[file.stage])} v{file.version}</span>
+          {file.output_s ? <span className={s.kbBadge}>{fmt(file.output_s)}</span> : null}
+        </span>
+        {onChoose && (
+          <Button type="button" size="sm" variant={chosen ? "default" : "outline"} onClick={() => onChoose(project, file)}>
+            {chosen ? <><Check /> {L("انتخاب‌شده", "Chosen")}</> : L("انتخاب", "Choose")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const SIZES = { portrait: { small: 64, large: 88 }, landscape: { small: 54, large: 74 } };
 const HEIGHTS = { portrait: { higher: 1100, lower: 1400 }, landscape: { higher: 800, lower: 960 } };
 
@@ -34,6 +79,7 @@ function NewProject() {
   const [mode, setMode] = useState(q.get("from") ? "project" : "link");
   const [projects, setProjects] = useState(null);
   const [from, setFrom] = useState({ project_id: q.get("from") || "", run_id: q.get("run") || "" });
+  const [pick, setPick] = useState(false);
   useEffect(() => {
     if (mode !== "project" || projects) return;
     api("/projects")
@@ -151,31 +197,42 @@ function NewProject() {
       {mode === "project" && (
         <div className={s.field}>
           <span>{L("پروژه و فایل تأییدشده‌ای که ادامه داده می‌شه", "The project and the approved file to continue from")}</span>
-          {!projects ? (
-            <p className={s.muted}>{L("در حال خواندن پروژه‌ها…", "Reading the projects…")}</p>
-          ) : !projects.length ? (
-            <p className={s.muted}>{L("هنوز پروژه‌ای با فایل تأییدشده نیست.", "No project has an approved file yet.")}</p>
-          ) : (
-            <div className={s.row} style={{ flexWrap: "wrap" }}>
-              <select id="from_project" className={`${s.select} ${s.grow}`} value={from.project_id} onChange={(e) => setFrom({ project_id: e.target.value, run_id: "" })}>
-                <option value="">{L("انتخاب پروژه…", "Choose a project…")}</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-              {origin && (
-                <select id="from_run" className={`${s.select} ${s.grow}`} value={from.run_id} onChange={(e) => setFrom({ ...from, run_id: e.target.value })}>
-                  {(origin.approved || []).map((x) => (
-                    <option key={x.run_id} value={x.run_id}>
-                      {L(STAGE[x.stage])} · {L(`نسخهٔ ${x.version}`, `version ${x.version}`)}
-                    </option>
-                  ))}
-                </select>
-              )}
+          {origin && from.run_id && (
+            <div style={{ maxWidth: 260 }}>
+              <FileCard project={origin} file={(origin.approved || []).find((x) => x.run_id === from.run_id) || origin.approved[0]} chosen />
             </div>
           )}
+          <div>
+            <Button type="button" variant="outline" onClick={() => setPick(true)}>
+              {origin && from.run_id ? L("عوض کردن", "Change") : L("انتخاب از پروژه‌ها…", "Choose from the projects…")}
+            </Button>
+          </div>
+          <Sheet open={pick} onOpenChange={setPick}>
+            <SheetContent title={L("کدوم فایل ادامه داده بشه؟", "Which file to continue?")} className="md:w-[min(960px,94vw)]">
+              {!projects ? (
+                <p className={s.muted}>{L("در حال خواندن پروژه‌ها…", "Reading the projects…")}</p>
+              ) : !projects.length ? (
+                <p className={s.muted}>{L("هنوز پروژه‌ای با فایل تأییدشده نیست.", "No project has an approved file yet.")}</p>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }} dir={uiDir()}>
+                  {projects.flatMap((p) =>
+                    (p.approved || []).map((x) => (
+                      <FileCard
+                        key={x.run_id}
+                        project={p}
+                        file={x}
+                        chosen={from.project_id === p.id && from.run_id === x.run_id}
+                        onChoose={(pr, fl) => {
+                          setFrom({ project_id: pr.id, run_id: fl.run_id });
+                          setPick(false);
+                        }}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+            </SheetContent>
+          </Sheet>
           <small className={s.muted}>
             {L("پروژهٔ جدیدی ساخته می‌شه که همون فایل رو ادامه می‌ده؛ پروژهٔ قبلی و فایل‌هاش دست نمی‌خورن.", "A new project is made that continues that file; the project it came from and its files are left as they are.")}
           </small>
