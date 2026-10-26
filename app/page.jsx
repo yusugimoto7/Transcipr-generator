@@ -57,7 +57,7 @@ function alpha(hex, a) {
 // Each topic type gets its own color, so a type is recognisable at a glance
 // in the list, on the card and in the library.
 const FIELDS = {
-  "Work Permit": { emoji: "🛂", label: ["مجوز کار", "Work Permit"], color: "#0e8a99" },
+  "Work Permit": { emoji: "🛂", label: ["اجازه کار", "Work Permit"], color: "#0e8a99" },
   PNP: { emoji: "📍", label: "PNP", color: "#d9770a" },
   "Express Entry": { emoji: "⚡", label: "Express Entry", color: "#b8890b" },
   Study: { emoji: "🎓", label: ["تحصیل / PGWP", "Study / PGWP"], color: "#6d5bd0" },
@@ -1720,7 +1720,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   );
 }
 
-const FOCUS_LABEL = { iran: ["⭐ ایران", "⭐ Iran"], study: ["⭐ مجوز تحصیل", "⭐ Study permit"], startup: ["⭐ استارتاپ ویزا", "⭐ Start-up Visa"] };
+const FOCUS_LABEL = { iran: ["⭐ ایران", "⭐ Iran"], study: ["⭐ اجازه تحصیل", "⭐ Study permit"], startup: ["⭐ ویزای استارتاپ", "⭐ Start-up Visa"] };
 
 // The newsletter section: a card for every item of a Lexbase issue, policy
 // notes and court decisions alike, with the standing priorities (Iran, study
@@ -1857,7 +1857,7 @@ function LexbaseSection({ decisions, ...actions }) {
           <>
             <b>📬 {iss.subject || "Lexbase " + iss.key}</b>
             <br />
-            {L(`${iss.policy} فکت و سیاست · ${iss.court} پروندهٔ دادگاه · ${iss.priority} مورد اولویت‌دار (ایران، مجوز تحصیل، استارتاپ ویزا)`, `${iss.policy} facts and policy · ${iss.court} court cases · ${iss.priority} priority items (Iran, study permits, Start-up Visa)`)}
+            {L(`${iss.policy} فکت و سیاست · ${iss.court} پروندهٔ دادگاه · ${iss.priority} مورد اولویت‌دار (ایران، اجازه تحصیل، ویزای استارتاپ)`, `${iss.policy} facts and policy · ${iss.court} court cases · ${iss.priority} priority items (Iran, study permits, Start-up Visa)`)}
             {writing && cards.length < iss.total ? (
               <div className="ui-pulse" style={{ color: "#6d5bd0", fontWeight: 700 }}>
                 ⏳ {L(`${cards.length} از ${iss.total} موضوع نوشته شده…`, `${cards.length} of ${iss.total} topics written…`)}

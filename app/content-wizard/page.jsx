@@ -68,8 +68,8 @@ const FIELDS_BY_COUNTRY = {
   canada: [
     { label: "Express Entry", value: "Express Entry" },
     { label: "PNP", value: "PNP" },
-    { label: ["استارتاپ ویزا", "Startup Visa"], value: "Startup Visa" },
-    { label: ["ورک پرمیت", "Work permit"], value: "ورک پرمیت" },
+    { label: ["ویزای استارتاپ", "Startup Visa"], value: "Startup Visa" },
+    { label: ["اجازه کار", "Work permit"], value: "اجازه کار" },
     { label: ["تحصیل", "Study"], value: "تحصیل" },
     { label: ["مهاجرت خانوادگی", "Family immigration"], value: "مهاجرت خانوادگی" },
     { label: ["اقامت دائم", "Permanent residence"], value: "اقامت دائم" },
@@ -79,8 +79,8 @@ const FIELDS_BY_COUNTRY = {
   ],
   europe: [
     { label: ["تحصیل", "Study"], value: "تحصیل" },
-    { label: ["ورک پرمیت", "Work permit"], value: "ورک پرمیت" },
-    { label: ["استارتاپ ویزا", "Startup Visa"], value: "Startup Visa" },
+    { label: ["اجازه کار", "Work permit"], value: "اجازه کار" },
+    { label: ["ویزای استارتاپ", "Startup Visa"], value: "Startup Visa" },
     { label: ["مهاجرت خانوادگی", "Family immigration"], value: "مهاجرت خانوادگی" },
     { label: ["سیاست‌گذاری", "Policy & news"], value: "سیاست‌گذاری" },
     { label: ["خبرهای مهاجرتی", "Immigration news"], value: "خبرهای مهاجرتی" },

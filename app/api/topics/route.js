@@ -505,7 +505,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
 // Old path: ask an LLM (OpenAI search model, else Claude web search) to both
 // find and write the topics. Kept as an automatic fallback.
 async function collectSearchTopics(exclude, today) {
-  const prompt = topicPrompt(today, exclude);
+  const prompt = topicPrompt(today, exclude) + (await glossaryBlock("fa"));
   let text = "";
   let provider = "anthropic";
   if (openaiEnabled()) {

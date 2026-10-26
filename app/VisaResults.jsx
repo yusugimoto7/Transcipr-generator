@@ -773,7 +773,7 @@ export default function VisaResults({ C, learn }) {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           dir={uiDir()}
-          placeholder={L("مثلاً: خانم مریم، ورک پرمیت همسر worker، اقدام از خارج از کانادا، سن ۲۸، سابمیت 2025/05/14، اپروال 2025/06/18", "e.g. Ms Maryam, spousal work permit (worker), applied from outside Canada, age 28, submitted 2025/05/14, approved 2025/06/18")}
+          placeholder={L("مثلاً: خانم مریم، اجازه کار همسر worker، اقدام از خارج از کانادا، سن ۲۸، ثبت درخواست 2025/05/14، تأیید 2025/06/18", "e.g. Ms Maryam, spousal work permit (worker), applied from outside Canada, age 28, submitted 2025/05/14, approved 2025/06/18")}
           style={{ fontFamily: FA, lineHeight: 1.8 }}
         />
       </div>

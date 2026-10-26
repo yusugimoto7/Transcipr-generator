@@ -51,6 +51,17 @@ as the change**, in the team's own words where possible, with the date.
   the official English names and acronyms from the same list. A new term goes into the Sheet (or,
   for a new deploy, into `BUILTIN` and then `POST /api/glossary {seed:true}`), never into one
   prompt only. Voice samples in the prompts are tone only and may still show older forms.
+- **Coverage check** (Oct 26 2026): every model call that writes Persian or English for people is
+  listed in the commit that added the glossary; a new one must append `glossaryBlock`. Fixed
+  wording in code (the draws poster's templates, screen labels, option values that become prompt
+  fields, the Wizard's brand context) was changed to the glossary's words by hand. Search-side
+  lists (`lib/candidates.js` matchers, `lib/ideas/seeds.js` autocomplete seeds, the WordPress
+  related-page search) keep the spellings people type or the site's older pages use, with the
+  glossary's word added first.
+- **Video Editing**: the app writes `glossary/terms.json` on `editing-data` (terms, the rule text in
+  both languages) before every worker dispatch and names it in the payload (`glossary`). The
+  subtitles, storyboard and motion-graphics steps run in english-sugimotovisa and must read that
+  file and spell every term as it says; until that repo does, those steps do not use the glossary.
 - In scripts, specialised vocabulary keeps the original English phrase in parentheses.
 - Never a bare English acronym as the name of something. People's names stay as written.
 - Express Entry draw results are not topics (covered elsewhere).
