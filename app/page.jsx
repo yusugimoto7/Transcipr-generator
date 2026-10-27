@@ -1052,6 +1052,19 @@ export default function App() {
     }
   }
 
+  // A finished notice clears itself after 10 seconds (the team: they piled
+  // up). A running one stays until it ends, and a failed one stays so its
+  // retry is not missed; both can still be closed by hand.
+  const autoClear = useRef(new Set());
+  useEffect(() => {
+    for (const j of bgRows) {
+      const id = j.key + ":" + j.kind + ":" + (j.id || j.startedAt);
+      if (j.status !== "done" || autoClear.current.has(id)) continue;
+      autoClear.current.add(id);
+      setTimeout(() => setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true })), 10000);
+    }
+  });
+
   const counts = { pending: 0, approved: 0, rejected: 0 };
   for (const t of listTopics) counts[decisions[topicKey(t)] || "pending"]++;
 
