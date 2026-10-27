@@ -15,7 +15,7 @@ import { splitSlideText } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
-import { Archive, Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X, Maximize2, Minimize2 } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -1315,6 +1315,7 @@ export default function App() {
           setLang={setContentLang}
           carousel={carousel}
           carouselJob={carouselJob}
+          carouselReadJob={LJ("carousel_read")}
           sendJob={sendJob}
           story={story}
           storyJob={storyJob}
@@ -1401,7 +1402,7 @@ function StudioSection({ topics, listProps, research, own }) {
 
 // List (every topic, new and used) or the Lexbase newsletter section.
 // Steps made in the language chosen on the topic page (lib/jobs.js LANG_KINDS).
-const LANG_KINDS = ["article", "publish", "telegram_write", "telegram_save", "telegram_image", "telegram_send", "carousel", "carousel_slide", "carousel_send", "story", "story_draw", "story_photo", "story_page", "story_send"];
+const LANG_KINDS = ["article", "publish", "telegram_write", "telegram_save", "telegram_image", "telegram_send", "carousel", "carousel_slide", "carousel_read", "carousel_send", "story", "story_draw", "story_photo", "story_page", "story_send"];
 const MODES = [["list", Newspaper, ["خبرها", "News"]], ["lexbase", Mail, ["Lexbase", "Lexbase"]], ["ideas", Lightbulb, ["ایده‌ها", "Ideas"]], ["studio", Images, ["استودیو", "Studio"]]];
 function ModeSwitch({ mode, onChange }) {
   const idx = Math.max(0, MODES.findIndex((m) => m[0] === mode));
@@ -2981,7 +2982,7 @@ function ScriptNote({ topic, tab, script, job, onJob }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, fixJobs = {}, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
+function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, fixJobs = {}, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, carouselReadJob = null, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
   const f = fieldOf(topic);
   const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -3419,7 +3420,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
       {/* Carousel (it shows nothing until asked for or made) */}
       {!loading && !error && (
         <div ref={carouselRef} style={{ scrollMarginTop: 90 }}>
-          <CarouselPanel key={"car:" + lang} lang={lang} topic={topic} carousel={carousel} job={carouselJob} sendJob={sendJob} caps={caps} onJob={onJob} openSignal={carouselOpen} />
+          <CarouselPanel key={"car:" + lang} lang={lang} topic={topic} carousel={carousel} job={carouselJob} readJob={carouselReadJob} sendJob={sendJob} caps={caps} onJob={onJob} openSignal={carouselOpen} />
         </div>
       )}
 
@@ -3501,7 +3502,7 @@ async function downloadSlides(slides, topic) {
   }
 }
 
-function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSignal = 0, lang = "fa" }) {
+function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJob, caps = {}, onJob, openSignal = 0, lang = "fa" }) {
   const textDir = lang === "en" ? "ltr" : "rtl";
   const [form, setForm] = useState(false);
   // The Carousel tile on the topic page opens the form.
@@ -3529,6 +3530,24 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   const missing = slides.length - drawn;
   // Which slide a single-slide job is working on, so only that one shows it.
   const busySlide = running && job.kind === "carousel_slide" ? (job.extra && job.extra.num) || 0 : 0;
+  // The text blocks of the slide whose ✏️ window is open: kept with the slide while its picture is
+  // the same, else read from the picture once (job carousel_read).
+  const editSl = editing ? slides.find((x) => x.num === editing) : null;
+  const readJob = readJobAll && readJobAll.extra && readJobAll.extra.num === editing ? readJobAll : null;
+  const slideBlocks = !editSl
+    ? null
+    : editSl.parts && editSl.parts_of === editSl.image_url
+      ? editSl.parts
+      : readJob && readJob.status === "done" && readJob.result && readJob.result.image_url === editSl.image_url
+        ? readJob.result.parts
+        : null;
+  useEffect(() => {
+    if (!editSl || !editSl.image_url || slideBlocks) return;
+    if (readJob && (readJob.status === "running" || (readJob.result && readJob.result.image_url === editSl.image_url))) return;
+    if (readJob && readJob.status === "error") return; // the stored text stands in
+    onJob("carousel_read", { num: editing });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, editSl && editSl.image_url]);
   const font = "'Geist', 'Vazirmatn', sans-serif";
   const fa = "'Vazirmatn', sans-serif";
 
@@ -3740,11 +3759,13 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
               item={slides.find((x) => x.num === editing)}
               text={slides.find((x) => x.num === editing).content}
               editText
+              blocks={slideBlocks}
+              reading={!slideBlocks && !!readJob && readJob.status === "running"}
               ratio="4 / 5"
               tone="#6d5bd0"
               onClose={() => setEditing(0)}
-              onSubmit={(edit, learn, newText) => {
-                onJob("carousel_slide", { num: editing, edit, ...(newText ? { text: newText } : {}) });
+              onSubmit={(edit, learn, newText, parts) => {
+                onJob("carousel_slide", { num: editing, edit, ...(newText ? { text: newText, parts } : {}) });
                 if (learn) teach({ topic, scope: "design", note: edit, context: (slides.find((x) => x.num === editing) || {}).content || "" });
                 setEditing(0);
               }}
@@ -4471,7 +4492,9 @@ function TelegramPanel({ topic, post, job, caps = {}, onJob, lang = "fa" }) {
 // A sheet over the page for changing ONE picture: the picture, what to
 // change, and the changes asked for before. Only this picture is redone,
 // starting from itself.
-function Sheet({ children, onClose }) {
+// A phone: rises from the bottom; a computer: a centred window (the ui-sheet classes in
+// globals.css). It scrolls inside and never runs off the screen; `big` fills most of the screen.
+function Sheet({ children, onClose, big = false }) {
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -4484,9 +4507,9 @@ function Sheet({ children, onClose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(10,14,20,0.55)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div onClick={(e) => e.stopPropagation()} className="ui-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "92vh", overflowY: "auto", background: C.surface, borderRadius: "20px 20px 0 0", padding: "16px 16px 22px", boxSizing: "border-box", boxShadow: "0 -8px 30px rgba(0,0,0,0.25)" }}>
-        {children}
+    <div onClick={onClose} className="ui-sheet-wrap" style={{ zIndex: 80 }}>
+      <div onClick={(e) => e.stopPropagation()} className="ui-sheet" style={{ maxWidth: big ? "min(1100px, 96vw)" : 600, ...(big ? { height: "92dvh", maxHeight: "92dvh" } : { maxHeight: "92dvh" }) }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 16px calc(22px + env(safe-area-inset-bottom, 0px))", boxSizing: "border-box" }}>{children}</div>
       </div>
     </div>
   );
@@ -4569,25 +4592,54 @@ function LearnNotice() {
 // editText: the picture's text is shown as one box per part (title, each paragraph or line, in the
 // order they are on the picture) to be changed by hand, besides or instead of the request to the AI
 // (Hamed, Oct 27 2026). The picture is then edited to read exactly the typed text.
-function EditPictureSheet({ title, item, text = "", editText = false, ratio = "4 / 5", tone = C.orange, onClose, onSubmit }) {
+// blocks: the text blocks read from the picture itself ({ role, text } in reading order, job
+// carousel_read); until they arrive (`reading`), or if they could not be read, the stored text is
+// split into a title and its lines.
+function EditPictureSheet({ title, item, text = "", editText = false, blocks = null, reading = false, ratio = "4 / 5", tone = C.orange, onClose, onSubmit }) {
   const [ask, setAsk] = useState("");
   const [learn, setLearn] = useState(false);
+  const [big, setBig] = useState(false);
   const fa = "'Vazirmatn', sans-serif";
   const edits = (item && item.edits) || [];
-  const original = useMemo(() => String(text || "").split("\n").map((x) => x.trim()).filter(Boolean), [text]);
+  const original = useMemo(() => {
+    if (blocks && blocks.length) return blocks.map((b) => ({ role: b.role || "text", text: String(b.text || "").trim() })).filter((b) => b.text);
+    const { title: head, body } = splitSlideText(text);
+    return [...(head ? [{ role: "title", text: head }] : []), ...String(body || "").split("\n").map((x) => x.trim()).filter(Boolean).map((x) => ({ role: "text", text: x }))];
+  }, [text, blocks]);
+  const sig = original.map((b) => b.role + ":" + b.text).join("\u0001");
   const [parts, setParts] = useState(original);
-  const typed = editText && parts.map((x) => x.trim()).join("\n") !== original.join("\n");
-  const ready = !!ask.trim() || (typed && parts.some((x) => x.trim()));
-  const partLabel = (i) => (i === 0 ? L("تیتر", "Title") : original.length > 2 ? L(`متن ${i}`, `Text ${i}`) : L("متن", "Text"));
+  const [touchedText, setTouchedText] = useState(false);
+  // the blocks read from the picture replace the first guess, unless the editor already typed
+  useEffect(() => {
+    if (!touchedText) setParts(original);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+  const typed = editText && parts.map((x) => x.text.trim()).join("\n") !== original.map((x) => x.text).join("\n");
+  const ready = !!ask.trim() || (typed && parts.some((x) => x.text.trim()));
+  const nText = parts.filter((x) => x.role === "text").length;
+  const partLabel = (i) => {
+    const r = parts[i].role;
+    if (r === "title") return L("تیتر", "Title");
+    if (r === "subtitle") return L("زیرتیتر", "Subtitle");
+    if (r === "button") return L("دکمه / دعوت به اقدام", "Button / call to action");
+    if (r === "label") return L("برچسب", "Label");
+    const k = parts.slice(0, i + 1).filter((x) => x.role === "text").length;
+    return nText > 1 ? L(`متن ${k}`, `Text ${k}`) : L("متن", "Text");
+  };
   return (
-    <Sheet onClose={onClose}>
+    <Sheet onClose={onClose} big={big}>
       <div dir={uiDir()} style={{ fontFamily: fa }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 12, position: "sticky", top: -16, background: C.surface, zIndex: 2, padding: "4px 0" }}>
           <b style={{ fontSize: 15 }}>✏️ {L("ویرایش همین تصویر", "Edit this picture")} <span style={{ fontWeight: 500, color: C.text3, fontSize: 12.5, direction: "ltr", unicodeBidi: "isolate" }}>{title}</span></b>
-          <button className="ui-btn" onClick={onClose} aria-label={L("بستن", "Close")} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
+          <span style={{ display: "flex", gap: 2 }}>
+            <button className="ui-btn" onClick={() => setBig(!big)} aria-label={big ? L("کوچک‌تر", "Smaller") : L("بزرگ‌تر", "Larger")} title={big ? L("کوچک‌تر", "Smaller") : L("بزرگ‌تر", "Larger")} style={{ background: "transparent", border: "none", cursor: "pointer", color: C.text2, padding: 6, display: "grid", placeItems: "center" }}>
+              {big ? <Minimize2 size={18} aria-hidden /> : <Maximize2 size={18} aria-hidden />}
+            </button>
+            <button className="ui-btn" onClick={onClose} aria-label={L("بستن", "Close")} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.text2 }}>✕</button>
+          </span>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <img src={item.image_url} alt="" style={{ width: 150, aspectRatio: ratio, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
+          <img src={item.image_url} alt="" style={{ width: big ? "min(380px, 100%)" : 150, aspectRatio: ratio, objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
           <div style={{ flex: "1 1 200px", minWidth: 0 }}>
             <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>{L("چه چیزی در این تصویر عوض بشه؟ فقط همین تصویر از روی خودش تغییر می‌کنه؛ بقیه دست نمی‌خورن.", "What should change in this picture? Only this picture changes, starting from itself; the others are not touched.")}</div>
             <textarea
@@ -4606,23 +4658,29 @@ function EditPictureSheet({ title, item, text = "", editText = false, ratio = "4
             )}
           </div>
         </div>
-        {editText && original.length > 0 && (
+        {editText && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>{L("متن روی تصویر (دستی عوضش کن؛ تصویر دقیقاً با همین متن کشیده می‌شه):", "Text on the picture (change it by hand; the picture is drawn with exactly this text):")}</div>
+            <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>
+              {L("متن روی تصویر، بخش به بخش (دستی عوضش کن؛ تصویر دقیقاً با همین متن کشیده می‌شه):", "Text on the picture, part by part (change it by hand; the picture is drawn with exactly this text):")}
+              {reading && <span className="ui-pulse" style={{ display: "block", color: tone, fontWeight: 700 }}>{L("در حال خواندن بخش‌های متن از روی تصویر…", "Reading the text parts from the picture…")}</span>}
+            </div>
             {parts.map((v, i) => (
               <label key={i} style={{ display: "block", marginBottom: 8 }}>
                 <span style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: C.text3, marginBottom: 3 }}>{partLabel(i)}</span>
                 <textarea
                   dir="auto"
-                  value={v}
-                  onChange={(e) => setParts(parts.map((x, j) => (j === i ? e.target.value : x)))}
-                  rows={i === 0 ? 1 : Math.min(5, Math.max(2, Math.ceil(v.length / 60)))}
-                  style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${parts[i].trim() !== original[i] ? tone : C.line}`, padding: 8, fontFamily: fa, fontSize: i === 0 ? 14 : 13, fontWeight: i === 0 ? 700 : 400, lineHeight: 1.7, resize: "vertical" }}
+                  value={v.text}
+                  onChange={(e) => {
+                    setTouchedText(true);
+                    setParts(parts.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)));
+                  }}
+                  rows={Math.min(6, Math.max(v.role === "title" ? 1 : 2, Math.ceil(v.text.length / (big ? 90 : 55))))}
+                  style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${!original[i] || v.text.trim() !== original[i].text ? tone : C.line}`, padding: 8, fontFamily: fa, fontSize: v.role === "title" ? 14 : 13, fontWeight: v.role === "title" ? 700 : 400, lineHeight: 1.7, resize: "vertical" }}
                 />
               </label>
             ))}
             {typed && (
-              <button className="ui-btn" onClick={() => setParts(original)} style={{ background: "transparent", border: "none", color: C.text3, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: fa }}>
+              <button className="ui-btn" onClick={() => { setParts(original); setTouchedText(false); }} style={{ background: "transparent", border: "none", color: C.text3, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: fa }}>
                 ↶ {L("برگرداندن متن", "Undo text changes")}
               </button>
             )}
@@ -4636,7 +4694,10 @@ function EditPictureSheet({ title, item, text = "", editText = false, ratio = "4
           </details>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button className="ui-btn ui-glow-orange" disabled={!ready} onClick={() => onSubmit(ask.trim(), learn && !!ask.trim(), typed ? parts.map((x) => x.trim()).filter(Boolean).join("\n") : null)} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5, fontFamily: fa }}>
+          <button className="ui-btn ui-glow-orange" disabled={!ready} onClick={() => {
+            const done = parts.map((x) => ({ role: x.role, text: x.text.replace(/\s*\n\s*/g, " ").trim() })).filter((x) => x.text);
+            onSubmit(ask.trim(), learn && !!ask.trim(), typed ? done.map((x) => x.text).join("\n") : null, typed ? done : null);
+          }} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5, fontFamily: fa }}>
             {L("اعمال تغییر روی همین تصویر", "Apply the change to this picture")}
           </button>
           <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>{L("انصراف", "Cancel")}</button>
