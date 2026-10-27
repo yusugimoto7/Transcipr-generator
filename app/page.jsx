@@ -982,15 +982,17 @@ export default function App() {
     }
   }
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
-  // A picked (green) topic opened with no script and no job for it (the job was lost to a server
-  // restart, or it was picked on another device): the scripts start by themselves, once.
+  // Any topic opened with no script and no job for it: the Persian and English scripts start by
+  // themselves, once (Hamed, Oct 27 2026: "when I open a topic, write both scripts right away";
+  // before, only topics picked with ✓ did). Saved scripts are read first and never written over.
+  // Not a pick: the topic is marked used, but only ✓ moves it to the top of the list.
   useEffect(() => {
     if (view !== "script" || !scriptTopic || !svKey || savedOkKey !== svKey || loadingSaved) return;
-    if (decisions[svKey] !== "approved" || viewScripts.fa || viewScripts.en || sj) return;
+    if (viewScripts.fa || viewScripts.en || sj) return;
     if (autoWroteRef.current.has(svKey)) return;
     autoWroteRef.current.add(svKey);
     startJob("script", scriptTopic, { topic: scriptTopic });
-  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, decisions, viewScripts.fa, viewScripts.en, sj, startJob]);
+  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, viewScripts.fa, viewScripts.en, sj, startJob]);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? L("نوشتن سناریو با خطا مواجه شد (", "Writing the script failed (") + (sj.error || "") + ")"
