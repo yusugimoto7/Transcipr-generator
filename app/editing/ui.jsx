@@ -4,9 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import s from "./editing.module.css";
-import { CalendarDays, Check, Clapperboard, KeyRound, Languages, LogOut, Newspaper, Users } from "lucide-react";
+import { CalendarDays, Clapperboard, Languages, LogOut, Newspaper, Settings, Users } from "lucide-react";
 import { L, chooseLang, getLang } from "../../lib/i18n";
-import PushSwitch from "../PushSwitch";
 
 // The bar's classes, for pages outside this folder that add their own buttons to it.
 export { s as barStyles };
@@ -145,7 +144,7 @@ const APPS = [
 ];
 
 // The two languages, each written in itself so anyone can find their own.
-const LANG_CHOICES = [["fa", "فارسی"], ["en", "English"]];
+export const LANG_CHOICES = [["fa", "فارسی"], ["en", "English"]];
 
 // The bar itself, shared by every part of the app (the Topic Engine draws it too, with its own
 // buttons in `actions`), so moving between parts never feels like changing apps.
@@ -229,19 +228,9 @@ export function AppBar({ me: given, actions = null }) {
                     </a>
                   )}
                 </div>
-                <div className={s.menuLabel}>
-                  <Languages size={14} aria-hidden /> {L("زبان برنامه", "App language")}
-                </div>
-                {LANG_CHOICES.map(([k, name]) => (
-                  <button key={k} className={s.menuItem} role="menuitemradio" aria-checked={getLang() === k} onClick={() => getLang() !== k && chooseLang(k)} lang={k}>
-                    {getLang() === k ? <Check size={16} aria-hidden /> : <span style={{ width: 16, display: "inline-block" }} />} {name}
-                  </button>
-                ))}
-                <div className={s.menuSep} />
-                <PushSwitch itemClass={s.menuItem} labelClass={s.menuLabel} mutedClass={s.muted} />
-                <div className={s.menuSep} />
-                <Link href="/editing/password" className={s.menuItem} role="menuitem" onClick={() => setMenu(false)}>
-                  <KeyRound size={16} aria-hidden /> {L("تغییر رمز عبور", "Change password")}
+                {/* language, notifications and password live on the Settings page (Hamed, Oct 27 2026) */}
+                <Link href="/settings" className={s.menuItem} role="menuitem" onClick={() => setMenu(false)}>
+                  <Settings size={16} aria-hidden /> {L("تنظیمات", "Settings")}
                 </Link>
                 <button className={`${s.menuItem} ${s.danger}`} onClick={logout} role="menuitem">
                   <LogOut size={16} aria-hidden /> {L("خروج", "Sign out")}

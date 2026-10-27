@@ -2793,7 +2793,7 @@ function AppMenu({ me, ax, navBtn, onSignOut }) {
     (!me || ax.includes("calendar")) && ["/calendar", "📅", L("تقویم محتوا", "Content calendar")],
     (!me || ax.includes("editing")) && ["/editing", "🎬", L("تدوین ویدیو", "Video Editing")],
     ax.includes("team") && ["/editing/team", "👥", L("تیم · چه کسی به چه چیزی دسترسی داره", "Team · who can open what")],
-    me && ["/editing/password", "🔑", L("تغییر رمز عبور", "Change password")],
+    me && ["/settings", "⚙️", L("تنظیمات", "Settings")],
   ].filter(Boolean);
   const row = { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, color: C.text, textDecoration: "none", fontSize: 14, fontWeight: 600, fontFamily: FONT, background: "none", border: "none", width: "100%", cursor: "pointer", textAlign: "start" };
   return (
