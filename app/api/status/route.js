@@ -1,4 +1,5 @@
 import { glossaryStatus } from "../../../lib/glossary";
+import { loadSources, sourcesStatus, unplacedRows } from "../../../lib/sources";
 import {
   wordpressEnabled,
   whoAmI,
@@ -252,6 +253,19 @@ export async function GET() {
   sections["WordPress"] = settled[1].status === "fulfilled" ? settled[1].value : [{ name: "WordPress", ok: false, detail: String(settled[1].reason) }];
   sections["Google Sheet"] = settled[2].status === "fulfilled" ? settled[2].value : [{ name: "Sheet", ok: false, detail: String(settled[2].reason) }];
   sections["AI"] = checkKeys();
+  await loadSources({ fresh: true });
+  const src = sourcesStatus();
+  const per = Object.entries(src.counts).filter(([k]) => k !== "built-in").map(([k, c]) => `${k} ${c.active}/${c.rows}`).join(" · ");
+  const odd = unplacedRows().length;
+  sections["Sources"] = [
+    {
+      name: "Sources sheet",
+      ok: src.read && !odd,
+      detail: src.read
+        ? `${src.rows} rows from the ${src.tab} tab (ticked/rows): ${per}${odd ? ` — ${odd} rows with a section/type the app cannot place` : ""}; details at /api/sources`
+        : `not read, using the lists in the code${src.error ? " — " + src.error : ""}`,
+    },
+  ];
 
   let rows = "";
   for (const [group, items] of Object.entries(sections)) {

@@ -12,6 +12,7 @@ import {
 import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier, focusOf } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
+import { loadSources } from "../../../lib/sources";
 import { getLexbaseItems, lexbaseEnabled } from "../../../lib/newsletter/lexbase";
 import { getLexbaseDeck } from "../../../lib/newsletter/lexbase-deck";
 import {
@@ -272,6 +273,8 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     seenP,
     getInstagramItems({ maxAgeDays: NEWS_WINDOW_DAYS, waitMs: 6000 }).catch(() => ({ items: [] })),
     getLexbaseItems({ waitMs: 6000 }).catch(() => ({ items: [] })),
+    // The Sources sheet's Blocked and trusted sites, used by sourceTier below.
+    loadSources(),
   ]);
   const seenUrlSet = seen ? seen.urls : null;
   const exclude = [...new Set([...(clientExclude || []), ...((seen && seen.titles) || [])])].slice(-100);
