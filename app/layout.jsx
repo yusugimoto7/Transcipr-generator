@@ -10,6 +10,8 @@ export const metadata = {
   title: "Sugimoto · Topic Engine",
   description:
     "Swipe this week's live Canada & Europe immigration news and generate bilingual (Farsi + English) Reel scripts.",
+  // added to an iPhone's home screen it opens full screen, which is also what lets it get notifications
+  appleWebApp: { capable: true, title: "Sugimoto", statusBarStyle: "black-translucent" },
 };
 
 export default function RootLayout({ children }) {

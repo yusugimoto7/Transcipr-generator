@@ -66,7 +66,8 @@ export async function middleware(req) {
   return res;
 }
 
-// Public static files (logo, fonts, the tab icon) load on the sign-in page too.
+// Public static files (logo, fonts, the icons, the app manifest and the notification worker) load
+// on the sign-in page too: a phone fetches the last three without the session cookie.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|brand/|fonts/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icon-192.png|icon-512.png|manifest.webmanifest|sw.js|brand/|fonts/).*)"],
 };
