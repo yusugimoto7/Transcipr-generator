@@ -25,3 +25,13 @@ Slides are drawn one by one by the image model in `lib/carousel.js` (`imagePromp
 
 ## Known history
 The Oct 12 "evergreen ideas" commit accidentally deleted `parseSlides`, `normaliseMarkers`, `NEWS_RULES` and `FORMAT_REMINDER` from `lib/carousel.js`, so every carousel failed. `next build` does not catch undefined identifiers — after editing, run an undefined-identifier check, e.g. `npx eslint@8 --no-eslintrc --env es2022,node --parser-options ecmaVersion:latest,sourceType:module --rule 'no-undef:error' lib/carousel.js`.
+
+## Persian typography and slide text (the team, Oct 27 2026)
+- A cover came out with «انگلیســی», «درخواســت», «رد شــد»: the image model stretched words with
+  kashida to fill lines, and took the first word «نبود» out of the headline into the pill label. The
+  picture prompts (`imagePrompt` in `lib/carousel.js`, the Telegram picture in `lib/telegram-post.js`)
+  now forbid kashida, keep lines ragged-right and one size per block, and allow a cover label only when
+  the text has its own first line for it. `englishPicturePrompt` drops the Persian-only rule.
+- The writer sometimes returns a slide as one line; the editor showed it all as the heading with an
+  empty body. `lib/slide-text.js` splits such a line after its opening question or clause (heading
+  ≤ 90 characters) for the editor and for the drawing; a short cover line stays a heading.

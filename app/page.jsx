@@ -11,6 +11,7 @@ import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
+import { splitSlideText } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
@@ -3759,10 +3760,10 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   );
 }
 
-// A slide's text as the editor sees it: the first line is the heading, the rest the body.
+// A slide's text as the editor sees it: heading and body (lib/slide-text.js also splits a
+// slide the writer returned as one line).
 function splitSlide(content) {
-  const lines = String(content || "").split("\n");
-  return { title: (lines[0] || "").trim(), body: lines.slice(1).join("\n").trim() };
+  return splitSlideText(content);
 }
 
 function TemplatePicker({ value, onChange, font }) {

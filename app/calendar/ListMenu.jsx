@@ -94,7 +94,8 @@ export default function ListMenu({ list, lists, cards, admin, onAddTop, onOp }) 
             <Row Icon={ArrowDownAZ} arrow onClick={() => show("sort")} disabled={cards.length < 2}>{L("مرتب‌سازی لیست", "Sort list")}</Row>
             {admin && <Row Icon={Palette} arrow onClick={() => show("color")}>{L("تغییر رنگ لیست", "Change list color")}</Row>}
             <Row Icon={ArrowRightLeft} arrow onClick={() => show("move_all")} disabled={!cards.length || !others.length}>{L("جابه‌جایی همهٔ کارت‌های این لیست", "Move all cards in this list")}</Row>
-            {admin && (
+            {/* archiving is everyone's; approved posts stay unless Hamed archives (lib/calendar/model.js) */}
+            {(
               <>
                 <Row Icon={Archive} disabled={!published || busy} onClick={() => ask(L(`${published} پست منتشرشدهٔ «${list.name}» بایگانی بشن؟`, `Archive the ${published} published post${published > 1 ? "s" : ""} in “${list.name}”?`), { action: "archive_published" })}>
                   {L("بایگانی پست‌های منتشرشده", "Archive published posts")}
