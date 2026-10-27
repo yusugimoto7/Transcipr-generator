@@ -42,7 +42,7 @@ td{padding:7px 9px;border-bottom:1px solid #eef0f3;vertical-align:top}td:first-c
 a{color:#0e8a99}ul{font-size:13px;line-height:1.7;padding-left:18px}.err{color:#b42318}
 </style></head><body>
 <h1>Social lane</h1>
-<div class="sub">${st.enabled ? "On" : "Off (no writing model, or SOCIAL_LANE=off)"} · transcripts ${st.transcripts ? "on" : "off (SUPADATA_API_KEY)"} · last read ${esc(st.last_poll || "never")}${st.polling ? " (reading now)" : ""}<br>
+<div class="sub">${st.enabled ? "On" : "Off (no writing model, or SOCIAL_LANE=off)"} · transcripts ${st.transcripts ? (st.transcripts_paused_until ? `<span class="err">paused until ${esc(st.transcripts_paused_until.slice(11, 16))} UTC: the transcript service answered "limit exceeded" (its quota)</span>` : "on") : "off (SUPADATA_API_KEY)"} · last read ${esc(st.last_poll || "never")}${st.polling ? " (reading now)" : ""}<br>
 Today (${esc(st.today.date)}): <b>${st.today.cards}</b> cards · ${st.today.transcripts} transcripts · by account: ${esc(
     Object.entries(st.today.by_account || {})
       .map(([k, v]) => `${k} ${v}`)
