@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import s from "./editing.module.css";
 import { CalendarDays, Check, Clapperboard, KeyRound, Languages, LogOut, Newspaper, Users } from "lucide-react";
 import { L, chooseLang, getLang } from "../../lib/i18n";
+import PushSwitch from "../PushSwitch";
 
 // The bar's classes, for pages outside this folder that add their own buttons to it.
 export { s as barStyles };
@@ -209,6 +210,8 @@ export function AppBar({ me: given, actions = null }) {
                     {getLang() === k ? <Check size={16} aria-hidden /> : <span style={{ width: 16, display: "inline-block" }} />} {name}
                   </button>
                 ))}
+                <div className={s.menuSep} />
+                <PushSwitch itemClass={s.menuItem} labelClass={s.menuLabel} mutedClass={s.muted} />
                 <div className={s.menuSep} />
                 <Link href="/editing/password" className={s.menuItem} role="menuitem" onClick={() => setMenu(false)}>
                   <KeyRound size={16} aria-hidden /> {L("تغییر رمز عبور", "Change password")}
