@@ -12,6 +12,8 @@ import {
 import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier, focusOf } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
+import { laneCards, pollSocialLane, laneStatus } from "../../../lib/social/lane";
+import { isReadableText } from "../../../lib/news";
 import { loadSources } from "../../../lib/sources";
 import { getLexbaseItems, lexbaseEnabled } from "../../../lib/newsletter/lexbase";
 import { getLexbaseDeck } from "../../../lib/newsletter/lexbase-deck";
@@ -213,7 +215,7 @@ async function generate(clientExclude, run) {
   const keyOf = (t) => articleKey(t.source_url) || titleKey(t.title_en || t.title_fa);
   const have = new Set(run.topics.map(keyOf));
   const older = prev.filter((t) => !have.has(keyOf(t)) && recentEnough(t, today));
-  cache = { topics: [...run.topics, ...older].slice(0, 80), timestamp: Date.now(), provider };
+  cache = { topics: [...run.topics, ...older].slice(0, 120), timestamp: Date.now(), provider };
   return cache.topics;
 }
 
@@ -246,7 +248,13 @@ function recencyBoost(ms, nowMs) {
 // otherwise fetched now. Google News links are resolved to the publisher first
 // — the redirect page itself holds no article text.
 async function groundTextFor(item) {
-  if (item.text && item.text.length >= MIN_GROUND) return item.text;
+  if (item.text && item.text.length >= MIN_GROUND && isReadableText(item.text)) return item.text;
+  // A video post says more than its caption: its transcript (the social lane usually got here
+  // first; the transcript is then already cached).
+  if (item.social && item.video) {
+    const t = await fetchArticleText(item.source_url, { timeoutMs: 8000, maxChars: 3000 }).catch(() => "");
+    if (t && t.length >= MIN_GROUND) return t;
+  }
   if ((item.snippet || "").length >= MIN_GROUND) return item.snippet;
   // A social post's page is a login wall; its caption is all the text there is, unless the post
   // links to a page of its own (an IRCC notice, an article), which is then read.
@@ -277,6 +285,8 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     loadSources(),
   ]);
   const seenUrlSet = seen ? seen.urls : null;
+  // The social lane's cards (lib/social/lane.js) are stories with a card already.
+  for (const c of laneCards()) remember(c.source_url, c.source_title);
   const exclude = [...new Set([...(clientExclude || []), ...((seen && seen.titles) || [])])].slice(-100);
   const harvestAge = harvest ? nowMs - Date.parse(harvest.harvested_at || 0) : Infinity;
   const needLive = !(harvestAge < HARVEST_FRESH_MS);
@@ -375,6 +385,7 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
       : null,
     pool: merged.length,
     socialPosts: social.items.length,
+    lane: (({ today: t, cards, last_poll }) => ({ cards, today: t.cards, transcripts: t.transcripts, last_poll }))(laneStatus()),
     newsletterItems: lexbase.items.length,
     ...counts,
     duplicateStories: collapsed,
@@ -653,13 +664,14 @@ export async function POST(request) {
         return;
       }
       if (pl.cached) {
-        for (const t of pl.cached) send({ type: "topic", topic: t });
+        for (const t of withLane(pl.cached)) send({ type: "topic", topic: t });
         send({ type: "stats", stats: lastStats, cached: true, stale: !!pl.stale, throttled: !!pl.throttled, generating: !!run });
         send({ type: "done" });
         return;
       }
+      for (const t of laneCards()) send({ type: "topic", topic: t });
       await follow(pl.run, send);
-      if (pl.run.error && !pl.run.topics.length) send({ type: "error", error: pl.run.error });
+      if (pl.run.error && !pl.run.topics.length && !laneCards().length) send({ type: "error", error: pl.run.error });
       send({ type: "stats", stats: lastStats });
       send({ type: "done" });
     });
@@ -668,14 +680,14 @@ export async function POST(request) {
   // Plain JSON (older clients): the whole batch at once.
   if (pl.fail) return Response.json({ error: pl.error, message: pl.message }, { status: pl.fail });
   if (pl.cached) {
-    return Response.json({ topics: pl.cached, cached: true, stats: lastStats, stale: !!pl.stale, throttled: !!pl.throttled });
+    return Response.json({ topics: withLane(pl.cached), cached: true, stats: lastStats, stale: !!pl.stale, throttled: !!pl.throttled });
   }
   await pl.run.promise;
-  if (!pl.run.topics.length) {
+  if (!pl.run.topics.length && !laneCards().length) {
     const err = pl.run.error || "parse";
     return Response.json({ error: err === "parse" ? "parse" : err, stats: lastStats }, { status: err === "parse" ? 502 : 500 });
   }
-  return Response.json({ topics: pl.run.topics, cached: false, provider: cache.provider, stats: lastStats });
+  return Response.json({ topics: withLane(pl.run.topics), cached: false, provider: cache.provider, stats: lastStats });
 }
 
 // Warm-up, called on a schedule by .github/workflows/keepwarm.yml. Keeps a
@@ -687,9 +699,13 @@ const WARM_MAX_MS = 2 * 60 * 60 * 1000;
 // polls this while a run goes on, so a person who left and came back (or was never waiting) sees
 // the new ideas without starting anything again; the run itself never depended on the page.
 function deckNow() {
+  return withLane([...(run ? run.topics : []), ...(cache.topics || [])]);
+}
+// The social lane's cards in front of a deck (they are written outside the runs), one card per story.
+function withLane(topics) {
   const seen = new Set();
   const out = [];
-  for (const t of [...(run ? run.topics : []), ...(cache.topics || [])]) {
+  for (const t of [...laneCards(), ...(topics || [])]) {
     const k = String(t.title_fa || t.title_en || "").trim().toLowerCase();
     if (k && seen.has(k)) continue;
     if (k) seen.add(k);
@@ -714,6 +730,8 @@ export async function GET(request) {
   }
   // Also keeps the newsletter section written after a restart.
   if (warm && lexbaseEnabled()) getLexbaseDeck({ waitMs: 0 }).catch(() => {});
+  // The social lane's clock runs inside the server; this call is its backstop after a sleep.
+  if (warm) pollSocialLane({ reason: "warm" }).catch(() => {});
   // Instagram tokens die after 60 days unless refreshed; this ten-minute call is the one clock that
   // always runs (the publishing clock may be off). It does real work at most weekly.
   if (warm) import("../../../lib/calendar/channels/instagram").then((m) => m.refreshTokens()).catch(() => {});
@@ -721,6 +739,7 @@ export async function GET(request) {
     {
       ok: true,
       cards: cache.topics ? cache.topics.length : 0,
+      laneCards: laneCards().length,
       deckAgeMin: Number.isFinite(age) ? Math.round(age / 60000) : null,
       generating: !!run,
       started,

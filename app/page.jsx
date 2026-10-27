@@ -688,6 +688,28 @@ export default function App() {
 
   useEffect(() => { loadTopics(); }, [loadTopics]);
 
+  // The social lane writes cards between runs (every few minutes); an open page shows them without
+  // a refresh. The same light call the page uses to follow a run.
+  useEffect(() => {
+    const seen = loadSeen();
+    const seenTitles = new Set(seen.map((s) => s.key));
+    const seenUrls = new Set(seen.map((s) => s.url).filter(Boolean));
+    const tick = async () => {
+      if (document.visibilityState !== "visible" || !aliveRef.current) return;
+      const d = await fetch("/api/topics?deck=1", { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      if (!d || !Array.isArray(d.topics)) return;
+      const add = d.topics.filter((t) => t.lane && !isSeen(t, seenTitles, seenUrls));
+      if (!add.length) return;
+      setTopics((prev) => {
+        const next = [...prev];
+        for (const t of add) if (!next.some((x) => topicKey(x) === topicKey(t) || (!!urlKey(x) && urlKey(x) === urlKey(t)))) next.push(t);
+        return next.length === prev.length ? prev : next;
+      });
+    };
+    const t = setInterval(tick, 3 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
   // One list: new ideas and every topic in the workspace. A new idea that is
   // the same story as a workspace topic (same title or same source) shows as
   // that topic, with its state. Cards that report the same story in other
@@ -1678,8 +1700,10 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   {(t.focus || []).map((k) => (
                     <span key={k} style={{ color: "#b42318", background: alpha("#f04438", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>{FOCUS_LABEL[k] ? L(FOCUS_LABEL[k]) : k}</span>
                   ))}
-                  {t.social === "instagram" && (
-                    <span title={L("از پست اینستاگرام یک تولیدکننده — قبل از نوشتن اسکریپت ادعا رو چک کن", "From a creator's Instagram post — check the claim before scripting")} style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>📸 @{t.author}</span>
+                  {t.social && t.author && (
+                    <span title={t.video ? L("کارت از متن گفته‌شده در ویدیوی این حساب نوشته شده", "Written from what is said in this account's video") : L("از پست یک حساب — قبل از نوشتن اسکریپت ادعا رو چک کن", "From an account's post — check the claim before scripting")} style={{ color: "#c13584", background: alpha("#c13584", 0.1), borderRadius: 99, padding: "0 7px", fontWeight: 600 }}>
+                      {t.video ? "🎬 " : t.social === "instagram" ? "📸 " : t.social === "x" ? "𝕏 " : t.social === "facebook" ? "ⓕ " : "💬 "}{t.social === "instagram" ? "@" : ""}{t.author}
+                    </span>
                   )}
                   <span style={{ color: scoreColor, background: alpha(scoreColor === C.text2 ? C.text : scoreColor, 0.12), borderRadius: 6, padding: "1px 6px", fontWeight: 700 }}>{score}</span>
                 </div>
@@ -2418,6 +2442,7 @@ function DeckWhy({ stats }) {
       <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.line}`, display: "grid", gap: 3 }}>
         {row(L("خبرهای موجود در مخزن", "Articles in pool"), stats.pool ?? 0)}
         {row(L("…از این‌ها پست اینستاگرام", "…of which Instagram posts"), stats.socialPosts ?? 0)}
+        {stats.lane && row(L("خط سوشال: کارت امروز از حساب‌های دنبال‌شده", "Social lane: cards today from the followed accounts"), `${stats.lane.today ?? 0} (${stats.lane.transcripts ?? 0} ${L("ویدیو", "videos")})`)}
         {row(L("…از این‌ها مورد Lexbase", "…of which Lexbase items"), stats.newsletterItems ?? 0)}
         {row(L("قبلاً تأیید یا رد شده", "Already approved or rejected"), stats.alreadyUsed ?? 0)}
         {row(L("قبلاً کارت داره (دوباره نوشته نمی‌شه)", "Already has a card (not written again)"), stats.alreadyShown ?? 0)}

@@ -13,7 +13,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fetchFeedItems, fetchArticleText, isGoogleNews } from "../lib/news.js";
+import { fetchFeedItems, fetchArticleText, isGoogleNews, isReadableText, isMediaUrl } from "../lib/news.js";
 import { mergeCandidates, relevance, isDrawResult, KEEP_DAYS } from "../lib/candidates.js";
 import { resolveGoogleNewsUrl } from "../lib/gnews.js";
 import { harvestSignals } from "../lib/ideas/signals.js";
@@ -55,6 +55,19 @@ const { items: fetched, ownTitles, feedStatus } = await fetchFeedItems({ maxAgeD
 // Store only what could become a topic: on-subject and not a draw result.
 const eligible = fetched.filter((it) => relevance(it) > 0 && !isDrawResult(it));
 const { items, added } = mergeCandidates(stored.items, eligible, nowMs);
+// Stored copies from before Oct 27 2026 carry a post's cover picture as its "linked page" and
+// the bytes of that picture as its "text"; both are dropped so the item is read again properly.
+let scrubbed = 0;
+for (const c of items) {
+  if (c.resolved_url && isMediaUrl(c.resolved_url)) {
+    c.resolved_url = undefined;
+    c.text = undefined;
+    scrubbed++;
+  } else if (c.text && !isReadableText(c.text)) {
+    c.text = undefined;
+    scrubbed++;
+  }
+}
 
 // ── Enrichment ────────────────────────────────────────────────────────────────
 // Newest first, so the budget goes where it matters most.
@@ -102,7 +115,7 @@ const lines = [
   `- Fetched ${fetched.length} items → ${eligible.length} on-topic → **${added} new**`,
   `- Pool: **${items.length}** candidates (last ${KEEP_DAYS} days)`,
   `- Google News links resolved: ${resolvedOk} / ${needResolve.length} attempted`,
-  `- Article text fetched: ${textOk} / ${needText.length} attempted`,
+  `- Article text fetched: ${textOk} / ${needText.length} attempted${scrubbed ? ` · ${scrubbed} stored copies cleaned of picture bytes` : ""}`,
   "",
   "| | Feed | Items / error |",
   "|---|---|---|",

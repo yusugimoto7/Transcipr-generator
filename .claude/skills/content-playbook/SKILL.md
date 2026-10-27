@@ -70,6 +70,12 @@ as the change**, in the team's own words where possible, with the date.
 
 - Topic supply: harvested pool (`scripts/harvest.mjs` → `harvest-data`), select, fetch real
   text, write cards from that text only. Most recent first in the list.
+- Social lane (Hamed, Oct 27 2026): the followed accounts' posts are the team's main supply —
+  Hamed wants at least 20 new titles a day, 15 of them from social media, and a creator's video
+  on the deck within minutes of going up. So every post of those accounts gets a card by itself
+  (`lib/social/lane.js`), written from the video's transcript, never from its cover picture or
+  its caption alone; the model skips ads, testimonials and greetings and says why on
+  `/api/social-lane`. The card is the brand's own subject, not a quote of the creator.
 - Same story from several outlets → one topic with all sources shown (`lib/similar.js`).
 - **Provincial draws come from the province itself** (Oct 17 2026: "search and bring the
   original updates from their provinces"). `lib/provinces.js` finds the province's official

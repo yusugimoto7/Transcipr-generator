@@ -15,6 +15,15 @@ export async function register() {
       console.error("[calendar] failed to start scheduler:", err);
     }
   }
+  // The social lane: the followed accounts' new posts become cards every few minutes. Like the
+  // calendar clock it calls its own route, so nothing the lane reads (the editing-data store) is
+  // bundled here.
+  try {
+    const { startSocialLaneClock } = await import("./lib/social/lane-clock");
+    startSocialLaneClock();
+  } catch (err) {
+    console.error("[social lane] failed to start:", err);
+  }
   if (process.env.DRAWS_AUTORUN !== "true") return;
   try {
     const { startScheduler } = await import("./lib/draws/scheduler");
