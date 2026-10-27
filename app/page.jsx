@@ -1569,6 +1569,8 @@ function SwipeToArchive({ enabled, onArchive, children }) {
   );
 }
 
+const LEGACY_PICKED_AT = Date.parse("2026-10-27T23:00:00Z");
+
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
   // Pinned topics stay on top while they are being worked on. Kept on this device.
@@ -1614,12 +1616,15 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   // topics come first, newest pin first, until they are unpinned.
   const now = Date.now();
   const arrived = (t) => t.found_at || t._made || Math.min(Date.parse(t.date || "") || t._ts || 0, now);
-  const pickedOf = (t) => (stateOf(t) === "approved" && (ws[topicKey(t)] || {}).pickedAt) || 0;
+  // Topics picked before picks were timed count as picked at the moment this order came in (Hamed:
+  // the old green ones on top too), among themselves by their latest work.
+  const pickedOf = (t) => (stateOf(t) === "approved" ? (ws[topicKey(t)] || {}).pickedAt || LEGACY_PICKED_AT : 0);
   const event = (t) => Math.max(pickedOf(t), arrived(t));
+  const touched = (t) => (ws[topicKey(t)] || {}).updatedAt || 0;
   const pinAt = (t) => pins[topicKey(t)] || 0;
-  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || event(b.t) - event(a.t) || a.i - b.i);
+  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || event(b.t) - event(a.t) || touched(b.t) - touched(a.t) || a.i - b.i);
   // The newsletter keeps its priority order, with the topics picked from it on top, latest pick first.
-  else rows.sort((a, b) => pickedOf(b.t) - pickedOf(a.t) || a.i - b.i);
+  else rows.sort((a, b) => pickedOf(b.t) - pickedOf(a.t) || (pickedOf(a.t) ? touched(b.t) - touched(a.t) : 0) || a.i - b.i);
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -3734,11 +3739,12 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
               title={L(`اسلاید ${editing} از ${slides.length}`, `Slide ${editing} of ${slides.length}`)}
               item={slides.find((x) => x.num === editing)}
               text={slides.find((x) => x.num === editing).content}
+              editText
               ratio="4 / 5"
               tone="#6d5bd0"
               onClose={() => setEditing(0)}
-              onSubmit={(edit, learn) => {
-                onJob("carousel_slide", { num: editing, edit });
+              onSubmit={(edit, learn, newText) => {
+                onJob("carousel_slide", { num: editing, edit, ...(newText ? { text: newText } : {}) });
                 if (learn) teach({ topic, scope: "design", note: edit, context: (slides.find((x) => x.num === editing) || {}).content || "" });
                 setEditing(0);
               }}
@@ -4560,11 +4566,19 @@ function LearnNotice() {
   );
 }
 
-function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.orange, onClose, onSubmit }) {
+// editText: the picture's text is shown as one box per part (title, each paragraph or line, in the
+// order they are on the picture) to be changed by hand, besides or instead of the request to the AI
+// (Hamed, Oct 27 2026). The picture is then edited to read exactly the typed text.
+function EditPictureSheet({ title, item, text = "", editText = false, ratio = "4 / 5", tone = C.orange, onClose, onSubmit }) {
   const [ask, setAsk] = useState("");
   const [learn, setLearn] = useState(false);
   const fa = "'Vazirmatn', sans-serif";
   const edits = (item && item.edits) || [];
+  const original = useMemo(() => String(text || "").split("\n").map((x) => x.trim()).filter(Boolean), [text]);
+  const [parts, setParts] = useState(original);
+  const typed = editText && parts.map((x) => x.trim()).join("\n") !== original.join("\n");
+  const ready = !!ask.trim() || (typed && parts.some((x) => x.trim()));
+  const partLabel = (i) => (i === 0 ? L("تیتر", "Title") : original.length > 2 ? L(`متن ${i}`, `Text ${i}`) : L("متن", "Text"));
   return (
     <Sheet onClose={onClose}>
       <div dir={uiDir()} style={{ fontFamily: fa }}>
@@ -4592,15 +4606,37 @@ function EditPictureSheet({ title, item, text = "", ratio = "4 / 5", tone = C.or
             )}
           </div>
         </div>
+        {editText && original.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, lineHeight: 1.7 }}>{L("متن روی تصویر (دستی عوضش کن؛ تصویر دقیقاً با همین متن کشیده می‌شه):", "Text on the picture (change it by hand; the picture is drawn with exactly this text):")}</div>
+            {parts.map((v, i) => (
+              <label key={i} style={{ display: "block", marginBottom: 8 }}>
+                <span style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: C.text3, marginBottom: 3 }}>{partLabel(i)}</span>
+                <textarea
+                  dir="auto"
+                  value={v}
+                  onChange={(e) => setParts(parts.map((x, j) => (j === i ? e.target.value : x)))}
+                  rows={i === 0 ? 1 : Math.min(5, Math.max(2, Math.ceil(v.length / 60)))}
+                  style={{ width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${parts[i].trim() !== original[i] ? tone : C.line}`, padding: 8, fontFamily: fa, fontSize: i === 0 ? 14 : 13, fontWeight: i === 0 ? 700 : 400, lineHeight: 1.7, resize: "vertical" }}
+                />
+              </label>
+            ))}
+            {typed && (
+              <button className="ui-btn" onClick={() => setParts(original)} style={{ background: "transparent", border: "none", color: C.text3, fontSize: 12, cursor: "pointer", padding: 0, fontFamily: fa }}>
+                ↶ {L("برگرداندن متن", "Undo text changes")}
+              </button>
+            )}
+          </div>
+        )}
         <LearnToggle on={learn} setOn={setLearn} />
-        {text && (
+        {text && !editText && (
           <details style={{ marginTop: 10, fontSize: 12, color: C.text2 }}>
             <summary style={{ cursor: "pointer" }}>{L("متن روی تصویر", "Text on the picture")}</summary>
             <div dir="auto" style={{ whiteSpace: "pre-line", lineHeight: 1.8, marginTop: 6 }}>{text}</div>
           </details>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button className="ui-btn ui-glow-orange" disabled={!ask.trim()} onClick={() => onSubmit(ask.trim(), learn)} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ask.trim() ? "pointer" : "default", opacity: ask.trim() ? 1 : 0.5, fontFamily: fa }}>
+          <button className="ui-btn ui-glow-orange" disabled={!ready} onClick={() => onSubmit(ask.trim(), learn && !!ask.trim(), typed ? parts.map((x) => x.trim()).filter(Boolean).join("\n") : null)} style={{ flex: 1, background: tone, color: "#fff", border: "none", borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", opacity: ready ? 1 : 0.5, fontFamily: fa }}>
             {L("اعمال تغییر روی همین تصویر", "Apply the change to this picture")}
           </button>
           <button className="ui-btn" onClick={onClose} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 16px", fontWeight: 600, cursor: "pointer", fontFamily: fa }}>{L("انصراف", "Cancel")}</button>
