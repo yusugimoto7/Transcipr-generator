@@ -15,7 +15,7 @@ import { splitSlideText } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
-import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -1626,6 +1626,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
     <button
       onClick={onClick}
       aria-label={aria}
+      title={aria}
       className={"ui-btn" + (kind === "primary" ? " ui-glow-orange" : kind === "danger" ? " ui-glow-danger" : "")}
       style={{
         minWidth: 36, height: 36, padding: "0 11px", borderRadius: 8, cursor: "pointer",
@@ -1707,7 +1708,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
             <SwipeToArchive key={topicKey(t) + i} enabled={st !== "rejected"} onArchive={() => onReject(t)}>
             <div
               dir="rtl"
-              className="ui-glass ui-lift ui-fade"
+              className="ui-glass ui-lift ui-fade topic-card"
               // a tap anywhere on the card opens the topic (Hamed, Oct 27 2026); its own buttons and
               // links (✓, ✕, pin, the source) keep doing their own thing
               onClick={(e) => {
@@ -1729,6 +1730,10 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 opacity: st === "rejected" ? 0.45 : 1,
               }}
             >
+              {/* The whole card is the topic's link (Hamed, Oct 27 2026: right-click worked only on the
+                  title and Open): a link laid over it, under the card's own buttons and links, which
+                  globals.css (.topic-card) lifts above it. A plain click still opens in the app. */}
+              <a href={topicHref(t)} {...openLinkProps(t, onOpen)} className="topic-card-link" aria-hidden tabIndex={-1} draggable={false} />
               {/* topic-type color stripe on the reading-start edge */}
               <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1839,7 +1844,12 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 )}
                 {st === "approved" && (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    {openBtn(t, job && job.status === "running" ? L("باز کن ⏳", "Open ⏳") : L("باز کن ✓", "Open ✓"))}
+                    {/* archive next to Open (Hamed, Oct 27 2026): on a computer there is no swipe, so a
+                        made card had no way out of the list; same as the swipe and ✕ */}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {smallBtn(<Archive size={16} aria-hidden />, () => onReject(t), "danger", L("بایگانی موضوع", "Archive topic"))}
+                      {openBtn(t, job && job.status === "running" ? L("باز کن ⏳", "Open ⏳") : L("باز کن ✓", "Open ✓"))}
+                    </div>
                     {job && job.status === "running" && (
                       <span className="ui-pulse" style={{ fontSize: 11, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>{L("در حال نوشتن…", "Writing…")}</span>
                     )}
@@ -2328,7 +2338,7 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
           {done && !running && (
             <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: alpha(C.success, 0.08), border: `1px solid ${alpha(C.success, 0.3)}`, fontSize: 13 }}>
               ✓ {L("خبر ساخته شد و به فهرست اضافه شد:", "The news was made and added to the list:")}{" "}
-              <a href={"/?t=" + encodeURIComponent(topicKey(job.result.topic))} onClick={(e) => { e.preventDefault(); onOpen(job.result.topic); }} style={{ color: C.teal, fontWeight: 700 }}>
+              <a href={topicHref(job.result.topic)} {...openLinkProps(job.result.topic, onOpen)} style={{ color: C.teal, fontWeight: 700 }}>
                 {job.result.topic.title_fa}
               </a>
               {(job.result.skipped || []).length > 0 && (
@@ -2410,7 +2420,7 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
               {ideas.topics.map((t) => (
                 <div key={topicKey(t)}>
                   •{" "}
-                  <a href={"/?t=" + encodeURIComponent(topicKey(t))} onClick={(e) => { e.preventDefault(); onOpen(t); }} style={{ color: C.teal, fontWeight: 700 }}>
+                  <a href={topicHref(t)} {...openLinkProps(t, onOpen)} style={{ color: C.teal, fontWeight: 700 }}>
                     {t.title_fa}
                   </a>
                 </div>
