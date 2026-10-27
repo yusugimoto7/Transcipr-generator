@@ -63,7 +63,7 @@ export async function POST(request) {
     // Ground the script in the REAL article text so it's about the actual news,
     // not an invented topic. Falls back to the stored snippet if the fetch
     // fails (cached, so the parallel fa+en calls don't double-fetch).
-    const sourceText = await sourceTextFor(topic, { maxChars: 4500 });
+    const sourceText = await sourceTextFor(topic, { maxChars: 6000 });
 
     // The glossary goes last, after the lessons: one Persian name per term in every script.
     const glossary = await glossaryBlock(lang === "en" ? "en" : "fa");

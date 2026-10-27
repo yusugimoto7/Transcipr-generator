@@ -83,3 +83,4 @@ explainers via `story.evergreen`). `simple` stays the default. The picker (`Stor
 - A hand-drawn page (`page.manual`) is drawn in the simple style whatever the template.
 - To add a template: a function in `T`, an entry in `STORY_TEMPLATES` (with `photo`/`look` if it has a
   picture), and a 216×384 preview jpg rendered from a sample page (stand-in photo blurred).
+- **Backgrounds (Oct 26 2026):** ten preset colours (purple default, black, navy, blue, teal, green, red, orange, yellow, white) plus a colour wheel for any other, under the simple template. The chosen background travels as the preset's name or a `#rrggbb` (`cleanBg` keeps only those); `storyColours` in `lib/story/colours.js` is the one table for the server drawing, the hand designer and the swatches, and for a picked colour the text and box colours follow its brightness (white text on dark, black on light).

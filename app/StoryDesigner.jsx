@@ -13,21 +13,13 @@ import { L, uiDir } from "../lib/i18n";
 
 const SW = 1080, SH = 1920;
 const FA = "'Vazirmatn', sans-serif";
-// The same colours as STORY_BACKGROUNDS in lib/story/index.js.
-const COLOURS = {
-  purple: { bg: "#8a3893", text: "#ffffff", box: "#ffffff", boxText: "#000000" },
-  black: { bg: "#000000", text: "#ffffff", box: "#ffffff", boxText: "#000000" },
-  blue: { bg: "#2f6fed", text: "#ffffff", box: "#ffffff", boxText: "#000000" },
-  red: { bg: "#e53935", text: "#ffffff", box: "#ffffff", boxText: "#000000" },
-  green: { bg: "#0e7a4f", text: "#ffffff", box: "#ffffff", boxText: "#000000" },
-  white: { bg: "#ffffff", text: "#000000", box: "#000000", boxText: "#ffffff", edge: "#dddddd" },
-};
+import { storyColours } from "../lib/story/colours";
 const faDigits = (s) => String(s || "").replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
 // Labels are [fa, en] pairs, read with L() when drawn.
 const PARTS = [["headline", ["تیتر", "Headline"]], ["shot", ["اسکرین‌شات", "Screenshot"]], ["body", ["متن", "Text"]], ["ref", ["منبع", "Source"]]];
 
 export default function StoryDesigner({ page, bg = "purple", busy, onMake, onReset, onSave }) {
-  const c = COLOURS[bg] || COLOURS.purple;
+  const c = storyColours(bg);
   const wrap = useRef(null);
   const stage = useRef(null);
   const refs = { headline: useRef(null), shot: useRef(null), body: useRef(null), ref: useRef(null) };

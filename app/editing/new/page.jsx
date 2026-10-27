@@ -1,31 +1,103 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, s, Shell } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import { L, uiDir } from "../../../lib/i18n";
+import { Sheet, SheetContent } from "../../../components/ui/sheet";
+import { Button } from "../../../components/ui/button";
+import { Play, Check } from "lucide-react";
 
-// Three ways in (Hamed, Oct 26 2026): raw footage to edit, a finished video that only needs
-// subtitles, or one that only needs motion graphics. The last two start the project at that stage;
-// review, corrections and approval work as for any version.
+// Four ways in (Hamed, Oct 26 2026): raw footage to edit, a video to dub (Farsi to English or English
+// to Farsi, english-sugimotovisa's dub pipeline), a finished video that only needs subtitles, or one
+// that only needs motion graphics. All but the first start the project at that stage; review,
+// corrections and approval work as for any version.
 const TABS = [
   ["cut", ["تدوین", "Edit"]],
+  ["dub", ["دوبله", "Dub"]],
   ["subtitles", ["فقط زیرنویس", "Subtitles only"]],
   ["graphics", ["فقط موشن‌گرافیک", "Motion graphics only"]],
 ];
 
 // Subtitle choices in words, turned into pixels for the frame (portrait 1080x1920, landscape
 // 1920x1080). 0 keeps the approved style; the worker keeps every value inside its safe bounds.
+// The approved files a project can be started from, in stage order (lib/editing/projects.js STAGES).
+const STAGE = { cut: ["برش", "Cut"], dub: ["دوبله", "Dub"], subtitles: ["زیرنویس", "Subtitles"], graphics: ["موشن‌گرافیک", "Motion graphics"] };
+
+const fmt = (sec) => {
+  const n = Math.round(Number(sec) || 0);
+  return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
+};
+
+// One approved file as a picture: the preview's thumbnail from Drive, the project's title, the stage
+// and version. A tap on the picture plays it in place; "Choose" takes it (Hamed, 26 Oct 2026: a
+// picker with previews, not a list of names).
+function FileCard({ project, file, chosen, onChoose }) {
+  const [playing, setPlaying] = useState(false);
+  const pv = file.preview;
+  return (
+    <div className={s.card} style={{ padding: 0, overflow: "hidden", border: chosen ? "2px solid var(--orange)" : undefined }}>
+      {playing && pv ? (
+        <iframe src={pv.embed} allow="autoplay" title={project.title} style={{ width: "100%", aspectRatio: project.kind === "reel" ? "9 / 16" : "16 / 9", border: 0, display: "block", background: "#000" }} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => pv && setPlaying(true)}
+          aria-label={L("پخش پیش‌نمایش", "Play the preview")}
+          style={{ display: "grid", placeItems: "center", width: "100%", aspectRatio: project.kind === "reel" ? "9 / 16" : "16 / 9", border: 0, padding: 0, cursor: pv ? "pointer" : "default",
+            background: pv ? `#0b0f14 url(https://drive.google.com/thumbnail?id=${pv.id}&sz=w600) center / cover no-repeat` : "#0b0f14" }}
+        >
+          {pv ? <span className={s.play}><Play size={16} /></span> : <span className={s.muted} style={{ color: "#aaa", fontSize: 13 }}>{L("پیش‌نمایشی نیست", "No preview")}</span>}
+        </button>
+      )}
+      <div style={{ padding: "8px 10px 10px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <span className={s.kbTitle} dir="auto">{project.title}</span>
+        <span className={s.kbBadges}>
+          <span className={s.kbBadge}>{L(STAGE[file.stage])} v{file.version}</span>
+          {file.output_s ? <span className={s.kbBadge}>{fmt(file.output_s)}</span> : null}
+        </span>
+        {onChoose && (
+          <Button type="button" size="sm" variant={chosen ? "default" : "outline"} onClick={() => onChoose(project, file)}>
+            {chosen ? <><Check /> {L("انتخاب‌شده", "Chosen")}</> : L("انتخاب", "Choose")}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const SIZES = { portrait: { small: 64, large: 88 }, landscape: { small: 54, large: 74 } };
 const HEIGHTS = { portrait: { higher: 1100, lower: 1400 }, landscape: { higher: 800, lower: 960 } };
 
 function NewProject() {
   const router = useRouter();
-  const [tab, setTab] = useState("cut");
+  const q = useSearchParams();
+  const [tab, setTab] = useState(q.get("tab") && q.get("tab") in STAGE ? q.get("tab") : "cut");
+  // The video can be another project's approved file instead of a Drive link (Hamed, 26 Oct 2026:
+  // "use the existing card"): the cut of one project becomes the video to dub or subtitle in a new one.
+  const [mode, setMode] = useState(q.get("from") ? "project" : "link");
+  const [projects, setProjects] = useState(null);
+  const [from, setFrom] = useState({ project_id: q.get("from") || "", run_id: q.get("run") || "" });
+  const [pick, setPick] = useState(false);
+  useEffect(() => {
+    if (mode !== "project" || projects) return;
+    api("/projects")
+      .then((d) => setProjects(d.projects.filter((p) => (p.approved || []).length)))
+      .catch(() => setProjects([]));
+  }, [mode, projects]);
+  const origin = (projects || []).find((p) => p.id === from.project_id);
+  useEffect(() => {
+    // the latest stage's file is the usual choice; the title follows the project it came from
+    if (!origin) return;
+    const files = origin.approved || [];
+    if (!files.some((x) => x.run_id === from.run_id)) setFrom((x) => ({ ...x, run_id: files[files.length - 1].run_id }));
+    setF((x) => ({ ...x, title: x.title || origin.title, kind: origin.kind || x.kind }));
+  }, [origin, from.run_id]);
   const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
   const [sub, setSub] = useState({ size: "", height: "", words: "" });
   const [gfx, setGfx] = useState({ amount: "normal", brief: "", with_subtitles: false });
+  const [dubTo, setDubTo] = useState("en");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -46,7 +118,12 @@ function NewProject() {
       words_per_group: Number(sub.words) || 0,
     };
     const { touched, ...fields } = f;
-    const body = { ...fields, start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx } }) };
+    if (mode === "project" && !(from.project_id && from.run_id)) {
+      setError(L("یک پروژه و یکی از فایل‌های تأییدشده‌ش رو انتخاب کن.", "Choose a project and one of its approved files."));
+      setBusy(false);
+      return;
+    }
+    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo } } }) };
     try {
       const { project } = await api("/projects", { method: "POST", body });
       router.push(`/editing/p/${project.id}`);
@@ -97,6 +174,8 @@ function NewProject() {
       <p className={s.muted}>
         {tab === "cut"
           ? L("دستگاه تدوین فقط مکث‌ها، شروع‌های اشتباه و برداشت‌های تکراری رو حذف می‌کنه. قبل از هر تأییدی، خودت نتیجه رو بازبینی می‌کنی.", "The editing machine removes pauses, false starts and retakes only. You review the result before anything is approved.")
+          : tab === "dub"
+            ? L("ویدیو با صدای خود حامد به زبان دیگه دوبله می‌شه و لب‌ها با صدای جدید هماهنگ می‌شن (همون فرایند دوبلهٔ تأییدشده). ترجمه فقط از حرف‌های خود ویدیوئه و دعوت به اقدام همیشه «لینک رو بزنید و وقت مشاوره بگیرید» هست. قبل از تأیید، نتیجه رو می‌بینی و اصلاح می‌دی.", "The video is dubbed into the other language in Hamed's own voice and the lips are synced to it (the approved dub process). The translation uses only what the video says, and the call to action is always to tap the link and book a consultation. You review and correct before approving.")
           : tab === "subtitles"
             ? L("برای ویدیوی تدوین‌شده و آماده: چیزی بریده نمی‌شه، فقط زیرنویس کلمه‌به‌کلمه (کلمهٔ گفته‌شده زرد) اضافه می‌شه. قبل از تأیید، نتیجه رو می‌بینی و اصلاح می‌دی.", "For a finished, edited video: nothing is cut, only word-by-word subtitles are added (the spoken word turns yellow). You review and correct before approving.")
             : L("برای ویدیوی تدوین‌شده و آماده: اول یک طرح (استوری‌بورد با چند فریم) می‌بینی و تأیید می‌کنی، بعد موشن‌گرافیک ساخته می‌شه. هر نوشته روی صفحه فقط از حرف‌های خود ویدیوئه.", "For a finished, edited video: you first see and approve a plan (storyboard with still frames), then the graphics are rendered. Every word on screen comes from the video itself.")}
@@ -105,8 +184,63 @@ function NewProject() {
         <span>{L("عنوان", "Title")}</span>
         <input id="title" className={s.input} value={f.title} onChange={set("title")} placeholder={L("اسپانسرشیپ داخل کانادا یا خارج از کانادا", "Inland vs overseas sponsorship")} required />
       </label>
+      <div className={s.row} role="radiogroup" aria-label={L("ویدیو از کجا", "Where the video comes from")}>
+        <label className={s.row} style={{ fontSize: 14 }}>
+          <input type="radio" name="src-mode" checked={mode === "link"} onChange={() => setMode("link")} />
+          <span>{L("ویدیو از Google Drive", "A video from Google Drive")}</span>
+        </label>
+        <label className={s.row} style={{ fontSize: 14 }}>
+          <input type="radio" name="src-mode" checked={mode === "project"} onChange={() => setMode("project")} />
+          <span>{L("از یک پروژهٔ موجود", "From an existing project")}</span>
+        </label>
+      </div>
+      {mode === "project" && (
+        <div className={s.field}>
+          <span>{L("پروژه و فایل تأییدشده‌ای که ادامه داده می‌شه", "The project and the approved file to continue from")}</span>
+          {origin && from.run_id && (
+            <div style={{ maxWidth: 260 }}>
+              <FileCard project={origin} file={(origin.approved || []).find((x) => x.run_id === from.run_id) || origin.approved[0]} chosen />
+            </div>
+          )}
+          <div>
+            <Button type="button" variant="outline" onClick={() => setPick(true)}>
+              {origin && from.run_id ? L("عوض کردن", "Change") : L("انتخاب از پروژه‌ها…", "Choose from the projects…")}
+            </Button>
+          </div>
+          <Sheet open={pick} onOpenChange={setPick}>
+            <SheetContent title={L("کدوم فایل ادامه داده بشه؟", "Which file to continue?")} className="md:w-[min(960px,94vw)]">
+              {!projects ? (
+                <p className={s.muted}>{L("در حال خواندن پروژه‌ها…", "Reading the projects…")}</p>
+              ) : !projects.length ? (
+                <p className={s.muted}>{L("هنوز پروژه‌ای با فایل تأییدشده نیست.", "No project has an approved file yet.")}</p>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 12 }} dir={uiDir()}>
+                  {projects.flatMap((p) =>
+                    (p.approved || []).map((x) => (
+                      <FileCard
+                        key={x.run_id}
+                        project={p}
+                        file={x}
+                        chosen={from.project_id === p.id && from.run_id === x.run_id}
+                        onChoose={(pr, fl) => {
+                          setFrom({ project_id: pr.id, run_id: fl.run_id });
+                          setPick(false);
+                        }}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+            </SheetContent>
+          </Sheet>
+          <small className={s.muted}>
+            {L("پروژهٔ جدیدی ساخته می‌شه که همون فایل رو ادامه می‌ده؛ پروژهٔ قبلی و فایل‌هاش دست نمی‌خورن.", "A new project is made that continues that file; the project it came from and its files are left as they are.")}
+          </small>
+        </div>
+      )}
+      {mode === "link" && (
       <div className={s.field}>
-        <label htmlFor="source_url">{tab === "cut" ? L("ویدیوی خام در Google Drive", "Raw video in Google Drive") : L("ویدیوی تدوین‌شده در Google Drive", "The edited video in Google Drive")}</label>
+        <label htmlFor="source_url">{tab === "cut" ? L("ویدیوی خام در Google Drive", "Raw video in Google Drive") : tab === "dub" ? L("ویدیویی که دوبله می‌شه، در Google Drive", "The video to dub, in Google Drive") : L("ویدیوی تدوین‌شده در Google Drive", "The edited video in Google Drive")}</label>
         <div className={s.row} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
           <DrivePicker kind="video" mode="upload" onPick={picked} />
           <DrivePicker kind="video" onPick={picked} />
@@ -119,6 +253,7 @@ function NewProject() {
           )}
         </small>
       </div>
+      )}
       <div className={s.row}>
         <label className={`${s.field} ${s.grow}`}>
           <span>{L("نوع", "Kind")}</span>
@@ -128,6 +263,15 @@ function NewProject() {
             <option value="course">{L("درس دوره", "Course lesson")}</option>
           </select>
         </label>
+        {tab === "dub" ? (
+        <label className={`${s.field} ${s.grow}`}>
+          <span>{L("دوبله", "Dub")}</span>
+          <select id="dub_to" className={s.select} value={dubTo} onChange={(e) => setDubTo(e.target.value)}>
+            <option value="en">{L("از فارسی به انگلیسی", "Farsi to English")}</option>
+            <option value="fa">{L("از انگلیسی به فارسی", "English to Farsi")}</option>
+          </select>
+        </label>
+        ) : (
         <label className={`${s.field} ${s.grow}`}>
           <span>{L("زبان گفتار", "Spoken language")}</span>
           <select id="language" className={s.select} value={f.language} onChange={(e) => setF({ ...f, language: e.target.value, touched: true })}>
@@ -136,7 +280,17 @@ function NewProject() {
             <option value="en">{L("انگلیسی", "English")}</option>
           </select>
         </label>
+        )}
       </div>
+
+      {tab === "dub" && dubTo === "fa" && (
+        <small className={s.muted}>
+          {L(
+            "انگلیسی به فارسی: زیرنویس و کارت پایانی کشیده نمی‌شه؛ بعد از تأیید، زیرنویس فارسی رو با مرحلهٔ «زیرنویس» اضافه کن. هنوز کلون فارسیِ صدای حامد نداریم، پس فعلاً همون کلون انگلیسی فارسی حرف می‌زنه. ویدیو بهتره زیرنویسِ چسبیده نداشته باشه.",
+            "English to Farsi: no subtitles or end card are drawn; add Farsi subtitles with the Subtitles step after approval. There is no Farsi clone of Hamed's voice yet, so his English clone speaks the Farsi for now. Best with a video that has no burned-in subtitles."
+          )}
+        </small>
+      )}
 
       {tab === "subtitles" && subtitleFields}
 
@@ -178,6 +332,8 @@ function NewProject() {
             ? L("در حال بررسی لینک…", "Checking the link…")
             : tab === "cut"
               ? L("شروع تدوین", "Start editing")
+              : tab === "dub"
+                ? L("شروع دوبله", "Start the dub")
               : tab === "subtitles"
                 ? L("شروع زیرنویس", "Start the subtitles")
                 : L("شروع موشن‌گرافیک", "Start the motion graphics")}
@@ -188,5 +344,14 @@ function NewProject() {
 }
 
 export default function Page() {
-  return <Shell>{() => <NewProject />}</Shell>;
+  // useSearchParams needs a Suspense boundary for the static build
+  return (
+    <Shell>
+      {() => (
+        <Suspense fallback={null}>
+          <NewProject />
+        </Suspense>
+      )}
+    </Shell>
+  );
 }

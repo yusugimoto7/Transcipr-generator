@@ -38,6 +38,9 @@ export async function POST(request) {
     const key = needsArticle
       ? String(body.article.slug || body.article.title_fa || "").toLowerCase()
       : topicKeyOf(body.topic);
+    // whoever started it is told on their phone when it is ready (lib/push)
+    // (never taken from the page: a page could otherwise send notifications to someone else)
+    body.by_uid = (await currentUser(request).catch(() => null))?.id || "";
     const job = startJob(kind, key, body);
     return Response.json({ job: publicJob(job) });
   } catch (e) {

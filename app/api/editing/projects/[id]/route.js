@@ -1,7 +1,7 @@
 import { guard, json, publicUser, allUsers } from "../../../../../lib/editing/auth";
 import { accessOf } from "../../../../../lib/editing/access";
 import { get } from "../../../../../lib/editing/store";
-import { loadProject, runsOf, correctionsOf, canApprove, isAdmin, nextStages, accessOfProject, canShare } from "../../../../../lib/editing/projects";
+import { loadProject, runsOf, correctionsOf, canApprove, isAdmin, nextStages, accessOfProject, canShare, approvedFiles } from "../../../../../lib/editing/projects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +25,7 @@ export async function GET(request, { params }) {
       corrections,
       can_approve: canApprove(g.user, project, owner && publicUser(owner)),
       next_stages: nextStages(runs, project),
+      approved: approvedFiles(runs),
       me: { id: g.user.id, role: g.user.role },
       access: accessOfProject(project),
       can_share: canShare(g.user, project),

@@ -101,6 +101,18 @@ as the change**, in the team's own words where possible, with the date.
   them, and every writing step uses them after the main source. The script shows the search while
   it runs and lists the extra sources under it; if even those fall short, it says what is missing.
   Older scripts get a «نوشتن دوباره، با تحقیق بیشتر» button; a script note rewrite runs the check too.
+- **A researched idea is a whole subject, found part by part** (Oct 26 2026: "cheapest and most
+  expensive cities in Canada" became a script on two-bedroom rents from one StatCan page; "why
+  only that? ChatGPT writes about many cities"). Why it happened: the search asked for pages
+  "about the idea" and found one; the card was written from that page; the script then saw at
+  most 4,500 characters of source text (shared between pages when there were several), and its
+  prompt treated every topic as one news item. ChatGPT writes from memory, this app only from
+  fetched text, so the fix is to fetch more, not to loosen grounding. Now: `outlineOf` breaks the
+  idea into 3-6 parts, the search asks for a page or two per part (official statistics first), up
+  to 6 pages are read, the card is about the whole subject (`whole`), the topic carries `outline`,
+  every writing step gets ~3,000 characters per page (`sourceTextFor` budget, prompt caps raised to
+  12-18k), and `outlineBlock` tells the writer to cover every part with its figures, say in one line
+  when a part has no data, and never fill one in. The page lists the parts above the script.
 - Topic links `/?t=<key>` open in a new tab; Back/Forward stay in the app.
 
 ## 3. Lexbase newsletter

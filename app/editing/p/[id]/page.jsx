@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Film, ImagePlus, Lock, Sparkles, Subtitles, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Sparkles, Subtitles, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -33,17 +33,20 @@ function Fold({ title, count, children, extra = null }) {
 }
 
 // Stages after the cut (english-sugimotovisa: video-transcribe, video-motion-graphics skills).
-const STAGE = { cut: ["برش", "Cut"], subtitles: ["زیرنویس", "Subtitles"], graphics: ["موشن‌گرافیک", "Motion graphics"] };
+const STAGE = { cut: ["برش", "Cut"], dub: ["دوبله", "Dub"], subtitles: ["زیرنویس", "Subtitles"], graphics: ["موشن‌گرافیک", "Motion graphics"] };
 const stageOf = (r) => (r && r.stage) || "cut";
 const runName = (r) =>
   stageOf(r) === "cut"
     ? L(`نسخهٔ ${r.version}`, `Version ${r.version}`)
+    : stageOf(r) === "dub"
+      ? L(`دوبله ${r.version}`, `Dub ${r.version}`)
     : stageOf(r) === "graphics"
       ? r.step === "plan"
         ? L(`طرح گرافیک ${r.version}`, `Graphics plan ${r.version}`)
         : L(`گرافیک ${r.version}`, `Graphics ${r.version}`)
       : L(`زیرنویس ${r.version}`, `Subtitles ${r.version}`);
 const STAGE_STATUS = {
+  dub: { preparing: ["در حال آماده‌سازی", "Preparing"], deciding: ["در حال ترجمه و صداگذاری", "Translating and voicing"], rendering: ["در حال هماهنگی لب‌ها", "Lip sync"], verifying: ["در حال بررسی", "Checking"] },
   subtitles: { deciding: ["در حال نوشتن زیرنویس", "Writing subtitles"], rendering: ["در حال چسباندن زیرنویس", "Burning subtitles"], preparing: ["در حال گرفتن برش", "Getting the cut"] },
   graphics: { deciding: ["در حال خواندن کلمه‌ها", "Reading the words"], rendering: ["در حال ساخت گرافیک", "Rendering graphics"], preparing: ["در حال گرفتن برش", "Getting the cut"] },
 };
@@ -53,7 +56,59 @@ const statusLabel = (r) => {
   return r.step === "plan" && r.status === "review" ? L("طرح آماده است", "Plan ready") : undefined;
 };
 
-function Steps({ runs }) {
+// What the dub pipeline reports: its own checks, the translator's notes (anything left out as
+// unclear), the spoken script and the post caption.
+function DubDetails({ r }) {
+  const checks = r.checks || [];
+  const notes = r.translator_notes || [];
+  return (
+    <>
+      <div className={s.card}>
+        <h2 className={s.h2}>{L("بررسی قبل از بازبینی", "Checked before review")}</h2>
+        {checks.length ? (
+          <ul className={s.list}>
+            {checks.map((c, i) => (
+              <li key={i}>{c}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className={s.muted}>{L("صدا بی‌بریدگی، کات‌ها سر جاشون و لب‌ها عوض شدن.", "No clipped words, the cuts are in place and the lips were redrawn.")}</p>
+        )}
+      </div>
+      {notes.length > 0 && (
+        <Fold title={L("یادداشت‌های مترجم (چیزهای نامشخص)", "Translator's notes (anything unclear)")} count={notes.length}>
+          <ul className={s.list}>
+            {notes.map((n, i) => (
+              <li key={i} dir="auto">
+                <Mixed text={n} />
+              </li>
+            ))}
+          </ul>
+        </Fold>
+      )}
+      {(r.sentences || []).length > 0 && (
+        <Fold title={L("متن دوبله", "The dubbed script")} count={r.sentences.length}>
+          <ol className={s.list} dir={r.language === "fa" ? "rtl" : "ltr"}>
+            {r.sentences.map((x, i) => (
+              <li key={i}>{x.text}</li>
+            ))}
+          </ol>
+        </Fold>
+      )}
+      {r.caption && (
+        <Fold title={L("کپشن پیشنهادی", "Suggested caption")}>
+          <p dir="auto" style={{ whiteSpace: "pre-wrap" }}>
+            {r.caption}
+            {"\n"}
+            {(r.hashtags || []).join(" ")}
+          </p>
+        </Fold>
+      )}
+    </>
+  );
+}
+
+function Steps({ runs, project }) {
   const state = (st) => {
     const rs = runs.filter((r) => stageOf(r) === st);
     // an approved graphics plan is not the end of its stage: the render still has to be approved
@@ -62,7 +117,10 @@ function Steps({ runs }) {
   };
   return (
     <ol className={s.steps}>
-      {Object.entries(STAGE).map(([k, label], i) => {
+      {Object.entries(STAGE)
+        // a dub project has a dub where the others have a cut
+        .filter(([k]) => (project.start === "dub" ? k !== "cut" : k !== "dub"))
+        .map(([k, label], i) => {
         const st = state(k);
         return (
           <li key={k} className={st === "done" ? s.stepDone : st === "on" ? s.stepOn : ""}>
@@ -496,6 +554,12 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                     <b>{fmt(r.output_s)}</b>
                     <span className={s.muted}>{L("مدت", "long")}</span>
                   </div>
+                  {stageOf(run) === "dub" && r.from && (
+                    <div>
+                      <b>{LANG[r.from] ? L(LANG[r.from]) : r.from}</b>
+                      <span className={s.muted}>{L("از", "from")}</span>
+                    </div>
+                  )}
                   {r.language && (
                     <div>
                       <b>{LANG[r.language] ? L(LANG[r.language]) : r.language}</b>
@@ -514,6 +578,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             {r.spelling && <Spelling sp={r.spelling} />}
+            {stageOf(run) === "dub" && <DubDetails r={r} />}
             {(r.qa || r.lessons) && <Checks qa={r.qa} lessons={r.lessons} me={me} />}
             {r.judgement_calls && r.judgement_calls.length > 0 && (
               <Fold title={L("تصمیم‌هایی که باید بررسی بشن", "Judgement calls to check")} count={r.judgement_calls.length}>
@@ -680,7 +745,8 @@ function Project({ id }) {
         </div>
       </div>
       <ProjectAccess id={p.id} d={d} reload={load} />
-      <Steps runs={d.runs} />
+      <ApprovedFiles p={p} files={d.approved || []} />
+      <Steps runs={d.runs} project={p} />
       {d.runs.length > 1 && (
         <div className={s.seg} role="tablist" aria-label={L("نسخه‌ها", "Versions")}>
           {d.runs.map((r) => (
@@ -693,6 +759,50 @@ function Project({ id }) {
       {run.id === latest.id && <NextSteps project={p} stages={d.next_stages || []} reload={load} />}
       {error && <div className={s.error}>{error}</div>}
       {run && <RunView key={run.id} run={run} project={p} isLatest={run.id === latest.id} corrections={run.id === latest.id ? d.corrections : []} canApprove={d.can_approve} me={d.me} reload={load} />}
+    </div>
+  );
+}
+
+// Every stage's approved file, each its own file in Drive (the cut, the dub, the subtitled file, the
+// graphics file), one click away; and "continue in a new project" for any of them (Hamed, 26 Oct 2026).
+function ApprovedFiles({ p, files }) {
+  if (!files.length && !p.from) return null;
+  return (
+    <div className={s.card} style={{ marginBottom: 12 }}>
+      {p.from && (
+        <p className={s.muted} style={{ marginTop: 0 }}>
+          {L("ادامهٔ ", "Continues ")}
+          <Link href={`/editing/p/${p.from.project_id}`}>{p.from.title}</Link>
+          {" · "}
+          {L(STAGE[p.from.stage])} {L(`نسخهٔ ${p.from.version}`, `version ${p.from.version}`)}
+        </p>
+      )}
+      {files.length > 0 && (
+        <>
+          <h2 className={s.h2}>
+            <FileCheck size={16} aria-hidden style={{ verticalAlign: "-3px" }} /> {L("فایل‌های تأییدشده", "Approved files")}
+          </h2>
+          <ul className={s.list}>
+            {files.map((x) => (
+              <li key={x.run_id} className={s.row} style={{ flexWrap: "wrap" }}>
+                <b>{L(STAGE[x.stage])}</b>
+                <span className={s.muted}>{L(`نسخهٔ ${x.version}`, `version ${x.version}`)}</span>
+                <a className={s.kbBadge} href={x.view} target="_blank" rel="noreferrer">
+                  <Film size={13} aria-hidden /> {L("باز کردن ویدیو", "Open the video")}
+                </a>
+                {x.folder && (
+                  <a className={s.kbBadge} href={x.folder} target="_blank" rel="noreferrer">
+                    <FolderOpen size={13} aria-hidden /> {L("پوشه", "Folder")}
+                  </a>
+                )}
+                <Link className={s.kbBadge} href={`/editing/new?from=${p.id}&run=${x.run_id}&tab=${x.stage === "cut" ? "subtitles" : "dub"}`}>
+                  <Copy size={13} aria-hidden /> {L("ادامه در پروژهٔ جدید", "Continue in a new project")}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
