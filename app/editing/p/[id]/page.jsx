@@ -86,11 +86,41 @@ function DubDetails({ r }) {
           </ul>
         </Fold>
       )}
+      {(r.speakers || []).length > 0 && (
+        <Fold title={L("گوینده‌ها", "Speakers")} count={r.speakers.length}>
+          <table className={s.table}>
+            <thead>
+              <tr>
+                <th>{L("نفر", "Who")}</th>
+                <th>{L("صدا", "Voice")}</th>
+                <th>{L("ثانیه", "Seconds")}</th>
+                <th>{L("اولین جمله", "First line")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.speakers.map((x, i) => (
+                <tr key={i}>
+                  <td dir="auto">{x.name}</td>
+                  <td>{x.voice}</td>
+                  <td>{x.seconds}</td>
+                  <td dir="auto">{x.first_text}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <small className={s.muted}>
+            {L("اگه نفرها جابه‌جا شناخته شدن، در اصلاح بنویس «صداها رو عوض کن» تا نسخهٔ بعد با ترتیب درست ساخته بشه.", "If the people were matched the wrong way round, write “swap the voices” as a correction and the next version is made with the right order.")}
+          </small>
+        </Fold>
+      )}
       {(r.sentences || []).length > 0 && (
         <Fold title={L("متن دوبله", "The dubbed script")} count={r.sentences.length}>
           <ol className={s.list} dir={r.language === "fa" ? "rtl" : "ltr"}>
             {r.sentences.map((x, i) => (
-              <li key={i}>{x.text}</li>
+              <li key={i}>
+                {x.speaker ? <b dir="auto">{x.speaker}: </b> : null}
+                {x.text}
+              </li>
             ))}
           </ol>
         </Fold>

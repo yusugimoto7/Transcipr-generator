@@ -98,6 +98,17 @@ function NewProject() {
   const [sub, setSub] = useState({ size: "", height: "", words: "" });
   const [gfx, setGfx] = useState({ amount: "normal", brief: "", with_subtitles: false });
   const [dubTo, setDubTo] = useState("en");
+  // Who speaks in a dub (Hamed, 27 Oct 2026: the border-officer series): one voice, or a cast in the order
+  // they first speak. Speaker 1 is Hamed with the approved voice; the others pick a HeyGen public voice
+  // from the worker's catalogue (/api/editing/voices reads config/video_process.json on main).
+  const [cast, setCast] = useState([]);
+  const [voices, setVoices] = useState(null);
+  useEffect(() => {
+    if (tab !== "dub" || voices) return;
+    api("/voices").then(setVoices).catch((e) => setVoices({ error: e.message }));
+  }, [tab, voices]);
+  const firstOther = (v) => (v && ((v.female || [])[0] || (v.male || [])[0] || {}).voice_id) || "hamed";
+  const setCastAt = (i, k, val) => setCast((c) => c.map((x, j) => (j === i ? { ...x, [k]: val } : x)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -123,7 +134,7 @@ function NewProject() {
       setBusy(false);
       return;
     }
-    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo } } }) };
+    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo, ...(cast.length >= 2 ? { speakers: cast } : {}) } } }) };
     try {
       const { project } = await api("/projects", { method: "POST", body });
       router.push(`/editing/p/${project.id}`);
@@ -282,6 +293,72 @@ function NewProject() {
         </label>
         )}
       </div>
+
+      {tab === "dub" && (
+        <div className={s.card} style={{ gap: 10 }}>
+          <label className={s.field}>
+            <span>{L("چه کسی حرف می‌زنه", "Who speaks")}</span>
+            <select
+              id="dub_cast"
+              className={s.select}
+              value={cast.length >= 2 ? "cast" : "one"}
+              onChange={(e) => setCast(e.target.value === "cast" ? [{ name: "Hamed", voice_id: "hamed" }, { name: "", voice_id: firstOther(voices) }] : [])}
+            >
+              <option value="one">{L("فقط حامد (صدای تأییدشده)", "Only Hamed (the approved voice)")}</option>
+              <option value="cast">{L("دو نفر یا بیشتر", "Two or more people")}</option>
+            </select>
+          </label>
+          {cast.length >= 2 && (
+            <>
+              <small className={s.muted}>
+                {L(
+                  "به ترتیبی که اول حرف می‌زنن. نفر اول حامد با صدای تأییدشده؛ بقیه یکی از صداهای آمادهٔ HeyGen (هیچ‌وقت کلون بازیگر). اسم هر نفر فقط برای متن دوبله است.",
+                  "In the order they first speak. The first is Hamed with the approved voice; the others get a HeyGen stock voice (never a clone of the actor). The names only label the dubbed script."
+                )}
+              </small>
+              {voices && voices.error && <div className={s.error}>{L("لیست صداها خونده نشد: ", "The voice list could not be read: ") + voices.error}</div>}
+              {cast.map((x, i) => (
+                <div key={i} className={s.row}>
+                  <input
+                    className={`${s.input} ${s.grow}`}
+                    value={x.name}
+                    onChange={(e) => setCastAt(i, "name", e.target.value)}
+                    placeholder={i === 0 ? "Hamed" : L("مثلاً مسافر", "e.g. Traveller")}
+                    aria-label={L("اسم گوینده", "Speaker name")}
+                  />
+                  <select className={`${s.select} ${s.grow}`} value={x.voice_id} onChange={(e) => setCastAt(i, "voice_id", e.target.value)} aria-label={L("صدا", "Voice")}>
+                    <option value="hamed">{(voices && voices.hamed && voices.hamed.name) || "Hamed"}</option>
+                    {voices && voices.female && voices.female.length > 0 && (
+                      <optgroup label={L("صدای زن", "Female voices")}>
+                        {voices.female.map((v) => (
+                          <option key={v.voice_id} value={v.voice_id}>{v.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {voices && voices.male && voices.male.length > 0 && (
+                      <optgroup label={L("صدای مرد", "Male voices")}>
+                        {voices.male.map((v) => (
+                          <option key={v.voice_id} value={v.voice_id}>{v.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  {cast.length > 2 && (
+                    <button type="button" className={s.btn} onClick={() => setCast((c) => c.filter((_, j) => j !== i))} aria-label={L("حذف", "Remove")}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              {cast.length < ((voices && voices.max) || 4) && (
+                <button type="button" className={s.btn} style={{ alignSelf: "flex-start" }} onClick={() => setCast((c) => [...c, { name: "", voice_id: firstOther(voices) }])}>
+                  {L("+ یک نفر دیگه", "+ One more person")}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {tab === "dub" && dubTo === "fa" && (
         <small className={s.muted}>
