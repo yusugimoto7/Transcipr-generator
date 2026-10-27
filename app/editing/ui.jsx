@@ -65,6 +65,33 @@ export function useMe(skip = false) {
 
 // English sentences that quote Farsi («…»): each quote is isolated so the island numbers and the
 // English around it keep their order.
+// A review preview from Drive, played by the device's own player (Hamed, 27 Oct 2026: on an iPhone
+// Drive's embedded player drew its controls twice, one set over the video's middle, and none of them
+// could be tapped). The preview is shared "anyone with the link", and Drive serves the file itself
+// as video/mp4 with byte ranges, so a plain <video> can play and seek it. Drive's player stays the
+// fallback for a file it will not stream (a large file gets a warning page instead).
+export const driveFile = (id) => `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`;
+export function DriveVideo({ id, embed, title, className, style, autoPlay = false }) {
+  const [failed, setFailed] = useState(false);
+  if (!id || failed) {
+    return embed ? <iframe className={className} style={style} src={embed} allow="autoplay" title={title} /> : null;
+  }
+  return (
+    <video
+      className={className}
+      style={{ display: "block", objectFit: "contain", background: "#000", ...style }}
+      src={driveFile(id)}
+      poster={`https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w800`}
+      controls
+      playsInline
+      preload="metadata"
+      autoPlay={autoPlay}
+      onError={() => setFailed(true)}
+      aria-label={title}
+    />
+  );
+}
+
 export function Mixed({ text }) {
   const parts = String(text || "").split(/(«[^»]*»)/);
   return (

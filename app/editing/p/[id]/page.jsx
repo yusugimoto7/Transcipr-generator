@@ -4,7 +4,7 @@ import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, Im
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
+import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar, DriveVideo } from "../../ui";
 import VoiceCorrections from "./VoiceCorrections";
 import MicButton from "../../../voice/MicButton";
 import { L, uiDir } from "../../../../lib/i18n";
@@ -622,7 +622,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
           ) : (
           <div className={s.card}>
             {r.preview ? (
-              <iframe className={`${s.player} ${project.kind === "reel" ? "" : s.playerWide}`} src={r.preview.embed} allow="autoplay" title={L(`پیش‌نمایش نسخهٔ ${run.version}`, `Preview of version ${run.version}`)} />
+              <DriveVideo key={r.preview.id} className={`${s.player} ${project.kind === "reel" ? "" : s.playerWide}`} id={r.preview.id} embed={r.preview.embed} title={L(`پیش‌نمایش نسخهٔ ${run.version}`, `Preview of version ${run.version}`)} />
             ) : (
               <p className={s.muted}>{r.note || L("این نسخه پیش‌نمایش نداره.", "No preview for this version.")}</p>
             )}
