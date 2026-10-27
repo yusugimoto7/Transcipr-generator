@@ -1128,7 +1128,8 @@ export default function App() {
         width={colMax}
         rows={bgRows}
         onOpen={(j) => {
-          setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }));
+          // A running job's notice stays until it ends; the topic page shows its progress meanwhile.
+          if (j.status !== "running") setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }));
           openTopic(j.topic);
         }}
         onDismiss={(j) => setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true }))}
@@ -2293,10 +2294,16 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
 }
 
 // Work that is running (or just finished) on the server for topics you have
-// already moved on from. Tap a finished one to open it.
+// already moved on from. Tapping a notice anywhere opens its topic, whatever the job's state.
 function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
   if (!rows.length) return null;
-  const KIND = { script: L("اسکریپت", "script"), article: L("مقاله", "article"), carousel: L("کاروسل", "carousel"), video: L("ویدیو انگلیسی", "English video") };
+  const KINDS = { script: ["اسکریپت", "script"], article: ["مقاله", "article"], carousel: ["کاروسل", "carousel"], story: ["استوری", "story"], video: ["ویدیو انگلیسی", "English video"] };
+  // Any kind without a name of its own still reads as a sentence, never "undefined".
+  const KIND = new Proxy({}, { get: (_, k) => L(KINDS[String(k).replace(/@en$/, "")] || ["محتوا", "content"]) });
+  const stop = (fn) => (e) => {
+    e.stopPropagation();
+    fn();
+  };
   return (
     // Pinned under the header so a finished or failed job is seen wherever
     // you are on the page.
@@ -2310,8 +2317,14 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
           <div
             key={j.key + ":" + j.kind}
             dir={uiDir()}
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpen(j)}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(j))}
+            title={L("باز کردن این موضوع", "Open this topic")}
             className={"ui-glass ui-fade" + (running ? " ui-progress" : "")}
             style={{
+              cursor: "pointer",
               display: "flex", alignItems: "center", gap: 10, padding: "9px 10px 9px 12px", borderRadius: 14,
               border: `1px solid ${alpha(tone, 0.35)}`,
               // Solid underneath: it floats over the list.
@@ -2334,17 +2347,17 @@ function JobsBar({ rows, onOpen, onDismiss, onRetry, width = 460 }) {
               </div>
             </div>
             {!running && !failed && (
-              <button className="ui-btn" onClick={() => onOpen(j)} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+              <button className="ui-btn" onClick={stop(() => onOpen(j))} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
                 {L("باز کن", "Open")}
               </button>
             )}
             {failed && (
-              <button className="ui-btn" onClick={() => onRetry(j)} style={{ background: "transparent", color: C.text, border: `1px solid ${alpha(C.reject, 0.5)}`, borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
+              <button className="ui-btn" onClick={stop(() => onRetry(j))} style={{ background: "transparent", color: C.text, border: `1px solid ${alpha(C.reject, 0.5)}`, borderRadius: 10, padding: "7px 13px", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Vazirmatn', sans-serif" }}>
                 {L("دوباره", "Retry")}
               </button>
             )}
             {!running && (
-              <button className="ui-btn" onClick={() => onDismiss(j)} aria-label={L("بستن", "Close")} style={{ background: "transparent", color: C.text3, border: "none", fontSize: 18, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
+              <button className="ui-btn" onClick={stop(() => onDismiss(j))} aria-label={L("بستن", "Close")} style={{ background: "transparent", color: C.text3, border: "none", fontSize: 18, cursor: "pointer", padding: "2px 4px", lineHeight: 1 }}>
                 ×
               </button>
             )}
