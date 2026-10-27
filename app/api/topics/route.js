@@ -12,7 +12,7 @@ import {
 import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier, focusOf } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
-import { laneCards, pollSocialLane, laneStatus } from "../../../lib/social/lane";
+import { laneCards, laneReady, pollSocialLane, laneStatus } from "../../../lib/social/lane";
 import { isReadableText } from "../../../lib/news";
 import { loadSources } from "../../../lib/sources";
 import { getLexbaseItems, lexbaseEnabled } from "../../../lib/newsletter/lexbase";
@@ -653,6 +653,7 @@ export async function POST(request) {
 
   let pl;
   try {
+    await laneReady();
     pl = plan(force, exclude);
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
@@ -719,6 +720,7 @@ function withLane(topics) {
 export async function GET(request) {
   const q = new URL(request.url).searchParams;
   if (q.get("deck") === "1") {
+    await laneReady();
     return Response.json({ topics: deckNow(), generating: !!run, stats: lastStats }, { headers: { "Cache-Control": "no-store" } });
   }
   const warm = q.get("warm") === "1";
