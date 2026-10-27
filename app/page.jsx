@@ -14,7 +14,7 @@ import { STORY_TEMPLATES } from "../lib/story/templates";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
-import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
+import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -1444,6 +1444,89 @@ const CATEGORIES = [
   ["web", ["سایت‌ها", "Websites"], (t) => !isSocialTopic(t)],
 ];
 
+// Drag a card to the left to show «بایگانی» behind it; a tap on that archives the topic for
+// everyone (the same as ✕, restorable from the Archive filter). Hamed, Oct 27 2026: cards already
+// made (green) had no way out of the list. Vertical scrolling stays the browser's (touch-action),
+// and a drag never counts as a tap on the card's link.
+const SWIPE_W = 92;
+function SwipeToArchive({ enabled, onArchive, children }) {
+  const [x, setX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const g = useRef(null);
+  const moved = useRef(false);
+  if (!enabled) return children;
+  const down = (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    g.current = { x0: e.clientX, y0: e.clientY, base: x, axis: "" };
+    moved.current = false;
+  };
+  const move = (e) => {
+    const s = g.current;
+    if (!s) return;
+    const dx = e.clientX - s.x0;
+    const dy = e.clientY - s.y0;
+    if (!s.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (s.axis === "x") {
+        setDragging(true);
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      }
+    }
+    if (s.axis !== "x") return;
+    moved.current = true;
+    setX(Math.max(-SWIPE_W - 24, Math.min(0, s.base + dx)));
+  };
+  const up = () => {
+    const s = g.current;
+    g.current = null;
+    setDragging(false);
+    if (s && s.axis === "x") setX((v) => (v < -SWIPE_W / 2 ? -SWIPE_W : 0));
+  };
+  return (
+    <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+      {/* only there while the card moves: at rest it would show at the rounded corners */}
+      {(x < 0 || dragging) && (
+      <button
+        type="button"
+        onClick={() => {
+          setX(0);
+          onArchive();
+        }}
+        style={{
+          position: "absolute", top: 0, bottom: 0, right: 0, width: SWIPE_W, border: "none", cursor: "pointer",
+          background: "#d92d20", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 700,
+        }}
+      >
+        <Trash2 size={20} aria-hidden />
+        {L("بایگانی", "Archive")}
+      </button>
+      )}
+      <div
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        // with a mouse, dragging the title would otherwise start the browser's link drag
+        onDragStart={(e) => e.preventDefault()}
+        onClickCapture={(e) => {
+          // the release of a drag, or a tap on an opened card, only closes it
+          if (moved.current || x) {
+            e.preventDefault();
+            e.stopPropagation();
+            moved.current = false;
+            setX(0);
+          }
+        }}
+        style={{ transform: `translateX(${x}px)`, transition: dragging ? "none" : "transform 0.18s ease", touchAction: "pan-y", position: "relative" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
   // Pinned topics stay on top while they are being worked on. Kept on this device.
@@ -1596,14 +1679,15 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
           const score = Number(t.score) || 0;
           const scoreColor = score >= 85 ? C.orange : score >= 70 ? "#d97706" : C.text2;
           return (
+            <SwipeToArchive key={topicKey(t) + i} enabled={st !== "rejected"} onArchive={() => onReject(t)}>
             <div
-              key={topicKey(t) + i}
               dir="rtl"
               className="ui-glass ui-lift ui-fade"
               style={{
                 position: "relative", overflow: "hidden", animationDelay: `${Math.min(n, 14) * 28}ms`,
                 display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
-                background: st === "approved" ? alpha(C.success, 0.07) : C.surface,
+                // opaque, so the archive button behind a dragged card does not show through
+                background: st === "approved" ? `linear-gradient(${alpha(C.success, 0.07)}, ${alpha(C.success, 0.07)}), ${C.surface}` : C.surface,
                 border: `1px solid ${pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
                 opacity: st === "rejected" ? 0.45 : 1,
               }}
@@ -1728,6 +1812,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", L("برگردوندن موضوع", "Restore topic"))}
               </div>
             </div>
+            </SwipeToArchive>
           );
         })}
       </div>
