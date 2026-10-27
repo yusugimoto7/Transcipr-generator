@@ -10,6 +10,7 @@ import { AppBar, barStyles } from "./editing/ui";
 import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
+import StoryTemplateDesigner from "./StoryTemplateDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
 import { splitSlideText } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
@@ -4204,6 +4205,18 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           {designing > 0 && pages.some((x) => x.num === designing) && (
             <div style={{ marginTop: 12, background: C.surface, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 14, padding: 12 }}>
               <div dir={uiDir()} style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 8, fontFamily: fa }}>{L(`طراحی دستی · صفحهٔ ${designing}`, `Design by hand · page ${designing}`)}</div>
+              {story.template && story.template !== "simple" ? (
+              <StoryTemplateDesigner
+                key={designing + ":" + story.template}
+                page={pages.find((x) => x.num === designing)}
+                story={story}
+                total={pages.length}
+                busy={running}
+                onMake={(manual) => onJob("story_page", { num: designing, manual })}
+                onReset={() => onJob("story_page", { num: designing, manual: null })}
+                onSave={(url) => saveStoryImage(url, `sugimoto-story-${designing}.png`)}
+              />
+              ) : (
               <StoryDesigner
                 key={designing}
                 page={pages.find((x) => x.num === designing)}
@@ -4213,6 +4226,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                 onReset={() => onJob("story_page", { num: designing, manual: null })}
                 onSave={(url) => saveStoryImage(url, `sugimoto-story-${designing}.png`)}
               />
+              )}
             </div>
           )}
           {!running && (
