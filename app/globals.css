@@ -279,3 +279,9 @@ header.ui-glass {
     animation: none;
   }
 }
+
+/* A topic card is one link (app/page.jsx): the link covers the card, and the card's own buttons,
+   links and fields sit above it so they keep doing their own thing. */
+.topic-card-link { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
+.topic-card :is(a, button, input, select, textarea, label):not(.topic-card-link) { position: relative; z-index: 1; }
+

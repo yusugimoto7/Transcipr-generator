@@ -23,7 +23,7 @@ export async function POST(request) {
     const { action, topic } = await request.json();
     if (!topic || !keyOf(topic)) return Response.json({ error: "bad request" }, { status: 400 });
     let rec;
-    if (action === "use") rec = await setStatus(topic, "active");
+    if (action === "use") rec = await setStatus(topic, "active", { pick: true });
     else if (action === "archive") rec = await setStatus(topic, "archived");
     else if (action === "restore") rec = await restore(topic);
     else return Response.json({ error: "unknown action" }, { status: 400 });

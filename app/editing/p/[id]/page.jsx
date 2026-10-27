@@ -4,7 +4,7 @@ import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, Im
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar } from "../../ui";
+import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar, DriveVideo } from "../../ui";
 import VoiceCorrections from "./VoiceCorrections";
 import MicButton from "../../../voice/MicButton";
 import { L, uiDir } from "../../../../lib/i18n";
@@ -443,6 +443,100 @@ function Checks({ qa, lessons, me }) {
   );
 }
 
+// Every subtitle line of a subtitles version with its time (Hamed, 27 Oct 2026: "an editor for
+// transcripts"). While the version is reviewed, a line can be typed over: each changed line becomes
+// a correction that the worker writes exactly as typed, no model in between; the next version is
+// made with "Apply corrections" as usual. Lines are never added or removed: each one is a stretch
+// of speech with its own time.
+const flat = (t) => String(t || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+function SubtitleEditor({ project, run, editable, corrections, busy, act }) {
+  const [lines, setLines] = useState(null);
+  const [err, setErr] = useState("");
+  const [draft, setDraft] = useState({});
+  const [find, setFind] = useState("");
+  useEffect(() => {
+    let live = true;
+    api(`/projects/${project.id}/subtitles?run=${run.id}`)
+      .then((x) => live && setLines(x.lines || []))
+      .catch((e) => live && setErr(e.message));
+    return () => {
+      live = false;
+    };
+  }, [project.id, run.id]);
+  // the text a line has now: its open edit, else the version's own
+  const pending = {};
+  for (const c of corrections || []) if (c.line) pending[c.line] = c.text;
+  const current = (l) => (pending[l.n] !== undefined ? pending[l.n] : l.text);
+  const value = (l) => (draft[l.n] !== undefined ? draft[l.n] : current(l));
+  const changed = (lines || []).filter((l) => draft[l.n] !== undefined && flat(draft[l.n]) !== flat(current(l)));
+  const dir = (run.result && run.result.language) === "en" ? "ltr" : "rtl";
+  const q = flat(find).toLowerCase();
+  const shown = (lines || []).filter((l) => !q || flat(value(l)).toLowerCase().includes(q) || fmt(l.start).startsWith(q));
+  if (err) return <div className={s.error}>{err}</div>;
+  if (!lines) return <p className={s.muted}>{L("در حال خوندن متن زیرنویس…", "Reading the subtitle text…")}</p>;
+  if (!lines.length) return <p className={s.muted}>{L("متن زیرنویس این نسخه پیدا نشد.", "This version's subtitle text was not found.")}</p>;
+  const save = () =>
+    act("lines", async () => {
+      await api(`/projects/${project.id}/subtitles`, { method: "POST", body: { run_id: run.id, edits: changed.map((l) => ({ line: l.n, text: draft[l.n] })) } });
+      setDraft({});
+    });
+  return (
+    <div className={s.subEditor}>
+      <p className={s.muted}>
+        {editable
+          ? L("هر جمله رو همون‌جا درست کن (املا، کلمه‌ای که اشتباه شنیده شده). جمله‌های عوض‌شده به اصلاحیه‌ها اضافه می‌شن و در نسخهٔ بعد دقیقاً همون‌طور که نوشتی می‌آن؛ زمان کلمه‌ها خودش جابه‌جا می‌شه.", "Fix any line right here (spelling, a word heard wrong). Changed lines go into the corrections and the next version shows them exactly as you typed; the word timing follows by itself.")
+          : L("متن زیرنویس این نسخه. فقط نسخه‌ای که در حال بازبینیه قابل ویرایشه.", "The subtitle text of this version. Only the version under review can be edited.")}
+      </p>
+      {lines.length > 8 && (
+        <input data-no-voice className={s.input} placeholder={L("جستجو در متن یا زمان (1:20)", "Search the text or a time (1:20)")} value={find} onChange={(e) => setFind(e.target.value)} aria-label={L("جستجو در زیرنویس", "Search the subtitles")} />
+      )}
+      <ol className={s.subLines}>
+        {shown.map((l) => {
+          const edited = pending[l.n] !== undefined;
+          const dirty = draft[l.n] !== undefined && flat(draft[l.n]) !== flat(current(l));
+          return (
+            <li key={l.n} className={dirty ? s.subDirty : edited ? s.subEdited : ""}>
+              <span className={s.subTime}>{fmt(l.start)}</span>
+              {editable ? (
+                <textarea
+                  className={s.textarea}
+                  data-no-copy
+                  dir={dir}
+                  rows={Math.min(6, Math.max(2, Math.ceil(value(l).length / 30)))}
+                  value={value(l)}
+                  onChange={(e) => setDraft({ ...draft, [l.n]: e.target.value.replace(/\n/g, " ") })}
+                  aria-label={L(`جملهٔ ${l.n}`, `Line ${l.n}`)}
+                />
+              ) : (
+                <span dir={dir} className={s.subText}>{value(l)}</span>
+              )}
+              {edited && !dirty && (
+                <span className={s.muted} style={{ fontSize: 12 }}>
+                  {L("قبلاً: ", "was: ")}
+                  <bdi>{flat(l.text)}</bdi>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {editable && (
+        <div className={s.row}>
+          <button className={`${s.btn} ${s.primary}`} disabled={!!busy || !changed.length} onClick={save}>
+            {busy === "lines" ? L("در حال ذخیره…", "Saving…") : changed.length ? L(`ذخیرهٔ ${changed.length} جمله`, `Save ${changed.length} line${changed.length > 1 ? "s" : ""}`) : L("جمله‌ای عوض نشده", "No line changed")}
+          </button>
+          {changed.length > 0 && (
+            <button className={s.linkBtn} disabled={!!busy} onClick={() => setDraft({})}>
+              {L("برگردوندن", "Undo changes")}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RunView({ run, project, isLatest, corrections, canApprove, me, reload }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -528,7 +622,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
           ) : (
           <div className={s.card}>
             {r.preview ? (
-              <iframe className={`${s.player} ${project.kind === "reel" ? "" : s.playerWide}`} src={r.preview.embed} allow="autoplay" title={L(`پیش‌نمایش نسخهٔ ${run.version}`, `Preview of version ${run.version}`)} />
+              <DriveVideo key={r.preview.id} className={`${s.player} ${project.kind === "reel" ? "" : s.playerWide}`} id={r.preview.id} embed={r.preview.embed} title={L(`پیش‌نمایش نسخهٔ ${run.version}`, `Preview of version ${run.version}`)} />
             ) : (
               <p className={s.muted}>{r.note || L("این نسخه پیش‌نمایش نداره.", "No preview for this version.")}</p>
             )}
@@ -590,6 +684,21 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                   ))}
                 </ul>
               </Fold>
+            )}
+
+            {stageOf(run) === "subtitles" && ACTIVE.indexOf(run.status) < 0 && run.status !== "failed" && (
+              reviewing ? (
+                <div className={s.card}>
+                  <h2 className={s.h2}>
+                    <Subtitles size={18} aria-hidden style={{ verticalAlign: "-3px" }} /> {L("ویرایش متن زیرنویس", "Edit the subtitle text")}
+                  </h2>
+                  <SubtitleEditor project={project} run={run} editable corrections={corrections} busy={busy} act={act} />
+                </div>
+              ) : (
+                <Fold title={L("متن زیرنویس", "Subtitle text")}>
+                  <SubtitleEditor project={project} run={run} editable={false} corrections={[]} busy={busy} act={act} />
+                </Fold>
+              )
             )}
 
             {reviewing && (

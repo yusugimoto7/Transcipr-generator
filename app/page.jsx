@@ -11,10 +11,11 @@ import { TEMPLATES } from "../lib/carousel-templates";
 import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
+import { splitSlideText } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
-import { Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, X } from "lucide-react";
+import { Archive, Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -303,6 +304,10 @@ export default function App() {
   const [contentLang, setContentLang] = useState("fa");
   const [savedEn, setSavedEn] = useState({});
   const [loadingSaved, setLoadingSaved] = useState(false);
+  // The topic whose saved material was read successfully: only then may a missing script be written
+  // automatically, never over a script the server has but could not send.
+  const [savedOkKey, setSavedOkKey] = useState("");
+  const autoWroteRef = useRef(new Set());
   const [caps, setCaps] = useState({ carousel: true, story: true, telegram: { review: true, public: true }, video: false });
 
   // The signed-in person (one login for the whole app): which other parts the header links to.
@@ -767,11 +772,13 @@ export default function App() {
   // ---- decisions ----------------------------------------------------------
   // Approve: the server writes the scripts as a job, and the topic becomes
   // "used" for everyone. Telegram is a separate choice on the topic page.
+  // pickedAt puts it at the top of the list, above everything older (Hamed, Oct 27 2026); the
+  // job stores it for the team (lib/workspace.js setStatus { pick }).
   const approveTopic = (topic) => {
     markSeenLocal(topic);
     recordSeenRemote(topic);
-    patchWs(topic, { status: "active" });
-    startJob("script", topic, { topic });
+    patchWs(topic, { status: "active", pickedAt: Date.now() });
+    startJob("script", topic, { topic, picked: true });
   };
 
   // ✕ archives, for everyone. It can be restored from the Archive filter.
@@ -862,7 +869,9 @@ export default function App() {
     fetch("/api/workspace?key=" + encodeURIComponent(key), { cache: "no-store" })
       .then((r) => r.json())
       .then(({ entry }) => {
-        if (!entry || openKeyRef.current !== key) return;
+        if (openKeyRef.current !== key) return;
+        if (!only) setSavedOkKey(key);
+        if (!entry) return;
         const m = entry.materials || {};
         if (!only) {
           if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, before_check: !("sources" in m.script) });
@@ -995,6 +1004,17 @@ export default function App() {
     }
   }
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
+  // Any topic opened with no script and no job for it: the Persian and English scripts start by
+  // themselves, once (Hamed, Oct 27 2026: "when I open a topic, write both scripts right away";
+  // before, only topics picked with ✓ did). Saved scripts are read first and never written over.
+  // Not a pick: the topic is marked used, but only ✓ moves it to the top of the list.
+  useEffect(() => {
+    if (view !== "script" || !scriptTopic || !svKey || savedOkKey !== svKey || loadingSaved) return;
+    if (viewScripts.fa || viewScripts.en || sj) return;
+    if (autoWroteRef.current.has(svKey)) return;
+    autoWroteRef.current.add(svKey);
+    startJob("script", scriptTopic, { topic: scriptTopic });
+  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, viewScripts.fa, viewScripts.en, sj, startJob]);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? L("نوشتن سناریو با خطا مواجه شد (", "Writing the script failed (") + (sj.error || "") + ")"
@@ -1073,6 +1093,19 @@ export default function App() {
       bgRows.push(j);
     }
   }
+
+  // A finished notice clears itself after 10 seconds (the team: they piled
+  // up). A running one stays until it ends, and a failed one stays so its
+  // retry is not missed; both can still be closed by hand.
+  const autoClear = useRef(new Set());
+  useEffect(() => {
+    for (const j of bgRows) {
+      const id = j.key + ":" + j.kind + ":" + (j.id || j.startedAt);
+      if (j.status !== "done" || autoClear.current.has(id)) continue;
+      autoClear.current.add(id);
+      setTimeout(() => setDismissed((d) => ({ ...d, [j.key + ":" + j.kind]: true })), 10000);
+    }
+  });
 
   const counts = { pending: 0, approved: 0, rejected: 0 };
   for (const t of listTopics) counts[decisions[topicKey(t)] || "pending"]++;
@@ -1453,6 +1486,89 @@ const CATEGORIES = [
   ["web", ["سایت‌ها", "Websites"], (t) => !isSocialTopic(t)],
 ];
 
+// Drag a card to the left to show «بایگانی» behind it; a tap on that archives the topic for
+// everyone (the same as ✕, restorable from the Archive filter). Hamed, Oct 27 2026: cards already
+// made (green) had no way out of the list. Vertical scrolling stays the browser's (touch-action),
+// and a drag never counts as a tap on the card's link.
+const SWIPE_W = 92;
+function SwipeToArchive({ enabled, onArchive, children }) {
+  const [x, setX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const g = useRef(null);
+  const moved = useRef(false);
+  if (!enabled) return children;
+  const down = (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    g.current = { x0: e.clientX, y0: e.clientY, base: x, axis: "" };
+    moved.current = false;
+  };
+  const move = (e) => {
+    const s = g.current;
+    if (!s) return;
+    const dx = e.clientX - s.x0;
+    const dy = e.clientY - s.y0;
+    if (!s.axis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      s.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (s.axis === "x") {
+        setDragging(true);
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      }
+    }
+    if (s.axis !== "x") return;
+    moved.current = true;
+    setX(Math.max(-SWIPE_W - 24, Math.min(0, s.base + dx)));
+  };
+  const up = () => {
+    const s = g.current;
+    g.current = null;
+    setDragging(false);
+    if (s && s.axis === "x") setX((v) => (v < -SWIPE_W / 2 ? -SWIPE_W : 0));
+  };
+  return (
+    <div style={{ position: "relative", borderRadius: 14, overflow: "hidden" }}>
+      {/* only there while the card moves: at rest it would show at the rounded corners */}
+      {(x < 0 || dragging) && (
+      <button
+        type="button"
+        onClick={() => {
+          setX(0);
+          onArchive();
+        }}
+        style={{
+          position: "absolute", top: 0, bottom: 0, right: 0, width: SWIPE_W, border: "none", cursor: "pointer",
+          background: "#d92d20", color: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 700,
+        }}
+      >
+        <Trash2 size={20} aria-hidden />
+        {L("بایگانی", "Archive")}
+      </button>
+      )}
+      <div
+        onPointerDown={down}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={up}
+        // with a mouse, dragging the title would otherwise start the browser's link drag
+        onDragStart={(e) => e.preventDefault()}
+        onClickCapture={(e) => {
+          // the release of a drag, or a tap on an opened card, only closes it
+          if (moved.current || x) {
+            e.preventDefault();
+            e.stopPropagation();
+            moved.current = false;
+            setX(0);
+          }
+        }}
+        style={{ transform: `translateX(${x}px)`, transition: dragging ? "none" : "transform 0.18s ease", touchAction: "pan-y", position: "relative" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
   // Pinned topics stay on top while they are being worked on. Kept on this device.
@@ -1491,14 +1607,19 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   const rows = topics
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t));
-  // Newest first by the news date, whether or not someone is working on the topic. A date still to
-  // come (a rule "from November 3") counts as the day the topic appeared, else it would sit on top
-  // for weeks. Pinned topics come first, newest pin first, until they are unpinned.
-  const today = new Date().toISOString().slice(0, 10);
-  const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : "");
-  const when = (t) => (t.date && t.date <= today ? t.date : day(t._made) || (t.date ? today : day(t._ts)));
+  // Newest event first (Hamed, Oct 27 2026): a topic picked with ✓ goes to the top at that moment,
+  // and anything that arrives after it goes above it. A card's arrival is when the server wrote it
+  // (found_at), else when the team first saved it, else its news date (a date still to come counts
+  // as today, else it would sit on top for weeks). Working on a topic does not move it. Pinned
+  // topics come first, newest pin first, until they are unpinned.
+  const now = Date.now();
+  const arrived = (t) => t.found_at || t._made || Math.min(Date.parse(t.date || "") || t._ts || 0, now);
+  const pickedOf = (t) => (stateOf(t) === "approved" && (ws[topicKey(t)] || {}).pickedAt) || 0;
+  const event = (t) => Math.max(pickedOf(t), arrived(t));
   const pinAt = (t) => pins[topicKey(t)] || 0;
-  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || when(b.t).localeCompare(when(a.t)) || a.i - b.i);
+  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || event(b.t) - event(a.t) || a.i - b.i);
+  // The newsletter keeps its priority order, with the topics picked from it on top, latest pick first.
+  else rows.sort((a, b) => pickedOf(b.t) - pickedOf(a.t) || a.i - b.i);
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -1527,6 +1648,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
     <button
       onClick={onClick}
       aria-label={aria}
+      title={aria}
       className={"ui-btn" + (kind === "primary" ? " ui-glow-orange" : kind === "danger" ? " ui-glow-danger" : "")}
       style={{
         minWidth: 36, height: 36, padding: "0 11px", borderRadius: 8, cursor: "pointer",
@@ -1605,18 +1727,35 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
           const score = Number(t.score) || 0;
           const scoreColor = score >= 85 ? C.orange : score >= 70 ? "#d97706" : C.text2;
           return (
+            <SwipeToArchive key={topicKey(t) + i} enabled={st !== "rejected"} onArchive={() => onReject(t)}>
             <div
-              key={topicKey(t) + i}
               dir="rtl"
-              className="ui-glass ui-lift ui-fade"
+              className="ui-glass ui-lift ui-fade topic-card"
+              // a tap anywhere on the card opens the topic (Hamed, Oct 27 2026); its own buttons and
+              // links (✓, ✕, pin, the source) keep doing their own thing
+              onClick={(e) => {
+                if (e.defaultPrevented || e.target.closest("a, button, input, textarea, select, label")) return;
+                if (e.metaKey || e.ctrlKey) {
+                  handOff(t);
+                  window.open(topicHref(t), "_blank");
+                  return;
+                }
+                onOpen && onOpen(t);
+              }}
               style={{
+                cursor: "pointer",
                 position: "relative", overflow: "hidden", animationDelay: `${Math.min(n, 14) * 28}ms`,
                 display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
-                background: st === "approved" ? alpha(C.success, 0.07) : C.surface,
+                // opaque, so the archive button behind a dragged card does not show through
+                background: st === "approved" ? `linear-gradient(${alpha(C.success, 0.07)}, ${alpha(C.success, 0.07)}), ${C.surface}` : C.surface,
                 border: `1px solid ${pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
                 opacity: st === "rejected" ? 0.45 : 1,
               }}
             >
+              {/* The whole card is the topic's link (Hamed, Oct 27 2026: right-click worked only on the
+                  title and Open): a link laid over it, under the card's own buttons and links, which
+                  globals.css (.topic-card) lifts above it. A plain click still opens in the app. */}
+              <a href={topicHref(t)} {...openLinkProps(t, onOpen)} className="topic-card-link" aria-hidden tabIndex={-1} draggable={false} />
               {/* topic-type color stripe on the reading-start edge */}
               <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -1729,7 +1868,12 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 )}
                 {st === "approved" && (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                    {openBtn(t, job && job.status === "running" ? L("باز کن ⏳", "Open ⏳") : L("باز کن ✓", "Open ✓"))}
+                    {/* archive next to Open (Hamed, Oct 27 2026): on a computer there is no swipe, so a
+                        made card had no way out of the list; same as the swipe and ✕ */}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {smallBtn(<Archive size={16} aria-hidden />, () => onReject(t), "danger", L("بایگانی موضوع", "Archive topic"))}
+                      {openBtn(t, job && job.status === "running" ? L("باز کن ⏳", "Open ⏳") : L("باز کن ✓", "Open ✓"))}
+                    </div>
                     {job && job.status === "running" && (
                       <span className="ui-pulse" style={{ fontSize: 11, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>{L("در حال نوشتن…", "Writing…")}</span>
                     )}
@@ -1739,6 +1883,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 {st === "rejected" && smallBtn("↶", () => onRestore(t), "ghost", L("برگردوندن موضوع", "Restore topic"))}
               </div>
             </div>
+            </SwipeToArchive>
           );
         })}
       </div>
@@ -2217,7 +2362,7 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
           {done && !running && (
             <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 12, background: alpha(C.success, 0.08), border: `1px solid ${alpha(C.success, 0.3)}`, fontSize: 13 }}>
               ✓ {L("خبر ساخته شد و به فهرست اضافه شد:", "The news was made and added to the list:")}{" "}
-              <a href={"/?t=" + encodeURIComponent(topicKey(job.result.topic))} onClick={(e) => { e.preventDefault(); onOpen(job.result.topic); }} style={{ color: C.teal, fontWeight: 700 }}>
+              <a href={topicHref(job.result.topic)} {...openLinkProps(job.result.topic, onOpen)} style={{ color: C.teal, fontWeight: 700 }}>
                 {job.result.topic.title_fa}
               </a>
               {(job.result.skipped || []).length > 0 && (
@@ -2299,7 +2444,7 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
               {ideas.topics.map((t) => (
                 <div key={topicKey(t)}>
                   •{" "}
-                  <a href={"/?t=" + encodeURIComponent(topicKey(t))} onClick={(e) => { e.preventDefault(); onOpen(t); }} style={{ color: C.teal, fontWeight: 700 }}>
+                  <a href={topicHref(t)} {...openLinkProps(t, onOpen)} style={{ color: C.teal, fontWeight: 700 }}>
                     {t.title_fa}
                   </a>
                 </div>
@@ -2685,7 +2830,7 @@ function AppMenu({ me, ax, navBtn, onSignOut }) {
     (!me || ax.includes("calendar")) && ["/calendar", "📅", L("تقویم محتوا", "Content calendar")],
     (!me || ax.includes("editing")) && ["/editing", "🎬", L("تدوین ویدیو", "Video Editing")],
     ax.includes("team") && ["/editing/team", "👥", L("تیم · چه کسی به چه چیزی دسترسی داره", "Team · who can open what")],
-    me && ["/editing/password", "🔑", L("تغییر رمز عبور", "Change password")],
+    me && ["/settings", "⚙️", L("تنظیمات", "Settings")],
   ].filter(Boolean);
   const row = { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, color: C.text, textDecoration: "none", fontSize: 14, fontWeight: 600, fontFamily: FONT, background: "none", border: "none", width: "100%", cursor: "pointer", textAlign: "start" };
   return (
@@ -3652,10 +3797,10 @@ function CarouselPanel({ topic, carousel, job, sendJob, caps = {}, onJob, openSi
   );
 }
 
-// A slide's text as the editor sees it: the first line is the heading, the rest the body.
+// A slide's text as the editor sees it: heading and body (lib/slide-text.js also splits a
+// slide the writer returned as one line).
 function splitSlide(content) {
-  const lines = String(content || "").split("\n");
-  return { title: (lines[0] || "").trim(), body: lines.slice(1).join("\n").trim() };
+  return splitSlideText(content);
 }
 
 function TemplatePicker({ value, onChange, font }) {

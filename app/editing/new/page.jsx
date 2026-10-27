@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api, s, Shell } from "../ui";
+import { api, s, Shell, DriveVideo } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import { L, uiDir } from "../../../lib/i18n";
 import { Sheet, SheetContent } from "../../../components/ui/sheet";
@@ -39,7 +39,7 @@ function FileCard({ project, file, chosen, onChoose }) {
   return (
     <div className={s.card} style={{ padding: 0, overflow: "hidden", border: chosen ? "2px solid var(--orange)" : undefined }}>
       {playing && pv ? (
-        <iframe src={pv.embed} allow="autoplay" title={project.title} style={{ width: "100%", aspectRatio: project.kind === "reel" ? "9 / 16" : "16 / 9", border: 0, display: "block", background: "#000" }} />
+        <DriveVideo id={pv.id} embed={pv.embed} title={project.title} autoPlay style={{ width: "100%", aspectRatio: project.kind === "reel" ? "9 / 16" : "16 / 9", border: 0 }} />
       ) : (
         <button
           type="button"

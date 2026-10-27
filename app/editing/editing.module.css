@@ -163,3 +163,12 @@ h2.h2 { font-size: 16px; margin: 0; }
 .shotRow img { width: 28px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid var(--line); display: block; }
 .generalBox { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 h3.h3 { font-size: 14.5px; margin: 0; }
+.subEditor { display: flex; flex-direction: column; gap: 10px; }
+.subLines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
+.subLines li { display: grid; grid-template-columns: 52px 1fr; gap: 4px 8px; align-items: start; padding: 4px 6px; border-radius: 8px; border-inline-start: 3px solid transparent; }
+.subLines li > :nth-child(3) { grid-column: 2; }
+.subLines .textarea { width: 100%; resize: vertical; field-sizing: content; min-height: 0; font-size: 15px; line-height: 1.6; }
+.subTime { font-size: 12.5px; font-weight: 600; color: var(--muted, #6b7280); padding-top: 9px; font-variant-numeric: tabular-nums; direction: ltr; }
+.subText { font-size: 15px; line-height: 1.7; }
+.subLines li.subDirty { border-inline-start-color: #f59e0b; background: rgba(245, 158, 11, 0.08); }
+.subLines li.subEdited { border-inline-start-color: #067647; background: rgba(6, 118, 71, 0.06); }
