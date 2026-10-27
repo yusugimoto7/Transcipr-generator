@@ -535,7 +535,9 @@ let run = null;
 
 function startRun(exclude) {
   const r = { topics: [], done: false, error: "", listeners: new Set() };
-  r.push = (t) => {
+  r.push = (t0) => {
+    // when the card arrived: the list puts newer arrivals above older ones and above earlier picks
+    const t = t0.found_at ? t0 : { ...t0, found_at: Date.now() };
     r.topics.push(t);
     for (const l of r.listeners) l({ type: "topic", topic: t });
   };

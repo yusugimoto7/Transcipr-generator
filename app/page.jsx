@@ -303,6 +303,10 @@ export default function App() {
   const [contentLang, setContentLang] = useState("fa");
   const [savedEn, setSavedEn] = useState({});
   const [loadingSaved, setLoadingSaved] = useState(false);
+  // The topic whose saved material was read successfully: only then may a missing script be written
+  // automatically, never over a script the server has but could not send.
+  const [savedOkKey, setSavedOkKey] = useState("");
+  const autoWroteRef = useRef(new Set());
   const [caps, setCaps] = useState({ carousel: true, story: true, telegram: { review: true, public: true }, video: false });
 
   // The signed-in person (one login for the whole app): which other parts the header links to.
@@ -745,11 +749,13 @@ export default function App() {
   // ---- decisions ----------------------------------------------------------
   // Approve: the server writes the scripts as a job, and the topic becomes
   // "used" for everyone. Telegram is a separate choice on the topic page.
+  // pickedAt puts it at the top of the list, above everything older (Hamed, Oct 27 2026); the
+  // job stores it for the team (lib/workspace.js setStatus { pick }).
   const approveTopic = (topic) => {
     markSeenLocal(topic);
     recordSeenRemote(topic);
-    patchWs(topic, { status: "active" });
-    startJob("script", topic, { topic });
+    patchWs(topic, { status: "active", pickedAt: Date.now() });
+    startJob("script", topic, { topic, picked: true });
   };
 
   // ✕ archives, for everyone. It can be restored from the Archive filter.
@@ -840,7 +846,9 @@ export default function App() {
     fetch("/api/workspace?key=" + encodeURIComponent(key), { cache: "no-store" })
       .then((r) => r.json())
       .then(({ entry }) => {
-        if (!entry || openKeyRef.current !== key) return;
+        if (openKeyRef.current !== key) return;
+        if (!only) setSavedOkKey(key);
+        if (!entry) return;
         const m = entry.materials || {};
         if (!only) {
           if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, before_check: !("sources" in m.script) });
@@ -973,6 +981,15 @@ export default function App() {
     }
   }
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
+  // A picked (green) topic opened with no script and no job for it (the job was lost to a server
+  // restart, or it was picked on another device): the scripts start by themselves, once.
+  useEffect(() => {
+    if (view !== "script" || !scriptTopic || !svKey || savedOkKey !== svKey || loadingSaved) return;
+    if (decisions[svKey] !== "approved" || viewScripts.fa || viewScripts.en || sj) return;
+    if (autoWroteRef.current.has(svKey)) return;
+    autoWroteRef.current.add(svKey);
+    startJob("script", scriptTopic, { topic: scriptTopic });
+  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, decisions, viewScripts.fa, viewScripts.en, sj, startJob]);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? L("نوشتن سناریو با خطا مواجه شد (", "Writing the script failed (") + (sj.error || "") + ")"
@@ -1565,14 +1582,19 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   const rows = topics
     .map((t, i) => ({ t, i }))
     .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t));
-  // Newest first by the news date, whether or not someone is working on the topic. A date still to
-  // come (a rule "from November 3") counts as the day the topic appeared, else it would sit on top
-  // for weeks. Pinned topics come first, newest pin first, until they are unpinned.
-  const today = new Date().toISOString().slice(0, 10);
-  const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : "");
-  const when = (t) => (t.date && t.date <= today ? t.date : day(t._made) || (t.date ? today : day(t._ts)));
+  // Newest event first (Hamed, Oct 27 2026): a topic picked with ✓ goes to the top at that moment,
+  // and anything that arrives after it goes above it. A card's arrival is when the server wrote it
+  // (found_at), else when the team first saved it, else its news date (a date still to come counts
+  // as today, else it would sit on top for weeks). Working on a topic does not move it. Pinned
+  // topics come first, newest pin first, until they are unpinned.
+  const now = Date.now();
+  const arrived = (t) => t.found_at || t._made || Math.min(Date.parse(t.date || "") || t._ts || 0, now);
+  const pickedOf = (t) => (stateOf(t) === "approved" && (ws[topicKey(t)] || {}).pickedAt) || 0;
+  const event = (t) => Math.max(pickedOf(t), arrived(t));
   const pinAt = (t) => pins[topicKey(t)] || 0;
-  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || when(b.t).localeCompare(when(a.t)) || a.i - b.i);
+  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || event(b.t) - event(a.t) || a.i - b.i);
+  // The newsletter keeps its priority order, with the topics picked from it on top, latest pick first.
+  else rows.sort((a, b) => pickedOf(b.t) - pickedOf(a.t) || a.i - b.i);
   const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
 
   const chip = (k, label) => {
@@ -1683,7 +1705,19 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
             <div
               dir="rtl"
               className="ui-glass ui-lift ui-fade"
+              // a tap anywhere on the card opens the topic (Hamed, Oct 27 2026); its own buttons and
+              // links (✓, ✕, pin, the source) keep doing their own thing
+              onClick={(e) => {
+                if (e.defaultPrevented || e.target.closest("a, button, input, textarea, select, label")) return;
+                if (e.metaKey || e.ctrlKey) {
+                  handOff(t);
+                  window.open(topicHref(t), "_blank");
+                  return;
+                }
+                onOpen && onOpen(t);
+              }}
               style={{
+                cursor: "pointer",
                 position: "relative", overflow: "hidden", animationDelay: `${Math.min(n, 14) * 28}ms`,
                 display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
                 // opaque, so the archive button behind a dragged card does not show through
