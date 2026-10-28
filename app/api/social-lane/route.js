@@ -42,8 +42,10 @@ td{padding:7px 9px;border-bottom:1px solid #eef0f3;vertical-align:top}td:first-c
 a{color:#0e8a99}ul{font-size:13px;line-height:1.7;padding-left:18px}.err{color:#b42318}
 </style></head><body>
 <h1>Social lane</h1>
-<div class="sub">${st.enabled ? "On" : "Off (no writing model, or SOCIAL_LANE=off)"} · transcripts ${st.transcripts ? (st.transcripts_paused_until ? `<span class="err">paused until ${esc(st.transcripts_paused_until.slice(11, 16))} UTC: this month's transcript credits are spent</span>` : "on") : "off (SUPADATA_API_KEY)"}${
-    st.transcript_credits ? ` (${esc(st.transcript_credits.plan)}: ${st.transcript_credits.used} of ${st.transcript_credits.max} credits used this month; a reel costs about 2 credits a minute)` : ""
+<div class="sub">${st.enabled ? "On" : "Off (no writing model, or SOCIAL_LANE=off)"} · transcripts ${st.transcripts ? `on, by ${esc((st.transcript_ways || []).join(" → "))}` : "off (GROQ_API_KEY, OpenAI or SUPADATA_API_KEY)"}${
+    Object.keys(st.transcripts_by_way || {}).length ? ` (today: ${esc(Object.entries(st.transcripts_by_way).map(([k, v]) => `${k} ${v}`).join(", "))})` : ""
+  }${st.supadata && st.transcripts_paused_until ? ` · <span class="err">Supadata paused until ${esc(st.transcripts_paused_until.slice(11, 16))} UTC: its month's credits are spent</span>` : ""}${
+    st.transcript_credits ? ` · Supadata ${esc(st.transcript_credits.plan)}: ${st.transcript_credits.used} of ${st.transcript_credits.max} credits used this month` : ""
   } · last read ${esc(st.last_poll || "never")}${st.polling ? " (reading now)" : ""}<br>
 Today (${esc(st.today.date)}): <b>${st.today.cards}</b> cards · ${st.today.transcripts} transcripts · by account: ${esc(
     Object.entries(st.today.by_account || {})
