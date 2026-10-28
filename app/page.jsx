@@ -12,7 +12,7 @@ import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
 import StoryTemplateDesigner from "./StoryTemplateDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
-import { splitSlideText } from "../lib/slide-text";
+import { splitSlideText, parseOwnSlides } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
@@ -782,6 +782,15 @@ export default function App() {
     startJob("script", topic, { topic, picked: true });
   };
 
+  // A topic added by its title alone (Studio → research): stored for the team, listed there, opened.
+  const addOwnTopic = async (title) => {
+    const res = await fetch("/api/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add", title }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.topic) throw new Error(d.error || "HTTP " + res.status);
+    if (!d.exists) patchWs(d.topic, { status: "new" });
+    openTopic(d.topic);
+  };
+
   // ✕ archives, for everyone. It can be restored from the Archive filter.
   const rejectTopic = (topic) => {
     markSeenLocal(topic);
@@ -1013,6 +1022,8 @@ export default function App() {
   useEffect(() => {
     if (view !== "script" || !scriptTopic || !svKey || savedOkKey !== svKey || loadingSaved) return;
     if (viewScripts.fa || viewScripts.en || sj) return;
+    // a topic added by its title alone has nothing to write from: its scripts start only by hand
+    if (scriptTopic.manual) return;
     if (autoWroteRef.current.has(svKey)) return;
     autoWroteRef.current.add(svKey);
     const pick = decisions[svKey] !== "approved";
@@ -1220,6 +1231,7 @@ export default function App() {
                   job={(bg[RESEARCH_KEY] || {}).research || null}
                   onStart={(mode, query) => startJob("research", { title_fa: RESEARCH_KEY }, { mode, query, count: 6 })}
                   onOpen={openTopic}
+                  onAdd={addOwnTopic}
                 />
               }
               own={
@@ -2397,9 +2409,24 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
 // Research beyond the daily news: an idea the editor had (found pages -> one card), or a subject
 // (or the default subjects) searched for several post ideas (one card each). The search only finds
 // pages; each card is written from the text of its own page (lib/idea-research.js).
-function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
+function ResearchBox({ job, onStart, onOpen, onAdd, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   const [q, setQ] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addErr, setAddErr] = useState("");
+  // The title alone becomes a topic, with no search (Hamed, Oct 28 2026); it opens at once.
+  const add = async () => {
+    setAdding(true);
+    setAddErr("");
+    try {
+      await onAdd(q.trim());
+      setQ("");
+    } catch (e) {
+      setAddErr(e.message);
+    } finally {
+      setAdding(false);
+    }
+  };
   const running = !!job && job.status === "running";
   const failed = !!job && job.status === "error" ? job.error : "";
   const done = !!job && job.status === "done" && job.result && (job.result.topics || []).length > 0;
@@ -2444,8 +2471,14 @@ function ResearchBox({ job, onStart, onOpen, defaultOpen = false }) {
                 <button className="ui-btn" onClick={() => onStart("ideas", q.trim())} style={btn(true)}>
                   {q.trim() ? L("ایده‌های تازه در این موضوع", "New ideas on this subject") : L("ایده‌های تازه (موضوع‌های همیشگی)", "New ideas (standing subjects)")}
                 </button>
+                {onAdd && (
+                  <button className="ui-btn" disabled={q.trim().length < 4 || adding} onClick={add} style={{ ...btn(q.trim().length >= 4 && !adding), background: q.trim().length >= 4 && !adding ? C.surface : alpha(tone, 0.08), color: tone, border: `1px solid ${alpha(tone, 0.6)}` }}>
+                    {adding ? L("در حال افزودن…", "Adding…") : L("➕ افزودن به‌عنوان موضوع (بدون تحقیق)", "➕ Add as a topic (no research)")}
+                  </button>
+                )}
               </div>
-              <div style={{ fontSize: 11, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("جستجو فقط صفحه‌ها رو پیدا می‌کنه؛ هر کارت فقط از متن همون صفحه‌ها نوشته می‌شه. ایده‌های تازه: تا ۶ کارت.", "The search only finds pages; each card is written only from their text. New ideas: up to 6 cards.")}</div>
+              {addErr && <div dir="ltr" style={{ marginTop: 6, fontSize: 12, color: C.reject, textAlign: "left" }}>⚠️ {addErr}</div>}
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("جستجو فقط صفحه‌ها رو پیدا می‌کنه؛ هر کارت فقط از متن همون صفحه‌ها نوشته می‌شه. ایده‌های تازه: تا ۶ کارت. «افزودن به‌عنوان موضوع» فقط همین عنوان رو موضوع می‌کنه تا محتوای خودت رو توش بسازی (مثلاً متن کاروسل خودت).", "The search only finds pages; each card is written only from their text. New ideas: up to 6 cards. «Add as a topic» only makes this title a topic, for content you bring yourself (your own carousel text, say).")}</div>
             </>
           )}
           {running && (
@@ -3532,6 +3565,8 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
   const [capOpen, setCapOpen] = useState(false);
   const [capText, setCapText] = useState("");
   const [draftCaption, setDraftCaption] = useState("");
+  const [own, setOwn] = useState(""); // the team's own ready-made carousel text, pasted whole
+  const ownParsed = own.trim() ? parseOwnSlides(own) : null;
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
@@ -3575,6 +3610,15 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
     if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
     setForm(false);
     onJob("carousel", { count, notes: notes.trim(), template, ...(textOnly ? { mode: "text" } : {}) });
+  };
+  // Own text: split into slides here and saved as a draft, so the slide editor shows them to be
+  // checked before «Design slides» draws them with the chosen template. No model writes anything.
+  const useOwn = () => {
+    if (!ownParsed || !ownParsed.slides.length) return;
+    if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
+    setForm(false);
+    onJob("carousel", { mode: "save", slides: ownParsed.slides, caption: ownParsed.caption, template });
+    setOwn("");
   };
   const editedSlides = () => draft.map((d) => ({ title: d.title, body: d.body })).filter((d) => d.title.trim() || d.body.trim());
   const saveText = () => onJob("carousel", { mode: "save", slides: editedSlides(), caption: draftCaption, template });
@@ -3633,6 +3677,41 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
             </button>
             <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
               {L("انصراف", "Cancel")}
+            </button>
+          </div>
+          {/* Hamed, Oct 28 2026: paste our own carousel text; the app finds the slides, each one's
+              heading and body, and designs them in the chosen template. */}
+          <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 14, paddingTop: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 4 }}>📋 {L("یا متن آمادهٔ خودت", "Or your own ready text")}</div>
+            <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 6, lineHeight: 1.7 }}>
+              {L(
+                "متن کامل کاروسل رو اینجا بذار. اسلایدها با «اسلاید ۱»، خط «---»، شماره‌های ۱. ۲. ۳. یا یک خط خالی بین اسلایدها جدا می‌شن؛ خط اول هر اسلاید تیتره و بقیه بدنه («تیتر:» و «متن:» هم کار می‌کنه). «کپشن:» در آخر، کپشن پست می‌شه. متن همون‌طور که نوشتی می‌مونه.",
+                "Paste the whole carousel text here. Slides are split at «Slide 1» lines, «---» lines, numbers 1. 2. 3., or a blank line between slides; each slide's first line is its heading and the rest its body («Title:» and «Body:» work too). «Caption:» at the end becomes the post's caption. Your words are kept exactly."
+              )}
+            </div>
+            <textarea
+              dir="auto"
+              value={own}
+              onChange={(e) => setOwn(e.target.value)}
+              rows={6}
+              placeholder={L("اسلاید ۱: تیتر کاور\nزیرتیتر\n\nاسلاید ۲: …", "Slide 1: cover heading\nsubtitle\n\nSlide 2: …")}
+              style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
+            />
+            {ownParsed && (
+              <div style={{ fontSize: 12, color: ownParsed.slides.length ? C.text2 : C.reject, margin: "6px 0 8px", lineHeight: 1.8 }}>
+                {ownParsed.slides.length
+                  ? L(`${ownParsed.slides.length} اسلاید پیدا شد`, `${ownParsed.slides.length} slides found`) + (ownParsed.caption ? L(" · با کپشن", " · with a caption") : "") + ": "
+                  : L("اسلایدی پیدا نشد.", "No slides found.")}
+                {ownParsed.slides.map((x, i) => (
+                  <span key={i} dir="auto" style={{ display: "inline-block", margin: "2px 4px", padding: "1px 8px", borderRadius: 99, background: alpha("#6d5bd0", 0.1), color: "#6d5bd0", fontWeight: 700 }}>
+                    {i + 1}. {(x.title || x.body).slice(0, 40)}
+                  </span>
+                ))}
+                {ownParsed.over > 0 && <div style={{ color: C.reject }}>{L(`بیشتر از ۱۰ اسلاید بود؛ ${ownParsed.over} اسلاید آخر کنار گذاشته شد.`, `More than 10 slides; the last ${ownParsed.over} were left out.`)}</div>}
+              </div>
+            )}
+            <button className="ui-btn" onClick={useOwn} disabled={!ownParsed || !ownParsed.slides.length} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), width: "100%", opacity: ownParsed && ownParsed.slides.length ? 1 : 0.5 }}>
+              ✂️ {ownParsed && ownParsed.slides.length ? L(`گذاشتن ${ownParsed.slides.length} اسلاید در ویرایشگر`, `Put the ${ownParsed.slides.length} slides in the editor`) : L("تقسیم به اسلایدها", "Split into slides")}
             </button>
           </div>
         </div>

@@ -39,3 +39,11 @@ The Oct 12 "evergreen ideas" commit accidentally deleted `parseSlides`, `normali
 - The writer sometimes returns a slide as one line; the editor showed it all as the heading with an
   empty body. `lib/slide-text.js` splits such a line after its opening question or clause (heading
   ≤ 90 characters) for the editor and for the drawing; a short cover line stays a heading.
+- The team's own carousel text (Hamed, Oct 28 2026): the carousel form takes a whole ready text
+  («یا متن آمادهٔ خودت»). `parseOwnSlides` (`lib/slide-text.js`) splits it by rule, never by a model,
+  so the words stay the team's: «اسلاید ۱» / «Slide 1» lines first, then `---` lines, then lines
+  numbered 1. 2. 3. from 1, else blank lines; each slide's first line is the heading and the rest the
+  body («تیتر:» / «متن:» honoured, a single long line split by `splitSlideText`), «کپشن:» at the end is
+  the caption, at most 10 slides. The slides are saved as a draft so the editor shows them; «Design
+  slides» draws them in the chosen template (mode `draw`, no supplement search). A topic for such
+  content can be added by its title alone (Studio → research, «افزودن به‌عنوان موضوع»).
