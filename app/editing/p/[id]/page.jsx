@@ -58,9 +58,57 @@ const statusLabel = (r) => {
 
 // What the dub pipeline reports: its own checks, the translator's notes (anything left out as
 // unclear), the spoken script and the post caption.
-function DubDetails({ r }) {
+// A speaker nobody in the people list matched: a name and a voice here make them a person, with the voice
+// print the worker took in this version, so the next version (and every later video) recognises them.
+function NamePerson({ run, speaker, onDone }) {
+  const [voices, setVoices] = useState(null);
+  const [name, setName] = useState("");
+  const [voice, setVoice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api("/voices").then((v) => {
+      setVoices(v);
+      const g = speaker.sounds === "male" ? "male" : "female";
+      setVoice(((v[g] || [])[0] || {}).voice_id || "");
+    }).catch((e) => setErr(e.message));
+  }, [speaker.sounds]);
+  const save = async () => {
+    setBusy(true);
+    setErr("");
+    try {
+      await api("/people", { method: "POST", body: { name, voice_id: voice, run_id: run.id, speaker: speaker.id } });
+      onDone(name);
+    } catch (e) {
+      setErr(e.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={s.row} style={{ marginTop: 6 }}>
+      <input className={`${s.input} ${s.grow}`} value={name} onChange={(e) => setName(e.target.value)} placeholder={L("اسم این نفر", "This person's name")} />
+      <select className={`${s.select} ${s.grow}`} value={voice} onChange={(e) => setVoice(e.target.value)}>
+        {voices && ["female", "male"].map((g) => (
+          <optgroup key={g} label={g === "female" ? L("صدای زن", "Female voices") : L("صدای مرد", "Male voices")}>
+            {(voices[g] || []).map((v) => (
+              <option key={v.voice_id} value={v.voice_id}>{v.name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <button className={`${s.btn} ${s.primary}`} disabled={busy || !name.trim() || !voice} onClick={save}>
+        {L("ذخیره در فهرست افراد", "Save to the people list")}
+      </button>
+      {err && <div className={s.error}>{err}</div>}
+    </div>
+  );
+}
+
+function DubDetails({ r, run }) {
   const checks = r.checks || [];
   const notes = r.translator_notes || [];
+  const [named, setNamed] = useState({});
+  const STATUS = { matched: ["شناخته شد", "recognised"], by_order: ["به ترتیب گفتن", "by speaking order"], unknown: ["ناشناس", "unknown"] };
   return (
     <>
       <div className={s.card}>
@@ -86,11 +134,50 @@ function DubDetails({ r }) {
           </ul>
         </Fold>
       )}
+      {(r.speakers || []).length > 0 && (
+        <Fold title={L("گوینده‌ها", "Speakers")} count={r.speakers.length}>
+          <table className={s.table}>
+            <thead>
+              <tr>
+                <th>{L("نفر", "Who")}</th>
+                <th>{L("چطور", "How")}</th>
+                <th>{L("صدا", "Voice")}</th>
+                <th>{L("ثانیه", "Seconds")}</th>
+                <th>{L("اولین جمله", "First line")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.speakers.map((x, i) => (
+                <tr key={i}>
+                  <td dir="auto">
+                    {named[x.id] || x.name}
+                    {x.status === "unknown" && !named[x.id] && <NamePerson run={run} speaker={x} onDone={(n) => setNamed((m) => ({ ...m, [x.id]: n }))} />}
+                    {named[x.id] && <div className={s.muted}>{L("ذخیره شد؛ نسخهٔ بعد با صدای خودش ساخته می‌شه.", "Saved; the next version is made with their own voice.")}</div>}
+                  </td>
+                  <td>
+                    {STATUS[x.status] ? L(STATUS[x.status]) : x.status}
+                    {x.similarity ? ` ${Math.round(x.similarity * 100)}%` : ""}
+                  </td>
+                  <td>{x.voice}</td>
+                  <td>{x.seconds}</td>
+                  <td dir="auto">{x.first_text}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <small className={s.muted}>
+            {L("یک نفر ناشناس: اسم و صدا بده و بعد «نسخهٔ جدید» بزن. اگه نفرها جابه‌جا شناخته شدن، در اصلاح بنویس «صداها رو عوض کن».", "An unknown speaker: give them a name and a voice, then make a new version. If the people were matched the wrong way round, write “swap the voices” as a correction.")}
+          </small>
+        </Fold>
+      )}
       {(r.sentences || []).length > 0 && (
         <Fold title={L("متن دوبله", "The dubbed script")} count={r.sentences.length}>
           <ol className={s.list} dir={r.language === "fa" ? "rtl" : "ltr"}>
             {r.sentences.map((x, i) => (
-              <li key={i}>{x.text}</li>
+              <li key={i}>
+                {x.speaker ? <b dir="auto">{x.speaker}: </b> : null}
+                {x.text}
+              </li>
             ))}
           </ol>
         </Fold>
@@ -672,7 +759,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
             {r.spelling && <Spelling sp={r.spelling} />}
-            {stageOf(run) === "dub" && <DubDetails r={r} />}
+            {stageOf(run) === "dub" && <DubDetails r={r} run={run} />}
             {(r.qa || r.lessons) && <Checks qa={r.qa} lessons={r.lessons} me={me} />}
             {r.judgement_calls && r.judgement_calls.length > 0 && (
               <Fold title={L("تصمیم‌هایی که باید بررسی بشن", "Judgement calls to check")} count={r.judgement_calls.length}>
