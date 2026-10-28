@@ -13,6 +13,7 @@ import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier, focu
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
 import { laneCards, laneReady, pollSocialLane, laneStatus } from "../../../lib/social/lane";
+import { laneClockStatus } from "../../../lib/social/lane-clock";
 import { isReadableText } from "../../../lib/news";
 import { loadSources } from "../../../lib/sources";
 import { getLexbaseItems, lexbaseEnabled } from "../../../lib/newsletter/lexbase";
@@ -744,6 +745,8 @@ export async function GET(request) {
       ok: true,
       cards: cache.topics ? cache.topics.length : 0,
       laneCards: laneCards().length,
+      lane: (({ last_poll, polling, today }) => ({ last_poll, polling, today }))(laneStatus()),
+      laneClock: laneClockStatus(),
       deckAgeMin: Number.isFinite(age) ? Math.round(age / 60000) : null,
       generating: !!run,
       started,
