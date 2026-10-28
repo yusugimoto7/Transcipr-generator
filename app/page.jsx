@@ -1826,6 +1826,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                       {sourceHost(t.source_url)} ↗
                     </a>
                   )}
+                  <SourceBadge t={t} />
                   {(t._also || []).map((x) => (
                     <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer" title={L("همین خبر، گزارش‌شده در ", "Same story, also reported by ") + (x.name || sourceHost(x.url))} style={{ color: C.teal, textDecoration: "none", borderLeft: `1px solid ${C.line}`, paddingLeft: 8 }}>
                       + {sourceHost(x.url)} ↗
@@ -2652,6 +2653,66 @@ function DeckWhy({ stats }) {
   );
 }
 
+// Whose post or video a card is (Hamed, Oct 28 2026: "from which channel", "whose post"): the
+// platform, the account's or channel's name and the link to the post itself. Cards made before
+// they carried a YouTube channel's name look it up once (/api/source-info) and remember it.
+const PLATFORM = { instagram: ["📸", "Instagram"], x: ["𝕏", "X"], facebook: ["ⓕ", "Facebook"], youtube: ["▶", "YouTube"] };
+const isYouTube = (u) => /^(www\.|m\.)?(youtube\.com|youtu\.be)$/.test(sourceHost(u || ""));
+const channelMemo = new Map(); // youtube link -> channel name
+let channelQueue = Promise.resolve();
+function useChannel(t) {
+  const url = t.source_url && isYouTube(t.source_url) && !t.channel && !t.author ? t.source_url : "";
+  const [name, setName] = useState(url ? channelMemo.get(url) || "" : "");
+  useEffect(() => {
+    if (!url) return;
+    if (channelMemo.has(url)) {
+      setName(channelMemo.get(url));
+      return;
+    }
+    let live = true;
+    // one at a time, so a long list does not ask for every video at once
+    channelQueue = channelQueue
+      .then(() => fetch("/api/source-info?url=" + encodeURIComponent(url)).then((r) => r.json()))
+      .then((d) => {
+        channelMemo.set(url, (d && d.channel) || "");
+        if (live) setName(channelMemo.get(url));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  return t.channel || name;
+}
+function SourceBadge({ t, header = false }) {
+  const channel = useChannel(t);
+  const key = t.social ? t.social : isYouTube(t.source_url) ? "youtube" : "";
+  const [icon, platform] = PLATFORM[key] || [];
+  const name = t.social ? (t.author ? (key === "instagram" ? "@" : "") + t.author : "") : channel;
+  // the list card already shows a social post's account (📸 @name); only a video's channel is added there
+  if (!header && t.social) return null;
+  if (!platform || !name) return null;
+  const url = t.post_url || t.source_url;
+  if (!header) {
+    return (
+      <span title={L("کانال این ویدیو", "This video's channel")} style={{ color: "#c4302b", background: alpha("#c4302b", 0.09), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>
+        {icon} {name}
+      </span>
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={L("باز کردن پست اصلی", "Open the original post")}
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: alpha("#c13584", 0.1), color: "#a02a6c", borderRadius: 99, padding: "4px 10px", fontSize: 11.5, fontWeight: 700, fontFamily: FONT, whiteSpace: "nowrap", textDecoration: "none", direction: "ltr" }}
+    >
+      {icon} {platform} · {name} <span aria-hidden>↗</span>
+    </a>
+  );
+}
+
 function sourceHost(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -3221,6 +3282,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
           <span style={pill(alpha(f.color, 0.16), C.ink)}>{f.label}</span>
           <span style={pill(C.surface, topic.page === "EU" ? C.slate : C.orangeDeep)}>{topic.page === "EU" ? L("🇪🇺 اروپا", "🇪🇺 Europe") : L("🇨🇦 کانادا", "🇨🇦 Canada")}</span>
           {formatNewsDate(topic.date) && <span style={pill(C.surface, C.text2)}>📅 {formatNewsDate(topic.date)}</span>}
+          <SourceBadge t={topic} header />
           {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 {L("توضیحی", "Explainer")}</span>}
         </div>
         <div dir="rtl" style={{ fontFamily: FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "right", lineHeight: 1.65, unicodeBidi: "plaintext" }}>
