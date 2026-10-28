@@ -153,6 +153,20 @@ function saveDeckCache(topics) {
 // the same article is still caught. ----
 const SEEN_KEY = "sugimoto_seen_topics_v2";
 
+// The last 48 hours (Hamed, Oct 28 2026: a button to set the latest news apart). A card is dated to
+// the day, so a dated one counts from the start of the day 48 hours ago; one with no date, by when
+// the app found it.
+const RECENT_MS = 48 * 3600 * 1000;
+function isRecent(t, now = Date.now()) {
+  const from = new Date(now - RECENT_MS);
+  from.setHours(0, 0, 0, 0);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t.date || "")) return Date.parse(t.date + "T00:00:00") >= from.getTime();
+  return (t.found_at || t._made || t._ts || 0) >= now - RECENT_MS;
+}
+
+// A court case: a Lexbase court item (kind) or a news story the writer filed under «Court».
+const isCourt = (t) => !!t && (t.kind === "court" || t.field === "Court");
+
 function topicKey(t) {
   return (t.title_fa || t.title_en || "").trim().toLowerCase();
 }
@@ -767,8 +781,11 @@ export default function App() {
     });
   }, [topics, ws]);
   // Topics made from the editor's own links and pictures live in Studio, not in the news list.
+  // Court cases live only in the Lexbase tab (Hamed, Oct 28 2026): its own court items there, and
+  // the court stories the news sources bring under «Other courts».
   const studioTopics = useMemo(() => listTopics.filter((t) => t.custom), [listTopics]);
-  const newsTopics = useMemo(() => listTopics.filter((t) => !t.custom), [listTopics]);
+  const newsTopics = useMemo(() => listTopics.filter((t) => !t.custom && !isCourt(t)), [listTopics]);
+  const otherCourts = useMemo(() => listTopics.filter((t) => !t.custom && isCourt(t) && !t.newsletter && t.kind !== "court"), [listTopics]);
 
   // ---- decisions ----------------------------------------------------------
   // Approve: the server writes the scripts as a job, and the topic becomes
@@ -1246,6 +1263,8 @@ export default function App() {
           ) : deckMode === "lexbase" ? (
             <LexbaseSection
               decisions={decisions}
+              otherCourts={otherCourts}
+              ws={ws}
               jobs={bg}
               onApprove={approveTopic}
               onReject={rejectTopic}
@@ -1613,6 +1632,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
     });
   };
   const [cat, setCat] = useState("all"); // see CATEGORIES
+  const [recent, setRecent] = useState(false); // only the last 48 hours
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
   const inCat = CATEGORIES.find((c) => c[0] === cat)[2];
   // "All" is everything not archived; the archive has its own filter.
@@ -1628,7 +1648,8 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   // not by date). The newsletter section keeps its own priority order.
   const rows = topics
     .map((t, i) => ({ t, i }))
-    .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t));
+    .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t) && (!recent || isRecent(t)));
+  const recentCount = topics.filter((t) => stateOf(t) !== "rejected" && inCat(t) && isRecent(t)).length;
   // Newest event first (Hamed, Oct 27 2026): a topic picked with ✓ goes to the top at that moment,
   // and anything that arrives after it goes above it. A card's arrival is when the server wrote it
   // (found_at), else when the team first saved it, else its news date (a date still to come counts
@@ -1738,6 +1759,23 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
             </button>
           );
         })}
+        <button
+          className="ui-btn"
+          onClick={() => setRecent((v) => !v)}
+          aria-pressed={recent}
+          title={L("فقط خبرهای ۴۸ ساعت اخیر", "Only the news of the last 48 hours")}
+          style={{
+            padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+            border: `1px solid ${recent ? C.orange : C.line}`, background: recent ? C.orange : C.surface,
+            color: recent ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif",
+            display: "inline-flex", alignItems: "center", gap: 5,
+          }}
+        >
+          🕒 {L("۴۸ ساعت اخیر", "Last 48 h")}
+          <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: recent ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>
+            {recentCount}
+          </span>
+        </button>
       </div>}
 
       {!rows.length && (
@@ -1929,11 +1967,12 @@ const FOCUS_LABEL = { iran: ["⭐ ایران", "⭐ Iran"], study: ["⭐ اجا�
 // Every issue's cards are kept on this device, so past issues stay on the
 // platform and show at once; the server adds what is new.
 const LEX_KEY = "sugimoto_lexbase_v2";
-const LEX_GROUPS = [
-  ["all", ["همه", "All"], () => true],
-  ["focus", ["⭐ اولویت‌ها", "⭐ Priorities"], (t) => (t.focus || []).length > 0],
-  ["policy", ["📋 فکت‌ها و سیاست‌ها", "📋 Facts and policy"], (t) => t.kind !== "court"],
-  ["court", ["⚖️ پرونده‌های دادگاه", "⚖️ Court cases"], (t) => t.kind === "court"],
+// Three sections (Hamed, Oct 28 2026): the issue's facts and policy, the issue's court decisions, and
+// the court stories from every other source (no issue behind them: the news list's own cards).
+const LEX_SECTIONS = [
+  ["policy", ["📋 پالیسی", "📋 Policy"], (t) => t.kind !== "court"],
+  ["court", ["⚖️ دادگاه‌های Lexbase", "⚖️ Lexbase courts"], (t) => t.kind === "court"],
+  ["other", ["⚖️ دادگاه‌های دیگر", "⚖️ Other courts"], null],
 ];
 
 function loadLexArchive() {
@@ -1967,12 +2006,13 @@ function mergeLexCards(old = [], fresh = []) {
   return lexOrder([...m.values()]);
 }
 
-function LexbaseSection({ decisions, ...actions }) {
+function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
   const [issueKey, setIssueKey] = useState("");
   const [archive, setArchive] = useState({ issues: {}, known: [] });
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
-  const [group, setGroup] = useState("all");
+  const [group, setGroup] = useState("policy");
+  const [onlyFocus, setOnlyFocus] = useState(false); // priority items only (Iran, study, Start-up Visa)
 
   useEffect(() => {
     setArchive(loadLexArchive());
@@ -2028,14 +2068,42 @@ function LexbaseSection({ decisions, ...actions }) {
   const cards = mergeLexCards(saved ? saved.cards : [], live ? live.cards : []);
   const writing = !!(live && (live.writing || live.missing > 0));
 
-  // Archived items stay out of the groups; the list's Archive filter has them.
-  const visible = cards.filter((t) => decisions[topicKey(t)] !== "rejected");
-  const inGroup = LEX_GROUPS.find((g) => g[0] === group)[2];
-  const rows = visible.filter(inGroup);
+  // The list's own chips (All / New / Made / Archive) hold the archived ones: court cases no longer
+  // show in the news list, so an archived one is found again here.
+  const isArchived = (t) => decisions[topicKey(t)] === "rejected";
+  const visible = cards.filter((t) => !isArchived(t));
+  const inGroup = (LEX_SECTIONS.find((g) => g[0] === group) || LEX_SECTIONS[0])[2] || (() => true);
+  const rows = cards.filter((t) => inGroup(t) && (!onlyFocus || (t.focus || []).length > 0));
+  const sectionCount = (k, test) => (k === "other" ? otherCourts.filter((t) => !isArchived(t)).length : visible.filter(test).length);
   const font = { fontFamily: "'Vazirmatn', sans-serif" };
 
+  const sectionChips = (
+    <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
+      {LEX_SECTIONS.map(([k, label, test]) => {
+        const on = group === k;
+        return (
+          <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "6px 12px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 12.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {L(label)}
+            <span style={{ minWidth: 16, padding: "0 5px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 11, fontFamily: "'Geist', sans-serif" }}>{sectionCount(k, test)}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+  if (group === "other") {
+    return (
+      <div>
+        {sectionChips}
+        <div dir={uiDir()} style={{ ...font, fontSize: 12, color: C.text3, marginBottom: 10, lineHeight: 1.8 }}>
+          {L("خبرهای دادگاهی که از منبع‌های دیگر (نه خبرنامهٔ Lexbase) می‌آد.", "Court stories from the other sources (not the Lexbase newsletter).")}
+        </div>
+        <IdeasList topics={otherCourts} decisions={decisions} {...actions} />
+      </div>
+    );
+  }
   return (
     <div>
+      {sectionChips}
       {issueList.length > 1 && (
         <div style={{ display: "flex", gap: 6, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
           {issueList.map((i) => {
@@ -2078,15 +2146,10 @@ function LexbaseSection({ decisions, ...actions }) {
 
       {cards.length > 0 && (
         <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
-          {LEX_GROUPS.map(([k, label, test]) => {
-            const on = group === k;
-            return (
-              <button key={k} className="ui-btn" onClick={() => setGroup(k)} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${on ? C.text : C.line}`, background: on ? C.text : C.surface, color: on ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                {L(label)}
-                <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: on ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{visible.filter(test).length}</span>
-              </button>
-            );
-          })}
+          <button className="ui-btn" onClick={() => setOnlyFocus((v) => !v)} aria-pressed={onlyFocus} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${onlyFocus ? C.text : C.line}`, background: onlyFocus ? C.text : C.surface, color: onlyFocus ? "#fff" : C.text2, fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+            {L("⭐ فقط اولویت‌ها", "⭐ Priorities only")}
+            <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: onlyFocus ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{visible.filter((t) => inGroup(t) && (t.focus || []).length > 0).length}</span>
+          </button>
         </div>
       )}
 
@@ -2097,7 +2160,7 @@ function LexbaseSection({ decisions, ...actions }) {
           ))}
         </div>
       ) : (
-        cards.length > 0 && <IdeasList topics={group === "all" ? cards : rows} decisions={decisions} plain {...actions} />
+        cards.length > 0 && <IdeasList topics={rows} decisions={decisions} plain {...actions} />
       )}
     </div>
   );
