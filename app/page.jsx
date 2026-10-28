@@ -1008,14 +1008,17 @@ export default function App() {
   // Any topic opened with no script and no job for it: the Persian and English scripts start by
   // themselves, once (Hamed, Oct 27 2026: "when I open a topic, write both scripts right away";
   // before, only topics picked with ✓ did). Saved scripts are read first and never written over.
-  // Not a pick: the topic is marked used, but only ✓ moves it to the top of the list.
+  // Opening a topic not picked yet picks it (Hamed, Oct 28 2026: "green, that is, opened"): it goes
+  // to the top of the list like a ✓.
   useEffect(() => {
     if (view !== "script" || !scriptTopic || !svKey || savedOkKey !== svKey || loadingSaved) return;
     if (viewScripts.fa || viewScripts.en || sj) return;
     if (autoWroteRef.current.has(svKey)) return;
     autoWroteRef.current.add(svKey);
-    startJob("script", scriptTopic, { topic: scriptTopic });
-  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, viewScripts.fa, viewScripts.en, sj, startJob]);
+    const pick = decisions[svKey] !== "approved";
+    if (pick) patchWs(scriptTopic, { status: "active", pickedAt: Date.now() });
+    startJob("script", scriptTopic, { topic: scriptTopic, ...(pick ? { picked: true } : {}) });
+  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, viewScripts.fa, viewScripts.en, sj, startJob, decisions, patchWs]);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? L("نوشتن سناریو با خطا مواجه شد (", "Writing the script failed (") + (sj.error || "") + ")"
@@ -1571,7 +1574,10 @@ function SwipeToArchive({ enabled, onArchive, children }) {
   );
 }
 
-const LEGACY_PICKED_AT = Date.parse("2026-10-27T23:00:00Z");
+// Picks count from this moment (Hamed, Oct 28 2026: the list by date, whatever is green; from now
+// on a topic picked or opened goes to the top, and later topics go above it). Earlier picks are
+// left at their news date.
+const PICKS_FROM = Date.parse("2026-10-28T00:34:00Z");
 
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
@@ -1617,10 +1623,13 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   // as today, else it would sit on top for weeks). Working on a topic does not move it. Pinned
   // topics come first, newest pin first, until they are unpinned.
   const now = Date.now();
-  const arrived = (t) => t.found_at || t._made || Math.min(Date.parse(t.date || "") || t._ts || 0, now);
+  const arrived = (t) => t.found_at || Math.min(Date.parse(t.date || "") || t._made || t._ts || 0, now);
   // Topics picked before picks were timed count as picked at the moment this order came in (Hamed:
   // the old green ones on top too), among themselves by their latest work.
-  const pickedOf = (t) => (stateOf(t) === "approved" ? (ws[topicKey(t)] || {}).pickedAt || LEGACY_PICKED_AT : 0);
+  const pickedOf = (t) => {
+    const at = stateOf(t) === "approved" ? (ws[topicKey(t)] || {}).pickedAt || 0 : 0;
+    return at >= PICKS_FROM ? at : 0;
+  };
   const event = (t) => Math.max(pickedOf(t), arrived(t));
   const touched = (t) => (ws[topicKey(t)] || {}).updatedAt || 0;
   const pinAt = (t) => pins[topicKey(t)] || 0;
