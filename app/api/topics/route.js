@@ -746,7 +746,7 @@ export async function GET(request) {
       cards: cache.topics ? cache.topics.length : 0,
       laneCards: laneCards().length,
       lane: (({ last_poll, polling, today }) => ({ last_poll, polling, today }))(laneStatus()),
-      laneClock: laneClockStatus(),
+      laneClock: (({ started, ticks, last }) => ({ started, ticks, last: last ? { at: last.at, ok: !last.error && last.status === 200 } : null }))(laneClockStatus()),
       deckAgeMin: Number.isFinite(age) ? Math.round(age / 60000) : null,
       generating: !!run,
       started,
