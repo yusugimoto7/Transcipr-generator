@@ -105,6 +105,7 @@ function NewProject() {
   // prints (an unknown one is named on the project page afterwards). "cast": the people are named here, each
   // a known person (their fixed voice) or a new one (name + voice, saved for the next video).
   const [dubMode, setDubMode] = useState("one");
+  const [dubBrief, setDubBrief] = useState("");
   const [cast, setCast] = useState([]);
   const [voices, setVoices] = useState(null);
   const [people, setPeople] = useState(null);
@@ -146,7 +147,7 @@ function NewProject() {
       setBusy(false);
       return;
     }
-    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo, mode: dubMode, ...(dubMode === "cast" ? { speakers: cast } : {}) } } }) };
+    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo, mode: dubMode, brief: dubBrief, ...(dubMode === "cast" ? { speakers: cast } : {}) } } }) };
     try {
       const { project } = await api("/projects", { method: "POST", body });
       router.push(`/editing/p/${project.id}`);
@@ -392,6 +393,14 @@ function NewProject() {
             </>
           )}
         </div>
+      )}
+
+      {tab === "dub" && (
+        <label className={s.field}>
+          <span>{L("شخصیت‌ها و لحن", "Characters and tone")}</span>
+          <textarea id="dub_brief" className={s.input} rows={3} value={dubBrief} onChange={(e) => setDubBrief(e.target.value)} placeholder={L("مثلاً: اسکچ طنز. حامد افسر مرز کاناداست، خشک و کم‌حرف؛ نفر دوم دانشجوی ایرانیِ تازه‌وارده، هول و بامزه، انگلیسی با لهجهٔ ایرانی.", "e.g. a comedy sketch. Hamed is a Canadian border officer, dry and clipped; the other person is a newly arrived Iranian student, flustered and funny, Iranian English.")} />
+          <small className={s.muted}>{L("مترجم با این متن اقتباس می‌کنه، نه ترجمهٔ لغت‌به‌لغت. در نسخه‌های بعدی هم «یادداشت روی کل ویدیو» به همین‌جا می‌رسه.", "The translator adapts with this, not word for word. On later versions, a note on the whole video reaches it too.")}</small>
+        </label>
       )}
 
       {tab === "dub" && dubTo === "fa" && (
