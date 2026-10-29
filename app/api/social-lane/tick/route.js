@@ -13,6 +13,13 @@ export async function GET(request) {
   const given = String(request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
   if (secret && given !== secret) return Response.json({ error: "unauthorized" }, { status: 401 });
   const before = laneStatus();
+  // ?backfill=7: one batch of the last 7 days' videos that have no card (call again until left is 0).
+  const days = Math.min(14, Math.max(0, Number(new URL(request.url).searchParams.get("backfill")) || 0));
+  if (days) {
+    const st = await pollSocialLane({ reason: "backfill " + days + "d", backfill: days });
+    const l = st.log && st.log[0];
+    return Response.json({ ok: true, backfill: days, last: l || null, error: st.error }, { headers: { "Cache-Control": "no-store" } });
+  }
   pollSocialLane({ reason: "clock" }).catch(() => {});
   return Response.json(
     { ok: true, started: true, was_polling: before.polling, cards: before.cards, today: before.today, last_poll: before.last_poll, error: before.error },
