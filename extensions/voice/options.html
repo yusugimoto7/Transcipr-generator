@@ -1,0 +1,21 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Sugimoto voice typing</title>
+<style>
+body{font:14px/1.6 system-ui,-apple-system,"Vazirmatn",sans-serif;margin:0;padding:16px;width:340px;color:#121a24}
+h1{font-size:16px;margin:0 0 6px}p{margin:6px 0;color:#5b6675;font-size:12.5px}
+label{display:block;font-weight:600;margin-top:12px;font-size:12.5px}
+input{width:100%;box-sizing:border-box;padding:8px;border:1px solid #d0d5dd;border-radius:8px;font:13px monospace}
+button{margin-top:12px;padding:8px 14px;border:none;border-radius:8px;background:#32515d;color:#fff;font-weight:600;cursor:pointer}
+#ok{color:#12805c;font-size:12.5px;margin-left:8px}
+</style></head>
+<body>
+<h1>Sugimoto voice typing</h1>
+<p dir="rtl">کلید شخصی‌ات را از تاپیک انجین ← تنظیمات ← «تایپ صوتی در سایت‌های دیگر» کپی کن و اینجا بگذار. بعد در هر کادر متن (مثلاً Log note در Odoo) دکمهٔ میکروفون گوشهٔ کادر را بزن، حرف بزن، دوباره بزن.</p>
+<p>Copy your personal key from Topic Engine → Settings → "Voice typing on other sites", paste it here. Then in any text box tap the microphone at its corner, speak, tap again.</p>
+<label for="key">Key / کلید</label>
+<input id="key" autocomplete="off" spellcheck="false">
+<label for="server">Topic Engine address</label>
+<input id="server" spellcheck="false">
+<button id="save">Save · ذخیره</button><span id="ok"></span>
+<script src="options.js"></script>
+</body></html>

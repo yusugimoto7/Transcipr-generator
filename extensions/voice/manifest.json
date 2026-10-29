@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Sugimoto voice typing",
+  "version": "1.0.0",
+  "description": "A microphone on any text box (Odoo notes and every other site): speak Farsi or English, the text is typed where the cursor is.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://sugimoto-topic-engine.onrender.com/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["<all_urls>"], "js": ["content.js"], "all_frames": true, "run_at": "document_idle" }],
+  "options_page": "options.html",
+  "action": { "default_title": "Sugimoto voice typing", "default_popup": "options.html" },
+  "icons": { "128": "icon-128.png" }
+}
