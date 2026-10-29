@@ -24,6 +24,19 @@ export async function register() {
   } catch (err) {
     console.error("[social lane] failed to start:", err);
   }
+  // The voice study (lib/voice-study.js): once after a deploy, until it has finished. Through its
+  // route with the server's own secret, like the lane, so the store is not bundled here.
+  if (process.env.VOICE_STUDY !== "off") {
+    setTimeout(() => {
+      fetch(`http://127.0.0.1:${process.env.PORT || 3000}/api/voice-study/tick`, {
+        headers: { Authorization: "Bearer " + (process.env.EDITING_SESSION_SECRET || "") },
+        signal: AbortSignal.timeout(60000),
+      })
+        .then((r) => r.json())
+        .then((d) => console.log("[voice study]", d && (d.started ? "started" : d.reason)))
+        .catch(() => console.log("[voice study] tick failed"));
+    }, 3 * 60 * 1000);
+  }
   if (process.env.DRAWS_AUTORUN !== "true") return;
   try {
     const { startScheduler } = await import("./lib/draws/scheduler");
