@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Sparkles, Subtitles, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Scissors, Sparkles, Subtitles, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -674,6 +674,14 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             )}
           </div>
         )}
+        {run.hand && (
+          <p className={s.muted}>
+            {L(
+              `ساخته‌شده با دست در ویرایشگر، از نسخهٔ ${run.version - 1}: ${run.hand.pieces.length} تکه${run.hand.overlays.length ? `، ${run.hand.overlays.length} تصویر روی ویدیو` : ""}.`,
+              `Made by hand in the editor from version ${run.version - 1}: ${run.hand.pieces.length} piece${run.hand.pieces.length > 1 ? "s" : ""}${run.hand.overlays.length ? `, ${run.hand.overlays.length} picture${run.hand.overlays.length > 1 ? "s" : ""} over the video` : ""}.`
+            )}
+          </p>
+        )}
         {run.error && <div className={s.error}>{run.error}</div>}
         {me.role === "admin" && run.log_tail && <pre className={s.pre}>{run.log_tail}</pre>}
         {me.role === "admin" && run.log_url && (
@@ -788,7 +796,25 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
               )
             )}
 
-            {reviewing && (
+            {reviewing && stageOf(run) === "cut" && r.preview && (
+              <div className={s.card}>
+                <h2 className={s.h2}>
+                  <Scissors size={18} aria-hidden style={{ verticalAlign: "-3px" }} /> {L("ویرایش با دست", "Edit by hand")}
+                </h2>
+                <p className={s.muted}>
+                  {run.hand
+                    ? L("این نسخه با دست ساخته شده. برای تغییرش دوباره ویرایشگر رو باز کن؛ اصلاحیهٔ نوشتاری برش اتوماتیک رو از اول می‌سازه و کار دستی از بین می‌ره.", "This version was made by hand. Open the editor again to change it; a written correction would make the automatic cut again and lose the hand edits.")
+                    : L("مثل CapCut: برش، جابه‌جایی تکه‌ها، سرعت و تصویر روی ویدیو. نتیجه نسخهٔ بعدیه، با کیفیت کامل از فیلم اصلی.", "Like CapCut: split, move clips, speed and pictures over the video. The result is the next version, at full quality from the original footage.")}
+                </p>
+                <div className={s.row}>
+                  <Link className={`${s.btn} ${s.primary}`} href={`/editing/p/${project.id}/edit`}>
+                    {L("باز کردن ویرایشگر", "Open the editor")}
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {reviewing && !run.hand && (
               <div className={s.card}>
                 <h2 className={s.h2}>{L("اصلاحیه‌ها", "Corrections")}</h2>
                 <p className={s.muted}>
