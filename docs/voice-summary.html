@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>صدای سوگیموتو ویزا</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column (720px) with wider bands for the findings grid and the tables; RTL throughout. Brand palette from the Topic Engine (slate, sand, cream, logo orange for small highlights). */
+:root{
+  --bg:#f7f5f0; --surface:#ffffff; --tint:#e2eaed; --cream:#f3e3c3;
+  --ink:#14231f; --muted:#56656a; --line:#e5e0d5;
+  --slate:#32515d; --slate-deep:#243b44; --orange:#c2410c; --good:#2f6b4f;
+  --bar-a:#32515d; --bar-b:#b9c9cf;
+  --f-body:"Vazirmatn", Tahoma, "Segoe UI", system-ui, sans-serif;
+  --f-quote:"Noto Naskh Arabic", "Vazirmatn", Tahoma, serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11191c; --surface:#182327; --tint:#1f2f35; --cream:#3a3222;
+  --ink:#e7ecea; --muted:#9fb0b4; --line:#2a383d;
+  --slate:#8fb6c4; --slate-deep:#21343b; --orange:#f28a4b; --good:#7cc2a0;
+  --bar-a:#8fb6c4; --bar-b:#3b5058; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11191c; --surface:#182327; --tint:#1f2f35; --cream:#3a3222;
+  --ink:#e7ecea; --muted:#9fb0b4; --line:#2a383d;
+  --slate:#8fb6c4; --slate-deep:#21343b; --orange:#f28a4b; --good:#7cc2a0;
+  --bar-a:#8fb6c4; --bar-b:#3b5058; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.85}
+.wrap{direction:rtl;text-align:right;max-width:960px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.col{max-width:720px}
+h1,h2,h3{text-wrap:balance;line-height:1.4;margin:0}
+h1{font-weight:800;font-size:clamp(28px,5vw,40px);color:var(--slate)}
+h2{font-weight:800;font-size:24px;margin-block:56px 8px;color:var(--ink)}
+h3{font-weight:700;font-size:17px}
+p{margin:0 0 12px}
+.lede{font-size:18px;color:var(--muted);margin-top:8px}
+.eyebrow{font-size:13px;font-weight:700;color:var(--orange);letter-spacing:.02em;margin-bottom:6px}
+.sub{color:var(--muted);font-size:15px;margin-bottom:20px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{background:var(--tint);color:var(--ink);border-radius:999px;padding:4px 12px;font-size:13.5px}
+.chip b{color:var(--slate);font-weight:800}
+.thesis{margin-top:32px;background:var(--slate-deep);color:#f3f1ea;border-radius:14px;padding:24px 24px}
+.thesis p{font-size:18px;line-height:1.9;margin:0}
+.thesis strong{color:#ffd9b8}
+blockquote{font-family:var(--f-quote);font-size:17px;line-height:2;margin:10px 0;padding:8px 14px;border-right:3px solid var(--orange);background:var(--surface);border-radius:8px;color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+@media (max-width:720px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 18px 14px;min-width:0}
+.card .num{font-size:30px;font-weight:800;color:var(--slate);line-height:1.2;font-variant-numeric:tabular-nums}
+.card .num small{font-size:15px;font-weight:500;color:var(--muted)}
+.card h3{margin:6px 0 6px}
+.card p{font-size:15px;color:var(--ink)}
+.card .src{font-size:12.5px;color:var(--muted);margin-top:6px}
+.chain{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:8px;counter-reset:s}
+.chain li{counter-increment:s;display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.chain li::before{content:counter(s, persian);width:28px;height:28px;border-radius:50%;background:var(--slate);color:var(--bg);display:grid;place-items:center;font-weight:800;font-size:14px}
+.chain li span{font-size:15px}
+.chain li em{font-style:normal;font-family:var(--f-quote);color:var(--muted)}
+.bars{margin-top:12px;display:grid;gap:10px}
+.bar{display:grid;grid-template-columns:minmax(0,170px) 1fr;gap:10px;align-items:center;font-size:14px}
+.bar .track{background:var(--tint);border-radius:6px;height:26px;position:relative;overflow:hidden}
+.bar .fill{height:100%;background:var(--bar-a);border-radius:6px}
+.bar .fill.b{background:var(--bar-b)}
+.bar .val{position:absolute;inset-block:0;inset-inline-start:8px;display:flex;align-items:center;font-weight:700;font-size:13px;color:var(--ink);font-variant-numeric:tabular-nums}
+.bar .fill + .val{color:var(--ink)}
+@media (max-width:520px){.bar{grid-template-columns:1fr}}
+.tablewrap{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14.5px}
+th,td{text-align:right;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{background:var(--tint);font-weight:700;font-size:13.5px;color:var(--ink)}
+tr:last-child td{border-bottom:0}
+td.k{font-weight:700;white-space:nowrap;color:var(--slate)}
+.tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:1px 8px;margin-inline-start:6px;vertical-align:middle}
+.tag.new{background:var(--cream);color:var(--ink)}
+.tag.keep{background:var(--tint);color:var(--slate)}
+.prop{display:grid;gap:12px;margin-top:16px}
+.prop .card{display:grid;grid-template-columns:44px 1fr;gap:12px}
+.prop .ic{width:40px;height:40px;border-radius:10px;background:var(--tint);color:var(--slate);display:grid;place-items:center;font-weight:800;font-size:18px}
+.prop .why{font-size:13.5px;color:var(--muted)}
+.phases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:16px}
+@media (max-width:760px){.phases{grid-template-columns:1fr}}
+.phase{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--slate);border-radius:12px;padding:16px;min-width:0}
+.phase:nth-child(2){border-top-color:var(--orange)}
+.phase:nth-child(3){border-top-color:var(--good)}
+.phase ul{margin:8px 0 0;padding-inline-start:18px;font-size:14.5px}
+.phase li{margin-bottom:6px}
+.phase .when{font-size:13px;color:var(--muted)}
+.qs{counter-reset:q;list-style:none;padding:0;margin:16px 0 0;display:grid;gap:10px}
+.qs li{counter-increment:q;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;grid-template-columns:28px 1fr;gap:10px}
+.qs li::before{content:counter(q, persian);font-weight:800;color:var(--orange);font-size:18px;line-height:1.6}
+.qs .rec{display:block;font-size:13.5px;color:var(--good);margin-top:2px}
+.keep ul{columns:2;column-gap:28px;padding-inline-start:18px;font-size:15px}
+@media (max-width:620px){.keep ul{columns:1}}
+.note{font-size:14px;color:var(--muted)}
+.foot{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:13.5px;color:var(--muted)}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;background:var(--tint);padding:1px 6px;border-radius:5px;direction:ltr;unicode-bidi:embed}
+@media (prefers-reduced-motion:no-preference){.fill{transition:width .6s ease}}
+</style>
+
+</head>
+<body style="margin:0">
+<div class="wrap" lang="fa" dir="rtl">
+
+<header class="col">
+  <div class="eyebrow">تحلیل لحن و ادبیات · ۲۹ اکتبر ۲۰۲۶</div>
+  <h1>صدای سوگیموتو ویزا</h1>
+  <p class="lede">از همهٔ چیزهایی که خوانده شد چه یاد گرفتیم، و تاپیک انجین با آن چطور باید عوض شود.</p>
+  <div class="chips">
+    <span class="chip"><b>۴۰۷</b> پست کاروسل و عکس، <b>۲٬۰۵۱</b> اسلاید</span>
+    <span class="chip"><b>۹۱</b> ویدیوی آخر اینستاگرام، متن‌شده</span>
+    <span class="chip"><b>۷۵۹</b> پست تلگرام از ۲۰۲۰</span>
+    <span class="chip"><b>۳۵</b> اسکریپت و کپشن تیم در درایو</span>
+    <span class="chip"><b>۶</b> ویدیوی حامد با زیرنویس تصحیح‌شده</span>
+    <span class="chip"><b>۳</b> قسمت دورهٔ آکادمی</span>
+    <span class="chip"><b>۵۰۹</b> مقالهٔ سایت</span>
+  </div>
+</header>
+
+<section class="thesis col">
+  <p>تاپیک انجین امروز <strong>خلاصهٔ خبر</strong> می‌نویسد: قلاب، چی اعلام شد، دعوت نرم. حامد این‌طور حرف نمی‌زند و نمی‌نویسد. او از <strong>موقعیت خود مخاطب</strong> شروع می‌کند، حالت‌ها را جدا می‌کند، پیامد هر حالت را با عدد می‌گوید، بد ماجرا را هم می‌گوید و تصمیم را به خود مخاطب برمی‌گرداند. پربازدیدترین محتوای صفحه، از کاروسل‌های ۲۰۲۲ تا ریل‌های امسال، همه همین صدا را دارند. پیشنهاد اصلی: این زنجیره، این قالب‌ها و این نوع دعوت به اقدام را به تاپیک انجین یاد بدهیم و قانون «فقط فکت منبع» را دست نزنیم.</p>
+</section>
+
+<h2>یافته‌ها</h2>
+<p class="sub col">هر یافته با عددش و منبعش. عددها میانه‌اند، نه میانگین، تا یک پست پربازدید همه را جابه‌جا نکند.</p>
+
+<div class="grid">
+  <article class="card">
+    <div class="num">۵٫۵ <small>برابر لایک</small></div>
+    <h3>کاروسل‌هایی که خود حامد نوشت، قوی‌ترین محتوای صفحه بودند</h3>
+    <p>۱۱۹ کاروسل متنی ۲۰۲۱ تا ۲۰۲۳: میانهٔ ۱٬۹۰۴ لایک و ۸۹ کامنت. کاروسل‌های متنی تیم در ۲۰۲۵ و ۲۰۲۶: ۳۴۶ لایک و ۱۹ کامنت. «مهاجرت بدون پول؟!» ۱۷٬۰۵۹ لایک و ۸۲۹ کامنت گرفت.</p>
+    <div class="src">منبع: ۴۰۷ پست کاروسل، خوانده‌شده اسلاید به اسلاید</div>
+  </article>
+  <article class="card">
+    <div class="num">۴۲۰ <small>در برابر ۹۰</small></div>
+    <h3>زبان از گفتاری به رسمی رفته</h3>
+    <p>در کاروسل‌های حامد ۴۲۰ اسلاید فعل گفتاری داشتند و ۹۰ اسلاید فعل نوشتاری. در ۲۰۲۵ و ۲۰۲۶ برعکس شده: ۲۴ گفتاری، ۴۹ نوشتاری («است»، «می‌شود»)، همراه برچسب‌های انگلیسی تزئینی.</p>
+    <div class="src">منبع: همان ۴۰۷ پست</div>
+  </article>
+  <article class="card">
+    <div class="num">۷ <small>برابر بازدید</small></div>
+    <h3>رشد صفحه از سریال آفیسر و مصاحبه‌ها می‌آید</h3>
+    <p>میانهٔ بازدید سریال آفیسر مرزی ۱۵۵ هزار، ویدیوی توضیحی روبه‌دوربین ۲۱ هزار. پربازدیدترین ویدیو مصاحبهٔ خانم ۵۰ سالهٔ خیاط بود: ۱٫۲ میلیون. هر دو یک درس حقوقی دارند که در کپشن باز می‌شود.</p>
+    <div class="src">منبع: ۹۱ ویدیوی ۳۰ ژوئن تا ۲۸ اکتبر ۲۰۲۶</div>
+  </article>
+  <article class="card">
+    <div class="num">۴ <small>برابر کامنت</small></div>
+    <h3>کلمه‌ای که «یک چیز» می‌دهد، کامنت می‌آورد</h3>
+    <p>کامنت کردن «لیست»، «۲» برای جدول امتیاز، «محاسبه» یا «ماکو»: میانهٔ ۵۶ کامنت. کامنت کردن «مشاوره»: ۱۳. «لیست» در یک ویدیو ۴۰۳ کامنت گرفت.</p>
+    <div class="src">منبع: ۴۴ ویدیوی توضیحی</div>
+  </article>
+  <article class="card">
+    <div class="num">۱۰ از ۱۰</div>
+    <h3>پربازدیدترین کاروسل‌ها دربارهٔ ذهن مهاجرند، نه قانون</h3>
+    <p>ترس، پشیمانی، خیال‌بافی، دلتنگی، پول، اراده. تنها خبر حقوقیِ فهرست، خبری بود که مستقیم به ایرانی‌ها مربوط بود («تسهیل شرایط ویزا برای ایرانیان»). تاپیک انجین امروز هیچ‌کدام از این موضوع‌ها را نمی‌سازد.</p>
+    <div class="src">منبع: ده کاروسل پرلایک</div>
+  </article>
+  <article class="card">
+    <div class="num">۲۵۰ تا ۴۰۰ <small>کلمه</small></div>
+    <h3>طول درست</h3>
+    <p>ویدیوهای توضیحی بالای ۲۶۰ کلمه کمی بهترند (میانهٔ ۲۴ هزار بازدید در برابر ۱۷ هزار). در کاروسل حامد هر اسلاید یک پاراگراف کامل بود: میانهٔ ۷۱ کلمه، جلد ۶ کلمه.</p>
+    <div class="src">منبع: ویدیوها و کاروسل‌ها</div>
+  </article>
+</div>
+
+<h3 style="margin-top:36px">چهار مقایسه، به مقیاس</h3>
+<div class="grid">
+  <div class="card">
+    <h3>میانهٔ بازدید ویدیو، به نوع</h3>
+    <div class="bars">
+      <div class="bar"><span>آفیسر مرزی (۲۹)</span><div class="track"><div class="fill" style="width:100%"></div><span class="val">۱۵۵ هزار</span></div></div>
+      <div class="bar"><span>مصاحبه (۱۰)</span><div class="track"><div class="fill b" style="width:18.8%"></div><span class="val">۲۹ هزار</span></div></div>
+      <div class="bar"><span>توضیحی (۴۴)</span><div class="track"><div class="fill b" style="width:13.8%"></div><span class="val">۲۱ هزار</span></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>میانهٔ کامنت، به نوع دعوت</h3>
+    <div class="bars">
+      <div class="bar"><span>کلمه برای یک چیز (۱۹)</span><div class="track"><div class="fill" style="width:100%"></div><span class="val">۵۶</span></div></div>
+      <div class="bar"><span>بدون کلمه (۹)</span><div class="track"><div class="fill b" style="width:25%"></div><span class="val">۱۴</span></div></div>
+      <div class="bar"><span>«مشاوره» (۱۶)</span><div class="track"><div class="fill b" style="width:23.2%"></div><span class="val">۱۳</span></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>میانهٔ لایک کاروسل متنی</h3>
+    <div class="bars">
+      <div class="bar"><span>حامد ۲۰۲۱–۲۰۲۳ (۱۱۹)</span><div class="track"><div class="fill" style="width:100%"></div><span class="val">۱٬۹۰۴</span></div></div>
+      <div class="bar"><span>تیم ۲۰۲۴ (۴۶)</span><div class="track"><div class="fill b" style="width:34.9%"></div><span class="val">۶۶۵</span></div></div>
+      <div class="bar"><span>تیم ۲۰۲۵–۲۰۲۶ (۱۴)</span><div class="track"><div class="fill b" style="width:18.2%"></div><span class="val">۳۴۶</span></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>میانهٔ کامنت کاروسل متنی</h3>
+    <div class="bars">
+      <div class="bar"><span>حامد ۲۰۲۱–۲۰۲۳</span><div class="track"><div class="fill" style="width:100%"></div><span class="val">۸۹</span></div></div>
+      <div class="bar"><span>تیم ۲۰۲۴</span><div class="track"><div class="fill b" style="width:36%"></div><span class="val">۳۲</span></div></div>
+      <div class="bar"><span>تیم ۲۰۲۵–۲۰۲۶</span><div class="track"><div class="fill b" style="width:21.3%"></div><span class="val">۱۹</span></div></div>
+    </div>
+  </div>
+</div>
+<p class="note col" style="margin-top:12px">همهٔ افت کاروسل‌ها از لحن نیست. الگوریتم اینستاگرام، جای ریل‌ها و موضوع‌ها هم عوض شده‌اند. اما فاصله بزرگ است و همهٔ نشانه‌ها همان جهت را دارند.</p>
+
+<h2>زنجیرهٔ فکر حامد</h2>
+<p class="sub col">در ۴۴ ویدیوی توضیحی، ۶ ویدیوی تصحیح‌شده و اسکریپت‌های درایو تکرار می‌شود. این مهم‌ترین چیزی است که تاپیک انجین باید یاد بگیرد، مهم‌تر از چند تکیه‌کلام.</p>
+<ol class="chain col">
+  <li><span><b>موقعیت خود مخاطب، اول.</b> <em>«اگه شما و همسرتون داخل کانادا هستید و می‌خواید…»</em>، یا خبر با عدد و مقایسه با دور قبل، یا برداشت غلط رایج.</span></li>
+  <li><span><b>حالت‌ها را جدا می‌کند.</b> <em>«دو تا راه پیش رو دارید»</em>، <em>«توی این شرایط دو حالت وجود داره»</em>.</span></li>
+  <li><span><b>پیامد دقیق هر حالت.</b> کدام دفتر، چه مهلتی، چه حق اعتراضی: <em>«فقط ۹۰ روز فرصت دارید…»</em>، <em>«تنها آپشن‌تون Federal Court… Judicial Review»</em>.</span></li>
+  <li><span><b>عددها را جمع می‌زند.</b> <em>«۴۰ نمره بابت مدت… ۷۰ نمره بابت شغل پردرآمد… ۴۸۰ تبدیل می‌شه ۵۵۰»</em>.</span></li>
+  <li><span><b>بد ماجرا را خودش می‌گوید.</b> <em>«تنها نکتهٔ منفی‌ای که داره اینه که…»</em>، <em>«به نظر من نه… اگر فقط هدفت گرفتن PR باشه!»</em>. در خبر بد، آرام می‌کند: <em>«اول از همه وحشت نکنید»</em>.</span></li>
+  <li><span><b>تصمیم را به مخاطب برمی‌گرداند.</b> <em>«با توجه به تمامی این نکات، شما باید تصمیم بگیرید که کدوم مسیر برای شما بهترین خواهد بود»</em>.</span></li>
+  <li><span><b>دعوت با یک کلمه.</b> <em>«کلمهٔ لیست رو این پایین بنویسید، لینکش رو براتون ارسال می‌کنیم»</em>.</span></li>
+</ol>
+
+<div class="grid" style="margin-top:20px">
+  <div class="card">
+    <h3>واژه‌ها و امضای گفتار</h3>
+    <p>«اگر که / اگه» در ۲۶ ویدیو از ۴۴، «پرونده» در ۱۷ ویدیو و ۶۰ بار، «نکته اینه که»، «حالا»، «دقت کنید»، «طبیعتاً»، «می‌تونید که». فعل گفتاری کنار آیندهٔ رسمی: <em style="font-style:normal;font-family:var(--f-quote)">«براتون ارسال خواهد شد»</em>. اصطلاح انگلیسی همان‌طور که در کانادا گفته می‌شود: Inland، Processing Time، Judicial Review.</p>
+  </div>
+  <div class="card">
+    <h3>قالب کاروسل حامد (۲۰۲۱ تا ۲۰۲۳)</h3>
+    <p>جلد ۲ تا ۶ کلمه با «!» یا «؟!» · اسلاید دوم «داستان چیه؟!» (۷۰ پست از ۱۱۹) · گاهی دیالوگ با + و − (۵۲ پست) · هر اسلاید تیتر دو کلمه‌ای و یک پاراگراف کامل · یک اسلاید برای آن طرف ماجرا · «حرف آخر…» · «+ تو بگو: … / به امید دیدار - حامد سوگیموتو» (۴۶ پست) · اسلاید آخر «تو بگو:» با سؤالی دربارهٔ خود مخاطب (۷۳ پست).</p>
+  </div>
+</div>
+
+<blockquote class="col">«اشتباه نکنی… نمیگم مهاجرت چون سختی داره، ارزش نداره… قطعاً ارزشش رو داره؛ مهاجرت انقدر خوبی‌هایی داره که خود من اگه صد بار هم به عقب برگردم، باز هم مهاجرت میکنم، شاید حتی زودتر…»</blockquote>
+<p class="note col">از کاروسل «خیال‌بافی ممنوع دربارهٔ مهاجرت!»، سپتامبر ۲۰۲۱، ۶٬۲۸۷ لایک و ۴۷۵ کامنت.</p>
+
+<h2>هر خروجی تاپیک انجین چطور عوض می‌شود</h2>
+<p class="sub col">چیزی که امروز می‌سازد، و چیزی که بعد از این تحلیل باید بسازد. قانون فکت فقط از منبع، واژه‌نامه و تأیید حامد در همه ثابت می‌ماند.</p>
+<div class="tablewrap">
+<table>
+<thead><tr><th style="width:150px">خروجی</th><th>امروز</th><th>بعد از تغییر</th></tr></thead>
+<tbody>
+<tr><td class="k">اسکریپت فارسی</td><td>قلاب، چی اعلام شد، کی، برای کی، قدم بعدی، دعوت نرم. نمونهٔ لحن: ۴ جمله.</td><td>زنجیرهٔ هفت‌مرحله‌ای حامد. سه نوع شروع (موقعیت مخاطب، خبر با عدد و مقایسه، برداشت غلط). ۲۵۰ تا ۴۰۰ کلمه. کلمهٔ کامنت مرتبط با موضوع که یک چیز واقعی از سایت می‌دهد. جای خالی مشخص برای «پروندهٔ مشابه ما» که تیم پر می‌کند، نه مدل. دو تا سه ویدیوی کامل حامد هر بار به‌عنوان نمونهٔ لحن.</td></tr>
+<tr><td class="k">سه قلاب پیشنهادی</td><td>ده الگوی عمومی قلاب.</td><td>اول سه الگوی خود حامد، بعد بقیه. قلاب‌هایی که «توجه بخواهند» همچنان علامت می‌خورند.</td></tr>
+<tr><td class="k">اسکریپت انگلیسی</td><td>همان چارچوب خبری، به انگلیسی.</td><td>همان زنجیره، ساختار ترجمه می‌شود نه متن. دعوت: لینک بایو، طبق قاعدهٔ فعلی.</td></tr>
+<tr><td class="k">کاروسل خبری</td><td>قلاب خود خبر، کامل بودن فکت‌ها، نوشتار رسمی.</td><td>همان قاعده، با زبان گفتاری حامد: «امروز اداره مهاجرت کانادا اعلام کرد…»، «دسته اول… دسته دوم…»، «هنوز جزئیاتش بیرون نیومده». بدون برچسب انگلیسی تزئینی.</td></tr>
+<tr><td class="k">کاروسل حامد <span class="tag new">جدید</span></td><td>وجود ندارد.</td><td>برای ایده‌های همیشگی و موضوع‌های ذهن مهاجر، با قالب ۲۰۲۱ تا ۲۰۲۳: «داستان چیه؟!»، پاراگراف ۵۰ تا ۸۵ کلمه‌ای، آن طرف ماجرا، «حرف آخر»، «تو بگو». تجربهٔ شخصی را مدل نمی‌سازد؛ جایش خالی می‌ماند.</td></tr>
+<tr><td class="k">پست تلگرام</td><td>لحن از روی یک کانال دیگر.</td><td>لحن خود برند در ۲۰۲۵: 📌 خبر در یک خط، 🔹 جزئیات، «باید ببینیم…» وقتی چیزی معلوم نیست، 📌 جمع‌بندی.</td></tr>
+<tr><td class="k">کپشن‌ها</td><td>فکت اول، بعد 🔹 جزئیات.</td><td>همان، به‌علاوهٔ «💢تو بگو: …» با سؤالی دربارهٔ خود مخاطب و کلمهٔ کامنتِ همان موضوع. حداکثر ۳ هشتگ.</td></tr>
+<tr><td class="k">مقالهٔ سایت <span class="tag keep">بدون تغییر</span></td><td>نوشتار رسمی سئو.</td><td>فعلاً همان، مگر حامد بخواهد (سؤال ۷).</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>پیشنهادها برای ساختار خود تاپیک انجین</h2>
+<p class="sub col">فراتر از عوض کردن پرامپت‌ها. هر پیشنهاد می‌گوید چرا.</p>
+<div class="prop">
+  <article class="card"><div class="ic">۱</div><div>
+    <h3>یک اسکیل «صدای سوگیموتو» و یک بانک نمونهٔ زنده</h3>
+    <p>اسکیل سه بخش دارد: صدای حامد، صدای تیم و نوشتار کاروسل. پرامپت‌ها هر بار دو تا سه نمونهٔ کامل از بانک می‌گیرند، نه ۴ جمله. بانک خودش پر می‌شود: هر زیرنویس تأییدشده در Video Editing و هر محتوایی که حامد تأیید کند به آن اضافه می‌شود.</p>
+    <p class="why">چرا: امروز لحن از یک ویدیو و یک کانال دیگر می‌آید و با گذر زمان کهنه می‌شود.</p>
+  </div></article>
+  <article class="card"><div class="ic">۲</div><div>
+    <h3>پیشنهاد قالب برای هر تاپیک</h3>
+    <p>هر کارت نشان بدهد این موضوع بیشتر به چه قالبی می‌خورد: ویدیوی توضیحی، کاروسل خبری، کاروسل حامد، قسمت آفیسر، یا فقط تلگرام. مثلاً یک دراو فقط تلگرام، یک تغییر قانون ویدیو، یک موضوع «جاب‌آفر خریدنی» قسمت آفیسر.</p>
+    <p class="why">چرا: سریال آفیسر ۷ برابر توضیحی بازدید دارد، ولی امروز هر تاپیک فقط اسکریپت توضیحی می‌گیرد.</p>
+  </div></article>
+  <article class="card"><div class="ic">۳</div><div>
+    <h3>ایدهٔ قسمت آفیسر مرزی از دل تاپیک</h3>
+    <p>برای تاپیک‌هایی که پای قصد سفر، ازدواج، جاب‌آفر یا misrepresentation در میان است: یک خط موقعیت، یک خط اشتباه مسافر، و درس حقوقی‌اش. فقط از فکت منبع. نویسندگی دیالوگ با تیم می‌ماند.</p>
+    <p class="why">چرا: پربازدیدترین قالب صفحه (یک میلیون، ۶۸۲ هزار، ۶۹۳ هزار) و فقط تیم آن را می‌سازد.</p>
+  </div></article>
+  <article class="card"><div class="ic">۴</div><div>
+    <h3>نقشهٔ کلمه‌های کامنت</h3>
+    <p>هر تاپیک یک کلمهٔ کامنت مرتبط می‌گیرد که به یک صفحهٔ واقعی سایت وصل است: ماشین‌حساب، لیست مشاغل، جدول امتیاز، راهنما. همان جست‌وجوی «لینک مرتبط» که پست تلگرام دارد، این را پیدا می‌کند. وقتی صفحه‌ای نیست، «مشاوره».</p>
+    <p class="why">چرا: ۵۶ کامنت در برابر ۱۳. و هر کلمه به دایرکتم تیم وصل است.</p>
+  </div></article>
+  <article class="card"><div class="ic">۵</div><div>
+    <h3>خط «ذهن مهاجر» و بازسازی بهترین‌های قدیمی</h3>
+    <p>کنار خبر و ایدهٔ همیشگی، یک خط سوم: موضوع‌های ترس، پشیمانی، پول، دلتنگی، اراده. نقطهٔ شروع: بیست کاروسل پرلایک ۲۰۲۱ تا ۲۰۲۳، دوباره ساخته با طراحی امروز و فکت‌های به‌روز از منبع، با تأیید حامد روی متن.</p>
+    <p class="why">چرا: ده کاروسل پرلایک صفحه همه از این جنس‌اند و این خط امروز اصلاً وجود ندارد.</p>
+  </div></article>
+  <article class="card"><div class="ic">۶</div><div>
+    <h3>بررسی لحن پیش از نمایش</h3>
+    <p>یک مرحلهٔ ارزان بعد از نوشتن: آیا اسکریپت با یکی از سه شروع آغاز شده، حالت‌ها و پیامدها را گفته، فعل‌هایش گفتاری است، طولش درست است و کلمهٔ کامنت دارد؟ کمبودها زیر اسکریپت علامت می‌خورند، مثل قلاب‌ها امروز.</p>
+    <p class="why">چرا: حامد دیگر لازم نیست هر بار یادداشت «خودمونی‌تر بنویس» بدهد.</p>
+  </div></article>
+  <article class="card"><div class="ic">۷</div><div>
+    <h3>حلقهٔ ماهانهٔ «چه کار کرد»</h3>
+    <p>کاری که امروز یک بار انجام شد (خواندن ویدیوها و پست‌های تازهٔ صفحه با آمارشان) هر ماه خودکار تکرار شود. یک صفحهٔ کوتاه نشان دهد کدام قالب و کدام کلمهٔ کامنت این ماه کار کرد، و بهترین‌ها به بانک نمونه بروند.</p>
+    <p class="why">چرا: لحن و الگوریتم عوض می‌شوند. تاپیک انجین باید از نتیجهٔ خود صفحه یاد بگیرد، نه فقط از این گزارش.</p>
+  </div></article>
+</div>
+
+<section class="keep col">
+  <h2>چیزهایی که دست نمی‌خورند</h2>
+  <ul>
+    <li>هر فکت فقط از متن منبع؛ نبود اطلاعات گفته می‌شود، پر نمی‌شود.</li>
+    <li>تجربهٔ شخصی، پروندهٔ واقعی دفتر و نظر سیاسی را مدل هرگز نمی‌سازد.</li>
+    <li>واژه‌نامهٔ تیم برای همهٔ اصطلاح‌ها.</li>
+    <li>هیچ چیز بدون تأیید حامد منتشر نمی‌شود.</li>
+    <li>کاروسل خبری خواننده را «برای شما» خطاب نمی‌کند.</li>
+    <li>هیچ جملهٔ فروش یا «دایرکت بده» در محتوای خبری.</li>
+  </ul>
+</section>
+
+<h2>ترتیب کار</h2>
+<div class="phases">
+  <div class="phase">
+    <h3>مرحلهٔ ۱ · صدا</h3>
+    <div class="when">بعد از جواب سؤال‌ها، چند روز</div>
+    <ul>
+      <li>اسکیل «صدای سوگیموتو» و بانک نمونه</li>
+      <li>پرامپت اسکریپت فارسی و انگلیسی با زنجیرهٔ حامد</li>
+      <li>کلمهٔ کامنت مرتبط با صفحهٔ واقعی سایت</li>
+      <li>پرامپت تلگرام با لحن خود برند</li>
+      <li>آزمون کنار هم روی سه تاپیک واقعی و یک ویدیوی واقعی حامد</li>
+    </ul>
+  </div>
+  <div class="phase">
+    <h3>مرحلهٔ ۲ · قالب‌ها</h3>
+    <div class="when">بعد از دیدن نتیجهٔ مرحلهٔ ۱</div>
+    <ul>
+      <li>کاروسل خبری گفتاری</li>
+      <li>کاروسل حامد، برای ایده‌های همیشگی</li>
+      <li>پیشنهاد قالب روی هر کارت</li>
+      <li>ایدهٔ قسمت آفیسر مرزی</li>
+      <li>بررسی لحن پیش از نمایش</li>
+    </ul>
+  </div>
+  <div class="phase">
+    <h3>مرحلهٔ ۳ · یادگیری</h3>
+    <div class="when">ماه بعد</div>
+    <ul>
+      <li>خط «ذهن مهاجر» و بازسازی بیست کاروسل برتر</li>
+      <li>حلقهٔ ماهانهٔ «چه کار کرد»</li>
+      <li>بانک نمونه از محتوای تأییدشده، خودکار</li>
+    </ul>
+  </div>
+</div>
+
+<h2>تصمیم‌هایی که با توست</h2>
+<p class="sub col">پیشنهاد من زیر هر سؤال آمده. اگر با همه موافقی، یک «موافقم» کافی است.</p>
+<ol class="qs col">
+  <li><div>دعوت در اسکریپت: کلمه‌ای که یک چیز می‌دهد، یا همیشه «مشاوره»؟<span class="rec">پیشنهاد: کلمهٔ مرتبط؛ «مشاوره» فقط وقتی چیزی برای فرستادن نیست.</span></div></li>
+  <li><div>ویدیوهای توضیحی کوتاه‌تر که از روی متن خوانده شده‌اند (امتیاز آلبرتا، هزینهٔ تحصیل، استادی پلن) کار کیست؟<span class="rec">برای اینکه در اسکیل، بخش حامد یا بخش تیم برود.</span></div></li>
+  <li><div>کاروسل حامد را می‌خواهی؟ با امضای «به امید دیدار - حامد سوگیموتو» و «تو بگو»، یا بدون امضای شخصی؟<span class="rec">پیشنهاد: بله، با «تو بگو»، و امضا به انتخاب تو.</span></div></li>
+  <li><div>تاپیک انجین برای هر تاپیک مناسب، ایدهٔ یک قسمت آفیسر مرزی هم بدهد؟<span class="rec">پیشنهاد: بله، فقط موقعیت و درس حقوقی؛ دیالوگ با تیم.</span></div></li>
+  <li><div>خط «ذهن مهاجر» و بازسازی بیست کاروسل برتر قدیمی را شروع کنیم؟<span class="rec">پیشنهاد: بله، در مرحلهٔ ۳، با تأیید تو روی هر متن.</span></div></li>
+  <li><div>شروع «دوستان سلام و امیدوارم که خوب باشید»: فقط در ویدیوهای بلندتر، یا هیچ‌وقت؟<span class="rec">پیشنهاد: فقط ویدیوهای بلند و رسمی‌تر.</span></div></li>
+  <li><div>مقالهٔ سایت با همین لحن سئو بماند یا به صدای تو نزدیک‌تر شود؟<span class="rec">پیشنهاد: فعلاً بماند؛ بعد از مرحلهٔ ۱ دوباره نگاه کنیم.</span></div></li>
+</ol>
+
+<section class="col">
+  <h2>محدودیت‌ها</h2>
+  <p>این عددها همبستگی‌اند، نه علت. بازدید کمتر کاروسل‌های امروز فقط از لحن نیست. ۹ ویدیو از ۱۰۰ متن نشد، چون فایلشان بزرگ بود یا اینستاگرام فایلی نداد. متن ویدیوها خروجی خام Whisper است و غلط املایی دارد، ولی برای ساختار و لحن کافی است. بازدید فقط برای ویدیوها خوانده شد؛ برای کاروسل‌ها لایک و کامنت هست. اینکه کدام ویدیو را چه کسی گفته، از متن معلوم نیست.</p>
+</section>
+
+<footer class="foot col">
+  گزارش کامل با نقل‌قول‌ها و جدول‌ها: <code>docs/voice-analysis.md</code> در ریپوی تاپیک انجین، بخش‌های ۱ تا ۱۰. داده‌ها روی شاخهٔ <code>editing-data</code> در <code>voice/</code>: ۹۱ ویدیو و ۴۰۷ پست کاروسل، با متن و آمار هر کدام.
+</footer>
+
+</div>
+</body>
+</html>
