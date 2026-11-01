@@ -901,7 +901,7 @@ export default function App() {
         if (!entry) return;
         const m = entry.materials || {};
         if (!only) {
-          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, before_check: !("sources" in m.script) });
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, cta_fa: m.script.cta_fa || null, before_check: !("sources" in m.script) });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
@@ -1013,7 +1013,7 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null } : { ...scripts };
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null } : { ...scripts };
   // A rewritten English script (into English, or to a length) replaces the
   // one on screen, unless it was a draft for the video editor only.
   const enJob = svJobs.script_en;
@@ -1028,6 +1028,7 @@ export default function App() {
     if (fj && fj.status === "done" && fj.result && fj.result.text && (fj.startedAt || 0) >= newer) {
       viewScripts[l] = fj.result.text;
       viewScripts["hooks_" + l] = fj.result.hooks || [];
+      if (l === "fa" && fj.result.cta) viewScripts.cta_fa = fj.result.cta;
     }
   }
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
@@ -2834,6 +2835,29 @@ function HookOptions({ hooks, lang }) {
   );
 }
 
+// The word the Persian script asks viewers to comment, and the site page the team's DM tool should
+// send for it (Hamed's own reels: a word that gets the viewer something drew four times the comments
+// of «مشاوره»). The page was chosen as the one sugimotovisa.com page that fits the topic.
+function CommentWord({ cta }) {
+  if (!cta || !cta.word) return null;
+  return (
+    <div dir={uiDir()} style={{ marginTop: 12, padding: "9px 12px", borderRadius: 12, background: alpha(C.teal, 0.07), border: `1px solid ${alpha(C.teal, 0.3)}`, fontFamily: FONT, fontSize: 13, color: C.text, lineHeight: 1.8 }}>
+      <b>{L("کلمهٔ کامنت", "Comment word")}:</b> <span data-copy style={{ fontFamily: FA_FONT }}>«{cta.word}»</span>
+      {cta.url ? (
+        <>
+          {" · "}
+          {L("لینکی که در دایرکت فرستاده می‌شه", "Link to send in the DM")}:{" "}
+          <a href={cta.url} target="_blank" rel="noreferrer" style={{ color: C.teal, fontWeight: 700 }} data-copy>
+            {cta.title || cta.url}
+          </a>
+        </>
+      ) : (
+        <span style={{ color: C.text2 }}>{" · "}{L("صفحهٔ مرتبطی در سایت پیدا نشد؛ جواب، رزرو مشاوره است", "No matching site page; the reply is a consultation booking")}</span>
+      )}
+    </div>
+  );
+}
+
 function ScriptBody({ text, tab }) {
   const font = tab === "fa" ? "'Vazirmatn', sans-serif" : "'Geist', 'Vazirmatn', sans-serif";
   const lines = (text || " ").split("\n");
@@ -3452,6 +3476,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             <>
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
               <ScriptBody text={active} tab={tab} />
+              {tab === "fa" && <CommentWord cta={scripts.cta_fa} />}
               <ExtraSources sources={scripts.sources} supplement={scripts.supplement} />
               {scripts.before_check && onWrite && (
                 <button className="ui-btn" onClick={() => window.confirm(L("اسکریپت فارسی و انگلیسی از نو نوشته می‌شن؛ اگه صفحهٔ اصلی کافی نباشه، اول از منابع معتبر مطلب تکمیلی پیدا می‌شه. ادامه بدیم؟", "Both scripts are written again; if the main page is not enough, more material is found from trusted sources first. Continue?")) && onWrite()} style={{ marginTop: 12, width: "100%", padding: "10px 14px", borderRadius: 12, border: `1px solid ${alpha(C.teal, 0.4)}`, background: alpha(C.teal, 0.08), color: C.text, fontWeight: 700, fontSize: 13, fontFamily: FA_FONT, cursor: "pointer" }}>

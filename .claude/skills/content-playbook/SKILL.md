@@ -157,10 +157,16 @@ as the change**, in the team's own words where possible, with the date.
 
 - Farsi script: spoken, specific, the fact first; English terms in parentheses; glossary names
   (`glossaryBlock`, also on the English script, the hook options and the note rewrites).
-- Voice reference for news scripts: the team's own on-camera Farsi (corrected subtitles of the
-  "Inland vs overseas" video, `VOICE_SAMPLE_FA` in `lib/prompts.js`): short spoken sentences, the
-  Persian term then its English name, step-by-step explanation. Style only, never facts. Add more
-  of the team's real transcripts there when they exist.
+- **Hamed's voice (Nov 1 2026; skill `sugimoto-voice`, code `lib/sugimoto-voice.js`).** The script
+  guide was a news template (hook, what was announced, soft call to act) with a four-sentence voice
+  sample, so scripts read as news summaries. Now the Persian and English script prompts follow his
+  chain of thought from 44 of his own reels (situation / number against last time / common misreading
+  as the opening; the cases split; each case's consequence; the downside; the decision handed back;
+  one comment word), 250–400 Persian words when the source holds that much, with two of his whole
+  explainers as voice samples (Persian prompt only). The Persian script ends with a comment word for
+  the one sugimotovisa.com page that fits the topic (else «مشاوره»), shown with that page under the
+  script for the DM tool; English closes on the bio link. A script about a kind of file carries
+  «[پروندهٔ مشابه ما، اگر داریم: یک جمله]» for the team; the model never invents a case.
 - English script: must really be English (a Persian "English" script is detected and rewritten).
 - "Change the script" note + Regenerate (e.g. "more details", "shorter") rewrites from the same
   source text, keeping what the note does not ask to change.
@@ -177,6 +183,9 @@ as the change**, in the team's own words where possible, with the date.
 
 ## 6. Telegram news post
 
+- **Voice (Nov 1 2026):** the brand's own 2025 posts replace the other channel as the model (skill
+  `sugimoto-voice` §2): the news with its number in one line, 🔹 details, «باید ببینیم…» when not
+  known, 📌 a one-line takeaway, at most 🚨 ⚠️ 📌 🔹. Before that:
 - **Voice (Oct 21 2026, replaces the neutral "clean news" tone):** a friendly lawyer posting himself,
   first person and colloquial, like the Persian channel the team showed as the model («نکته اینجاست»،
   «قسمت جالبش اینه که…»، «این سؤال داره زیاد پرسیده میشه»، «فکر کنم…»). Short: 2–5 short paragraphs,
