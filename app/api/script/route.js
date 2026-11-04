@@ -7,7 +7,7 @@ import { sourceTextFor } from "../../../lib/grounding";
 import { editorNoteBlock } from "../../../lib/custom-news";
 import { lessonsBlock } from "../../../lib/learning";
 import { glossaryBlock } from "../../../lib/glossary";
-import { scriptSamplesBlock, ctaWordOf } from "../../../lib/sugimoto-voice";
+import { voiceSamplesBlock, voiceOf, ctaWordOf } from "../../../lib/sugimoto-voice";
 import { pickRelatedLink } from "../../../lib/telegram-post";
 
 export const runtime = "nodejs";
@@ -34,9 +34,9 @@ const notEnglish = (text) => persianShare(text) > 0.2;
 // The team's note on a written script (the note box under it): the same script prompt, so every
 // rule on format, voice and length still holds, with the current script and the note after it.
 // The note changes the wording, order, emphasis or length; facts still come only from the source.
-function revisePrompt(topic, lang, sourceText, script, note, ctaPage) {
+function revisePrompt(topic, lang, sourceText, script, note, ctaPage, voice) {
   const fa = lang === "fa";
-  return `${scriptPrompt(topic, lang, sourceText, { ctaPage })}
+  return `${scriptPrompt(topic, lang, sourceText, { ctaPage, voice })}
 
 ===== REVISION =====
 ${fa ? "این اسکریپت قبلاً نوشته شده. تیم یک یادداشت روی آن گذاشته. اسکریپت را طبق یادداشت بازنویسی کن و هرچه یادداشت نخواسته، همان‌طور که هست نگه دار." : "This script was already written and the team left a note on it. Rewrite the script as the note asks, and keep everything the note does not ask to change."}
@@ -57,7 +57,8 @@ ${fa ? "فقط متن اسکریپت بازنویسی‌شده را بنویس،
 //   POST { topic, lang, revise: { script, note } }         -> the script rewritten by the team's note
 export async function POST(request) {
   try {
-    const { topic, lang, rewrite, revise } = await request.json();
+    const { topic, lang, rewrite, revise, voice: askedVoice } = await request.json();
+    const voice = voiceOf(askedVoice);
     if (!topic || (lang !== "fa" && lang !== "en") || (rewrite && lang !== "en") || (revise && !(revise.script && revise.note))) {
       return Response.json({ error: "bad request" }, { status: 400 });
     }
@@ -73,16 +74,16 @@ export async function POST(request) {
     const ctaPage = lang === "fa" && !rewrite ? await pickRelatedLink(topic).catch(() => null) : null;
     // Whole videos of Hamed to hear the rhythm by (Persian only), then the lessons, then the
     // glossary last: one Persian name per term in every script.
-    const samples = rewrite ? "" : scriptSamplesBlock(topic, sourceText, lang);
+    const samples = rewrite ? "" : voiceSamplesBlock(voice, topic, sourceText, lang);
     const glossary = await glossaryBlock(lang === "en" ? "en" : "fa");
     const prompt = (revise
-      ? revisePrompt(topic, lang, sourceText, revise.script, revise.note, ctaPage) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))
+      ? revisePrompt(topic, lang, sourceText, revise.script, revise.note, ctaPage, voice) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))
       : rewrite
       ? englishScriptRewritePrompt(topic, rewrite.script, sourceText, {
           seconds: Math.max(0, Math.min(600, Number(rewrite.seconds) || 0)),
           notes: String(rewrite.notes || "").slice(0, 1500),
         })
-      : scriptPrompt(topic, lang, sourceText, { ctaPage }) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))) + glossary;
+      : scriptPrompt(topic, lang, sourceText, { ctaPage, voice }) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))) + glossary;
 
     let { text, provider } = await write(prompt);
 
@@ -100,7 +101,7 @@ export async function POST(request) {
     // What the team's comment tool must answer with: the word the script asks for and the page behind it.
     const word = lang === "fa" ? ctaWordOf(clean) : "";
     const cta = word ? { word, url: (ctaPage && ctaPage.url) || "", title: (ctaPage && ctaPage.title) || "" } : null;
-    return Response.json({ text: clean, provider, hooks, cta });
+    return Response.json({ text: clean, provider, hooks, cta, voice });
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
   }

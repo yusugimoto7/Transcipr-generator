@@ -8,6 +8,7 @@ import CalendarButtons from "./CalendarButtons";
 import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
 import { TEMPLATES } from "../lib/carousel-templates";
+import { VOICES, CAROUSEL_KINDS } from "../lib/sugimoto-voice";
 import VisaResults from "./VisaResults";
 import StoryDesigner from "./StoryDesigner";
 import StoryTemplateDesigner from "./StoryTemplateDesigner";
@@ -901,7 +902,7 @@ export default function App() {
         if (!entry) return;
         const m = entry.materials || {};
         if (!only) {
-          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, cta_fa: m.script.cta_fa || null, before_check: !("sources" in m.script) });
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, cta_fa: m.script.cta_fa || null, voice: m.script.voice || "hamed", before_check: !("sources" in m.script) });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
@@ -1013,7 +1014,7 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null } : { ...scripts };
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null, voice: sjResult.voice || "hamed" } : { ...scripts };
   // A rewritten English script (into English, or to a length) replaces the
   // one on screen, unless it was a draft for the video editor only.
   const enJob = svJobs.script_en;
@@ -2838,6 +2839,34 @@ function HookOptions({ hooks, lang }) {
 // The word the Persian script asks viewers to comment, and the site page the team's DM tool should
 // send for it (Hamed's own reels: a word that gets the viewer something drew four times the comments
 // of «مشاوره»). The page was chosen as the one sugimotovisa.com page that fits the topic.
+// The voice a script was written in, as a tag, and the other voices to write it again in (Hamed,
+// Nov 4 2026: "a tag or option to select which voice: Hamed, our team, …"). Both scripts are written
+// again in the chosen voice; the old ones are replaced.
+function VoicePicker({ voice, onPick }) {
+  const cur = VOICES.find((v) => v.id === voice) || VOICES[0];
+  return (
+    <div dir={uiDir()} style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, fontFamily: FONT, fontSize: 12.5 }}>
+      <span style={{ color: C.text2 }}>{L("صدای اسکریپت", "Script voice")}:</span>
+      {VOICES.map((v) => {
+        const on = v.id === cur.id;
+        return (
+          <button
+            key={v.id}
+            type="button"
+            className="ui-btn"
+            disabled={on}
+            title={L(v.note_fa, v.note_en)}
+            onClick={() => window.confirm(L(`اسکریپت‌های فارسی و انگلیسی با صدای «${v.fa}» از نو نوشته می‌شن و جای قبلی‌ها رو می‌گیرن. ادامه بدیم؟`, `Both scripts are written again in the “${v.en}” voice and replace the current ones. Continue?`)) && onPick(v.id)}
+            style={{ padding: "4px 12px", borderRadius: 999, cursor: on ? "default" : "pointer", fontWeight: 700, border: `1px solid ${on ? C.teal : C.line}`, background: on ? alpha(C.teal, 0.14) : C.surface, color: on ? C.teal : C.text }}
+          >
+            {on ? "✓ " : ""}{L(v.fa, v.en)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function CommentWord({ cta }) {
   if (!cta || !cta.word) return null;
   return (
@@ -3474,6 +3503,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             </div>
           ) : (
             <>
+              {tab === "fa" && <VoicePicker voice={scripts.voice || "hamed"} onPick={(v) => onJob("script", { voice: v })} />}
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
               <ScriptBody text={active} tab={tab} />
               {tab === "fa" && <CommentWord cta={scripts.cta_fa} />}
@@ -3716,7 +3746,11 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
   const [capText, setCapText] = useState("");
   const [draftCaption, setDraftCaption] = useState("");
   const [own, setOwn] = useState(""); // the team's own ready-made carousel text, pasted whole
-  const ownParsed = own.trim() ? parseOwnSlides(own) : null;
+  const [formMode, setFormMode] = useState("ai"); // "ai": written from the topic, "own": the team's own text
+  const [kind, setKind] = useState("news"); // CAROUSEL_KINDS
+  const [voice, setVoice] = useState("hamed"); // VOICES
+  const [ownPages, setOwnPages] = useState(0); // 0 = as many as the text holds
+  const ownParsed = own.trim() ? parseOwnSlides(own, ownPages ? { max: ownPages } : {}) : null;
   const running = !!job && job.status === "running";
   const stage = running ? (job.result && job.result.stage) || "writing" : "";
   const failed = !!job && job.status === "error" ? job.error : "";
@@ -3759,7 +3793,7 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
   const start = (textOnly) => {
     if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
     setForm(false);
-    onJob("carousel", { count, notes: notes.trim(), template, ...(textOnly ? { mode: "text" } : {}) });
+    onJob("carousel", { count, notes: notes.trim(), template, kind, voice, ...(textOnly ? { mode: "text" } : {}) });
   };
   // Own text: split into slides here and saved as a draft, so the slide editor shows them to be
   // checked before «Design slides» draws them with the chosen template. No model writes anything.
@@ -3767,7 +3801,16 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
     if (!ownParsed || !ownParsed.slides.length) return;
     if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
     setForm(false);
-    onJob("carousel", { mode: "save", slides: ownParsed.slides, caption: ownParsed.caption, template });
+    onJob("carousel", { mode: "save", slides: ownParsed.slides, caption: ownParsed.caption, template, own: true });
+    setOwn("");
+  };
+  // Own text, designed at once in the chosen template: no model rewrites a word (Hamed, Nov 4 2026:
+  // "paste the text, choose the template, and press go").
+  const drawOwn = () => {
+    if (!ownParsed || !ownParsed.slides.length) return;
+    if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
+    setForm(false);
+    onJob("carousel", { mode: "draw", slides: ownParsed.slides, caption: ownParsed.caption, template, own: true });
     setOwn("");
   };
   const editedSlides = () => draft.map((d) => ({ title: d.title, body: d.body })).filter((d) => d.title.trim() || d.body.trim());
@@ -3793,6 +3836,31 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
       {form && !running && (
         <div dir={uiDir()} className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa }}>
           <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 10 }}>🖼 {L("کاروسل از این موضوع", "Carousel from this topic")}</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            {[["ai", L("✍️ بنویس از روی موضوع", "✍️ Write from the topic")], ["own", L("📋 متن آمادهٔ خودم", "📋 My own ready text")]].map(([k, label]) => (
+              <button key={k} type="button" className="ui-btn" onClick={() => setFormMode(k)} aria-pressed={formMode === k} style={{ flex: 1, padding: "9px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 800, fontSize: 13, fontFamily: fa, border: `${formMode === k ? 2 : 1}px solid ${formMode === k ? "#6d5bd0" : C.line}`, background: formMode === k ? alpha("#6d5bd0", 0.12) : C.surface, color: formMode === k ? "#6d5bd0" : C.text }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {formMode === "ai" && (
+            <>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("نوع کاروسل", "Carousel type")}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+            {CAROUSEL_KINDS.map((k) => (
+              <button key={k.id} type="button" className="ui-btn" title={L(k.note_fa, k.note_en)} onClick={() => setKind(k.id)} aria-pressed={kind === k.id} style={{ padding: "6px 12px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontFamily: fa, border: `${kind === k.id ? 2 : 1}px solid ${kind === k.id ? "#6d5bd0" : C.line}`, background: kind === k.id ? alpha("#6d5bd0", 0.12) : C.surface, color: kind === k.id ? "#6d5bd0" : C.text }}>
+                {L(k.fa, k.en)}<span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: C.text3 }}>{L(k.note_fa, k.note_en)}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("صدای نوشتار", "Writing voice")}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+            {VOICES.filter((v) => v.id !== "classroom").map((v) => (
+              <button key={v.id} type="button" className="ui-btn" title={L(v.note_fa, v.note_en)} onClick={() => setVoice(v.id)} aria-pressed={voice === v.id} style={{ padding: "5px 14px", borderRadius: 999, cursor: "pointer", fontWeight: 700, fontFamily: fa, border: `1px solid ${voice === v.id ? "#6d5bd0" : C.line}`, background: voice === v.id ? alpha("#6d5bd0", 0.14) : C.surface, color: voice === v.id ? "#6d5bd0" : C.text }}>
+                {voice === v.id ? "✓ " : ""}{L(v.fa, v.en)}
+              </button>
+            ))}
+          </div>
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("تعداد اسلاید", "Number of slides")}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
             {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
@@ -3816,8 +3884,11 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
               "The slide text is written only from the news text and each slide is designed with GPT Image 2 (about 5 cents a slide, takes a few minutes). “Write the text” writes only the text first, so you can change each slide's heading and body before it is designed."
             )}
           </div>
+          </>
+          )}
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("قالب اسلایدها", "Slide template")}</div>
           <TemplatePicker value={template} onChange={setTemplate} font={fa} />
+          {formMode === "ai" && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="ui-btn" onClick={() => start(true)} disabled={!caps.carousel} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
               ✍️ {L(`نوشتن متن ${count} اسلاید`, `Write the text of ${count} slides`)}
@@ -3829,10 +3900,12 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
               {L("انصراف", "Cancel")}
             </button>
           </div>
-          {/* Hamed, Oct 28 2026: paste our own carousel text; the app finds the slides, each one's
-              heading and body, and designs them in the chosen template. */}
-          <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 14, paddingTop: 12 }}>
-            <div style={{ fontWeight: 800, fontSize: 13.5, marginBottom: 4 }}>📋 {L("یا متن آمادهٔ خودت", "Or your own ready text")}</div>
+          )}
+          {/* Hamed, Oct 28 + Nov 4 2026: paste our own carousel text (written elsewhere, or by another
+              AI) in one box; the app finds the slides, each one's heading and body, and designs them in
+              the chosen template without changing a word. */}
+          {formMode === "own" && (
+          <div style={{ marginTop: 2 }}>
             <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 6, lineHeight: 1.7 }}>
               {L(
                 "متن کامل کاروسل رو اینجا بذار. اسلایدها با «اسلاید ۱»، خط «---»، شماره‌های ۱. ۲. ۳. یا یک خط خالی بین اسلایدها جدا می‌شن؛ خط اول هر اسلاید تیتره و بقیه بدنه («تیتر:» و «متن:» هم کار می‌کنه). «کپشن:» در آخر، کپشن پست می‌شه. متن همون‌طور که نوشتی می‌مونه.",
@@ -3843,7 +3916,7 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
               dir="auto"
               value={own}
               onChange={(e) => setOwn(e.target.value)}
-              rows={6}
+              rows={12}
               placeholder={L("اسلاید ۱: تیتر کاور\nزیرتیتر\n\nاسلاید ۲: …", "Slide 1: cover heading\nsubtitle\n\nSlide 2: …")}
               style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical" }}
             />
@@ -3860,10 +3933,27 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
                 {ownParsed.over > 0 && <div style={{ color: C.reject }}>{L(`بیشتر از ۱۰ اسلاید بود؛ ${ownParsed.over} اسلاید آخر کنار گذاشته شد.`, `More than 10 slides; the last ${ownParsed.over} were left out.`)}</div>}
               </div>
             )}
-            <button className="ui-btn" onClick={useOwn} disabled={!ownParsed || !ownParsed.slides.length} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), width: "100%", opacity: ownParsed && ownParsed.slides.length ? 1 : 0.5 }}>
-              ✂️ {ownParsed && ownParsed.slides.length ? L(`گذاشتن ${ownParsed.slides.length} اسلاید در ویرایشگر`, `Put the ${ownParsed.slides.length} slides in the editor`) : L("تقسیم به اسلایدها", "Split into slides")}
-            </button>
+            <div style={{ fontSize: 12.5, color: C.text2, margin: "4px 0 6px" }}>{L("تعداد صفحه (اختیاری؛ خالی = همان‌قدر که متن داره)", "Number of pages (optional; empty = as many as the text holds)")}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+              {[0, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                <button key={n} type="button" className="ui-btn" onClick={() => setOwnPages(n)} style={{ minWidth: 38, height: 32, borderRadius: 10, cursor: "pointer", border: `1px solid ${ownPages === n ? "#6d5bd0" : C.line}`, background: ownPages === n ? alpha("#6d5bd0", 0.14) : C.surface, color: ownPages === n ? "#6d5bd0" : C.text, fontWeight: 700, fontFamily: font }}>
+                  {n === 0 ? L("خودکار", "Auto") : n}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="ui-btn ui-glow-orange" onClick={drawOwn} disabled={!ownParsed || !ownParsed.slides.length || !caps.carousel} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, minWidth: 160, opacity: ownParsed && ownParsed.slides.length && caps.carousel ? 1 : 0.5 }}>
+                🎨 {ownParsed && ownParsed.slides.length ? L(`طراحی ${ownParsed.slides.length} اسلاید با این قالب`, `Design the ${ownParsed.slides.length} slides in this template`) : L("طراحی اسلایدها", "Design the slides")}
+              </button>
+              <button className="ui-btn" onClick={useOwn} disabled={!ownParsed || !ownParsed.slides.length} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), flex: 1, minWidth: 160, opacity: ownParsed && ownParsed.slides.length ? 1 : 0.5 }}>
+                ✂️ {L("اول در ویرایشگر ببینم", "Check in the editor first")}
+              </button>
+              <button className="ui-btn" onClick={() => setForm(false)} style={btn("transparent", C.text2, `1px solid ${C.line}`)}>
+                {L("انصراف", "Cancel")}
+              </button>
+            </div>
           </div>
+          )}
         </div>
       )}
 
@@ -3884,6 +3974,18 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
         <div style={{ fontSize: 12, color: C.reject, marginBottom: 10, fontFamily: font, direction: "ltr" }}>⚠️ {failed}</div>
       )}
 
+      {slides.length > 0 && carousel && carousel.kind && (
+        <div dir={uiDir()} style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 6, fontFamily: font, fontSize: 12 }}>
+          <span style={{ padding: "2px 10px", borderRadius: 999, background: alpha("#6d5bd0", 0.12), color: "#6d5bd0", fontWeight: 700 }}>
+            {carousel.kind === "own" ? L("متن خودم", "My own text") : L((CAROUSEL_KINDS.find((k) => k.id === carousel.kind) || CAROUSEL_KINDS[0]).fa, (CAROUSEL_KINDS.find((k) => k.id === carousel.kind) || CAROUSEL_KINDS[0]).en)}
+          </span>
+          {carousel.voice && carousel.voice !== "own" && (
+            <span style={{ padding: "2px 10px", borderRadius: 999, background: alpha(C.teal, 0.12), color: C.teal, fontWeight: 700 }}>
+              {L("صدا", "Voice")}: {L((VOICES.find((v) => v.id === carousel.voice) || VOICES[0]).fa, (VOICES.find((v) => v.id === carousel.voice) || VOICES[0]).en)}
+            </span>
+          )}
+        </div>
+      )}
       {slides.length > 0 && !running && (isDraft || textOpen) && (
         <SlideTextEditor
           draft={draft}

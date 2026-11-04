@@ -110,3 +110,14 @@ content-playbook §7 news rules; the "Hamed carousel" mode for evergreen topics,
 carousel, a voice check before a script is shown, a suggested format per topic and the officer
 episode idea come next. Hamed's own experience is never written by the model: the Hamed carousel
 leaves a marked gap for it.
+
+## 4. Choosing the voice and the kind (Nov 4 2026)
+
+Hamed asked to see which voice wrote a piece and to choose it. `VOICES` in `lib/sugimoto-voice.js`:
+`hamed` (default), `team`, `classroom` (scripts only). A script is saved with its `voice` and shows it
+as a tag with a switch under the Persian script (`VoicePicker`; switching rewrites both scripts through
+job `script` with `voice`). A carousel has a type (`CAROUSEL_KINDS`: `news`, `hamed`) and a voice
+chosen before writing; both are saved on the carousel and shown as tags. «متن آمادهٔ خودم» is a
+separate mode of the carousel form: paste the whole text in one box, the slides are found by rule
+(`parseOwnSlides`), an optional page count caps them, and «طراحی» draws them in the chosen template at
+once with no model touching a word (`own: true`, saved as kind `own`).
