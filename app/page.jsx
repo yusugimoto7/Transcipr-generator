@@ -476,7 +476,8 @@ export default function App() {
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, topic, ...extra }),
+        // the job's kind last: a field of the same name in extra must never replace it
+        body: JSON.stringify({ topic, ...extra, kind }),
       });
       const data = await res.json();
       if (!res.ok || !data.job) throw new Error(data.error || L("شروع نشد", "could not start"));
@@ -3802,7 +3803,8 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
   const start = (textOnly) => {
     if (slides.length && !window.confirm(L("کاروسل جدید جای کاروسل فعلی رو می‌گیره. ادامه بدیم؟", "A new carousel replaces the current one. Continue?"))) return;
     setForm(false);
-    onJob("carousel", { count, notes: notes.trim(), template, kind, voice, ...(textOnly ? { mode: "text" } : {}) });
+    // "kind" names the job itself in the request (startJob): the carousel's type travels as carousel_kind
+    onJob("carousel", { count, notes: notes.trim(), template, carousel_kind: kind, voice, ...(textOnly ? { mode: "text" } : {}) });
   };
   // Own text: split into slides here and saved as a draft, so the slide editor shows them to be
   // checked before «Design slides» draws them with the chosen template. No model writes anything.
