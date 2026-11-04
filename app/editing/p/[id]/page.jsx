@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Scissors, Sparkles, Subtitles, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Sparkles, Subtitles, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -955,9 +955,21 @@ function Project({ id }) {
             {latest && <Pill status={latest.status} label={statusLabel(latest)} />}
             <span className={s.kbBadge}>{LANG[p.language] ? L(LANG[p.language]) : p.language}</span>
             {p.topic && <span className={s.kbBadge} dir="auto">{p.topic}</span>}
-            <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
-              <Film size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> {L("فیلم خام", "raw footage")} ↗
-            </a>
+            {p.settings && p.settings.graphics && p.settings.graphics.voice_only ? (
+              p.source_url ? (
+                <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
+                  <Mic size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> {L("فقط صدا", "voice only")} ↗
+                </a>
+              ) : (
+                <span className={s.kbBadge}>
+                  <Mic size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> {L("فقط صدا", "voice only")}
+                </span>
+              )
+            ) : (
+              <a className={s.kbBadge} href={p.source_url} target="_blank" rel="noreferrer">
+                <Film size={13} aria-hidden style={{ verticalAlign: "-2px" }} /> {L("فیلم خام", "raw footage")} ↗
+              </a>
+            )}
             {d.owner && (
               <span className={s.kbBadge} style={{ background: "none", padding: 0, gap: 6 }}>
                 <Avatar user={d.owner} size={22} /> {L("صاحب پروژه: ", "Owner: ")}{d.owner.id === d.me.id ? L("خودت", "you") : d.owner.name}

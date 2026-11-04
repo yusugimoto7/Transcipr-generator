@@ -16,6 +16,7 @@ const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const MIME = {
   video: "video/mp4,video/quicktime,video/x-m4v,video/webm,video/x-matroska,video/3gpp",
   image: "image/jpeg,image/png,image/webp,image/heic,image/gif",
+  audio: "audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/wav,audio/x-wav,audio/ogg,audio/webm",
 };
 
 const g = typeof window !== "undefined" ? (window.__drivePicker = window.__drivePicker || { config: null, scripts: {}, token: null }) : {};

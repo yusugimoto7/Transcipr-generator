@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api, s, Shell, DriveVideo } from "../ui";
 import DrivePicker from "../../DrivePicker";
+import VoicePicker from "./VoicePicker";
 import { L, uiDir } from "../../../lib/i18n";
 import { Sheet, SheetContent } from "../../../components/ui/sheet";
 import { Button } from "../../../components/ui/button";
@@ -97,6 +98,8 @@ function NewProject() {
   const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
   const [sub, setSub] = useState({ size: "", height: "", words: "" });
   const [gfx, setGfx] = useState({ amount: "normal", brief: "", with_subtitles: false });
+  // Motion graphics on a voice alone (mode "voice"): a recording or file kept on editing-data, or a Drive link
+  const [voice, setVoice] = useState(null);
   const [dubTo, setDubTo] = useState("en");
   // Who speaks in a dub (Hamed, 27 Oct 2026: the border-officer series): one voice, or a cast in the order
   // they first speak. Speaker 1 is Hamed with the approved voice; the others pick a HeyGen public voice
@@ -129,6 +132,7 @@ function NewProject() {
   const shape = f.kind === "youtube" ? "landscape" : "portrait";
   const pickTab = (t) => {
     setTab(t);
+    if (t !== "graphics" && mode === "voice") setMode("link");
     // A finished video's language is heard by default; raw footage needs it said.
     setF((x) => ({ ...x, language: t === "cut" ? (x.language === "auto" ? "fa" : x.language) : x.language === "fa" && !x.touched ? "auto" : x.language }));
   };
@@ -147,7 +151,14 @@ function NewProject() {
       setBusy(false);
       return;
     }
-    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics: gfx, dub: { to: dubTo, mode: dubMode, brief: dubBrief, ...(dubMode === "cast" ? { speakers: cast } : {}) } } }) };
+    const voiceOnly = tab === "graphics" && mode === "voice";
+    if (voiceOnly && !voice && !fields.source_url.trim()) {
+      setError(L("صدا رو ضبط کن، فایلش رو بده یا لینکش رو بچسبون.", "Record the voice, choose its file or paste its link."));
+      setBusy(false);
+      return;
+    }
+    const graphics = { ...gfx, voice_only: voiceOnly, with_subtitles: voiceOnly ? false : gfx.with_subtitles };
+    const body = { ...fields, ...(mode === "project" ? { from, source_url: "" } : {}), ...(voiceOnly && voice ? { voice_file: voice.path, source_url: "" } : {}), start: tab, ...(tab === "cut" ? {} : { settings: { subtitles, graphics, dub: { to: dubTo, mode: dubMode, brief: dubBrief, ...(dubMode === "cast" ? { speakers: cast } : {}) } } }) };
     try {
       const { project } = await api("/projects", { method: "POST", body });
       router.push(`/editing/p/${project.id}`);
@@ -202,7 +213,7 @@ function NewProject() {
             ? L("ویدیو با صدای خود حامد به زبان دیگه دوبله می‌شه و لب‌ها با صدای جدید هماهنگ می‌شن (همون فرایند دوبلهٔ تأییدشده). ترجمه فقط از حرف‌های خود ویدیوئه و دعوت به اقدام همیشه «لینک رو بزنید و وقت مشاوره بگیرید» هست. قبل از تأیید، نتیجه رو می‌بینی و اصلاح می‌دی.", "The video is dubbed into the other language in Hamed's own voice and the lips are synced to it (the approved dub process). The translation uses only what the video says, and the call to action is always to tap the link and book a consultation. You review and correct before approving.")
           : tab === "subtitles"
             ? L("برای ویدیوی تدوین‌شده و آماده: چیزی بریده نمی‌شه، فقط زیرنویس کلمه‌به‌کلمه (کلمهٔ گفته‌شده زرد) اضافه می‌شه. قبل از تأیید، نتیجه رو می‌بینی و اصلاح می‌دی.", "For a finished, edited video: nothing is cut, only word-by-word subtitles are added (the spoken word turns yellow). You review and correct before approving.")
-            : L("برای ویدیوی تدوین‌شده و آماده: اول یک طرح (استوری‌بورد با چند فریم) می‌بینی و تأیید می‌کنی، بعد موشن‌گرافیک ساخته می‌شه. هر نوشته روی صفحه فقط از حرف‌های خود ویدیوئه.", "For a finished, edited video: you first see and approve a plan (storyboard with still frames), then the graphics are rendered. Every word on screen comes from the video itself.")}
+            : L("برای ویدیوی تدوین‌شده و آماده، یا فقط یک صدا بدون ویدیو: اول یک طرح (استوری‌بورد با چند فریم) می‌بینی و تأیید می‌کنی، بعد موشن‌گرافیک ساخته می‌شه. هر نوشته روی صفحه فقط از حرف‌های خود ویدیو یا صداست.", "For a finished, edited video, or just a voice with no video: you first see and approve a plan (storyboard with still frames), then the graphics are rendered. Every word on screen comes from what is said.")}
       </p>
       <label className={s.field}>
         <span>{L("عنوان", "Title")}</span>
@@ -217,7 +228,14 @@ function NewProject() {
           <input type="radio" name="src-mode" checked={mode === "project"} onChange={() => setMode("project")} />
           <span>{L("از یک پروژهٔ موجود", "From an existing project")}</span>
         </label>
+        {tab === "graphics" && (
+          <label className={s.row} style={{ fontSize: 14 }}>
+            <input id="src-voice" type="radio" name="src-mode" checked={mode === "voice"} onChange={() => setMode("voice")} />
+            <span>{L("فقط صدا، بدون ویدیو", "A voice only, no video")}</span>
+          </label>
+        )}
       </div>
+      {mode === "voice" && <VoicePicker voice={voice} onVoice={setVoice} link={f.source_url} onLink={(v) => setF((x) => ({ ...x, source_url: v }))} />}
       {mode === "project" && (
         <div className={s.field}>
           <span>{L("پروژه و فایل تأییدشده‌ای که ادامه داده می‌شه", "The project and the approved file to continue from")}</span>
@@ -428,13 +446,17 @@ function NewProject() {
             <span>{L("توضیح برای طراح (اختیاری)", "Brief for the designer (optional)")}</span>
             <textarea id="gfx_brief" className={s.input} rows={3} value={gfx.brief} onChange={(e) => setGfx({ ...gfx, brief: e.target.value })} placeholder={L("مثلاً: روی مقایسهٔ دو مسیر تأکید کن، نقشهٔ کانادا رو نشون بده…", "e.g. stress the comparison of the two routes, show the map of Canada…")} />
           </label>
-          <label className={s.row} style={{ fontSize: 14 }}>
-            <input id="gfx_subs" type="checkbox" checked={gfx.with_subtitles} onChange={(e) => setGfx({ ...gfx, with_subtitles: e.target.checked })} />
-            <span>{L("زیرنویس هم روی ویدیو باشه", "Burn in subtitles too")}</span>
-          </label>
-          {gfx.with_subtitles && subtitleFields}
+          {mode !== "voice" && (
+            <label className={s.row} style={{ fontSize: 14 }}>
+              <input id="gfx_subs" type="checkbox" checked={gfx.with_subtitles} onChange={(e) => setGfx({ ...gfx, with_subtitles: e.target.checked })} />
+              <span>{L("زیرنویس هم روی ویدیو باشه", "Burn in subtitles too")}</span>
+            </label>
+          )}
+          {mode !== "voice" && gfx.with_subtitles && subtitleFields}
           <small className={s.muted}>
-            {L("سبک: «کانواس» (کاغذ شطرنجی، اشیا با کلمهٔ گفته‌شده ظاهر می‌شن، گوینده در حباب گرد). سبک «کارت‌ها» هنوز آزمایشیه و اینجا نیست.", "Style: “canvas” (grid paper, objects appear on the spoken word, the speaker in a round bubble). The “cards” style is still a prototype and is not offered here.")}
+            {mode === "voice"
+              ? L("سبک: «کانواس» در تمام تصویر از اول تا آخر (کاغذ شطرنجی، اشیا با کلمهٔ گفته‌شده ظاهر می‌شن)، بدون گوینده و بدون زیرنویس. اندازهٔ تصویر از «نوع» میاد.", "Style: “canvas” over the whole picture from start to end (grid paper, objects appear on the spoken word), with no speaker and no subtitles. The frame size follows “Kind”.")
+              : L("سبک: «کانواس» (کاغذ شطرنجی، اشیا با کلمهٔ گفته‌شده ظاهر می‌شن، گوینده در حباب گرد). سبک «کارت‌ها» هنوز آزمایشیه و اینجا نیست.", "Style: “canvas” (grid paper, objects appear on the spoken word, the speaker in a round bubble). The “cards” style is still a prototype and is not offered here.")}
           </small>
         </>
       )}
