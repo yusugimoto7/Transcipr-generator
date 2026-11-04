@@ -902,7 +902,7 @@ export default function App() {
         if (!entry) return;
         const m = entry.materials || {};
         if (!only) {
-          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, cta_fa: m.script.cta_fa || null, voice: m.script.voice || "hamed", before_check: !("sources" in m.script) });
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, cta_fa: m.script.cta_fa || null, voice: m.script.voice || "hamed", versions: m.script.versions || {}, before_check: !("sources" in m.script) });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
@@ -1014,7 +1014,7 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null, voice: sjResult.voice || "hamed" } : { ...scripts };
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null, voice: sjResult.voice || "hamed", versions: sjResult.versions || {} } : { ...scripts };
   // A rewritten English script (into English, or to a length) replaces the
   // one on screen, unless it was a draft for the video editor only.
   const enJob = svJobs.script_en;
@@ -2842,27 +2842,36 @@ function HookOptions({ hooks, lang }) {
 // The voice a script was written in, as a tag, and the other voices to write it again in (Hamed,
 // Nov 4 2026: "a tag or option to select which voice: Hamed, our team, …"). Both scripts are written
 // again in the chosen voice; the old ones are replaced.
-function VoicePicker({ voice, onPick }) {
+function VoicePicker({ voice, versions = {}, onPick }) {
   const cur = VOICES.find((v) => v.id === voice) || VOICES[0];
+  // a voice is "written" when it has a saved version (or is the one on screen)
+  const has = (id) => id === cur.id || !!(versions[id] && (versions[id].script_fa || versions[id].script_en));
   return (
-    <div dir={uiDir()} style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, fontFamily: FONT, fontSize: 12.5 }}>
-      <span style={{ color: C.text2 }}>{L("صدای اسکریپت", "Script voice")}:</span>
-      {VOICES.map((v) => {
-        const on = v.id === cur.id;
-        return (
-          <button
-            key={v.id}
-            type="button"
-            className="ui-btn"
-            disabled={on}
-            title={L(v.note_fa, v.note_en)}
-            onClick={() => window.confirm(L(`اسکریپت‌های فارسی و انگلیسی با صدای «${v.fa}» از نو نوشته می‌شن و جای قبلی‌ها رو می‌گیرن. ادامه بدیم؟`, `Both scripts are written again in the “${v.en}” voice and replace the current ones. Continue?`)) && onPick(v.id)}
-            style={{ padding: "4px 12px", borderRadius: 999, cursor: on ? "default" : "pointer", fontWeight: 700, border: `1px solid ${on ? C.teal : C.line}`, background: on ? alpha(C.teal, 0.14) : C.surface, color: on ? C.teal : C.text }}
-          >
-            {on ? "✓ " : ""}{L(v.fa, v.en)}
-          </button>
-        );
-      })}
+    <div dir={uiDir()} style={{ marginBottom: 12, fontFamily: FONT, fontSize: 12.5 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+        <span style={{ color: C.text2 }}>{L("صدای اسکریپت", "Script voice")}:</span>
+        {VOICES.map((v) => {
+          const on = v.id === cur.id;
+          const written = has(v.id);
+          return (
+            <button
+              key={v.id}
+              type="button"
+              className="ui-btn"
+              disabled={on}
+              title={L(v.note_fa, v.note_en) + " · " + (written ? L("نسخهٔ نوشته‌شده هست؛ فقط نشونش می‌دم", "already written; just shown") : L("هنوز نوشته نشده", "not written yet"))}
+              onClick={() => (written || window.confirm(L(`اسکریپت‌ها با صدای «${v.fa}» نوشته می‌شن. نسخه‌های قبلی می‌مونن. ادامه بدیم؟`, `The scripts are written in the “${v.en}” voice. The earlier versions stay. Continue?`))) && onPick(v.id)}
+              style={{ padding: "4px 12px", borderRadius: 999, cursor: on ? "default" : "pointer", fontWeight: 700, border: `1px ${written ? "solid" : "dashed"} ${on ? C.teal : C.line}`, background: on ? alpha(C.teal, 0.14) : C.surface, color: on ? C.teal : C.text }}
+            >
+              {on ? "✓ " : written ? "● " : "+ "}{L(v.fa, v.en)}
+            </button>
+          );
+        })}
+        <button type="button" className="ui-btn" title={L("همین صدا از نو نوشته بشه", "Write this voice again")} onClick={() => window.confirm(L(`فقط نسخهٔ «${cur.fa}» از نو نوشته می‌شه؛ نسخه‌های دیگه می‌مونن. ادامه بدیم؟`, `Only the “${cur.en}” version is written again; the others stay. Continue?`)) && onPick(cur.id, true)} style={{ padding: "4px 10px", borderRadius: 999, cursor: "pointer", border: `1px solid ${C.line}`, background: "transparent", color: C.text2 }}>
+          ↻ {L("نوشتن دوباره", "Write again")}
+        </button>
+      </div>
+      <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{L("● نوشته شده · + هنوز نوشته نشده. عوض کردن صدا چیزی رو پاک نمی‌کنه.", "● written · + not written yet. Switching voice deletes nothing.")}</div>
     </div>
   );
 }
@@ -3503,7 +3512,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             </div>
           ) : (
             <>
-              {tab === "fa" && <VoicePicker voice={scripts.voice || "hamed"} onPick={(v) => onJob("script", { voice: v })} />}
+              {tab === "fa" && <VoicePicker voice={scripts.voice || "hamed"} versions={scripts.versions || {}} onPick={(v, again) => onJob("script", { voice: v, ...(again ? { again: true } : {}) })} />}
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
               <ScriptBody text={active} tab={tab} />
               {tab === "fa" && <CommentWord cta={scripts.cta_fa} />}
