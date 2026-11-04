@@ -606,8 +606,10 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
 
 // ---- card editor --------------------------------------------------------------------------------
 
-// A card opened, as on Trello: everything saves as you change it (no Save button); title and
-// description save when you leave the field.
+// A card opened, as on Trello: everything saves as you change it (no Save button). The title and
+// the description also save a few seconds after typing stops, when the field is left, when the phone
+// switches app and when the card closes; an unsent comment is kept on the device until it is sent
+// (Hamed, Nov 4 2026: "it should save every 5 seconds or so, like Trello").
 function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onCompose }) {
   const [card, setCard] = useState(null);
   const [comments, setComments] = useState([]);
@@ -633,7 +635,10 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
     setTitle(d.card.title);
     setLinks(d.card.links || {});
     setComments(d.comments);
-  }, [boardId, cardId]);
+    setComment((x) => x || draft("comment"));
+    const kept = draft("desc");
+    if (kept && kept !== (d.card.description || "")) setDesc((x) => (x === null ? kept : x));
+  }, [boardId, cardId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, [load]);
@@ -643,6 +648,19 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
     return () => window.removeEventListener("keydown", esc);
   });
 
+  const draftKey = (k) => `cal-draft:${cardId}:${k}`;
+  const keep = (k, v) => {
+    try {
+      v ? localStorage.setItem(draftKey(k), v) : localStorage.removeItem(draftKey(k));
+    } catch (_) {}
+  };
+  const draft = (k) => {
+    try {
+      return localStorage.getItem(draftKey(k)) || "";
+    } catch (_) {
+      return "";
+    }
+  };
   const commit = async (fields) => {
     setCard((x) => ({ ...x, ...fields }));
     setSaving("saving");
@@ -658,10 +676,41 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       load().catch(() => {});
     }
   };
-  const saveTitle = () => title.trim() && title.trim() !== card.title && commit({ title: title.trim() });
+  const saveTitle = () => card && title.trim() && title.trim() !== card.title && commit({ title: title.trim() });
+  const saveDesc = () => {
+    if (!card || desc === null || desc === (card.description || "")) return null;
+    keep("desc", "");
+    return commit({ description: desc });
+  };
+  // the latest typing, for the timers and the page-hidden flush, which outlive a render
+  const flushRef = useRef(null);
+  flushRef.current = () => Promise.all([saveTitle(), saveDesc()]);
+  useEffect(() => {
+    if (!card || desc === null || desc === (card.description || "")) return;
+    keep("desc", desc);
+    const t = setTimeout(() => flushRef.current(), 3000);
+    return () => clearTimeout(t);
+  }, [desc]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!card || !title.trim() || title.trim() === card.title) return;
+    const t = setTimeout(() => flushRef.current(), 3000);
+    return () => clearTimeout(t);
+  }, [title]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const hide = () => document.visibilityState === "hidden" && flushRef.current();
+    document.addEventListener("visibilitychange", hide);
+    window.addEventListener("pagehide", hide);
+    return () => {
+      document.removeEventListener("visibilitychange", hide);
+      window.removeEventListener("pagehide", hide);
+    };
+  }, []);
+  // only once the card is in: the empty box of the first render must not wipe the kept draft
+  useEffect(() => {
+    if (card) keep("comment", comment);
+  }, [comment]); // eslint-disable-line react-hooks/exhaustive-deps
   const close = async () => {
-    if (card && title.trim() && title.trim() !== card.title) await commit({ title: title.trim() });
-    if (card && desc !== null && desc !== card.description && !window.confirm(L("بدون ذخیرهٔ توضیحات بسته بشه؟", "Close without saving the description?"))) return;
+    await flushRef.current();
     onClose();
   };
   const action = async (a) => {
@@ -676,12 +725,21 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   };
   const addComment = async (e) => {
     e.preventDefault();
-    if (!comment.trim()) return;
+    const text = comment.trim();
+    if (!text) return;
+    // shown at once, as on Trello; taken back and returned to the box if the save fails
+    const temp = { id: "pending-" + Date.now(), type: "comment", by: me && me.id, text, at: Date.now(), pending: true };
+    setComments((x) => [...x, temp]);
+    setComment("");
+    setSaving("saving");
     try {
-      await calApi(`/boards/${boardId}/cards/${cardId}/comments`, { method: "POST", body: { text: comment } });
-      setComment("");
-      await load();
+      const d = await calApi(`/boards/${boardId}/cards/${cardId}/comments`, { method: "POST", body: { text } });
+      setComments((x) => x.map((m) => (m.id === temp.id ? d.comment : m)));
+      setSaving("saved");
     } catch (err) {
+      setComments((x) => x.filter((m) => m.id !== temp.id));
+      setComment(text);
+      setSaving("");
       setError(err.message);
     }
   };
@@ -964,19 +1022,17 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                 </div>
               ) : (
                 <>
-                  <Textarea id="card-desc" dir="auto" autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} className="min-h-[140px]" />
-                  <div className="flex gap-2">
+                  <Textarea id="card-desc" dir="auto" autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} onBlur={() => saveDesc()} className="min-h-[140px]" />
+                  <div className="flex items-center gap-2">
                     <Button
                       onClick={() => {
-                        if (desc !== card.description) commit({ description: desc });
+                        saveDesc();
                         setDesc(null);
                       }}
                     >
                       {L("ذخیره", "Save")}
                     </Button>
-                    <Button variant="ghost" onClick={() => setDesc(null)}>
-                      {L("انصراف", "Cancel")}
-                    </Button>
+                    <span className="text-xs text-muted">{L("چند ثانیه بعد از نوشتن خودش ذخیره می‌شه.", "Saves by itself a few seconds after you stop typing.")}</span>
                   </div>
                 </>
               )}
