@@ -97,7 +97,7 @@ function NewProject() {
   }, [origin, from.run_id]);
   const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
   const [sub, setSub] = useState({ size: "", height: "", words: "" });
-  const [gfx, setGfx] = useState({ amount: "normal", brief: "", with_subtitles: false });
+  const [gfx, setGfx] = useState({ amount: "normal", template: "canvas", brief: "", with_subtitles: false });
   // Motion graphics on a voice alone (mode "voice"): a recording or file kept on editing-data, or a Drive link
   const [voice, setVoice] = useState(null);
   const [dubTo, setDubTo] = useState("en");
@@ -111,6 +111,11 @@ function NewProject() {
   const [dubBrief, setDubBrief] = useState("");
   const [cast, setCast] = useState([]);
   const [voices, setVoices] = useState(null);
+  const [looks, setLooks] = useState(null);
+  useEffect(() => {
+    if (tab !== "graphics" || looks) return;
+    api("/graphics-templates").then((d) => setLooks(d.templates || [])).catch(() => setLooks([]));
+  }, [tab, looks]);
   const [people, setPeople] = useState(null);
   useEffect(() => {
     if (tab !== "dub" || voices) return;
@@ -434,6 +439,25 @@ function NewProject() {
 
       {tab === "graphics" && (
         <>
+          {looks && looks.length > 1 && (
+            <div className={s.field}>
+              <span>{L("قالب موشن‌گرافیک", "Motion graphics template")}</span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
+                {looks.map((t) => {
+                  const on = gfx.template === t.id;
+                  return (
+                    <button key={t.id} type="button" onClick={() => setGfx({ ...gfx, template: t.id })} aria-pressed={on} title={t.source}
+                      style={{ textAlign: "start", padding: 10, borderRadius: 12, cursor: "pointer", font: "inherit", fontSize: 13.5, fontWeight: 600, background: "var(--surface)", color: "var(--text)", border: on ? "2px solid var(--orange, #e8702a)" : "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}>
+                        {(t.swatch || []).map((c, i) => <i key={i} style={{ flex: i === 0 ? 2 : 1, background: c }} />)}
+                      </span>
+                      <span>{L(t.fa, t.en)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <label className={s.field}>
             <span>{L("چقدر گرافیک", "How much graphics")}</span>
             <select id="gfx_amount" className={s.select} value={gfx.amount} onChange={(e) => setGfx({ ...gfx, amount: e.target.value })}>
@@ -456,7 +480,7 @@ function NewProject() {
           <small className={s.muted}>
             {mode === "voice"
               ? L("سبک: «کانواس» در تمام تصویر از اول تا آخر (کاغذ شطرنجی، اشیا با کلمهٔ گفته‌شده ظاهر می‌شن)، بدون گوینده و بدون زیرنویس. اندازهٔ تصویر از «نوع» میاد.", "Style: “canvas” over the whole picture from start to end (grid paper, objects appear on the spoken word), with no speaker and no subtitles. The frame size follows “Kind”.")
-              : L("سبک: «کانواس» (کاغذ شطرنجی، اشیا با کلمهٔ گفته‌شده ظاهر می‌شن، گوینده در حباب گرد). سبک «کارت‌ها» هنوز آزمایشیه و اینجا نیست.", "Style: “canvas” (grid paper, objects appear on the spoken word, the speaker in a round bubble). The “cards” style is still a prototype and is not offered here.")}
+              : L("همهٔ قالب‌ها یک شیوه دارن: اشیا با کلمهٔ گفته‌شده ظاهر می‌شن و گوینده در حباب گرد می‌مونه؛ فقط رنگ و حال‌وهوا فرق می‌کنه. سبک «کارت‌ها» هنوز آزمایشیه و اینجا نیست.", "Every template works the same way: objects appear on the spoken word and the speaker stays in a round bubble; only the colours and feel change. The “cards” style is still a prototype and is not offered here.")}
           </small>
         </>
       )}
