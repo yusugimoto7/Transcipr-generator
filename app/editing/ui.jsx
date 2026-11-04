@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import s from "./editing.module.css";
+import NotificationBell from "../NotificationBell";
 import { CalendarDays, Clapperboard, Languages, LogOut, Newspaper, Settings, Users } from "lucide-react";
 import { L, chooseLang, getLang } from "../../lib/i18n";
 
@@ -199,6 +200,7 @@ export function AppBar({ me: given, actions = null }) {
         )}
         {me.user && (
           <div className={s.account} data-menu>
+            <NotificationBell btnClass={s.barBtn} menuClass={s.menu} itemClass={s.menuItem} onOpen={() => setMenu(false)} />
             {ax.includes("team") && (
               <Link href="/editing/team" className={`${s.barBtn} ${path === "/editing/team" ? s.appOn : ""}`} title={L("تیم: چه کسی به چه بخشی دسترسی دارد", "Team: who can open what")}>
                 <Users size={16} aria-hidden /> <span className={s.wideOnly}>{L("تیم", "Team")}</span>
