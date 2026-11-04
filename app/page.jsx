@@ -5496,16 +5496,21 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
               onGone={() => set({ benchmark: "" })}
             />
             <div style={{ ...hint, marginTop: 8, lineHeight: 1.6 }}>
-              {L("نمونه‌ها فقط از پوشهٔ Benchmarks میان. برای نمونهٔ تازه، ویدیو رو توی همون پوشه بذار و «تازه‌سازی» رو بزن. نمونه ریتم و کادربندی رو نشون می‌ده؛ لباس و جا رو بخش ۵ تعیین می‌کنه.", "Samples come only from the Benchmarks folder. For a new one, put the video in that folder and tap Refresh. A sample sets the pacing and framing; the outfit and place come from section 5.")}
+              {L("نمونه‌ها فقط از پوشهٔ Benchmarks میان. نمونه هم ریتم و کادربندی رو تعیین می‌کنه و هم ظاهر حامد رو: ویدیو با همون لباس و همون جای نمونه ساخته می‌شه. برای نمونهٔ تازه، ویدیو رو توی پوشه بذار و «تازه‌سازی» رو بزن؛ ظاهرش باید یک بار در HeyGen ساخته بشه.", "Samples come only from the Benchmarks folder. A sample sets the pacing and framing and also Hamed's look: the video is made in the same outfit and place as the sample. For a new one, put the video in the folder and tap Refresh; its look has to be made in HeyGen once.")}
             </div>
           </div>
 
           {/* 5. look: the outfit and place HeyGen renders; a sample only shows one */}
           <div style={block}>
             <div style={label}>5 · {L("ظاهر حامد در ویدیو", "Hamed's look in the video")} <span style={hint}>{L("لباس و جایی که ویدیو توش ساخته می‌شه", "the outfit and place the video is made in")}</span></div>
+            {bench && lookForBenchmark(bench) === d.look && (
+              <div dir={uiDir()} style={{ fontSize: 12, lineHeight: 1.7, color: C.text2, background: alpha(C.teal, 0.07), border: `1px solid ${alpha(C.teal, 0.3)}`, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
+                {L("✓ همون ظاهر ویدیوی نمونه: همون لباس و همون جا.", "✓ The sample's own look: the same outfit and place.")}
+              </div>
+            )}
             {bench && !lookForBenchmark(bench) && (
               <div dir={uiDir()} style={{ fontSize: 12, lineHeight: 1.7, color: C.orangeDeep, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
-                {L("از لباس این ویدیوی نمونه هنوز ظاهری در HeyGen ساخته نشده، پس ویدیو با ظاهری که این‌جا انتخاب می‌کنی ساخته می‌شه؛ نمونه فقط قالب و ریتم رو مشخص می‌کنه.", "HeyGen has no look of the outfit in this sample yet, so the video is made in the look you choose here; the sample only sets the format and pacing.")}
+                {L("ظاهر این ویدیوی نمونه هنوز در HeyGen ساخته نشده، پس فعلاً ویدیو با ظاهری که این‌جا انتخاب می‌کنی ساخته می‌شه و نمونه فقط ریتم و کادربندی رو تعیین می‌کنه.", "This sample's look is not made in HeyGen yet, so for now the video is made in the look you choose here and the sample sets only the pacing and framing.")}
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
