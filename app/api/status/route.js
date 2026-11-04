@@ -218,7 +218,7 @@ function checkKeys() {
       name: "Models in use",
       ok: true,
       detail:
-        `article: ${process.env.OPENAI_ARTICLE_MODEL || "gpt-5.6-sol"} · ` +
+        `article: ${process.env.OPENAI_ARTICLE_MODEL || "gpt-6.1-sol"} · ` +
         `script: ${process.env.OPENAI_SCRIPT_MODEL || "gpt-5.6-terra"} · ` +
         `rewrite: ${process.env.OPENAI_REWRITE_MODEL || "gpt-5.6-luna"}`,
     },
