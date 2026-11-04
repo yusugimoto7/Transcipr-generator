@@ -804,7 +804,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                 <p className={s.muted}>
                   {run.hand
                     ? L("این نسخه با دست ساخته شده. برای تغییرش دوباره ویرایشگر رو باز کن؛ اصلاحیهٔ نوشتاری برش اتوماتیک رو از اول می‌سازه و کار دستی از بین می‌ره.", "This version was made by hand. Open the editor again to change it; a written correction would make the automatic cut again and lose the hand edits.")
-                    : L("مثل CapCut: برش، جابه‌جایی تکه‌ها، سرعت و تصویر روی ویدیو. نتیجه نسخهٔ بعدیه، با کیفیت کامل از فیلم اصلی.", "Like CapCut: split, move clips, speed and pictures over the video. The result is the next version, at full quality from the original footage.")}
+                    : L("مثل CapCut: روی کل فیلم اصلی باز می‌شه و تکه‌ها همون برش اتوماتیک‌اند؛ لبهٔ تکه رو بکش تا چیزی که زیادی بریده شده برگرده. برش، جابه‌جایی، سرعت و تصویر روی ویدیو. نتیجه نسخهٔ بعدیه، با کیفیت کامل از فیلم اصلی.", "Like CapCut: it opens on the whole original footage with the automatic cut as clips; drag a clip's edge to bring back what was cut too much. Split, move clips, speed and pictures over the video. The result is the next version, at full quality from the original footage.")}
                 </p>
                 <div className={s.row}>
                   <Link className={`${s.btn} ${s.primary}`} href={`/editing/p/${project.id}/edit`}>

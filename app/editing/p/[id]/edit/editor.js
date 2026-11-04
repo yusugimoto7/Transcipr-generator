@@ -5,6 +5,13 @@
 // worker in english-sugimotovisa (scripts/hand_edit.py) maps the list back to the original footage and
 // renders the full-quality file from it, so nothing made here is ever a re-encode of the preview.
 //
+//
+// On the whole original (Hamed, 4 Nov 2026: "like CapCut or Premiere, a cut timeline whose clips I can
+// stretch back"): with opts.basis "source" the editor plays the worker's light copy of the original
+// footage and starts from the automatic cut's own clips (opts.initial, in the original's seconds), so a
+// clip's edge can be dragged into what the cut removed; the cut list then goes back in the original's
+// seconds and is rendered from it as it is.
+//
 // Written as plain DOM code mounted by page.jsx: dragging a clip redraws positions on every pointer
 // move, and React re-renders in that path made dragging stutter on a phone in the prototype.
 
@@ -36,9 +43,11 @@ const svg = (k, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="curren
 const SCALE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
 const esc = (x) => String(x).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]);
 
-// opts: { src, title, version, t(fa, en), rtl, onSave({ pieces, overlays }) -> Promise, onClose() }
+// opts: { src, title, version, t(fa, en), rtl, onSave({ pieces, overlays, basis }) -> Promise, onClose(),
+//         basis: "source" | undefined, initial: [{ in, out, speed }] in the media's seconds }
 export function mountEditor(host, opts) {
   const t = opts.t;
+  const ORIGINAL = opts.basis === "source";
   host.innerHTML = `<div class="he"><div id="he-app">
   <header>
     <button class="icon" id="he-close" aria-label="${t("بستن ویرایشگر", "Close the editor")}">${svg("close", 2)}</button>
@@ -325,7 +334,7 @@ export function mountEditor(host, opts) {
     if (s) {
       const i = segIdx(s.id);
       panel.innerHTML = `<h3>${t(`تکهٔ ${i + 1} از ${segs.length}`, `Clip ${i + 1} of ${segs.length}`)}</h3><dl>`
-        + `<dt>${t("شروع در نسخه", "In the version from")}</dt><dd>${exact(s.in)}</dd><dt>${t("تا", "to")}</dt><dd>${exact(s.out)}</dd>`
+        + `<dt>${ORIGINAL ? t("در فیلم اصلی از", "In the original from") : t("شروع در نسخه", "In the version from")}</dt><dd>${exact(s.in)}</dd><dt>${t("تا", "to")}</dt><dd>${exact(s.out)}</dd>`
         + `<dt>${t("روی خط زمان", "On the timeline")}</dt><dd>${exact(startOf(i))} – ${exact(startOf(i) + len(s))}</dd></dl>`
         + speedHTML(s, false)
         + `<div class="prow"><button class="pill ghost" data-a="split">${t("برش", "Split")}</button><button class="pill danger" data-a="del">${t("حذف", "Delete")}</button></div>`;
@@ -346,7 +355,9 @@ export function mountEditor(host, opts) {
       panel.innerHTML = `<h3>${esc(opts.title || "")}</h3><dl><dt>${t("تکه‌ها", "Pieces")}</dt><dd>${segs.length}</dd><dt>${t("مدت", "Length")}</dt><dd>${exact(total())}</dd>`
         + `<dt>${t("حذف‌شده", "Removed")}</dt><dd>${Math.max(0, removed).toFixed(1)} s</dd><dt>${t("تصویرها", "Overlays")}</dt><dd>${ovs.length}</dd></dl>`
         + `<p class="hint">${t("روی یک تکه بزن تا انتخاب بشه. تکه رو بکش تا جابه‌جا بشه؛ لبه‌های سفیدش رو بکش تا کوتاه بشه. خط زمان خالی یا خط‌کش رو بکش تا جلو و عقب بری.", "Click a clip to select it. Drag a clip to move it; drag its white edges to trim. Drag the empty timeline or the ruler to scrub.")}</p>`
-        + `<p class="hint">${t("این ویرایشگر روی همین نسخه کار می‌کنه: چیزی که برش اتوماتیک حذف کرده اینجا نیست.", "The editor works on this version: what the automatic cut removed is not here.")}</p>`
+        + (ORIGINAL
+          ? `<p class="hint">${t("این ویرایشگر روی کل فیلم اصلی کار می‌کنه و تکه‌ها همون برش اتوماتیک‌اند. لبهٔ هر تکه رو بکش تا چیزی که برش حذف کرده برگرده، یا بیشتر حذف بشه.", "The editor works on the whole original footage, and the clips are the automatic cut. Drag a clip's edge to bring back what the cut removed, or to remove more.")}</p>`
+          : `<p class="hint">${t("این ویرایشگر روی همین نسخه کار می‌کنه: چیزی که برش اتوماتیک حذف کرده اینجا نیست.", "The editor works on this version: what the automatic cut removed is not here.")}</p>`)
         + `<div class="keys"><kbd>Space</kbd><span>${t("پخش / توقف", "Play / pause")}</span><kbd>S</kbd><span>${t("برش در جای خط پخش", "Split at the playhead")}</span>`
         + `<kbd>Delete</kbd><span>${t("حذف انتخاب‌شده", "Delete the selection")}</span><kbd>← →</kbd><span>${t("یک فریم (با Shift یک ثانیه)", "One frame (Shift: one second)")}</span>`
         + `<kbd>⌘Z / Ctrl+Z</kbd><span>${t("برگرداندن (با Shift دوباره)", "Undo (Shift: redo)")}</span><kbd>+ −</kbd><span>${t("بزرگ و کوچک کردن خط زمان", "Zoom the timeline")}</span><kbd>Esc</kbd><span>${t("لغو انتخاب", "Deselect")}</span></div>`;
@@ -710,6 +721,7 @@ export function mountEditor(host, opts) {
   const changed = () => past.length > 0;
   function cutList() {
     return {
+      ...(ORIGINAL ? { basis: "source" } : {}),
       pieces: segs.map((s) => ({ in: +s.in.toFixed(3), out: +s.out.toFixed(3), speed: s.speed, pitch: !!s.pitch })),
       overlays: ovs.map((o) => ({ image: imgs[o.img], name: o.name, start: +o.start.toFixed(3), end: +(o.start + o.len).toFixed(3), x: +o.x.toFixed(4), y: +o.y.toFixed(4), width: +o.w.toFixed(4) })),
     };
@@ -722,7 +734,7 @@ export function mountEditor(host, opts) {
     const v2 = (opts.version || 0) + 1;
     const sh = $("sheet");
     sh.innerHTML = `<div class="card" role="dialog" aria-label="${t("لیست برش", "Cut list")}"><h2>${making ? t(`ساخت نسخهٔ ${v2}`, `Make version ${v2}`) : t("لیست برش", "Cut list")}</h2>`
-      + `<p>${t(`${segs.length} تکه، ${mmss(total())}؛ ${Math.max(0, removed).toFixed(1)} ثانیه از این نسخه حذف شده.`, `${segs.length} piece${segs.length > 1 ? "s" : ""}, ${mmss(total())} long; ${Math.max(0, removed).toFixed(1)} s of this version left out.`)} `
+      + `<p>${t(`${segs.length} تکه، ${mmss(total())}؛ ${Math.max(0, removed).toFixed(1)} ثانیه از ${ORIGINAL ? "فیلم اصلی" : "این نسخه"} حذف شده.`, `${segs.length} piece${segs.length > 1 ? "s" : ""}, ${mmss(total())} long; ${Math.max(0, removed).toFixed(1)} s of ${ORIGINAL ? "the original footage" : "this version"} left out.`)} `
       + `${t("ورکر فایل با کیفیت کامل رو از فیلم اصلی می‌سازه، نه از این پیش‌نمایش، و نسخهٔ جدید برای بازبینی میاد.", "The worker renders the full-quality file from the original footage, not from this preview, and the new version comes back for review.")}</p>`
       + `<table><tr><th>#</th><th>${t("از", "From")}</th><th>${t("تا", "To")}</th><th>${t("سرعت", "Speed")}</th><th>${t("مدت", "Length")}</th></tr>${rows}</table>`
       + (ovs.length ? `<h4>${t("تصویرها", "Overlays")}</h4><table><tr><th>#</th><th>${t("از", "From")}</th><th>${t("تا", "To")}</th><th>${t("اندازه", "Size")}</th><th>${t("مرکز", "Centre")}</th></tr>${orows}</table>` : "")
@@ -765,12 +777,16 @@ export function mountEditor(host, opts) {
   }
   v.addEventListener("loadedmetadata", () => {
     if (dur) return;
-    dur = v.duration; segs = [{ id: nextId++, in: 0, out: dur, speed: 1, pitch: false }];
-    tnow = 0; pps = clamp((sc.clientWidth * (desk.matches ? 1.5 : 3)) / dur, 4, 60);
-    $("empty").hidden = true; render(); v.currentTime = 0.01;
+    dur = v.duration;
+    const start = (opts.initial || [])
+      .map((p) => ({ in: clamp(+p.in, 0, dur), out: clamp(+p.out, 0, dur), speed: clamp(+p.speed || 1, 0.1, 100) }))
+      .filter((p) => p.out - p.in >= MIN);
+    segs = start.length ? start.map((p) => ({ id: nextId++, ...p, pitch: false })) : [{ id: nextId++, in: 0, out: dur, speed: 1, pitch: false }];
+    tnow = 0; pps = clamp((sc.clientWidth * (desk.matches ? 1.5 : 3)) / total(), 4, 60);
+    $("empty").hidden = true; render(); v.currentTime = segs[0].in + 0.01;
     makeThumbs(opts.src);
   });
-  v.addEventListener("error", () => { if (!dur) $("empty").textContent = t("پیش‌نمایش این نسخه باز نشد. صفحه رو دوباره باز کن.", "This version's preview did not open. Reload the page."); });
+  v.addEventListener("error", () => { if (!dur) $("empty").textContent = (ORIGINAL ? t("فیلم اصلی باز نشد. صفحه رو دوباره باز کن.", "The original footage did not open. Reload the page.") : t("پیش‌نمایش این نسخه باز نشد. صفحه رو دوباره باز کن.", "This version's preview did not open. Reload the page.")); });
   const ro = new ResizeObserver(() => { if (!gesture && dur) render(); });
   ro.observe(stage);
   on(desk, "change", () => { panelOpen = null; render(); });
