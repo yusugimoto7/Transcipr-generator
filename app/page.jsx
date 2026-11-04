@@ -15,7 +15,7 @@ import StoryTemplateDesigner from "./StoryTemplateDesigner";
 import { STORY_TEMPLATES } from "../lib/story/templates";
 import { splitSlideText, parseOwnSlides } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
-import { LOOKS, DEFAULT_LOOK, isLook, lookForBenchmark } from "../lib/video-looks";
+import { lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
 import { Archive, Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X, Maximize2, Minimize2 } from "lucide-react";
 
@@ -5247,13 +5247,16 @@ function BenchmarkPicker({ value, ratio, onPick, onGone = () => {} }) {
         {videos.map((v) => {
           const on = value === v.url;
           const fits = !ratio || !v.ratio || v.ratio === ratio;
+          // A sample is also Hamed's look; one with no look trained in HeyGen cannot be made yet.
+          const ready = !!lookForBenchmark(v.url);
           return (
             <button
               key={v.id}
               className="ui-btn"
-              onClick={() => onPick(v)}
+              onClick={() => ready && onPick(v)}
+              aria-disabled={!ready}
               title={v.title}
-              style={{ flex: "0 0 auto", width: v.orientation === "horizontal" ? 180 : 104, padding: 0, borderRadius: 12, overflow: "hidden", cursor: "pointer", textAlign: "left", background: C.surface, border: on ? `2px solid ${C.orange}` : `1px solid ${C.line}`, opacity: fits || on ? 1 : 0.55 }}
+              style={{ flex: "0 0 auto", width: v.orientation === "horizontal" ? 180 : 104, padding: 0, borderRadius: 12, overflow: "hidden", cursor: ready ? "pointer" : "not-allowed", textAlign: "left", background: C.surface, border: on ? `2px solid ${C.orange}` : `1px solid ${C.line}`, opacity: !ready ? 0.45 : fits || on ? 1 : 0.55 }}
             >
               <div style={{ position: "relative", aspectRatio: v.orientation === "horizontal" ? "16 / 9" : v.orientation === "square" ? "1 / 1" : "9 / 16", background: "#111" }}>
                 <img src={v.thumb} alt="" loading="lazy" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
@@ -5262,7 +5265,7 @@ function BenchmarkPicker({ value, ratio, onPick, onGone = () => {} }) {
               </div>
               <div style={{ padding: "5px 7px 7px" }}>
                 <div style={{ fontSize: 10.5, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v.title}</div>
-                {v.fits && <div style={{ fontSize: 10, color: C.text3 }}>{v.fits}</div>}
+                {ready ? v.fits && <div style={{ fontSize: 10, color: C.text3 }}>{v.fits}</div> : <div style={{ fontSize: 10, color: C.orangeDeep, fontWeight: 700 }}>{L("ظاهرش هنوز ساخته نشده", "Look not made yet")}</div>}
               </div>
             </button>
           );
@@ -5293,11 +5296,10 @@ function videoDraftFrom(script, last) {
     customSec: last && !preset ? String(last.duration_sec % 60) : "0",
     script: script || "",
     notes: (last && last.notes) || "",
-    benchmark: (last && last.benchmark && last.benchmark.url) || "",
+    benchmark: (last && last.benchmark && lookForBenchmark(last.benchmark.url) && last.benchmark.url) || "",
     ratio: (last && last.format && last.format.aspect_ratio) || "9:16",
     captions: last && last.format ? last.format.captions !== false : true,
     voice: (last && last.voice) || "primary",
-    look: (last && isLook(last.look_id) && last.look_id) || DEFAULT_LOOK,
   };
 }
 
@@ -5352,6 +5354,7 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
     ? L("ورک‌فلوی ویدیو هنوز وصل نیست (VIDEO_WORKFLOW_URL روی Render).", "The video workflow is not connected yet (VIDEO_WORKFLOW_URL on Render).")
     : words < 10 ? L("اسکریپت خالیه.", "The script is empty.")
     : persian ? L("اسکریپت فارسیه. اول به انگلیسی بازنویسی‌اش کن.", "The script is in Persian. Rewrite it in English first.")
+    : !bench ? L("یک ویدیوی نمونه انتخاب کن؛ ظاهر حامد از همون میاد.", "Choose a benchmark video; Hamed's look comes from it.")
     : lenErr || benchErr || (fitting ? L("صبر کن بازنویسی تموم بشه.", "Wait for the rewrite to finish.") : "");
 
   const submit = () => {
@@ -5364,7 +5367,6 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
       aspect_ratio: d.ratio,
       captions: d.captions,
       voice: d.voice,
-      look_id: d.look,
     });
   };
 
@@ -5488,46 +5490,21 @@ function VideoComposer({ topic, enabled, initial, savedScript, draftJob, onDraft
 
           {/* 4. benchmark */}
           <div style={block}>
-            <div style={label}>4 · {L("ویدیوی نمونه", "Benchmark video")} <span style={hint}>{L("اختیاری · سبکی که باید شبیهش بشه", "optional · the style to match")}</span></div>
+            <div style={label}>4 · {L("ویدیوی نمونه", "Benchmark video")} <span style={hint}>{L("ظاهر و سبک ویدیو", "the video's look and style")}</span></div>
             <BenchmarkPicker
               value={d.benchmark}
               ratio={d.ratio}
-              onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}), ...(lookForBenchmark(v.url) ? { look: lookForBenchmark(v.url) } : {}) })}
+              onPick={(v) => set(d.benchmark === v.url ? { benchmark: "" } : { benchmark: v.url, ...(v.ratio ? { ratio: v.ratio } : {}) })}
               onGone={() => set({ benchmark: "" })}
             />
             <div style={{ ...hint, marginTop: 8, lineHeight: 1.6 }}>
-              {L("نمونه‌ها فقط از پوشهٔ Benchmarks میان. نمونه هم ریتم و کادربندی رو تعیین می‌کنه و هم ظاهر حامد رو: ویدیو با همون لباس و همون جای نمونه ساخته می‌شه. برای نمونهٔ تازه، ویدیو رو توی پوشه بذار و «تازه‌سازی» رو بزن؛ ظاهرش باید یک بار در HeyGen ساخته بشه.", "Samples come only from the Benchmarks folder. A sample sets the pacing and framing and also Hamed's look: the video is made in the same outfit and place as the sample. For a new one, put the video in the folder and tap Refresh; its look has to be made in HeyGen once.")}
-            </div>
-          </div>
-
-          {/* 5. look: the outfit and place HeyGen renders; a sample only shows one */}
-          <div style={block}>
-            <div style={label}>5 · {L("ظاهر حامد در ویدیو", "Hamed's look in the video")} <span style={hint}>{L("لباس و جایی که ویدیو توش ساخته می‌شه", "the outfit and place the video is made in")}</span></div>
-            {bench && lookForBenchmark(bench) === d.look && (
-              <div dir={uiDir()} style={{ fontSize: 12, lineHeight: 1.7, color: C.text2, background: alpha(C.teal, 0.07), border: `1px solid ${alpha(C.teal, 0.3)}`, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
-                {L("✓ همون ظاهر ویدیوی نمونه: همون لباس و همون جا.", "✓ The sample's own look: the same outfit and place.")}
-              </div>
-            )}
-            {bench && !lookForBenchmark(bench) && (
-              <div dir={uiDir()} style={{ fontSize: 12, lineHeight: 1.7, color: C.orangeDeep, background: alpha(C.orange, 0.08), border: `1px solid ${alpha(C.orange, 0.3)}`, borderRadius: 10, padding: "8px 10px", marginBottom: 8 }}>
-                {L("ظاهر این ویدیوی نمونه هنوز در HeyGen ساخته نشده، پس فعلاً ویدیو با ظاهری که این‌جا انتخاب می‌کنی ساخته می‌شه و نمونه فقط ریتم و کادربندی رو تعیین می‌کنه.", "This sample's look is not made in HeyGen yet, so for now the video is made in the look you choose here and the sample sets only the pacing and framing.")}
-              </div>
-            )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-              {LOOKS.map((lk) => (
-                <button key={lk.id} type="button" className="ui-btn" onClick={() => set({ look: lk.id })} aria-pressed={d.look === lk.id} style={{ padding: 0, borderRadius: 12, overflow: "hidden", cursor: "pointer", background: C.surface, border: `2px solid ${d.look === lk.id ? C.teal : C.line}`, textAlign: "start", fontFamily: FONT }}>
-                  <img src={lk.picture} alt="" loading="lazy" style={{ display: "block", width: "100%", aspectRatio: "9 / 14", objectFit: "cover" }} />
-                  <div dir={uiDir()} style={{ padding: "6px 7px", fontSize: 11, fontWeight: 700, lineHeight: 1.4, color: C.text }}>
-                    {d.look === lk.id ? "✓ " : ""}{L(lk.name)}
-                  </div>
-                </button>
-              ))}
+              {L("ویدیو با همون لباس، همون جا و همون ریتم و کادربندیِ نمونه ساخته می‌شه. نمونه‌ها فقط از پوشهٔ Benchmarks میان؛ برای نمونهٔ تازه، ویدیو رو توی پوشه بذار و «تازه‌سازی» رو بزن. ظاهرش یک بار باید در HeyGen ساخته بشه و تا اون موقع کم‌رنگ نشون داده می‌شه.", "The video is made in the sample's outfit, place, pacing and framing. Samples come only from the Benchmarks folder; for a new one, put the video in the folder and tap Refresh. Its look has to be made in HeyGen once, and until then it shows faded.")}
             </div>
           </div>
 
           {/* 6. format */}
           <div style={block}>
-            <div style={label}>6 · {L("قالب", "Format")}</div>
+            <div style={label}>5 · {L("قالب", "Format")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
               {[["9:16", ["ریلز / شورتز", "Reel / Short"], "9:16"], ["16:9", "YouTube", "16:9"], ["1:1", ["فید", "Feed"], "1:1"]].map(([v, l, sub]) => (
                 <button key={v} className="ui-btn" onClick={() => set({ ratio: v })} style={{ ...chip(d.ratio === v), height: "auto", padding: "8px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
