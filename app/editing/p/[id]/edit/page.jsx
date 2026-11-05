@@ -31,6 +31,11 @@ export default function Page({ params }) {
       strip: `/api/editing/projects/${params.id}/filmstrip?run=${source ? "source" : run.id}`,
       basis: source ? "source" : undefined,
       initial: source ? base.pieces : undefined,
+      // saved as you go: the edit left last time reopens; each change is kept on the server a moment later
+      draft: ctx.current.draft && (ctx.current.draft.basis === "source") === source ? ctx.current.draft : null,
+      onDraft: (edit) => api(`/projects/${params.id}/draft`, { method: "PUT", body: { base_run_id: run.id, ...edit } }),
+      onDraftImage: (key, image) => api(`/projects/${params.id}/draft`, { method: "POST", body: { key, image } }).then((r) => r.path),
+      draftImage: (key) => `/api/editing/projects/${params.id}/draft?img=${encodeURIComponent(key)}`,
       title: `${d.project.title} · ${L(`نسخهٔ ${run.version}`, `version ${run.version}`)}`,
       version: run.version,
       t: L,
@@ -70,7 +75,10 @@ export default function Page({ params }) {
         const ok = run && (run.stage || "cut") === "cut" && run.status === "review" && run.result && run.result.preview;
         if (!ok) return setState({ phase: "closed" });
         ctx.current = { d, run };
-        return check();
+        return api(`/projects/${params.id}/draft?run=${run.id}`)
+          .then((r) => { ctx.current.draft = r.draft; })
+          .catch(() => {})
+          .then(check);
       })
       .catch((e) => !gone && setState({ phase: "error", error: e.message }));
     return () => {

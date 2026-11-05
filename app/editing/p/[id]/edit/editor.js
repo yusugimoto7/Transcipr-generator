@@ -43,7 +43,12 @@ const svg = (k, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="curren
 const SCALE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
 const esc = (x) => String(x).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]);
 
-// opts: { src, strip (the filmstrip's address, lib/editing/filmstrip.js), title, version, t(fa, en), rtl, onSave({ pieces, overlays, basis }) -> Promise, onClose(),
+// Saved as you go (Hamed, 5 Nov 2026: "like CapCut: every edit is saved; I leave, do something else,
+// come back and carry on, and export only when the edit is done"): every change is sent to the server a
+// moment later (opts.onDraft, pictures once each through opts.onDraftImage), opts.draft reopens it, and
+// "Make version" is the export. Leaving asks nothing unless a save failed.
+//
+// opts: { src, strip, draft, onDraft(edit) -> Promise, onDraftImage(key, dataUrl) -> Promise<path>, draftImage(key) -> url, (the filmstrip's address, lib/editing/filmstrip.js), title, version, t(fa, en), rtl, onSave({ pieces, overlays, basis }) -> Promise, onClose(),
 //         basis: "source" | undefined, initial: [{ in, out, speed }] in the media's seconds }
 export function mountEditor(host, opts) {
   const t = opts.t;
@@ -53,6 +58,7 @@ export function mountEditor(host, opts) {
     <button class="icon" id="he-close" aria-label="${t("بستن ویرایشگر", "Close the editor")}">${svg("close", 2)}</button>
     <span class="title" id="he-title">${esc(opts.title || "")}</span>
     <span class="spacer"></span>
+    <span class="save" id="he-save" role="status" aria-live="polite"></span>
     <button class="pill ghost" id="he-list">${t("لیست برش", "Cut list")}</button>
     <button class="pill primary" id="he-done">${t("ساخت نسخه", "Make version")}</button>
   </header>
@@ -117,15 +123,63 @@ export function mountEditor(host, opts) {
   }
   // pictures stay out of the history (imgs): a snapshot per edit would copy every picture each time
   const snap = () => JSON.stringify({ segs, ovs });
-  function commit(before) { if (before === snap()) return; past.push(before); if (past.length > 150) past.shift(); future = []; refreshUndo(); }
+  function commit(before) { if (before === snap()) return; past.push(before); if (past.length > 150) past.shift(); future = []; refreshUndo(); queueSave(); }
   function refreshUndo() { $("undo").disabled = !past.length; $("redo").disabled = !future.length; }
   function restore(j) {
     const o = JSON.parse(j); segs = o.segs; ovs = o.ovs;
     if (sel && !(sel.k === "seg" ? segs : ovs).some((x) => x.id === sel.id)) sel = null;
     tnow = Math.min(tnow, total()); refreshUndo(); render(); seekVideo();
   }
-  function undo() { if (!past.length || gesture) return; future.push(snap()); restore(past.pop()); }
-  function redo() { if (!future.length || gesture) return; past.push(snap()); restore(future.pop()); }
+  function undo() { if (!past.length || gesture) return; future.push(snap()); restore(past.pop()); queueSave(); }
+  function redo() { if (!future.length || gesture) return; past.push(snap()); restore(future.pop()); queueSave(); }
+
+  /* ---------- saved as you go ---------- */
+  let baseSnap = null, baseSegs = [], saveTimer = 0, saveState = "idle", saveAgain = false, savedPaths = {};
+  const SAVE_WORDS = { saving: ["در حال ذخیره…", "Saving…"], saved: ["ذخیره شد", "Saved"], error: ["ذخیره نشد؛ دوباره امتحان می‌شه", "Not saved; trying again"] };
+  function showSave(st) { saveState = st; const el = $("save"); el.textContent = SAVE_WORDS[st] ? t(...SAVE_WORDS[st]) : ""; el.dataset.st = st; }
+  function queueSave(delay = 1200) {
+    if (!opts.onDraft || !dur) return;
+    clearTimeout(saveTimer); saveTimer = setTimeout(doSave, delay);
+    if (saveState !== "saving") showSave("saving");
+  }
+  async function doSave() {
+    clearTimeout(saveTimer); saveTimer = 0;
+    if (dead || !opts.onDraft) return;
+    if (saveState === "saving" && doSave.busy) { saveAgain = true; return; }
+    doSave.busy = true; showSave("saving");
+    try {
+      // each picture over the video goes up once; the edit names it by its key
+      for (const o of ovs) if (!savedPaths[o.img] && imgs[o.img]) savedPaths[o.img] = await opts.onDraftImage(o.img, imgs[o.img]);
+      const images = {}; for (const o of ovs) if (savedPaths[o.img]) images[o.img] = savedPaths[o.img];
+      await opts.onDraft({ basis: ORIGINAL ? "source" : "version", segs, ovs, images });
+      showSave(saveAgain ? "saving" : "saved");
+    } catch (e) {
+      showSave("error"); saveTimer = setTimeout(doSave, 8000);
+    } finally {
+      doSave.busy = false;
+      if (saveAgain) { saveAgain = false; doSave(); }
+    }
+  }
+  const unsaved = () => !!saveTimer || doSave.busy || saveState === "error";
+  on(document, "visibilitychange", () => { if (document.visibilityState === "hidden" && saveTimer) doSave(); });
+  async function toDataUrl(url) {
+    const b = await (await fetch(url, { credentials: "same-origin" })).blob();
+    return new Promise((ok, bad) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = bad; r.readAsDataURL(b); });
+  }
+  // the edit saved last time, over the automatic cut it started from
+  async function openDraft(d) {
+    const keep = (d.segs || []).map((x) => ({ id: nextId++, in: clamp(+x.in, 0, dur), out: clamp(+x.out, 0, dur), speed: clamp(+x.speed || 1, 0.1, 100), pitch: !!x.pitch })).filter((x) => x.out - x.in >= MIN / 2);
+    if (!keep.length) return;
+    segs = keep;
+    const pics = [];
+    for (const o of d.ovs || []) {
+      if (!d.images || !d.images[o.img]) continue;
+      try { imgs[o.img] = await toDataUrl(opts.draftImage(o.img)); savedPaths[o.img] = d.images[o.img]; pics.push({ ...o, id: nextId++ }); } catch (e) {}
+    }
+    ovs = pics;
+    tnow = 0; render(); seekVideo(); showSave("saved");
+    toast(t("ویرایش ذخیره‌شده‌ت باز شد", "Your saved edit is open"));
+  }
   $("undo").onclick = undo; $("redo").onclick = redo;
 
   /* ---------- formatting ---------- */
@@ -424,7 +478,7 @@ export function mountEditor(host, opts) {
   $("ofile").onchange = async (e) => {
     const f = e.target.files[0]; e.target.value = ""; if (!f) return;
     try {
-      const p = await readPicture(f), key = "i" + nextId++;
+      const p = await readPicture(f), key = "i" + nextId++ + "-" + Math.random().toString(36).slice(2).padEnd(8, "0").slice(0, 8);
       imgs[key] = p.data;
       const b = snap(), start = tnow >= total() - OVMIN ? 0 : tnow;
       const o = { id: nextId++, img: key, name: f.name.slice(0, 80), ar: p.ar, start, len: Math.max(OVMIN, Math.min(3, total() - start)), x: 0.5, y: 0.62, w: 0.7 };
@@ -734,7 +788,9 @@ export function mountEditor(host, opts) {
   });
 
   /* ---------- the cut list, and making the version from it ---------- */
-  const changed = () => past.length > 0;
+  // what the edit is, without the editor's own ids: a reopened or reset edit equal to the cut is no change
+  const editKey = () => JSON.stringify({ s: segs.map(({ id, ...x }) => x), o: ovs.map(({ id, ...x }) => x) });
+  const changed = () => baseSnap !== null && editKey() !== baseSnap;
   function cutList() {
     return {
       ...(ORIGINAL ? { basis: "source" } : {}),
@@ -754,23 +810,34 @@ export function mountEditor(host, opts) {
       + `${t("ورکر فایل با کیفیت کامل رو از فیلم اصلی می‌سازه، نه از این پیش‌نمایش، و نسخهٔ جدید برای بازبینی میاد.", "The worker renders the full-quality file from the original footage, not from this preview, and the new version comes back for review.")}</p>`
       + `<table><tr><th>#</th><th>${t("از", "From")}</th><th>${t("تا", "To")}</th><th>${t("سرعت", "Speed")}</th><th>${t("مدت", "Length")}</th></tr>${rows}</table>`
       + (ovs.length ? `<h4>${t("تصویرها", "Overlays")}</h4><table><tr><th>#</th><th>${t("از", "From")}</th><th>${t("تا", "To")}</th><th>${t("اندازه", "Size")}</th><th>${t("مرکز", "Centre")}</th></tr>${orows}</table>` : "")
+      + (changed() ? `<p><button class="pill ghost" id="he-sReset">${t("برگشت به برش اتوماتیک (پاک کردن ویرایش من)", "Back to the automatic cut (clear my edit)")}</button></p>` : "")
       + `<div class="row"><button class="pill ghost" id="he-sClose">${making ? t("ادامهٔ ویرایش", "Keep editing") : t("بستن", "Close")}</button>`
       + (making ? `<button class="pill primary" id="he-sMake"${changed() ? "" : " disabled"}>${t(`ساخت نسخهٔ ${v2}`, `Make version ${v2}`)}</button>` : "") + `</div>`
       + (making && !changed() ? `<p style="margin-top:12px">${t("هنوز چیزی عوض نشده.", "Nothing has changed yet.")}</p>` : "") + `</div>`;
     sh.hidden = false;
     $("sClose").onclick = () => { if (!saving) sh.hidden = true; };
+    const rs = $("sReset");
+    if (rs) rs.onclick = () => {
+      if (!confirm(t("ویرایش دستی پاک بشه و برش اتوماتیک برگرده؟ با «برگرداندن» برمی‌گرده.", "Clear your edit and go back to the automatic cut? Undo brings it back."))) return;
+      const b = snap(); segs = baseSegs.map((x) => ({ ...x, id: nextId++ })); ovs = []; sel = null; tnow = 0; commit(b); sh.hidden = true; render(); seekVideo();
+    };
     sh.onclick = (e) => { if (e.target === sh && !saving) sh.hidden = true; };
     const mk = $("sMake");
     if (mk) mk.onclick = async () => {
       saving = true; mk.disabled = true; mk.textContent = t("در حال فرستادن…", "Sending…");
-      try { await opts.onSave(cutList()); past = []; }
+      try { clearTimeout(saveTimer); saveTimer = 0; await opts.onSave(cutList()); past = []; baseSnap = editKey(); }
       catch (err) { saving = false; mk.disabled = false; mk.textContent = t(`ساخت نسخهٔ ${v2}`, `Make version ${v2}`); toast(err.message || String(err)); }
     };
   }
   $("list").onclick = () => showList(false);
   $("done").onclick = () => showList(true);
-  $("close").onclick = () => { if (!changed() || confirm(t("تغییرها ذخیره نشده‌اند. از ویرایشگر خارج می‌شی؟", "Your changes are not saved. Leave the editor?"))) { past = []; opts.onClose(); } };
-  on(window, "beforeunload", (e) => { if (changed() && !saving) { e.preventDefault(); e.returnValue = ""; } });
+  // leaving keeps the edit: the last change is saved first; only a save that keeps failing asks
+  $("close").onclick = async () => {
+    if (saveTimer || doSave.busy) { await doSave(); }
+    if (saveState === "error" && !confirm(t("آخرین تغییرها ذخیره نشد. باز هم خارج می‌شی؟", "The last changes could not be saved. Leave anyway?"))) return;
+    opts.onClose();
+  };
+  on(window, "beforeunload", (e) => { if (unsaved() && !saving) { e.preventDefault(); e.returnValue = ""; } });
 
   /* ---------- the version's preview and its filmstrip ---------- */
   // the server's filmstrip; false when it could not be had (then the frames are drawn here)
@@ -814,9 +881,11 @@ export function mountEditor(host, opts) {
       .map((p) => ({ in: clamp(+p.in, 0, dur), out: clamp(+p.out, 0, dur), speed: clamp(+p.speed || 1, 0.1, 100) }))
       .filter((p) => p.out - p.in >= MIN);
     segs = start.length ? start.map((p) => ({ id: nextId++, ...p, pitch: false })) : [{ id: nextId++, in: 0, out: dur, speed: 1, pitch: false }];
+    baseSegs = segs.map((x) => ({ ...x })); baseSnap = editKey();
     tnow = 0; pps = clamp((sc.clientWidth * (desk.matches ? 1.5 : 3)) / total(), 4, 60);
     $("empty").hidden = true; render(); v.currentTime = segs[0].in + 0.01;
     loadStrip().then((ok) => { if (!ok && !dead) makeThumbs(opts.src); });
+    if (opts.draft) openDraft(opts.draft).catch(() => {});
   });
   v.addEventListener("error", () => { if (!dur) $("empty").textContent = (ORIGINAL ? t("فیلم اصلی باز نشد. صفحه رو دوباره باز کن.", "The original footage did not open. Reload the page.") : t("پیش‌نمایش این نسخه باز نشد. صفحه رو دوباره باز کن.", "This version's preview did not open. Reload the page.")); });
   const ro = new ResizeObserver(() => { if (!gesture && dur) render(); });

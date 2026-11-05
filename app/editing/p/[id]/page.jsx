@@ -822,6 +822,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                     ? L("این نسخه با دست ساخته شده. برای تغییرش دوباره ویرایشگر رو باز کن؛ اصلاحیهٔ نوشتاری برش اتوماتیک رو از اول می‌سازه و کار دستی از بین می‌ره.", "This version was made by hand. Open the editor again to change it; a written correction would make the automatic cut again and lose the hand edits.")
                     : L("مثل CapCut: روی کل فیلم اصلی باز می‌شه و تکه‌ها همون برش اتوماتیک‌اند؛ لبهٔ تکه رو بکش تا چیزی که زیادی بریده شده برگرده. برش، جابه‌جایی، سرعت و تصویر روی ویدیو. نتیجه نسخهٔ بعدیه، با کیفیت کامل از فیلم اصلی.", "Like CapCut: it opens on the whole original footage with the automatic cut as clips; drag a clip's edge to bring back what was cut too much. Split, move clips, speed and pictures over the video. The result is the next version, at full quality from the original footage.")}
                 </p>
+                <SavedEdit projectId={project.id} runId={run.id} />
                 <div className={s.row}>
                   <Link className={`${s.btn} ${s.primary}`} href={`/editing/p/${project.id}/edit`}>
                     {L("باز کردن ویرایشگر", "Open the editor")}
@@ -1158,6 +1159,25 @@ function reasonText(err) {
   return hit ? L(hit[1], err) : err;
 }
 const KEPT_FA = { transcription: "متن پیاده‌شده", "chosen takes": "برداشت‌های انتخاب‌شده" };
+
+// An edit by hand saved and not yet made into a version (the editor saves as it goes, like CapCut).
+function SavedEdit({ projectId, runId }) {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let gone = false;
+    api(`/projects/${projectId}/draft?run=${runId}`).then((r) => !gone && setD(r.draft)).catch(() => {});
+    return () => { gone = true; };
+  }, [projectId, runId]);
+  if (!d) return null;
+  return (
+    <p className={s.ok} dir={uiDir()}>
+      {L(
+        `یک ویرایش دستی ذخیره شده (${d.segs.length} تکه، ${new Date(d.saved_at).toLocaleString("fa-IR")}). ویرایشگر رو باز کن تا ادامه بدی؛ هر وقت تموم شد «ساخت نسخه» رو بزن.`,
+        `An edit by hand is saved (${d.segs.length} pieces, ${new Date(d.saved_at).toLocaleString()}). Open the editor to carry on; when it is done, tap Make version.`
+      )}
+    </p>
+  );
+}
 
 export default function Page({ params }) {
   return <Shell>{() => <Project id={params.id} />}</Shell>;
