@@ -36,7 +36,12 @@ async function body(request) {
   if (type.includes("application/json")) return request.json().catch(() => ({}));
   if (type.includes("form")) {
     const f = await request.formData().catch(() => null);
-    return f ? { text: f.get("text") || f.get("url") || "", note: f.get("note") || "" } : {};
+    if (!f) return {};
+    // a Shortcut whose field was filled the other way round (the shared link as the field's name,
+    // Nov 5 2026) still works: every name and value is searched for the link
+    const all = [];
+    for (const [k, v] of f.entries()) if (k !== "note") all.push(k, typeof v === "string" ? v : "");
+    return { text: [f.get("text"), f.get("url"), ...all].filter(Boolean).join("\n"), note: f.get("note") || "" };
   }
   return { text: await request.text().catch(() => "") };
 }
