@@ -1655,11 +1655,18 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   const recentCount = topics.filter((t) => stateOf(t) !== "rejected" && inCat(t) && isRecent(t)).length;
   // Newest event first (Hamed, Oct 27 2026): a topic picked with ✓ goes to the top at that moment,
   // and anything that arrives after it goes above it. A card's arrival is when the server wrote it
-  // (found_at), else when the team first saved it, else its news date (a date still to come counts
-  // as today, else it would sit on top for weeks). Working on a topic does not move it. Pinned
+  // (found_at, never later than two days after its news date), else when the team first saved it,
+  // else its news date (a date still to come counts as today, else it would sit on top for weeks). Working on a topic does not move it. Pinned
   // topics come first, newest pin first, until they are unpinned.
   const now = Date.now();
-  const arrived = (t) => t.found_at || Math.min(Date.parse(t.date || "") || t._made || t._ts || 0, now);
+  // An old article the app only found now (a late source, a second source, a page that was slow to
+  // be read) is not news arriving now: its arrival counts at most two days after its own date, so a
+  // story dated Oct 8 found on Nov 4 sits among the Oct 8 ones (Hamed, Nov 5 2026).
+  const arrived = (t) => {
+    const dated = /^\d{4}-\d{2}-\d{2}$/.test(t.date || "") ? Date.parse(t.date + "T00:00:00Z") + 2 * 86400000 : 0;
+    const at = t.found_at || Math.min(Date.parse(t.date || "") || t._made || t._ts || 0, now);
+    return dated ? Math.min(at, dated) : at;
+  };
   // Topics picked before picks were timed count as picked at the moment this order came in (Hamed:
   // the old green ones on top too), among themselves by their latest work.
   const pickedOf = (t) => {
