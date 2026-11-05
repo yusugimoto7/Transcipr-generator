@@ -4,9 +4,10 @@ WORKDIR /app
 
 # A browser for drawing story pages and photographing source pages
 # (lib/story/hcti.js): Chromium with Persian/Arabic and emoji fonts. Free and
-# unlimited, unlike the HCTI service it replaces.
+# unlimited, unlike the HCTI service it replaces. ffmpeg makes the hand editor's filmstrip
+# (lib/editing/filmstrip.js).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends chromium fonts-noto-core fonts-noto-color-emoji ca-certificates \
+  && apt-get install -y --no-install-recommends chromium ffmpeg fonts-noto-core fonts-noto-color-emoji ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 ENV CHROMIUM_PATH=/usr/bin/chromium
 

@@ -28,6 +28,7 @@ export default function Page({ params }) {
     const source = mode === "source";
     ctx.current.destroy = mountEditor(host.current, {
       src: `/api/editing/projects/${params.id}/media?run=${source ? "source" : run.id}`,
+      strip: `/api/editing/projects/${params.id}/filmstrip?run=${source ? "source" : run.id}`,
       basis: source ? "source" : undefined,
       initial: source ? base.pieces : undefined,
       title: `${d.project.title} · ${L(`نسخهٔ ${run.version}`, `version ${run.version}`)}`,

@@ -61,7 +61,7 @@
 #he-lane,#he-olane{position:absolute;left:0}
 .he .seg{position:absolute;top:0;height:100%;background:var(--clip);overflow:hidden;border-radius:6px;box-sizing:border-box;touch-action:pan-x}
 .he .seg .tiles{position:absolute;inset:0;display:flex;pointer-events:none}
-.he .seg .tiles i{flex:0 0 auto;height:100%;background-size:cover;background-position:center;background-color:#30353b;border-right:1px solid rgba(0,0,0,.25)}
+.he .seg .tiles i{flex:0 0 auto;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat;background-color:#30353b}
 .he .seg.sel,.he .oclip.sel{overflow:visible;z-index:2;box-shadow:0 0 0 2px var(--sel) inset}
 .he .badge{position:absolute;left:6px;top:5px;font:600 11px var(--mono);background:rgba(0,0,0,.6);padding:1px 5px;border-radius:4px;display:none;pointer-events:none;white-space:nowrap}
 .he .sel>.badge{display:block}
@@ -71,7 +71,7 @@
 .he .handle.l{left:-20px;border-radius:7px 0 0 7px}
 .he .handle.r{right:-20px;border-radius:0 7px 7px 0}
 .he .sel>.handle{display:flex}
-.he .join{position:absolute;top:0;height:100%;width:2px;margin-left:-1px;background:#000;pointer-events:none}
+.he .join{position:absolute;top:0;height:100%;width:3px;margin-left:-1.5px;background:#f2f4f7;border-radius:2px;z-index:1;pointer-events:none}
 .he .oclip{position:absolute;background-color:var(--ov);background-repeat:repeat-x;background-size:auto 100%;border-radius:5px;box-sizing:border-box;touch-action:pan-x}
 .he .oclip .badge{top:3px}
 #he-addRow{position:absolute;left:0;right:0;height:30px;margin:0 8px;border:0;border-radius:6px;background:var(--lane);color:#9aa0a8;font:500 13px var(--ui);text-align:left;padding-left:10px;display:flex;align-items:center;gap:6px;cursor:pointer;z-index:1}

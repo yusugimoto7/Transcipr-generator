@@ -43,7 +43,7 @@ const svg = (k, w = 1.8) => `<svg viewBox="0 0 24 24" fill="none" stroke="curren
 const SCALE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
 const esc = (x) => String(x).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c]);
 
-// opts: { src, title, version, t(fa, en), rtl, onSave({ pieces, overlays, basis }) -> Promise, onClose(),
+// opts: { src, strip (the filmstrip's address, lib/editing/filmstrip.js), title, version, t(fa, en), rtl, onSave({ pieces, overlays, basis }) -> Promise, onClose(),
 //         basis: "source" | undefined, initial: [{ in, out, speed }] in the media's seconds }
 export function mountEditor(host, opts) {
   const t = opts.t;
@@ -95,7 +95,7 @@ export function mountEditor(host, opts) {
 
   let dur = 0, segs = [], ovs = [], imgs = {}, sel = null, bar = "root", panelOpen = null, saving = false, dead = false;
   let pps = 50, playing = false, pad = 0, lastSet = -1, nextId = 1;
-  let past = [], future = [], thumbs = [], thumbStep = 1, gesture = null, quietClick = 0, frameW = 1, frameH = 1;
+  let strip = null, past = [], future = [], thumbs = [], thumbStep = 1, gesture = null, quietClick = 0, frameW = 1, frameH = 1;
   let tnow = 0; // the playhead, in seconds of the edited timeline
 
   /* ---------- model: kept pieces of the version, in timeline order; overlays on their own track ---------- */
@@ -171,12 +171,20 @@ export function mountEditor(host, opts) {
     ruler.innerHTML = h;
   }
   const thumbAt = (src) => thumbs[clamp(Math.round(src / thumbStep), 0, Math.max(0, thumbs.length - 1))];
-  function tilesFor(s, w) {
-    const n = Math.min(400, Math.max(1, Math.ceil(w / TW))); let h = "";
-    for (let k = 0; k < n; k++) {
-      const img = thumbAt(s.in + (((k + 0.5) * TW) / pps) * s.speed);
-      h += `<i style="width:${TW}px${img ? `;background-image:url(${img})` : ""}"></i>`;
+  // A frame as a tile's background: a piece of the server's filmstrip (strip, one picture for the whole
+  // video, lib/editing/filmstrip.js), else a frame drawn here (computers only; iPhone Safari draws none).
+  function frameStyle(src, bw, bh) {
+    if (strip) {
+      const k = clamp(Math.round(src / strip.step), 0, strip.count - 1), sc_ = Math.max(bw / strip.w, bh / strip.h);
+      const fw = strip.w * sc_, fh = strip.h * sc_, x = (k % strip.cols) * fw + (fw - bw) / 2, y = Math.floor(k / strip.cols) * fh + (fh - bh) / 2;
+      return `background-image:var(--he-strip);background-size:${(strip.cols * fw).toFixed(1)}px auto;background-position:-${x.toFixed(1)}px -${y.toFixed(1)}px`;
     }
+    const img = thumbAt(src);
+    return img ? `background-image:url(${img})` : "";
+  }
+  function tilesFor(s, w) {
+    const n = Math.min(400, Math.max(1, Math.ceil(w / TW))), th = geo().th; let h = "";
+    for (let k = 0; k < n; k++) h += `<i style="width:${TW}px;${frameStyle(s.in + (((k + 0.5) * TW) / pps) * s.speed, TW, th)}"></i>`;
     return h;
   }
   const isSel = (k, id) => !!sel && sel.k === k && sel.id === id;
@@ -231,7 +239,8 @@ export function mountEditor(host, opts) {
   }
   // light update while something is being dragged: positions only, the dragged piece's filmstrip redrawn
   function relayout(changedId) {
-    layout(); renderRuler();
+    // the ruler is rebuilt once the drag ends (endTrim renders): rebuilding it on every move made trimming stutter on a phone
+    layout(); if (!gesture) renderRuler();
     let a = 0;
     segs.forEach((s) => {
       const el = lane.querySelector(`.seg[data-id="${s.id}"]`), w = len(s) * pps;
@@ -482,10 +491,17 @@ export function mountEditor(host, opts) {
       gesture = { type: "pan", pid: e.pointerId, x: e.clientX, move(cx) { sc.scrollLeft = s0 - (cx - x0); }, end() {} };
     }
   });
-  on(window, "pointermove", (e) => { if (gesture && gesture.pid === e.pointerId) { gesture.x = e.clientX; gesture.move(e.clientX); } });
+  // a phone sends several moves per screen frame: only the last one of each frame is drawn
+  let moveRaf = 0;
+  on(window, "pointermove", (e) => {
+    if (!gesture || gesture.pid !== e.pointerId) return;
+    gesture.x = e.clientX;
+    if (!moveRaf) moveRaf = requestAnimationFrame(() => { moveRaf = 0; if (gesture) gesture.move(gesture.x); });
+  });
   function endGesture(e) {
     if (!gesture || gesture.pid !== e.pointerId) return;
     const g = gesture; g.active = false;
+    if (moveRaf) { cancelAnimationFrame(moveRaf); moveRaf = 0; g.move(g.x); }
     if (g.type !== "pan") quietClick = Date.now();
     g.end();
     if (gesture === g) gesture = null;
@@ -550,7 +566,7 @@ export function mountEditor(host, opts) {
     rl.innerHTML = "";
     const blocks = segs.map((s, k) => {
       const d = document.createElement("div"); d.className = "rb";
-      const img = thumbAt(s.in + (s.out - s.in) / 2); if (img) d.style.backgroundImage = `url(${img})`;
+      d.style.cssText = frameStyle(s.in + (s.out - s.in) / 2, B, geo().th);
       d.style.left = pad + startOf(k) * pps - sc.scrollLeft + "px"; d.style.width = Math.max(4, len(s) * pps) + "px";
       rl.appendChild(d); return d;
     });
@@ -757,6 +773,22 @@ export function mountEditor(host, opts) {
   on(window, "beforeunload", (e) => { if (changed() && !saving) { e.preventDefault(); e.returnValue = ""; } });
 
   /* ---------- the version's preview and its filmstrip ---------- */
+  // the server's filmstrip; false when it could not be had (then the frames are drawn here)
+  async function loadStrip() {
+    if (!opts.strip) return false;
+    try {
+      const r = await fetch(opts.strip + "&meta=1", { credentials: "same-origin" });
+      const m = await r.json();
+      if (!r.ok || !m.count) return false;
+      const url = opts.strip;
+      await new Promise((ok, bad) => { const im = new Image(); im.onload = ok; im.onerror = bad; im.src = url; });
+      if (dead) return true;
+      host.querySelector(".he").style.setProperty("--he-strip", `url("${url}")`);
+      strip = m;
+      if (!gesture) render();
+      return true;
+    } catch (e) { return false; }
+  }
   let thumbJob = 0;
   async function makeThumbs(url) {
     const job = ++thumbJob, tv = document.createElement("video");
@@ -784,7 +816,7 @@ export function mountEditor(host, opts) {
     segs = start.length ? start.map((p) => ({ id: nextId++, ...p, pitch: false })) : [{ id: nextId++, in: 0, out: dur, speed: 1, pitch: false }];
     tnow = 0; pps = clamp((sc.clientWidth * (desk.matches ? 1.5 : 3)) / total(), 4, 60);
     $("empty").hidden = true; render(); v.currentTime = segs[0].in + 0.01;
-    makeThumbs(opts.src);
+    loadStrip().then((ok) => { if (!ok && !dead) makeThumbs(opts.src); });
   });
   v.addEventListener("error", () => { if (!dur) $("empty").textContent = (ORIGINAL ? t("فیلم اصلی باز نشد. صفحه رو دوباره باز کن.", "The original footage did not open. Reload the page.") : t("پیش‌نمایش این نسخه باز نشد. صفحه رو دوباره باز کن.", "This version's preview did not open. Reload the page.")); });
   const ro = new ResizeObserver(() => { if (!gesture && dur) render(); });
