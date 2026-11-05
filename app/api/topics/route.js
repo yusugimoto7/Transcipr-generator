@@ -101,7 +101,7 @@ const MAX_PER_SOURCE_DECK = 2; // cards any one source or creator may take in a 
 const MAX_NEWSLETTER_DECK = 5; // a newsletter issue is many developments, so it may take more
 const MAX_FOCUS_NEWSLETTER = 4; // priority newsletter items every deck carries, chosen or not
 const MAX_CASES = 3; // shortlist slots for individual court decisions
-const MAX_SOCIAL = 15; // shortlist slots for creators' posts (news stays the backbone)
+const MAX_SOCIAL = 30; // shortlist slots for creators' posts (Hamed, Nov 5 2026: the focus is social media; was 15)
 const HARVEST_FRESH_MS = 3 * 60 * 60 * 1000; // skip the live fetch if the pool is newer
 const GROUND_BUDGET_MS = 12000; // wall-clock cap on fetching text for chosen items
 const WRITE_BATCH = 2; // cards per write call; batches run in parallel
@@ -295,9 +295,11 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
     ? await fetchFeedItems({ maxAgeDays: NEWS_WINDOW_DAYS, nowMs }).catch(() => null)
     : null;
 
+  // No Reddit topics (Hamed, Nov 5 2026), including what an earlier harvest already pooled.
+  const notReddit = (items) => items.filter((i) => !/(^|\.)reddit\.com$/i.test((() => { try { return new URL(i.source_url || i.url || "").hostname; } catch (_) { return ""; } })()) && !/^r\//i.test(i.source_name || ""));
   const merged = mergeCandidates(
-    harvest ? harvest.items : [],
-    [...(live ? live.items : []), ...social.items, ...lexbase.items],
+    harvest ? notReddit(harvest.items) : [],
+    notReddit([...(live ? live.items : []), ...social.items, ...lexbase.items]),
     nowMs
   ).items;
   // The brand's own published titles. They are Farsi and the news is mostly
@@ -356,7 +358,9 @@ async function collectFeedTopics({ today, nowMs, clientExclude, seenP, accept, e
         // Iranians, study permits, Start-up Visa: the audience's own files.
         (focusOf(c).length ? 5 : 0) +
         // A creator's post that far beat that account's usual is something the audience wants.
-        (c.outlier >= 3 ? 6 : c.outlier >= 2 ? 3 : 0),
+        (c.outlier >= 3 ? 6 : c.outlier >= 2 ? 3 : 0) +
+        // The focus is social media (Hamed, Nov 5 2026): a creator's post gets a lift over a plain news item.
+        (c.social ? 4 : 0),
     }))
     .sort((a, b) => b.rank - a.rank);
   for (const { c } of byRank) {

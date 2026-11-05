@@ -2268,8 +2268,8 @@ function IdeasSection({ decisions, ...actions }) {
         {sig ? (
           <div style={{ color: C.text2 }}>
             {L(
-              `منبع ایده‌ها: ${sig.google} جست‌وجوی گوگل و یوتیوب (فارسی و انگلیسی) · ${sig.helpcentre} سؤال مرکز راهنمای اداره مهاجرت کانادا · ${sig.reddit} پرسش ردیت · مقایسه با ${sig.covered} مطلب سایت · برداشت ${when(sig.at)}`,
-              `Sources: ${sig.google} Google and YouTube searches (Persian and English) · ${sig.helpcentre} IRCC Help Centre questions · ${sig.reddit} Reddit questions · compared with ${sig.covered} site posts · harvested ${when(sig.at)}`
+              `منبع ایده‌ها: ${sig.google} جست‌وجوی گوگل و یوتیوب (فارسی و انگلیسی) · ${sig.helpcentre} سؤال مرکز راهنمای اداره مهاجرت کانادا · مقایسه با ${sig.covered} مطلب سایت · برداشت ${when(sig.at)}`,
+              `Sources: ${sig.google} Google and YouTube searches (Persian and English) · ${sig.helpcentre} IRCC Help Centre questions · compared with ${sig.covered} site posts · harvested ${when(sig.at)}`
             )}
             {sig.pages < sig.pagesTotal ? L(` · ${sig.pages} از ${sig.pagesTotal} صفحهٔ رسمی آماده`, ` · ${sig.pages} of ${sig.pagesTotal} official pages ready`) : ""}
           </div>
