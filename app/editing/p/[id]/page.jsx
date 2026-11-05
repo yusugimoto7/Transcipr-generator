@@ -682,7 +682,23 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             )}
           </p>
         )}
-        {run.error && <div className={s.error}>{run.error}</div>}
+        {run.error && run.status === "failed" ? (
+          <div className={s.error} dir={uiDir()}>
+            <b>{run.stopped_at ? L(`در مرحلهٔ «${STOP_STEP_FA[run.stopped_at] || run.stopped_at}» متوقف شد.`, `Stopped while ${run.stopped_at}.`) : L("متوقف شد.", "Stopped.")}</b>{" "}
+            {L("دلیل: ", "Why: ")}
+            <bdi>{reasonText(run.error)}</bdi>
+            {(run.kept || []).length > 0 && (
+              <div style={{ marginTop: 6 }}>
+                {L(
+                  `کارهای انجام‌شده نگه داشته شد (${run.kept.map((k) => KEPT_FA[k] || k).join("، ")})؛ «ادامه» از همون‌جا ادامه می‌ده و اونها رو دوباره انجام نمی‌ده.`,
+                  `What was finished is kept (${run.kept.join(", ")}); Continue picks up from there and does not do it again.`
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          run.error && <div className={s.error}>{run.error}</div>
+        )}
         {me.role === "admin" && run.log_tail && <pre className={s.pre}>{run.log_tail}</pre>}
         {me.role === "admin" && run.log_url && (
           <a className={s.muted} href={run.log_url} target="_blank" rel="noreferrer">
@@ -692,7 +708,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
         {isLatest && run.status === "failed" && (
           <div>
             <button className={s.btn} disabled={!!busy} onClick={() => act("retry", () => api(`/projects/${project.id}/rerun`, { method: "POST" }))}>
-              {L("دوباره امتحان کن", "Try again")}
+              {L("ادامه از همون‌جا", "Continue from where it stopped")}
             </button>
           </div>
         )}
@@ -1124,6 +1140,24 @@ function ProjectAccess({ id, d, reload }) {
     </div>
   );
 }
+
+// The worker's words for where a version stopped and what it kept (english-sugimotovisa cmd_fail).
+const STOP_STEP_FA = { starting: "شروع", transcribing: "پیاده‌سازی متن", "choosing the takes": "انتخاب برداشت‌ها", "cutting and joining": "برش و چسباندن", "checking the cut": "بررسی برش", "copying to Drive": "کپی در درایو" };
+// The worker writes its plain reasons in English (english-sugimotovisa REASONS); the known ones in Persian.
+const REASON_FA = [
+  ["the editing machine ran out of disk space", "فضای دیسک ماشین ویرایش تموم شد"],
+  ["the raw video could not be downloaded", "فیلم خام دانلود نشد: ببین لینک درایوش باز می‌شه و روی «هر کسی با لینک» شِیر شده"],
+  ["the AI service that chooses the takes was busy", "سرویس هوش مصنوعی که برداشت‌ها رو انتخاب می‌کنه شلوغ بود و بعد از سه بار هم جواب نداد"],
+  ["the footage is longer than", "فیلم از حداکثری که ماشین ویرایش می‌گیره بلندتره"],
+  ["a step took too long", "یک مرحله بیش از حد طول کشید و متوقف شد"],
+  ["the video tool (ffmpeg) refused", "ابزار ساخت ویدیو (ffmpeg) یک مرحله از ساخت ویدیو رو قبول نکرد"],
+  ["the editing machine ran out of memory", "حافظهٔ ماشین ویرایش تموم شد"],
+];
+function reasonText(err) {
+  const hit = REASON_FA.find(([en]) => String(err).startsWith(en));
+  return hit ? L(hit[1], err) : err;
+}
+const KEPT_FA = { transcription: "متن پیاده‌شده", "chosen takes": "برداشت‌های انتخاب‌شده" };
 
 export default function Page({ params }) {
   return <Shell>{() => <Project id={params.id} />}</Shell>;

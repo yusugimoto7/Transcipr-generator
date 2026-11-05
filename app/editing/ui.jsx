@@ -23,7 +23,8 @@ export const STATUS = {
   review: ["آمادهٔ بازبینی", "Ready for review"],
   delivering: ["در حال کپی در درایو", "Copying to Drive"],
   approved: ["تأییدشده", "Approved"],
-  failed: ["ناموفق", "Failed"],
+  // a stopped version keeps what it finished and continues from there (Hamed, 5 Nov 2026)
+  failed: ["متوقف شد", "Stopped"],
 };
 export function statusName(status) {
   return STATUS[status] ? L(STATUS[status]) : status;
