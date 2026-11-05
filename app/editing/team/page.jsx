@@ -69,7 +69,7 @@ function Team({ user }) {
                   <th>{L("ایمیل", "Email")}</th>
                   <th>{L("نقش", "Role")}</th>
                   <th>{L("دسترسی به", "Can open")}</th>
-                  <th>{L("تأیید برش‌های خودش", "May approve own cuts")}</th>
+                  <th>{L("تأیید نسخه‌ها", "May approve versions")}</th>
                   <th>{L("حساب", "Account")}</th>
                   <th>{L("رمز موقت جدید", "New temporary password")}</th>
                 </tr>
@@ -125,7 +125,7 @@ function Team({ user }) {
                           id={"approve-" + u.id}
                           type="checkbox"
                           checked={!!u.may_approve_own}
-                          onChange={(e) => patch(u.id, { may_approve_own: e.target.checked }, e.target.checked ? L(`${u.name} حالا می‌تونه برش‌های خودش رو تأیید کنه.`, `${u.name} may now approve their own cuts.`) : L(`از این به بعد دوباره حامد برش‌های ${u.name} رو تأیید می‌کنه.`, `Hamed approves ${u.name}'s cuts again.`))}
+                          onChange={(e) => patch(u.id, { may_approve_own: e.target.checked }, e.target.checked ? L(`${u.name} حالا می‌تونه نسخه‌های پروژه‌هایی که باهاش به اشتراک گذاشته شده رو تأیید کنه.`, `${u.name} may now approve versions of the projects shared with them.`) : L(`از این به بعد دوباره حامد نسخه‌ها رو برای ${u.name} تأیید می‌کنه.`, `Hamed approves versions for ${u.name} again.`))}
                         />
                       )}
                     </td>
@@ -182,7 +182,7 @@ function Team({ user }) {
         </div>
         <label className={s.row} style={{ fontSize: 14 }}>
           <input id="new-approve" type="checkbox" checked={f.may_approve_own} onChange={(e) => setF({ ...f, may_approve_own: e.target.checked })} />
-          {L("می‌تونه برش‌های خودش رو تأیید کنه (خاموش: تأیید با توئه)", "May approve their own cuts (off: you approve)")}
+          {L("می‌تونه نسخه‌ها رو تأیید کنه، در هر پروژه‌ای که باهاش به اشتراک گذاشته شده (خاموش: تأیید با توئه)", "May approve versions, in any project shared with them (off: you approve)")}
         </label>
         <div>
           <button className={`${s.btn} ${s.primary}`}>{L("افزودن عضو", "Add member")}</button>

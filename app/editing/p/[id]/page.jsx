@@ -889,7 +889,9 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
                       <span className={s.grow}>
                         {r.step === "plan"
                           ? L("گرافیک‌ها طبق طرح ساخته بشن؟ برای هر دقیقه ویدیو حدود ۱۰ دقیقه طول می‌کشه.", "Render the graphics as planned? It takes about 10 minutes per minute of video.")
-                          : L(`${runName(run)} تأیید بشه و فایل با کیفیت کامل در Drive کپی بشه؟`, `Approve ${runName(run).toLowerCase()} and copy the full-quality file to Drive?`)}
+                          : r.full_on_approval && !r.full
+                            ? L(`${runName(run)} تأیید بشه؟ فایل با کیفیت کامل همین حالا ساخته می‌شه و چند دقیقه بعد در Drive هست.`, `Approve ${runName(run).toLowerCase()}? The full-quality file is made now and is in Drive a few minutes later.`)
+                            : L(`${runName(run)} تأیید بشه و فایل با کیفیت کامل در Drive کپی بشه؟`, `Approve ${runName(run).toLowerCase()} and copy the full-quality file to Drive?`)}
                       </span>
                       <button className={`${s.btn} ${s.primary}`} disabled={!!busy} onClick={() => act("approve", () => api(`/projects/${project.id}/approve`, { method: "POST", body: { run_id: run.id } }))}>
                         {L("بله، تأیید", "Yes, approve")}
