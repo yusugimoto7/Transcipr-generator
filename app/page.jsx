@@ -2786,6 +2786,25 @@ function SourceBadge({ t, header = false }) {
   );
 }
 
+// The pictures of a social post (a tweet's photo, a reel's cover), shown under the topic's headline.
+// A picture that no longer loads (a platform's expiring link) is left out, not shown broken; no
+// referrer is sent, since some platforms refuse a picture asked for from another site.
+function PostPictures({ images, url }) {
+  const [bad, setBad] = useState({});
+  const shown = images.filter((u) => !bad[u]);
+  if (!shown.length) return null;
+  return (
+    <div style={{ marginTop: 14, display: "grid", gap: 8, gridTemplateColumns: shown.length === 1 ? "1fr" : "1fr 1fr" }}>
+      {shown.map((u) => (
+        <a key={u} href={u} target="_blank" rel="noopener noreferrer" title={L("باز کردن تصویر", "Open the picture")} style={{ display: "block", borderRadius: 14, overflow: "hidden", border: `1px solid ${C.line}`, background: C.surface, lineHeight: 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={u} alt={L("تصویر پست", "Picture from the post")} loading="lazy" referrerPolicy="no-referrer" onError={() => setBad((b) => ({ ...b, [u]: true }))} style={{ width: "100%", maxHeight: shown.length === 1 ? 420 : 240, objectFit: "cover", display: "block" }} />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function sourceHost(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -3429,6 +3448,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
             {topic.why_now}
           </div>
         )}
+        {Array.isArray(topic.images) && topic.images.length > 0 && <PostPictures images={topic.images} url={topic.post_url || topic.source_url} />}
         {topic.source_url && (
           <a
             href={topic.source_url}
