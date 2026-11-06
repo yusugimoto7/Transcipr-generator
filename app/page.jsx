@@ -3778,6 +3778,33 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
   const [editing, setEditing] = useState(0); // slide number whose edit sheet is open
   const [template, setTemplate] = useState((carousel && carousel.template) || 1);
   const [textOpen, setTextOpen] = useState(false); // the slide-text editor over a drawn carousel
+  // «Redesign everything» over a drawn carousel (Hamed, Nov 6 2026: "after the design I want to change
+  // the template, the number of posts, the tone and the rest"): the same choices as the first form,
+  // starting from what the carousel is now.
+  const [redo, setRedo] = useState(false);
+  const [rdKind, setRdKind] = useState("news");
+  const [rdVoice, setRdVoice] = useState("hamed");
+  const [rdCount, setRdCount] = useState(7);
+  const [rdNotes, setRdNotes] = useState("");
+  const [rdFresh, setRdFresh] = useState(false); // false: rewrite from this version; true: from the news again
+  const openRedo = () => {
+    setRdKind(carousel && carousel.kind && carousel.kind !== "own" ? carousel.kind : "news");
+    setRdVoice(carousel && carousel.voice && carousel.voice !== "own" ? carousel.voice : "hamed");
+    setRdCount(slides.length || 7);
+    setRdNotes("");
+    setRdFresh(false);
+    setTemplate((carousel && carousel.template) || 1);
+    setTextOpen(false);
+    setRedo(true);
+  };
+  const runRedo = (textOnly) => {
+    setRedo(false);
+    onJob("carousel", { count: rdCount, notes: rdNotes.trim(), template, carousel_kind: rdKind, voice: rdVoice, ...(rdFresh ? {} : { revise: true }), ...(textOnly ? { mode: "text" } : {}) });
+  };
+  const goBack = () => {
+    if (!window.confirm(L("به نسخهٔ قبلی برگردیم؟ نسخهٔ فعلی جاش رو می‌گیره و با دوباره زدن همین دکمه برمی‌گرده.", "Go back to the earlier version? The current one takes its place, and pressing this again brings it back."))) return;
+    onJob("carousel", { mode: "restore" });
+  };
   const [draft, setDraft] = useState([]); // [{ title, body }] being edited
   const [capOpen, setCapOpen] = useState(false);
   const [capText, setCapText] = useState("");
@@ -4000,6 +4027,8 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
           <span className="ui-pulse">⏳</span>{" "}
           {mode === "save"
             ? L("در حال ذخیره…", "Saving…")
+            : mode === "restore"
+            ? L("در حال برگرداندن نسخهٔ قبلی…", "Going back to the earlier version…")
             : stage === "writing"
             ? L("در حال نوشتن متن اسلایدها…", "Writing the slide text…")
             : slides.length
@@ -4053,15 +4082,78 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
                     ⬇ {L(`دانلود همه (${drawn})`, `Download all (${drawn})`)}
                   </button>
                 )}
-                <button className="ui-btn" onClick={() => setTextOpen(true)} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 9, padding: "5px 10px", color: "#6d5bd0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
+                <button className="ui-btn" onClick={() => { setRedo(false); setTextOpen(true); }} style={{ background: alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 9, padding: "5px 10px", color: "#6d5bd0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
                   ✍️ {L("متن اسلایدها", "Slide text")}
                 </button>
+                <button className="ui-btn" onClick={() => (redo ? setRedo(false) : openRedo())} aria-pressed={redo} style={{ background: redo ? "#6d5bd0" : alpha("#6d5bd0", 0.1), border: `1px solid ${alpha("#6d5bd0", 0.4)}`, borderRadius: 9, padding: "5px 10px", color: redo ? "#fff" : "#6d5bd0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: fa }}>
+                  🎛 {L("تغییر کامل طراحی", "Redesign")}
+                </button>
+                {carousel && carousel.before && (
+                  <button className="ui-btn" onClick={goBack} title={L("نسخهٔ قبل از آخرین تغییر", "The version before the last change")} style={{ background: "transparent", border: `1px solid ${C.line}`, borderRadius: 9, padding: "5px 10px", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
+                    ↩ {L("نسخهٔ قبلی", "Earlier version")}
+                  </button>
+                )}
                 <button className="ui-btn" onClick={() => setForm(true)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>
                   ↻ {L("از نو (بدون نسخهٔ قبلی)", "Start over (without the last version)")}
                 </button>
               </span>
             )}
           </div>
+          {redo && !running && (
+            <div dir={uiDir()} className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha("#6d5bd0", 0.35)}`, borderRadius: 16, padding: 14, fontFamily: fa, marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <b style={{ fontSize: 14.5 }}>🎛 {L("تغییر کامل طراحی", "Redesign the whole carousel")}</b>
+                <button className="ui-btn" onClick={() => setRedo(false)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: fa }}>{L("بستن", "Close")}</button>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10, lineHeight: 1.7 }}>
+                {L("هر چی می‌خوای عوض کن؛ نسخهٔ فعلی نگه داشته می‌شه و با «نسخهٔ قبلی» برمی‌گرده. اگه فقط قالب رو عوض می‌کنی و متن همونه، از «متن اسلایدها» استفاده کن.", "Change whatever you like; the current version is kept and comes back with “Earlier version”. If you only change the template and keep the text, use “Slide text”.")}
+              </div>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("نوع کاروسل", "Carousel type")}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {CAROUSEL_KINDS.map((k) => (
+                  <button key={k.id} type="button" className="ui-btn" title={L(k.note_fa, k.note_en)} onClick={() => setRdKind(k.id)} aria-pressed={rdKind === k.id} style={{ padding: "6px 12px", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontFamily: fa, border: `${rdKind === k.id ? 2 : 1}px solid ${rdKind === k.id ? "#6d5bd0" : C.line}`, background: rdKind === k.id ? alpha("#6d5bd0", 0.12) : C.surface, color: rdKind === k.id ? "#6d5bd0" : C.text }}>
+                    {L(k.fa, k.en)}<span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: C.text3 }}>{L(k.note_fa, k.note_en)}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("لحن و صدای نوشتار", "Tone and writing voice")}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {VOICES.filter((v) => v.id !== "classroom").map((v) => (
+                  <button key={v.id} type="button" className="ui-btn" title={L(v.note_fa, v.note_en)} onClick={() => setRdVoice(v.id)} aria-pressed={rdVoice === v.id} style={{ padding: "5px 14px", borderRadius: 999, cursor: "pointer", fontWeight: 700, fontFamily: fa, border: `1px solid ${rdVoice === v.id ? "#6d5bd0" : C.line}`, background: rdVoice === v.id ? alpha("#6d5bd0", 0.14) : C.surface, color: rdVoice === v.id ? "#6d5bd0" : C.text }}>
+                    {rdVoice === v.id ? "✓ " : ""}{L(v.fa, v.en)}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("تعداد اسلاید", "Number of slides")}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
+                {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <button key={n} className="ui-btn" onClick={() => setRdCount(n)} style={{ minWidth: 38, height: 34, borderRadius: 10, cursor: "pointer", border: `1px solid ${rdCount === n ? "#6d5bd0" : C.line}`, background: rdCount === n ? alpha("#6d5bd0", 0.14) : C.surface, color: rdCount === n ? "#6d5bd0" : C.text, fontWeight: 700, fontFamily: font }}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("قالب اسلایدها", "Slide template")}</div>
+              <TemplatePicker value={template} onChange={setTemplate} font={fa} />
+              <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
+              <textarea dir="auto" value={rdNotes} onChange={(e) => setRdNotes(e.target.value)} rows={3} placeholder={L("مثلاً: لحن رسمی‌تر، روی دانشجوها تمرکز کن، اسلاید مقایسه نذار…", "e.g. a more formal tone, focus on students, no comparison slide…")} style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical", marginBottom: 10 }} />
+              <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                {[[false, L("از روی نسخهٔ فعلی", "From the current version"), L("متن فعلی پایه می‌مونه و فقط چیزهایی که عوض کردی (لحن، نوع، تعداد، یادداشت) اعمال می‌شه", "The current text stays the base; only what you changed (tone, type, count, notes) applies")], [true, L("از نو از روی خبر", "From the news again"), L("متن از اول و فقط از روی خبر نوشته می‌شه", "The text is written again from the news alone")]].map(([v, label, note]) => (
+                  <button key={String(v)} type="button" className="ui-btn" onClick={() => setRdFresh(v)} aria-pressed={rdFresh === v} style={{ flex: 1, minWidth: 150, textAlign: "start", padding: "8px 10px", borderRadius: 12, cursor: "pointer", fontFamily: fa, fontWeight: 700, fontSize: 12.5, border: `${rdFresh === v ? 2 : 1}px solid ${rdFresh === v ? "#6d5bd0" : C.line}`, background: rdFresh === v ? alpha("#6d5bd0", 0.1) : C.surface, color: rdFresh === v ? "#6d5bd0" : C.text }}>
+                    {label}<span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: C.text3 }}>{note}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="ui-btn ui-glow-orange" onClick={() => runRedo(false)} disabled={!caps.carousel} style={{ ...btn("#6d5bd0", "#fff", "none"), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
+                  🎨 {L(`نوشتن و ساخت ${rdCount} اسلاید`, `Rewrite and design ${rdCount} slides`)}
+                </button>
+                <button className="ui-btn" onClick={() => runRedo(true)} disabled={!caps.carousel} style={{ ...btn(alpha("#6d5bd0", 0.1), "#6d5bd0", `1px solid ${alpha("#6d5bd0", 0.5)}`), flex: 1, minWidth: 150, opacity: caps.carousel ? 1 : 0.5 }}>
+                  ✍️ {L("فقط متن رو بنویس", "Write the text only")}
+                </button>
+              </div>
+              <div style={{ fontSize: 11.5, color: C.text3, marginTop: 8 }}>{L("هر اسلاید حدود ۵ سنت و چند دقیقه طول می‌کشه. «فقط متن» اول متن رو نشونت می‌ده تا تیتر و بدنه رو عوض کنی و بعد طراحی کنی.", "Each slide costs about 5 cents and takes a few minutes. “Text only” shows the text first, so you can edit the headings and bodies before designing.")}</div>
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
             {slides.map((sl) => (
               <div key={sl.num} style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
