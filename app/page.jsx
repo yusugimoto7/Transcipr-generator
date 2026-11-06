@@ -1,5 +1,6 @@
 "use client";
 
+import TopicAssistant from "./TopicAssistant";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { isUntrusted } from "../lib/trust";
 import { sameTopic } from "../lib/similar";
@@ -1363,6 +1364,14 @@ export default function App() {
           onRefreshVideo={() => loadSaved(svKey, "video")}
           caps={caps}
           onJob={(kind, extra) => startJob(LANG_KINDS.includes(kind) ? kind + sfx : kind, scriptTopic, { topic: scriptTopic, ...extra })}
+        />
+      )}
+      {view === "script" && scriptTopic && (
+        <TopicAssistant
+          topicKey={svKey}
+          job={svJobs.assistant || null}
+          lang={contentLang}
+          run={(kind, extra) => startJob(kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
     </div>
