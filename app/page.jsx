@@ -4331,6 +4331,15 @@ function TemplatePicker({ value, onChange, font }) {
 // template did not change.
 function SlideTextEditor({ draft, setDraft, template, setTemplate, caption, setCaption, drawnBefore, changed, onSave, onDraw, onClose, btn, fa }) {
   const set = (i, k, v) => setDraft(draft.map((d, j) => (j === i ? { ...d, [k]: v } : d)));
+  // Hamed, Nov 6 2026: remove a slide, or add one where it is needed (at most 10, at least 1).
+  const MAX = 10;
+  const removeAt = (i) => {
+    const d = draft[i];
+    if ((d.title.trim() || d.body.trim()) && !window.confirm(L(`اسلاید ${i + 1} حذف بشه؟`, `Remove slide ${i + 1}?`))) return;
+    setDraft(draft.filter((_, j) => j !== i));
+  };
+  const addAfter = (i) => draft.length < MAX && setDraft([...draft.slice(0, i + 1), { title: "", body: "" }, ...draft.slice(i + 1)]);
+  const small = { background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "2px 9px", cursor: "pointer", fontSize: 12, fontFamily: fa };
   const field = { width: "100%", boxSizing: "border-box", borderRadius: 10, border: `1px solid ${C.line}`, padding: 9, fontFamily: fa, fontSize: 13, lineHeight: 1.7, background: C.surface, color: C.text };
   const any = draft.some((d) => d.title.trim() || d.body.trim());
   return (
@@ -4343,16 +4352,31 @@ function SlideTextEditor({ draft, setDraft, template, setTemplate, caption, setC
           </button>
         )}
       </div>
-      <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10 }}>{L("تیتر و بدنهٔ هر اسلاید رو عوض کن؛ بعد «طراحی اسلایدها» رو بزن.", "Change each slide's heading and body, then press “Design slides”.")} {drawnBefore ? L("فقط اسلایدهایی که متنشون عوض شده دوباره طراحی می‌شن (با قالب جدید، همه).", "Only slides whose text changed are designed again (all of them with a new template).") : ""}</div>
+      <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10 }}>{L("تیتر و بدنهٔ هر اسلاید رو عوض کن؛ بعد «طراحی اسلایدها» رو بزن.", "Change each slide's heading and body, then press “Design slides”.")} {drawnBefore ? L("فقط اسلایدهایی که متنشون یا جاشون (کاور، وسط، آخر) عوض شده دوباره طراحی می‌شن (با قالب جدید، همه).", "Only slides whose text or place (cover, middle, last) changed are designed again (all of them with a new template).") : ""}</div>
       {draft.map((d, i) => (
         <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 10, marginBottom: 8, background: C.surfaceHi }}>
-          <div style={{ fontSize: 11.5, fontWeight: 800, color: "#6d5bd0", marginBottom: 6 }}>{L("اسلاید ", "Slide ")}{i + 1}{i === 0 ? L(" (کاور)", " (cover)") : i === draft.length - 1 ? L(" (آخر)", " (last)") : ""}</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 800, color: "#6d5bd0" }}>{L("اسلاید ", "Slide ")}{i + 1}{i === 0 ? L(" (کاور)", " (cover)") : i === draft.length - 1 ? L(" (آخر)", " (last)") : ""}</span>
+            {draft.length > 1 && (
+              <button type="button" className="ui-btn" onClick={() => removeAt(i)} title={L("حذف این اسلاید", "Remove this slide")} style={{ ...small, color: C.reject, borderColor: alpha(C.reject, 0.4) }}>
+                ✕ {L("حذف", "Remove")}
+              </button>
+            )}
+          </div>
           <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>{L("تیتر", "Heading")}</div>
           <input dir="auto" value={d.title} onChange={(e) => set(i, "title", e.target.value)} style={{ ...field, fontWeight: 700, marginBottom: 6 }} />
           <div style={{ fontSize: 11.5, color: C.text2, marginBottom: 3 }}>{L("بدنه", "Body")}</div>
           <textarea dir="auto" value={d.body} onChange={(e) => set(i, "body", e.target.value)} rows={Math.min(8, Math.max(3, d.body.split("\n").length + 1))} style={{ ...field, resize: "vertical" }} />
+          {draft.length < MAX && (
+            <div style={{ textAlign: "center", marginTop: 8 }}>
+              <button type="button" className="ui-btn" onClick={() => addAfter(i)} title={L("یک اسلاید خالی بعد از این اضافه کن", "Add an empty slide after this one")} style={{ ...small, color: "#6d5bd0", borderColor: alpha("#6d5bd0", 0.4), fontWeight: 700 }}>
+                + {L("اسلاید بعد از این", "Slide after this one")}
+              </button>
+            </div>
+          )}
         </div>
       ))}
+      {draft.length >= MAX && <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 8 }}>{L("حداکثر ۱۰ اسلاید.", "At most 10 slides.")}</div>}
       <div style={{ fontSize: 12.5, color: C.text2, margin: "10px 0 4px" }}>{L("کپشن (حداکثر ۳ هشتگ)", "Caption (at most 3 hashtags)")}</div>
       <textarea dir="auto" value={caption} onChange={(e) => setCaption(e.target.value)} rows={6} style={{ ...field, resize: "vertical", marginBottom: 12 }} />
       <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("قالب اسلایدها", "Slide template")}</div>
