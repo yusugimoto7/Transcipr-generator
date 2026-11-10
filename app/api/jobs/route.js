@@ -1,3 +1,4 @@
+import { record, jobLabel } from "../../../lib/activity";
 import { Lfor } from "../../../lib/i18n";
 import { startJob, getJobs, publicJob, topicKeyOf, JOB_KINDS } from "../../../lib/jobs";
 import { currentUser } from "../../../lib/editing/auth";
@@ -42,6 +43,11 @@ export async function POST(request) {
     // (never taken from the page: a page could otherwise send notifications to someone else)
     body.by_uid = (await currentUser(request).catch(() => null))?.id || "";
     const job = startJob(kind, key, body);
+    // the activity log: what was made, and for which topic (lib/activity.js)
+    if (body.by_uid) {
+      const t = body.topic || {};
+      record({ uid: body.by_uid, what: jobLabel(kind), detail: t.title_fa || t.title_en || (body.article && body.article.title_fa) || "" });
+    }
     return Response.json({ job: publicJob(job) });
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });

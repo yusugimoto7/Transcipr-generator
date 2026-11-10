@@ -8,6 +8,7 @@ import { Bell, Check, Copy, Download, Languages, Mic, Settings, Share2 } from "l
 import { s, Shell, LANG_CHOICES } from "../editing/ui";
 import PasswordForm from "../editing/PasswordForm";
 import PushSwitch from "../PushSwitch";
+import ActivityLog from "./ActivityLog";
 import { L, chooseLang, getLang, uiDir } from "../../lib/i18n";
 
 function SettingsPage({ user }) {
@@ -39,6 +40,7 @@ function SettingsPage({ user }) {
       <ShareShortcut />
       <VoiceExtension />
       <PasswordForm user={user} inSettings />
+      {user && user.role === "admin" && <ActivityLog />}
     </div>
   );
 }

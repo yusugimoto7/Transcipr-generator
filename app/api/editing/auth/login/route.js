@@ -1,4 +1,5 @@
 import { LANG_COOKIE, normLang, Lfor } from "../../../../../lib/i18n";
+import { record } from "../../../../../lib/activity";
 import { editingEnabled, findByEmail, checkPassword, createUser, sessionCookie, publicUser, json, normEmail, loginLocked, loginFailed, loginOk, allUsers } from "../../../../../lib/editing/auth";
 
 export const runtime = "nodejs";
@@ -24,6 +25,7 @@ export async function POST(request) {
       return json({ error: Lfor(request)("ایمیل یا رمز عبور اشتباه است", "wrong email or password") }, 401);
     }
     loginOk(email);
+    record({ uid: user.id, method: "POST", path: "/api/editing/auth/login" });
     const headers = new Headers({ "Cache-Control": "no-store" });
     headers.append("Set-Cookie", await sessionCookie(user));
     // The language chosen on the account follows the person to this device.

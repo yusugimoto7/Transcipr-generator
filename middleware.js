@@ -2,6 +2,7 @@ import { Lfor } from "./lib/i18n";
 import { NextResponse } from "next/server";
 import { COOKIE, TICKET, TICKET_MINUTES, readSession, readTicket, sessionSecret } from "./lib/editing/session";
 import { sectionOf, isPublishing, homeOf, SECTION_NAMES } from "./lib/editing/access";
+import { worthLogging } from "./lib/activity-filter";
 
 // One login for the whole app. Video Editing, the content calendar and the Team page always need
 // it (once the section is switched on). The Topic Engine itself needs it only with APP_LOGIN=all;
@@ -24,7 +25,22 @@ async function ticketFor(req, uid) {
   return d && Array.isArray(d.ax) ? { ax: d.ax, set: d.ticket } : null;
 }
 
-export async function middleware(req) {
+// The activity log (lib/activity.js): an action or a page a signed-in person opened is handed to
+// /api/activity on this server, after the answer, so nobody waits for it.
+function logActivity(req, event, uid) {
+  const { pathname } = req.nextUrl;
+  const prefetch = !!(req.headers.get("next-router-prefetch") || req.headers.get("purpose") === "prefetch");
+  if (!worthLogging(req.method, pathname, { prefetch })) return;
+  const base = process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : req.nextUrl.origin;
+  const p = fetch(base + "/api/activity", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + sessionSecret() },
+    body: JSON.stringify({ uid, method: req.method, path: pathname }),
+  }).catch(() => {});
+  if (event && event.waitUntil) event.waitUntil(p);
+}
+
+export async function middleware(req, event) {
   const { pathname, search } = req.nextUrl;
   const section = sectionOf(pathname, search);
   if (section === "open") return NextResponse.next();
@@ -42,7 +58,10 @@ export async function middleware(req) {
   const s = await readSession(req.cookies.get(COOKIE)?.value);
   if (!s || s.t) return signIn();
   if (s.mc && !api && pathname !== "/editing/password") return NextResponse.redirect(new URL("/editing/password", req.url));
-  if (section === "any") return NextResponse.next();
+  if (section === "any") {
+    logActivity(req, event, s.uid);
+    return NextResponse.next();
+  }
 
   const t = await ticketFor(req, s.uid);
   if (!t) return signIn();
@@ -58,7 +77,10 @@ export async function middleware(req) {
   let res;
   if (!t.ax.includes(need)) res = deny(need);
   else if (all && isPublishing(pathname, req.method) && !t.ax.includes("publishing")) res = deny("publishing");
-  else res = NextResponse.next();
+  else {
+    res = NextResponse.next();
+    logActivity(req, event, s.uid);
+  }
   if (t.set) {
     const secure = process.env.NODE_ENV === "production";
     res.cookies.set(TICKET, t.set, { path: "/", httpOnly: true, sameSite: "lax", maxAge: TICKET_MINUTES * 60, secure });
