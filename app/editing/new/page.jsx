@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api, s, Shell, DriveVideo } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import VoicePicker from "./VoicePicker";
+import SubtitleStyle, { EMPTY_SUB } from "../SubtitleStyle";
 import { L, uiDir } from "../../../lib/i18n";
 import { Sheet, SheetContent } from "../../../components/ui/sheet";
 import { Button } from "../../../components/ui/button";
@@ -68,8 +69,6 @@ function FileCard({ project, file, chosen, onChoose }) {
   );
 }
 
-const SIZES = { portrait: { small: 64, large: 88 }, landscape: { small: 54, large: 74 } };
-const HEIGHTS = { portrait: { higher: 1100, lower: 1400 }, landscape: { higher: 800, lower: 960 } };
 
 function NewProject() {
   const router = useRouter();
@@ -96,7 +95,7 @@ function NewProject() {
     setF((x) => ({ ...x, title: x.title || origin.title, kind: origin.kind || x.kind }));
   }, [origin, from.run_id]);
   const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
-  const [sub, setSub] = useState({ size: "", height: "", words: "" });
+  const [sub, setSub] = useState(EMPTY_SUB);
   const [gfx, setGfx] = useState({ amount: "normal", template: "canvas", brief: "", with_subtitles: false });
   // Motion graphics on a voice alone (mode "voice"): a recording or file kept on editing-data, or a Drive link
   const [voice, setVoice] = useState(null);
@@ -145,11 +144,7 @@ function NewProject() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const subtitles = {
-      size: (SIZES[shape] || {})[sub.size] || 0,
-      position_y: (HEIGHTS[shape] || {})[sub.height] || 0,
-      words_per_group: Number(sub.words) || 0,
-    };
+    const subtitles = sub;
     const { touched, ...fields } = f;
     if (mode === "project" && !(from.project_id && from.run_id)) {
       setError(L("یک پروژه و یکی از فایل‌های تأییدشده‌ش رو انتخاب کن.", "Choose a project and one of its approved files."));
@@ -172,35 +167,7 @@ function NewProject() {
       setBusy(false);
     }
   };
-  const subtitleFields = (
-    <div className={s.row} style={{ flexWrap: "wrap" }}>
-      <label className={`${s.field} ${s.grow}`}>
-        <span>{L("اندازهٔ زیرنویس", "Subtitle size")}</span>
-        <select id="sub_size" className={s.select} value={sub.size} onChange={(e) => setSub({ ...sub, size: e.target.value })}>
-          <option value="">{L("همون استایل تأییدشده", "The approved style")}</option>
-          <option value="small">{L("کوچک‌تر", "Smaller")}</option>
-          <option value="large">{L("بزرگ‌تر", "Larger")}</option>
-        </select>
-      </label>
-      <label className={`${s.field} ${s.grow}`}>
-        <span>{L("جای زیرنویس", "Subtitle height")}</span>
-        <select id="sub_height" className={s.select} value={sub.height} onChange={(e) => setSub({ ...sub, height: e.target.value })}>
-          <option value="">{L("همون جای تأییدشده (روی سینه)", "The approved place (chest band)")}</option>
-          <option value="higher">{L("بالاتر", "Higher")}</option>
-          <option value="lower">{L("پایین‌تر", "Lower")}</option>
-        </select>
-      </label>
-      <label className={`${s.field} ${s.grow}`}>
-        <span>{L("چند کلمه هم‌زمان", "Words at a time")}</span>
-        <select id="sub_words" className={s.select} value={sub.words} onChange={(e) => setSub({ ...sub, words: e.target.value })}>
-          <option value="">{L("همون تأییدشده (۳)", "The approved (3)")}</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-        </select>
-      </label>
-    </div>
-  );
+  const subtitleFields = <SubtitleStyle value={sub} onChange={setSub} shape={shape} lang={f.language === "en" ? "en" : "fa"} />;
   return (
     <form className={s.card} onSubmit={submit} style={{ maxWidth: 640 }} dir={uiDir()}>
       <h1 className={s.title}>{L("پروژهٔ جدید", "New project")}</h1>

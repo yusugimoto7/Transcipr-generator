@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar, DriveVideo } from "../../ui";
 import VoiceCorrections from "./VoiceCorrections";
+import SubtitleStyle, { EMPTY_SUB } from "../../SubtitleStyle";
 import MicButton from "../../../voice/MicButton";
 import { L, uiDir } from "../../../../lib/i18n";
 
@@ -220,6 +221,62 @@ function Steps({ runs, project }) {
   );
 }
 
+// Subtitle settings on the project (Hamed, 10 Nov 2026): set before the subtitles start, or on a
+// subtitles version in review, where "make it again in this style" redraws it (the words stay; the
+// transcription is reused unless the language changed).
+function SubtitleSettings({ project, reload, remake, open: startOpen = false }) {
+  const [v, setV] = useState(() => ({ ...EMPTY_SUB, ...((project.settings || {}).subtitles || {}) }));
+  const [open, setOpen] = useState(startOpen);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const shape = project.kind === "youtube" ? "landscape" : "portrait";
+  const send = async (again) => {
+    setBusy(again ? "remake" : "save");
+    setError("");
+    setSaved(false);
+    try {
+      await api(`/projects/${project.id}/subtitle-style`, { method: "POST", body: { subtitles: v, remake: !!again } });
+      setSaved(true);
+      await reload();
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy("");
+  };
+  return (
+    <div className={s.card}>
+      <button type="button" className={s.linkBtn} onClick={() => setOpen(!open)} aria-expanded={open} style={{ textAlign: "start", padding: 0 }}>
+        <h2 className={s.h2} style={{ margin: 0 }}>
+          <Subtitles size={18} aria-hidden style={{ verticalAlign: "-3px" }} /> {L("تنظیمات زیرنویس: جا، اندازه، فونت، سبک، زبان", "Subtitle settings: place, size, font, style, language")} {open ? "▴" : "▾"}
+        </h2>
+      </button>
+      {open && (
+        <>
+          <SubtitleStyle value={v} onChange={(x) => { setV(x); setSaved(false); }} shape={shape} lang={project.language === "en" ? "en" : "fa"} />
+          <div className={s.row}>
+            {remake && (
+              <button className={`${s.btn} ${s.primary}`} disabled={!!busy} onClick={() => send(true)}>
+                {busy === "remake" ? L("در حال شروع…", "Starting…") : L("نسخهٔ جدید با این تنظیمات", "Make a new version in this style")}
+              </button>
+            )}
+            <button className={s.btn} disabled={!!busy} onClick={() => send(false)}>
+              {busy === "save" ? L("در حال ذخیره…", "Saving…") : remake ? L("فقط ذخیره برای نسخهٔ بعد", "Save for the next version only") : L("ذخیره", "Save")}
+            </button>
+            {saved && <span className={s.muted}>{L("ذخیره شد ✓", "Saved ✓")}</span>}
+          </div>
+          {remake && (
+            <p className={s.muted} style={{ margin: 0, fontSize: 13 }}>
+              {L("متن زیرنویس عوض نمی‌شه، فقط دوباره با این شکل کشیده می‌شه (اصلاحیه‌هایی که نوشتی هم اعمال می‌شن).", "The words stay; the subtitles are drawn again in this style (any corrections you wrote are applied too).")}
+            </p>
+          )}
+          {error && <div className={s.error}>{error}</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function NextSteps({ project, stages, reload }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -258,6 +315,7 @@ function NextSteps({ project, stages, reload }) {
         )}
       </p>
       {error && <div className={s.error}>{error}</div>}
+      {stages.includes("subtitles") && <SubtitleSettings project={project} reload={reload} />}
     </div>
   );
 }
@@ -797,6 +855,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
               </Fold>
             )}
 
+            {stageOf(run) === "subtitles" && reviewing && <SubtitleSettings project={project} reload={reload} remake />}
             {stageOf(run) === "subtitles" && ACTIVE.indexOf(run.status) < 0 && run.status !== "failed" && (
               reviewing ? (
                 <div className={s.card}>
