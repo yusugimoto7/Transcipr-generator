@@ -1246,6 +1246,78 @@ function SourcePicker({ sources, admin, onPick, onClose }) {
   );
 }
 
+// The board's archived cards (Nov 10 2026: the cards older than six months were moved there): search,
+// read the date and who archived it, and put one back on the board.
+function ArchivePanel({ board, onRestored, onClose }) {
+  const [q, setQ] = useState("");
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const [more, setMore] = useState(0);
+  const lists = new Map((board.lists || []).map((l) => [l.id, l.name]));
+  useEffect(() => {
+    let gone = false;
+    const t = setTimeout(() => {
+      calApi(`/boards/${board.id}/archive?q=${encodeURIComponent(q)}&offset=${more}`)
+        .then((d) => !gone && setData((prev) => (more && prev ? { ...d, cards: [...prev.cards, ...d.cards] } : d)))
+        .catch((e) => !gone && setError(e.message));
+    }, 250);
+    return () => {
+      gone = true;
+      clearTimeout(t);
+    };
+  }, [q, more, board.id]);
+  const restore = async (card) => {
+    setBusy(card.id);
+    setError("");
+    try {
+      await calApi(`/boards/${board.id}/archive`, { method: "POST", body: { card_id: card.id } });
+      setData((d) => ({ ...d, total: d.total - 1, cards: d.cards.filter((x) => x.id !== card.id) }));
+      onRestored();
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy("");
+  };
+  return (
+    <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={c.modal} style={{ width: "min(640px, 100%)" }}>
+        <div className={c.bar}>
+          <strong className={c.grow}>{L("کارت‌های بایگانی‌شده", "Archived cards")}{data ? ` · ${data.total}` : ""}</strong>
+          <button className={`${c.btn} ${c.ghost}`} onClick={onClose} aria-label={L("بستن", "Close")}>
+            ✕
+          </button>
+        </div>
+        <input className={c.input} placeholder={L("جستجو در عنوان و متن", "Search the title and text")} value={q} onChange={(e) => { setQ(e.target.value); setMore(0); }} autoFocus />
+        {error && <div className={c.note}>{error}</div>}
+        {!data && !error && <p className={c.muted}>{L("در حال خواندن…", "Loading…")}</p>}
+        <div className={c.picker}>
+          {data && data.cards.map((k) => (
+            <div key={k.id} className={c.pickItem} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "default" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b dir="auto" style={{ display: "block" }}>{k.title || L("(بی‌عنوان)", "(untitled)")}</b>
+                <span className={c.muted} dir={uiDir()}>
+                  {lists.get(k.list_id) || ""}
+                  {k.archived_at ? " · " + L("بایگانی ", "archived ") + new Date(k.archived_at).toLocaleDateString(dateLocale(), { year: "numeric", month: "short", day: "numeric" }) : ""}
+                  {k.archived_by_name ? " · " + k.archived_by_name : ""}
+                  {k.why ? " · " + L("قدیمی‌تر از ۶ ماه", "older than 6 months") : ""}
+                </span>
+              </div>
+              <Button type="button" size="sm" variant="outline" disabled={!!busy} onClick={() => restore(k)}>
+                {busy === k.id ? L("…", "…") : L("برگردوندن", "Restore")}
+              </Button>
+            </div>
+          ))}
+          {data && !data.cards.length && <p className={c.muted} dir={uiDir()}>{q ? L("چیزی پیدا نشد.", "Nothing found.") : L("بایگانی خالیه.", "The archive is empty.")}</p>}
+        </div>
+        {data && data.cards.length < data.total && (
+          <Button type="button" variant="outline" onClick={() => setMore(data.cards.length)}>{L("بیشتر", "Show more")}</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ChannelsPanel({ channels, settings, onClose }) {
   return (
     <div className={c.modalBg} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -1536,6 +1608,7 @@ function Calendar({ user }) {
         { key: "week", label: L("هفته", "Week"), onClick: () => setView("week") },
         { key: "source", label: L("از یک موضوع یا ویدیو", "From a topic or video"), onClick: () => setPanel("source") },
         { key: "channels", label: L("کانال‌ها", "Channels"), onClick: () => setPanel("channels") },
+        { key: "archive", label: L("کارت‌های بایگانی‌شده", "Archived cards"), onClick: () => setPanel("archive") },
         ...(admin ? [{ key: "settings", label: L("لیست‌ها و برچسب‌ها", "Lists and labels"), onClick: () => setPanel("settings") }] : []),
       ];
   const tab = (k, icon, label, on, onClick, disabled) => (
@@ -1635,6 +1708,10 @@ function Calendar({ user }) {
         <button className={p.nav} onClick={() => setPanel("channels")} disabled={!ready}>
           <Radio size={16} className={p.navIcon} aria-hidden />
           <span className={p.navLabel}>{L("کانال‌ها", "Channels")}</span>
+        </button>
+        <button className={p.nav} onClick={() => setPanel("archive")} disabled={!ready}>
+          <Archive size={16} className={p.navIcon} aria-hidden />
+          <span className={p.navLabel}>{L("کارت‌های بایگانی‌شده", "Archived cards")}</span>
         </button>
         {admin && (
           <button className={p.nav} onClick={() => setPanel("settings")} disabled={!ready}>
@@ -1753,6 +1830,7 @@ function Calendar({ user }) {
       )}
       {panel === "source" && planBoard && <SourcePicker sources={sources} admin={admin} onPick={fromSource} onClose={() => setPanel("")} />}
       {panel === "channels" && first && <ChannelsPanel channels={first.channels} settings={first.settings} onClose={() => setPanel("")} />}
+      {panel === "archive" && planBoard && <ArchivePanel board={planBoard.board} onRestored={load} onClose={() => setPanel("")} />}
       {panel === "settings" && planBoard && (
         <BoardSettings board={planBoard.board} onSave={async (body) => {
           await calApi(`/boards/${planBoard.board.id}`, { method: "PATCH", body });
