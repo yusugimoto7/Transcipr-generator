@@ -610,6 +610,31 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
 // the description also save a few seconds after typing stops, when the field is left, when the phone
 // switches app and when the card closes; an unsent comment is kept on the device until it is sent
 // (Hamed, Nov 4 2026: "it should save every 5 seconds or so, like Trello").
+// The card window's side button and section. Kept outside CardEditor: defined inside it they were a
+// new component on every render, so React rebuilt them on each keystroke and the description box lost
+// its cursor (Yegane, Nov 10 2026: letters came out jumbled and backspace did nothing).
+function SideBtn({ k, Icon, label, onClick, tone, pop, setPop }) {
+  return (
+    <Button
+      variant="outline"
+      className={`h-10 justify-start gap-2.5 px-3 max-md:h-12 max-md:rounded-[10px] ${pop === k ? "border-primary bg-primary-soft" : ""} ${tone || ""}`}
+      onClick={onClick || (() => setPop(pop === k ? "" : k))}
+    >
+      <Icon className="text-muted" /> {label}
+    </Button>
+  );
+}
+function Section({ Icon, title, children }) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <h3 className="m-0 flex items-center gap-2 text-[15px] font-semibold text-ink">
+        <Icon size={16} className="text-muted" aria-hidden /> {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
 function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onCompose }) {
   const [card, setCard] = useState(null);
   const [comments, setComments] = useState([]);
@@ -661,20 +686,34 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       return "";
     }
   };
-  const commit = async (fields) => {
+  // Changes go to the server one after another, and only the answer to the latest one is shown
+  // (Yegane, Nov 10 2026: a second label or member picked quickly vanished, because the answer to the
+  // first change arrived after it and drew the card without it, and could even reach the server last).
+  const queue = useRef(Promise.resolve());
+  const seq = useRef(0);
+  const cardRef = useRef(null);
+  cardRef.current = card;
+  const commit = (fields) => {
+    const n = ++seq.current;
     setCard((x) => ({ ...x, ...fields }));
     setSaving("saving");
     setError("");
-    try {
-      const d = await calApi(`/boards/${boardId}/cards/${cardId}`, { method: "PATCH", body: fields });
-      setCard((x) => ({ ...x, ...d.card }));
-      setSaving("saved");
-      onChanged();
-    } catch (e) {
-      setError(e.message);
-      setSaving("");
-      load().catch(() => {});
-    }
+    const run = queue.current.then(async () => {
+      try {
+        const d = await calApi(`/boards/${boardId}/cards/${cardId}`, { method: "PATCH", body: fields });
+        if (n === seq.current) {
+          setCard((x) => ({ ...x, ...d.card }));
+          setSaving("saved");
+          onChanged();
+        }
+      } catch (e) {
+        setError(e.message);
+        setSaving("");
+        if (n === seq.current) load().catch(() => {});
+      }
+    });
+    queue.current = run;
+    return run;
   };
   const saveTitle = () => card && title.trim() && title.trim() !== card.title && commit({ title: title.trim() });
   const saveDesc = () => {
@@ -744,7 +783,13 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
     }
   };
   const person = (id) => users.find((u) => u.id === id) || { id, name: id === "scheduler" ? L("زمان‌بند", "Scheduler") : String(id).startsWith("trello:") ? String(id).slice(7) : L("یک نفر", "Someone") };
-  const toggle = (k, id) => commit({ [k]: (card[k] || []).includes(id) ? card[k].filter((x) => x !== id) : [...(card[k] || []), id] });
+  // from the card as it is now on screen, with every pick so far, not as it was when this render began
+  const toggle = (k, id) => {
+    const cur = (cardRef.current && cardRef.current[k]) || [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    cardRef.current = { ...cardRef.current, [k]: next };
+    return commit({ [k]: next });
+  };
   const setCheck = (list) => commit({ checklist: list });
 
   if (!card)
@@ -769,15 +814,6 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   const done = (card.checklist || []).filter((i) => i.done).length;
   const total = (card.checklist || []).length;
   const due = dueState(card);
-  const SideBtn = ({ k, Icon, label, onClick, tone }) => (
-    <Button
-      variant="outline"
-      className={`h-10 justify-start gap-2.5 px-3 max-md:h-12 max-md:rounded-[10px] ${pop === k ? "border-primary bg-primary-soft" : ""} ${tone || ""}`}
-      onClick={onClick || (() => setPop(pop === k ? "" : k))}
-    >
-      <Icon className="text-muted" /> {label}
-    </Button>
-  );
   const popTitle = { labels: L("برچسب‌ها", "Labels"), members: L("اعضا", "Members"), dates: L("تاریخ‌ها", "Dates"), links: L("لینک‌ها", "Links"), move: L("جابه‌جایی کارت", "Move card") }[pop];
   const popover = pop && (
     <div
@@ -864,14 +900,6 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       )}
     </div>
   );
-  const Section = ({ Icon, title, children }) => (
-    <section className="flex flex-col gap-2.5">
-      <h3 className="m-0 flex items-center gap-2 text-[15px] font-semibold text-ink">
-        <Icon size={16} className="text-muted" aria-hidden /> {title}
-      </h3>
-      {children}
-    </section>
-  );
   const dueTone = due === "late" ? "bg-[#fef2f2] text-[#b91c1c]" : due === "soon" ? "bg-[#fff7ed] text-[#9a3412]" : due === "done" ? "bg-[#f0fdf4] text-[#15803d]" : "bg-[#f1efe9] text-ink";
   const metaLabel = "text-xs font-medium text-muted";
 
@@ -949,14 +977,14 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               <span className="hidden md:inline">{L("افزودن به کارت", "Add to card")}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 md:flex md:flex-col md:gap-1.5">
-              <SideBtn k="members" Icon={Users} label={L("اعضا", "Members")} />
-              <SideBtn k="labels" Icon={Tag} label={L("برچسب‌ها", "Labels")} />
-              <SideBtn k="check" Icon={SquareCheck} label={L("چک‌لیست", "Checklist")} onClick={() => document.getElementById("chk-new")?.focus()} />
-              <SideBtn k="dates" Icon={Clock} label={L("تاریخ‌ها", "Dates")} />
-              <SideBtn k="links" Icon={Link2} label={L("لینک‌ها", "Links")} />
-              <SideBtn k="compose" Icon={Pencil} label={onNetworks(card).length ? L("ویرایش پست", "Edit the post") : L("نوشتن پست", "Write the post")} onClick={() => onCompose(boardId, cardId)} />
-              <SideBtn k="move" Icon={ArrowRight} label={L("جابه‌جایی", "Move")} />
-              <SideBtn k="archive" Icon={Archive} label={L("بایگانی", "Archive")} tone="text-[#b91c1c]" onClick={() => window.confirm(L("این کارت بایگانی بشه؟", "Archive this card?")) && action("archive")} />
+              <SideBtn pop={pop} setPop={setPop} k="members" Icon={Users} label={L("اعضا", "Members")} />
+              <SideBtn pop={pop} setPop={setPop} k="labels" Icon={Tag} label={L("برچسب‌ها", "Labels")} />
+              <SideBtn pop={pop} setPop={setPop} k="check" Icon={SquareCheck} label={L("چک‌لیست", "Checklist")} onClick={() => document.getElementById("chk-new")?.focus()} />
+              <SideBtn pop={pop} setPop={setPop} k="dates" Icon={Clock} label={L("تاریخ‌ها", "Dates")} />
+              <SideBtn pop={pop} setPop={setPop} k="links" Icon={Link2} label={L("لینک‌ها", "Links")} />
+              <SideBtn pop={pop} setPop={setPop} k="compose" Icon={Pencil} label={onNetworks(card).length ? L("ویرایش پست", "Edit the post") : L("نوشتن پست", "Write the post")} onClick={() => onCompose(boardId, cardId)} />
+              <SideBtn pop={pop} setPop={setPop} k="move" Icon={ArrowRight} label={L("جابه‌جایی", "Move")} />
+              <SideBtn pop={pop} setPop={setPop} k="archive" Icon={Archive} label={L("بایگانی", "Archive")} tone="text-[#b91c1c]" onClick={() => window.confirm(L("این کارت بایگانی بشه؟", "Archive this card?")) && action("archive")} />
             </div>
             {popover}
           </aside>
