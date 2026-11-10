@@ -10,6 +10,8 @@
 .apps { display: flex; gap: 2px; margin-left: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .apps::-webkit-scrollbar { display: none; }
 .app, .barBtn { display: inline-flex; align-items: center; gap: 6px; color: rgba(255, 255, 255, 0.82); text-decoration: none; font-size: 14px; font-weight: 600; padding: 7px 11px; border-radius: 8px; white-space: nowrap; }
+/* a button in the bar (the bell) looks like the links next to it, not like the device's own white button */
+button.barBtn { background: transparent; border: 0; font: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; }
 .app:hover, .barBtn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .appOn, .appOn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
 .spacer { flex: 1 1 auto; }

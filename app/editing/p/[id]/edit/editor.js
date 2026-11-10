@@ -34,6 +34,9 @@ const ICON = {
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
   ok: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  zin: '<circle cx="11" cy="11" r="6.5"/><path d="M20.5 20.5 16 16M11 8v6M8 11h6"/>',
+  zout: '<circle cx="11" cy="11" r="6.5"/><path d="M20.5 20.5 16 16M8 11h6"/>',
+  zfit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   prevf: '<path d="M15 6 9 12l6 6"/><path d="M6 6v12"/>',
   nextf: '<path d="m9 6 6 6-6 6"/><path d="M18 6v12"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-2"/>',
@@ -73,6 +76,9 @@ export function mountEditor(host, opts) {
     <button class="icon play" id="he-play" aria-label="${t("پخش", "Play")}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path id="he-playPath" d="M7 4.5v15l13-7.5z"/></svg></button>
     <button class="icon" id="he-nextf" aria-label="${t("یک فریم جلو", "Forward one frame")}">${svg("nextf", 2)}</button>
     <span class="spacer"></span>
+    <button class="icon" id="he-zout" aria-label="${t("کوچک کردن خط زمان", "Zoom out the timeline")}" title="${t("کوچک کردن خط زمان (−)", "Zoom out (−)")}">${svg("zout", 2)}</button>
+    <button class="icon" id="he-zfit" aria-label="${t("کل ویدیو در یک نگاه", "Fit the whole video")}" title="${t("کل ویدیو در یک نگاه", "Fit the whole video")}">${svg("zfit", 2)}</button>
+    <button class="icon" id="he-zin" aria-label="${t("بزرگ کردن خط زمان", "Zoom in the timeline")}" title="${t("بزرگ کردن خط زمان (+)", "Zoom in (+)")}">${svg("zin", 2)}</button>
     <button class="icon" id="he-undo" aria-label="${t("برگرداندن", "Undo")}" disabled>${svg("undo", 2)}</button>
     <button class="icon" id="he-redo" aria-label="${t("دوباره", "Redo")}" disabled>${svg("redo", 2)}</button>
   </div>
@@ -216,7 +222,7 @@ export function mountEditor(host, opts) {
     return rows;
   }
   function renderRuler() {
-    const W = parseFloat(ruler.style.width) / pps, step = pps >= 70 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : pps >= 5 ? 10 : 30;
+    const W = parseFloat(ruler.style.width) / pps, step = pps >= 70 ? 1 : pps >= 30 ? 2 : pps >= 12 ? 5 : pps >= 5 ? 10 : pps >= 2 ? 30 : pps >= 1 ? 60 : pps >= 0.5 ? 120 : 300;
     let h = "";
     for (let s = 0; s <= W + 1e-6; s += step) {
       h += `<span class="tick" style="left:${s * pps}px">${mmss(s)}</span>`;
@@ -689,11 +695,19 @@ export function mountEditor(host, opts) {
 
   /* pinch / ctrl+wheel zoom keep the moment under the playhead in place */
   let pinch = null, zoomRAF = 0;
-  function zoom(p) { pps = clamp(p, 4, 400); if (!zoomRAF) zoomRAF = requestAnimationFrame(() => { zoomRAF = 0; render(); }); }
+  function zoom(p) { pps = clamp(p, 0.3, 400); if (!zoomRAF) zoomRAF = requestAnimationFrame(() => { zoomRAF = 0; render(); }); }
   const tdist = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
   tlEl.addEventListener("touchstart", (e) => { if (e.touches.length === 2 && !gesture) pinch = { d: tdist(e), p: pps }; }, { passive: true });
   tlEl.addEventListener("touchmove", (e) => { if (!pinch || e.touches.length !== 2) return; e.preventDefault(); zoom((pinch.p * tdist(e)) / pinch.d); }, { passive: false });
   tlEl.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinch = null; });
+  // iPhone Safari zooms the whole page on a pinch unless its own gesture event is stopped too
+  tlEl.addEventListener("gesturestart", (e) => e.preventDefault());
+  tlEl.addEventListener("gesturechange", (e) => e.preventDefault());
+  // the same zoom from buttons (Hamed, Nov 10 2026: "zoom in and out the timeline to edit easier"):
+  // the gestures alone were never found
+  $("zin").onclick = () => zoom(pps * 1.5);
+  $("zout").onclick = () => zoom(pps / 1.5);
+  $("zfit").onclick = () => { const T = total(); if (T > 0) zoom((sc.clientWidth * 0.46) / T); }; // the playhead sits mid-screen: the whole video fits in the half after it
   tlEl.addEventListener("wheel", (e) => {
     if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoom(pps * (e.deltaY < 0 ? 1.12 : 0.89)); return; }
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); sc.scrollLeft += e.deltaY; } // a plain mouse wheel scrubs

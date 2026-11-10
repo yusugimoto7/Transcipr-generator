@@ -169,3 +169,5 @@
 .he .save{font:500 12px/1 var(--ui);color:#9aa3ad;margin-inline-end:10px;white-space:nowrap}
 .he .save[data-st="saved"]::before{content:"✓ ";color:#4ade80}
 .he .save[data-st="error"]{color:var(--danger)}
+/* the zoom buttons share the transport row: on a phone every control gets a little narrower */
+@media (max-width:440px){#he-transport{padding:0 6px;gap:0}#he-transport .icon{width:33px}#he-transport .tc{min-width:92px;font-size:13px}}

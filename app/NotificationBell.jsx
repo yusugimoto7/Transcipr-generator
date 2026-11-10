@@ -66,7 +66,7 @@ export default function NotificationBell({ btnClass, menuClass, itemClass, onOpe
       <button className={btnClass} data-bell onClick={toggle} aria-label={L("اعلان‌ها", "Notifications")} aria-expanded={open} style={{ position: "relative" }}>
         <Bell size={18} aria-hidden />
         {data.unread > 0 && (
-          <span aria-hidden style={{ position: "absolute", top: 4, insetInlineEnd: 4, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 99, background: "#e8702a", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "grid", placeItems: "center", boxSizing: "border-box" }}>
+          <span aria-hidden style={{ position: "absolute", top: 0, insetInlineEnd: 0, minWidth: 16, height: 16, padding: "0 4px", borderRadius: 99, background: "#e8702a", color: "#fff", boxShadow: "0 0 0 2px var(--brand-deep, #243b44)", fontSize: 10.5, lineHeight: 1, fontWeight: 700, display: "grid", placeItems: "center", boxSizing: "border-box" }}>
             {data.unread > 9 ? "9+" : data.unread}
           </span>
         )}
