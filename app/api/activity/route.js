@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "crypto";
-import { guard, json, allUsers } from "../../../lib/editing/auth";
+import { guard, json, allUsers, currentUser } from "../../../lib/editing/auth";
 import { sessionSecret } from "../../../lib/editing/session";
 import { get } from "../../../lib/editing/store";
 import { record, readDay, dayOf, ZONE } from "../../../lib/activity";
@@ -8,8 +8,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // The activity log (lib/activity.js).
-//   POST — the middleware, on this server, with the session secret: one request a signed-in person made.
-//          Open in access.js; the secret is the check.
+//   POST — the middleware, on this server, with the session secret: one request a signed-in person made;
+//          or, without it, a page the signed-in person moved to inside the app (their session says who).
+//          Open in access.js; the secret or the session is the check.
 //   GET ?day=YYYY-MM-DD (Vancouver day, default today) — the admin only: that day's entries with
 //          each person's name and the project or card they were about.
 
@@ -18,7 +19,15 @@ const digest = (s) => createHash("sha256").update(String(s)).digest();
 export async function POST(request) {
   const secret = sessionSecret();
   const got = String(request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!secret || !got || !timingSafeEqual(digest(got), digest(secret))) return json({ error: "not allowed" }, 403);
+  // a page the signed-in person moved to inside the app (app/ActivityPing.jsx): the session says who
+  if (!got) {
+    const user = await currentUser(request).catch(() => null);
+    const b = await request.json().catch(() => ({}));
+    const view = String(b.view || "");
+    if (user && /^\/[\w\-/]*$/.test(view) && view.length < 200) record({ uid: user.id, method: "GET", path: view });
+    return json({ ok: true });
+  }
+  if (!secret || !timingSafeEqual(digest(got), digest(secret))) return json({ error: "not allowed" }, 403);
   const b = await request.json().catch(() => ({}));
   record({ uid: String(b.uid || ""), method: String(b.method || ""), path: String(b.path || "").slice(0, 300) });
   return json({ ok: true });

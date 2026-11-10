@@ -4,6 +4,7 @@ import LangProvider from "./LangProvider";
 import { LANG_COOKIE, normLang } from "../lib/i18n";
 import VoiceDictation from "./VoiceDictation";
 import CopyCorners from "./CopyCorners";
+import ActivityPing from "./ActivityPing";
 import PasteImages from "./PasteImages";
 
 export const metadata = {
@@ -31,6 +32,7 @@ export default function RootLayout({ children }) {
           {children}
           <VoiceDictation />
           <CopyCorners />
+          <ActivityPing />
           <PasteImages />
         </LangProvider>
       </body>

@@ -29,7 +29,10 @@ async function ticketFor(req, uid) {
 // /api/activity on this server, after the answer, so nobody waits for it.
 function logActivity(req, event, uid) {
   const { pathname } = req.nextUrl;
-  const prefetch = !!(req.headers.get("next-router-prefetch") || req.headers.get("purpose") === "prefetch");
+  // A move inside the app (and every link the router loads ahead) carries next-url; Next.js removes the
+  // header that says which of the two it is before this runs, so the page reports the pages it really
+  // shows itself (app/ActivityPing.jsx) and only full page loads are counted here.
+  const prefetch = !!(req.headers.get("next-url") || req.headers.get("next-router-prefetch") || req.headers.get("purpose") === "prefetch");
   if (!worthLogging(req.method, pathname, { prefetch })) return;
   const base = process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : req.nextUrl.origin;
   const p = fetch(base + "/api/activity", {
