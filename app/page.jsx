@@ -8,6 +8,7 @@ import CalendarStrip from "./CalendarStrip";
 import CalendarButtons from "./CalendarButtons";
 import DrivePicker from "./DrivePicker";
 import { AppBar, barStyles } from "./editing/ui";
+import { Button } from "../components/ui/button";
 import { TEMPLATES } from "../lib/carousel-templates";
 import { VOICES, CAROUSEL_KINDS } from "../lib/sugimoto-voice";
 import VisaResults from "./VisaResults";
@@ -741,6 +742,7 @@ export default function App() {
   const listTopics = useMemo(() => {
     const byUrl = new Map();
     for (const e of Object.values(ws)) {
+      if (e.status === "replaced") continue;
       const u = urlKey(e.topic);
       if (u && !byUrl.has(u)) byUrl.set(u, e);
     }
@@ -755,12 +757,14 @@ export default function App() {
       if (u) urls.add(u);
       cands.push({ t: ts || made ? { ...t, ...(ts ? { _ts: ts } : {}), ...(made ? { _made: made } : {}) } : t, used });
     };
+    // A shared link's stand-in whose card is written has given its place to that card.
     for (const t of topics) {
       const e = ws[topicKey(t)] || byUrl.get(urlKey(t));
+      if (e && e.status === "replaced") continue;
       if (e) add({ ...t, ...e.topic }, e.updatedAt, true, e.createdAt);
       else add(t, 0, false);
     }
-    for (const e of Object.values(ws)) add(e.topic, e.updatedAt, true, e.createdAt);
+    for (const e of Object.values(ws)) if (e.status !== "replaced") add(e.topic, e.updatedAt, true, e.createdAt);
 
     // The row is shown under its best card: the one with material, else the
     // one written from full text, else the higher-scored.
@@ -796,6 +800,7 @@ export default function App() {
   // pickedAt puts it at the top of the list, above everything older (Hamed, Oct 27 2026); the
   // job stores it for the team (lib/workspace.js setStatus { pick }).
   const approveTopic = (topic) => {
+    if (topic.pending) return openTopic(topic);
     markSeenLocal(topic);
     recordSeenRemote(topic);
     patchWs(topic, { status: "active", pickedAt: Date.now() });
@@ -844,6 +849,29 @@ export default function App() {
     patchWs(t, { status: "new" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customJob && customJob.status, customJob && customJob.id]);
+
+  // A shared link listed before it was read (app/api/share): when its card is written, the card
+  // joins the list and the stand-in leaves it; when nothing could be read, the stand-in shows why.
+  // The page started the job (its «read again»), or the phone did and the workspace says so.
+  const shareDoneRef = useRef(new Set());
+  useEffect(() => {
+    for (const [key, entry] of Object.entries(bg)) {
+      const j = entry.custom_news;
+      if (key === CUSTOM_NEWS_KEY || !j || j.status === "running" || !j.id || shareDoneRef.current.has(j.id)) continue;
+      shareDoneRef.current.add(j.id);
+      const held = j.topic || (wsRef.current[key] || {}).topic;
+      if (!held) continue;
+      if (j.status === "done" && j.result && j.result.topic) {
+        const t = j.result.topic;
+        setTopics((prev) => [t, ...prev.filter((x) => topicKey(x) !== topicKey(t) && topicKey(x) !== key)]);
+        patchWs(t, { status: "new" });
+        patchWs({ ...held, pending: "done", replaced_by: t.title_fa || t.title_en }, { status: "replaced" });
+      } else if (j.status === "error") {
+        patchWs({ ...held, pending: "failed", pending_error: j.error || "" }, {});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bg]);
 
   // Cards from research (one idea, or several ideas on a subject) join the list the same way.
   const researchJob = (bg[RESEARCH_KEY] || {}).research;
@@ -1014,6 +1042,21 @@ export default function App() {
   // this is correct however long the page was away.
   const svKey = scriptTopic ? topicKey(scriptTopic) : "";
   const svJobs = bg[svKey] || {};
+  // A shared link not read yet has its own page (PendingTopicView), kept up to date from the workspace.
+  const svEntry = (svKey && ws[svKey]) || null;
+  const svLive = scriptTopic ? { ...scriptTopic, ...((svEntry && svEntry.topic) || {}) } : null;
+  const svPending = !!(svLive && (svLive.pending === "reading" || svLive.pending === "failed") && !(svEntry && svEntry.status === "replaced"));
+  useEffect(() => {
+    if (view !== "script" || !svEntry || svEntry.status !== "replaced") return;
+    const to = String((svEntry.topic && svEntry.topic.replaced_by) || "").trim().toLowerCase();
+    const next = to && ws[to];
+    if (!next || !next.topic) return;
+    openTopic(next.topic, { push: false });
+    try {
+      window.history.replaceState({ t: to }, "", topicHref(next.topic));
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, svEntry, ws]);
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
   const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null, voice: sjResult.voice || "hamed", versions: sjResult.versions || {} } : { ...scripts };
@@ -1322,7 +1365,28 @@ export default function App() {
         </div>
       )}
 
-      {view === "script" && scriptTopic && (
+      {view === "script" && scriptTopic && svPending && (
+        <PendingTopicView
+          topic={svLive}
+          job={svJobs.custom_news || null}
+          since={(svEntry && svEntry.updatedAt) || 0}
+          onBack={backToList}
+          onRead={() =>
+            startJob("custom_news", svLive, {
+              links: Array.isArray(svLive.links) && svLive.links.length ? svLive.links : [svLive.source_url],
+              note: svLive.note || "",
+              images: [],
+              shared_by: svLive.shared_by || "",
+              placeholder: { ...svLive, pending: "reading", pending_error: "" },
+            })
+          }
+          onArchive={() => {
+            rejectTopic(svLive);
+            backToList();
+          }}
+        />
+      )}
+      {view === "script" && scriptTopic && !svPending && (
         <ScriptView
           key={"sv:" + topicKey(scriptTopic)}
           topic={scriptTopic}
@@ -1366,7 +1430,7 @@ export default function App() {
           onJob={(kind, extra) => startJob(LANG_KINDS.includes(kind) ? kind + sfx : kind, scriptTopic, { topic: scriptTopic, ...extra })}
         />
       )}
-      {view === "script" && scriptTopic && (
+      {view === "script" && scriptTopic && !svPending && (
         <TopicAssistant
           topicKey={svKey}
           job={svJobs.assistant || null}
@@ -5754,6 +5818,71 @@ function VideoPanel({ job, video, onRefresh, onOpen }) {
           <button className="ui-btn" onClick={onOpen} style={{ ...link, background: "transparent", color: C.text2, border: `1px solid ${C.line}`, cursor: "pointer" }}>
             {st === "done" ? L("↻ ساخت یک نسخهٔ دیگه", "↻ Make another version") : sendErr || st === "failed" ? L("↻ دوباره امتحان کن", "↻ Try again") : L("✎ ویرایش و ارسال دوباره", "✎ Edit and send again")}
           </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// A link shared from the phone, listed before its post was read (app/api/share). Nothing can be
+// made from an address, so the page says where the reading stands: still reading, or what stopped
+// it, with «read again» (a private post made public, transcript credits topped up, a deploy that cut
+// the reading short). When the card is written the app moves to it.
+function PendingTopicView({ topic, job, since = 0, onBack, onRead, onArchive }) {
+  const running = !!(job && job.status === "running");
+  const failed = !running && (topic.pending === "failed" || (job && job.status === "error"));
+  const why = (job && job.status === "error" && job.error) || topic.pending_error || "";
+  // a reading cut short (a deploy restarts the server) leaves the stand-in at "reading" with no job
+  const stale = !running && !failed && since && Date.now() - since > 5 * 60 * 1000;
+  return (
+    <div style={{ width: "100%", maxWidth: 640, flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div>
+        <BackBtn onClick={onBack} label={L("همهٔ موضوع‌ها", "All topics")} />
+      </div>
+      <div className="ui-fade" style={{ ...card, borderRadius: 22, padding: "16px 18px" }}>
+        <div dir={uiDir()} style={{ fontFamily: FA_FONT, fontSize: 12, fontWeight: 700, color: C.text2, marginBottom: 8 }}>
+          {L("لینک فرستاده‌شده از گوشی", "Link shared from the phone")}
+          {topic.shared_by ? " · " + topic.shared_by : ""}
+        </div>
+        <a href={topic.source_url} target="_blank" rel="noopener noreferrer" dir="ltr" style={{ display: "inline-flex", alignItems: "center", gap: 7, color: C.teal, fontSize: 13.5, fontWeight: 700, wordBreak: "break-all", textDecoration: "none" }}>
+          <Link2 size={16} /> {topic.source_url}
+        </a>
+        {topic.note && (
+          <div dir="auto" style={{ marginTop: 10, fontFamily: FA_FONT, fontSize: 12.5, lineHeight: 1.8, color: C.text2, unicodeBidi: "plaintext" }}>
+            {topic.note}
+          </div>
+        )}
+      </div>
+      <div dir={uiDir()} style={{ ...card, padding: "14px 16px", fontFamily: FA_FONT, fontSize: 13, lineHeight: 1.9, color: C.text }}>
+        {running || (!failed && !stale) ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="ui-spin" style={{ width: 18, height: 18, flexShrink: 0, border: `2px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRadius: "50%" }} />
+            <span>{L("محتوای پست در حال خوندنه (متن، زیرنویس ویدیو و صفحه‌ای که بهش لینک داده). موضوعش که نوشته شد، همین‌جا باز می‌شه و خبرت می‌کنیم.", "The post is being read (its text, the video's transcript and the page it links to). When its topic is written it opens here and you get a notification.")}</span>
+          </div>
+        ) : failed ? (
+          <>
+            <b>{L("خوندن این پست نشد.", "This post could not be read.")}</b>
+            {why && (
+              <div dir="ltr" style={{ marginTop: 6, fontFamily: FONT, fontSize: 12, color: C.text2, textAlign: "left", wordBreak: "break-word" }}>
+                {why}
+              </div>
+            )}
+            <div style={{ marginTop: 6, color: C.text2, fontSize: 12.5 }}>
+              {L("لینک همین‌جا می‌مونه. اگه پست خصوصیه یا سرویس زیرنویس اعتبار نداشت، بعداً دوباره بخونش.", "The link stays here. If the post is private or the transcript service had no credits, read it again later.")}
+            </div>
+          </>
+        ) : (
+          <span>{L("خوندن این پست نیمه‌کاره موند (احتمالاً سرور دوباره راه‌اندازی شد). دوباره بخونش.", "Reading this post stopped part way (the server probably restarted). Read it again.")}</span>
+        )}
+        {!running && (failed || stale) && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <Button size="sm" onClick={onRead}>
+              <RefreshCw /> {L("دوباره بخون", "Read again")}
+            </Button>
+            <Button size="sm" variant="outline" onClick={onArchive}>
+              <Archive /> {L("بایگانی", "Archive")}
+            </Button>
+          </div>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { userForVoiceKey } from "../../../lib/voice/key";
-import { parseLinks } from "../../../lib/custom-news";
-import { startJob } from "../../../lib/jobs";
+import { parseLinks, pendingTopic } from "../../../lib/custom-news";
+import { startJob, topicKeyOf } from "../../../lib/jobs";
+import { setStatus, getRecords } from "../../../lib/workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,9 +13,12 @@ export const dynamic = "force-dynamic";
 // ?k=<key>. The link becomes a topic under Studio → My sources exactly as one pasted there would
 // (custom_news: a video is read as its transcript), and the person gets a notification when it is
 // ready. The answer is one plain sentence, which the Shortcut shows as its notification.
+// Nov 10 2026 (Hamed: "first just keep the link I send as a topic, then check its content"): the link
+// is listed as a topic before anything is read, so a post that cannot be read yet is never lost; the
+// card written from it later takes its place (lib/custom-news.js pendingTopic, lib/jobs.js).
 // Open in access.js: the key is the check.
 
-const SHORT = /^(www\.|m\.)?(facebook\.com\/share\/|fb\.watch\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/|tiktok\.com\/t\/|instagr\.am\/)/i;
+const SHORT = /^(www\.|m\.)?(facebook\.com\/share\/|fb\.watch\/|vm\.tiktok\.com\/|vt\.tiktok\.com\/|tiktok\.com\/t\/|instagr\.am\/|instagram\.com\/share\/|t\.co\/)/i;
 
 // A share link that only redirects (Facebook's /share/, TikTok's short links) becomes the post's own
 // address, so the video is recognised as a video and read as its transcript.
@@ -62,10 +66,19 @@ export async function POST(request) {
   // what came with the link (a caption, a few words typed in the Shortcut) frames the card, never its facts
   const rest = String(text).replace(/https?:\/\/[^\s<>"'،]+/gi, " ").replace(/\s+/g, " ").trim();
   const note = [String(b.note || "").trim(), rest].filter(Boolean).join(" · ").slice(0, 1500);
+  const placeholder = pendingTopic({ url: resolved[0], note, shared_by: user.name || user.id });
+  const tkey = topicKeyOf(placeholder);
+  // The same post shared again: once its card exists, say where it is instead of writing a second one.
+  const prev = (await getRecords("topic:" + tkey).catch(() => [])).find((r) => r.id === "topic:" + tkey);
+  const done = prev && prev.status === "replaced" && prev.topic && prev.topic.replaced_by;
+  if (done) return reply(fa ? `این پست قبلاً موضوع شده: «${done}» در استودیو ← منابع خودم.` : `This post is already a topic: "${done}" in Studio → My sources.`);
+  // Listed first, read second. A stand-in that cannot be stored still gets read: the card is saved
+  // on its own when it is written.
+  if (!prev || prev.status !== "archived") await setStatus(placeholder, "new").catch((e) => console.log("[share] stand-in not saved:", String(e?.message || e).slice(0, 160)));
   try {
-    startJob("custom_news", "share:" + resolved[0], { links: resolved, note, images: [], by_uid: user.id, shared_by: user.name || user.id });
+    startJob("custom_news", tkey, { links: resolved, note, images: [], by_uid: user.id, shared_by: user.name || user.id, placeholder });
   } catch (e) {
-    return reply((fa ? "الان نشد: " : "Not now: ") + String(e.message || e), 503);
+    return reply(fa ? `لینک در استودیو ← منابع خودم ذخیره شد، ولی الان خونده نشد (${String(e.message || e)}). از صفحهٔ موضوع دوباره بخونش.` : `The link is saved in Studio → My sources, but it could not be read now (${String(e.message || e)}). Read it again from its topic page.`, 202);
   }
-  return reply(fa ? "رسید ✓ موضوعش تا یکی دو دقیقهٔ دیگه در استودیو ← منابع خودم آماده می‌شه." : "Got it ✓ The topic will be ready in Studio → My sources in a minute or two.");
+  return reply(fa ? "رسید ✓ لینک در استودیو ← منابع خودم ذخیره شد؛ محتوای پست الان خونده می‌شه و موضوعش تا یکی دو دقیقهٔ دیگه آماده می‌شه." : "Got it ✓ The link is saved in Studio → My sources; the post is being read now and its topic will be ready in a minute or two.");
 }

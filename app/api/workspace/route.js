@@ -13,7 +13,7 @@ export async function GET(request) {
   const key = new URL(request.url).searchParams.get("key");
   try {
     if (key) return Response.json({ entry: await getEntry(key) }, { headers: { "Cache-Control": "no-store" } });
-    return Response.json({ entries: await getEntries() }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ entries: await getEntries({ replaced: true }) }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     return Response.json({ error: String(e?.message || e), entries: [] }, { status: 500 });
   }
