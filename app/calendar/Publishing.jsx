@@ -48,8 +48,22 @@ export function Tile({ card, onOpen, drag = true }) {
           <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
         ))}
       </b>
+      <LabelBars hex={card.label_hex} />
       <span dir="auto">{card.title || captionOf(card) || L("پست بی‌عنوان", "Untitled post")}</span>
     </div>
+  );
+}
+
+// The card's labels as Trello's small colour bars (Yegane, Nov 10 2026: the calendar showed no label
+// colours to organise cards by). `hex` is filled from the board's labels by the calendar page.
+export function LabelBars({ hex }) {
+  if (!hex || !hex.length) return null;
+  return (
+    <span style={{ display: "flex", gap: 3, flexWrap: "wrap", margin: "2px 0" }} aria-hidden>
+      {hex.slice(0, 6).map((h, i) => (
+        <i key={i} style={{ display: "block", width: 22, height: 6, borderRadius: 3, background: h }} />
+      ))}
+    </span>
   );
 }
 

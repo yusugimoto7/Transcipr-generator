@@ -16,11 +16,11 @@ import p from "./publishing.module.css";
 import PostFiles from "./PostFiles";
 import Composer, { NetChip, StatusPill } from "./Composer";
 import ListMenu, { LIST_COLORS } from "./ListMenu";
-import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner } from "./Publishing";
+import { WeekView, PostList, LIST_TABS, inTab, Tile, captionOf, ZoneBanner, LabelBars } from "./Publishing";
 import { whenAll, pickerNote, dateLocale } from "../../lib/tz";
 import { NETWORKS, STATUS, onNetworks, thumbOf, statusName, netName } from "./channels";
 import { L, uiDir, isFa } from "../../lib/i18n";
-import { AlertCircle, AlignLeft, Archive, ArrowRight, CalendarCheck, CalendarDays, CheckCircle2, FilePen, FileText, Hourglass, Menu as MenuIcon, Newspaper, Radio, Rocket, Settings2, SlidersHorizontal, Columns3, List as ListIcon, Sparkles, Check, Clock, Link2, MessageSquare, Megaphone, Paperclip, Pencil, Play, Plus, SquareCheck, Tag, Users, X } from "lucide-react";
+import { AlertCircle, AlignLeft, Archive, ArrowRight, Copy, CalendarCheck, CalendarDays, CheckCircle2, FilePen, FileText, Hourglass, Menu as MenuIcon, Newspaper, Radio, Rocket, Settings2, SlidersHorizontal, Columns3, List as ListIcon, Sparkles, Check, Clock, Link2, MessageSquare, Megaphone, Paperclip, Pencil, Play, Plus, SquareCheck, Tag, Users, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Input, Textarea } from "../../components/ui/input";
@@ -103,6 +103,15 @@ function dueState(card) {
 }
 
 // Labels as soft tints with dark text (the new look), keyed by the board's colour names.
+// A label's own colour as a solid bar (the app's colours as in lib/calendar/model.js LABEL_COLORS,
+// Trello's as brought over).
+const LABEL_HEX = {
+  sky: "#5aa9e6", orange: "#f28c28", yellow: "#e9c46a", purple: "#9b7fd4", green: "#4caf7a",
+  red: "#e5484d", pink: "#e86fa8", lime: "#94c94b", gray: "#8b95a3", navy: "#2f5d9b",
+  ...TRELLO_LABELS,
+};
+// Trello's label colours, offered when someone makes a new label on a card.
+const NEW_LABEL_COLORS = ["green", "yellow", "orange", "red", "purple", "blue", "sky", "lime", "pink", "black"].map((k) => "trello_" + k + "_dark");
 const LABEL_TINT = {
   sky: ["#e0f2fe", "#075985"], orange: ["#ffedd5", "#9a3412"], yellow: ["#fef9c3", "#854d0e"], purple: ["#ede9fe", "#5b21b6"],
   green: ["#dcfce7", "#166534"], red: ["#fee2e2", "#991b1b"], pink: ["#fce7f3", "#9d174d"], lime: ["#ecfccb", "#3f6212"],
@@ -426,7 +435,7 @@ function useNarrow(px = 700) {
 
 // A phone's month, as in a phone's own calendar app: the whole month as a grid of days with a dot
 // per post (coloured by where it stands), and the chosen day's posts listed under it.
-function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
+function PhoneMonth({ days, month, byDay, dues, onOpen, onOpenCard, onNew }) {
   const today = dayKey(new Date());
   const inMonth = days.filter((d) => d.getMonth() === month);
   const [picked, setPicked] = useState("");
@@ -476,7 +485,7 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
           <Tile key={card.id} card={card} onOpen={onOpen} drag={false} />
         ))}
         {due.map((card) => (
-          <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
+          <span key={"d" + card.id} className={c.due} onClick={() => (onOpenCard || onOpen)(card)} dir="auto">
             {L("موعد: ", "Due: ")}{card.title}
           </span>
         ))}
@@ -488,7 +497,19 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onNew }) {
 
 // ---- month view ---------------------------------------------------------------------------------
 
-function DayCell({ date, month, cards, dues, onOpen, onNew }) {
+// A card's due date on the month grid, dragged to another day to move it (Yegane, Nov 10 2026: cards
+// could not be moved on the calendar as on Trello). A tap opens the card itself.
+function DueChip({ card, onOpen }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: "due:" + card.id });
+  return (
+    <span ref={setNodeRef} {...attributes} {...listeners} className={c.due} onClick={() => onOpen(card)} dir="auto" style={{ opacity: isDragging ? 0.4 : 1, touchAction: "none", cursor: "grab" }}>
+      <LabelBars hex={card.label_hex} />
+      {L("موعد: ", "Due: ")}{card.title}
+    </span>
+  );
+}
+
+function DayCell({ date, month, cards, dues, onOpen, onOpenCard, onNew }) {
   const { setNodeRef, isOver } = useDroppable({ id: "day-" + dayKey(date) });
   const today = dayKey(date) === dayKey(new Date());
   return (
@@ -498,9 +519,7 @@ function DayCell({ date, month, cards, dues, onOpen, onNew }) {
         <Tile key={card.id} card={card} onOpen={onOpen} />
       ))}
       {dues.map((card) => (
-        <span key={"d" + card.id} className={c.due} onClick={() => onOpen(card)} dir="auto">
-          {L("موعد: ", "Due: ")}{card.title}
-        </span>
+        <DueChip key={"d" + card.id} card={card} onOpen={onOpenCard || onOpen} />
       ))}
     </div>
   );
@@ -522,12 +541,26 @@ function Unscheduled({ cards, onOpen }) {
   );
 }
 
-function MonthView({ cards, onOpen, onMove, onNew }) {
+function MonthView({ cards, dueCards, onOpen, onOpenCard, onMove, onNew }) {
   const [anchor, setAnchor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
-  const [showDue, setShowDue] = useState(false);
+  // On unless switched off on this device (Yegane, Nov 10 2026: with it off, cards with only a due date
+  // never showed on the calendar)
+  const [showDue, setShowDueState] = useState(() => {
+    try {
+      return localStorage.getItem("cal:showDue") !== "0";
+    } catch (_) {
+      return true;
+    }
+  });
+  const setShowDue = (v) => {
+    setShowDueState(v);
+    try {
+      localStorage.setItem("cal:showDue", v ? "1" : "0");
+    } catch (_) {}
+  };
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } })
@@ -539,14 +572,24 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
   const dueDay = {};
   for (const card of cards) {
     if (card.publish_at) (byDay[dayKey(new Date(card.publish_at))] ||= []).push(card);
-    if (showDue && card.due_at) (dueDay[dayKey(new Date(card.due_at))] ||= []).push(card);
   }
+  // due dates come from every card on the board, planning cards too, not only posts
+  for (const card of dueCards || cards) if (showDue && card.due_at) (dueDay[dayKey(new Date(card.due_at))] ||= []).push(card);
   for (const k of Object.keys(byDay)) byDay[k].sort((a, b) => new Date(a.publish_at) - new Date(b.publish_at));
   const unscheduled = cards.filter((x) => !x.publish_at && x.status !== "published" && onNetworks(x).length);
   const [active, setActive] = useState(null);
   const onDragEnd = ({ active: a, over }) => {
     setActive(null);
     if (!over) return;
+    if (String(a.id).startsWith("due:")) {
+      const card = (dueCards || cards).find((x) => x.id === String(a.id).slice(4));
+      if (!card || !String(over.id).startsWith("day-")) return;
+      const [y, m, d] = over.id.slice(4).split("-").map(Number);
+      const old = new Date(card.due_at);
+      const when = new Date(y, m - 1, d, old.getHours(), old.getMinutes());
+      if (when.getTime() !== old.getTime()) onMove(card, { due_at: when.toISOString() });
+      return;
+    }
     const card = cards.find((x) => x.id === a.id);
     if (over.id === "unscheduled") {
       if (card.publish_at) onMove(card, { publish_at: null });
@@ -579,7 +622,7 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
       </div>
       {narrow ? (
         <>
-          <PhoneMonth days={days} month={anchor.getMonth()} byDay={byDay} dues={dueDay} onOpen={onOpen} onNew={onNew} />
+          <PhoneMonth days={days} month={anchor.getMonth()} byDay={byDay} dues={dueDay} onOpen={onOpen} onOpenCard={onOpenCard} onNew={onNew} />
           {unscheduled.length > 0 && <Unscheduled cards={unscheduled} onOpen={onOpen} />}
         </>
       ) : (
@@ -593,23 +636,19 @@ function MonthView({ cards, onOpen, onMove, onNew }) {
               </div>
             ))}
             {days.map((d) => (
-              <DayCell key={dayKey(d)} date={d} month={anchor.getMonth()} cards={byDay[dayKey(d)] || []} dues={dueDay[dayKey(d)] || []} onOpen={onOpen} onNew={onNew} />
+              <DayCell key={dayKey(d)} date={d} month={anchor.getMonth()} cards={byDay[dayKey(d)] || []} dues={dueDay[dayKey(d)] || []} onOpen={onOpen} onOpenCard={onOpenCard} onNew={onNew} />
             ))}
           </div>
         </div>
       </div>
       )}
-      <DragOverlay>{active ? <div className={c.mini}>{cards.find((x) => x.id === active)?.title}</div> : null}</DragOverlay>
+      <DragOverlay>{active ? <div className={c.mini}>{(dueCards || cards).find((x) => x.id === String(active).replace(/^due:/, ""))?.title}</div> : null}</DragOverlay>
     </DndContext>
   );
 }
 
 // ---- card editor --------------------------------------------------------------------------------
 
-// A card opened, as on Trello: everything saves as you change it (no Save button). The title and
-// the description also save a few seconds after typing stops, when the field is left, when the phone
-// switches app and when the card closes; an unsent comment is kept on the device until it is sent
-// (Hamed, Nov 4 2026: "it should save every 5 seconds or so, like Trello").
 // The card window's side button and section. Kept outside CardEditor: defined inside it they were a
 // new component on every render, so React rebuilt them on each keystroke and the description box lost
 // its cursor (Yegane, Nov 10 2026: letters came out jumbled and backspace did nothing).
@@ -635,7 +674,11 @@ function Section({ Icon, title, children }) {
   );
 }
 
-function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onCompose }) {
+// A card opened, as on Trello: everything saves as you change it (no Save button). The title and
+// the description also save a few seconds after typing stops, when the field is left, when the phone
+// switches app and when the card closes; an unsent comment is kept on the device until it is sent
+// (Hamed, Nov 4 2026: "it should save every 5 seconds or so, like Trello").
+function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onCompose, onOpenCard }) {
   const [card, setCard] = useState(null);
   const [comments, setComments] = useState([]);
   const [error, setError] = useState("");
@@ -654,6 +697,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
   const [item, setItem] = useState("");
   const [comment, setComment] = useState("");
   const [links, setLinks] = useState({});
+  const [newLabel, setNewLabel] = useState({ name: "", color: NEW_LABEL_COLORS[5] });
   const load = useCallback(async () => {
     const d = await calApi(`/boards/${boardId}/cards/${cardId}`);
     setCard(d.card);
@@ -762,6 +806,30 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
       setError(e.message);
     }
   };
+  // Trello's Copy: the copy opens at once (Yegane, Nov 10 2026: every card was made from nothing)
+  const copy = async () => {
+    await flushRef.current();
+    try {
+      const d = await calApi(`/boards/${boardId}/cards/${cardId}/action`, { method: "POST", body: { action: "copy" } });
+      await onChanged();
+      if (onOpenCard) onOpenCard(d.card.id);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  // a new label made from the card, by anyone, and put on it at once
+  const makeLabel = async (e) => {
+    e.preventDefault();
+    if (!newLabel.name.trim()) return;
+    try {
+      const d = await calApi(`/boards/${boardId}/labels`, { method: "POST", body: newLabel });
+      setNewLabel((x) => ({ ...x, name: "" }));
+      if (!((cardRef.current && cardRef.current.labels) || []).includes(d.label.id)) toggle("labels", d.label.id);
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
   const addComment = async (e) => {
     e.preventDefault();
     const text = comment.trim();
@@ -840,6 +908,27 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
             </label>
           );
         })}
+      {pop === "labels" && (
+        <form onSubmit={makeLabel} className="flex flex-col gap-2 border-0 border-t border-solid border-border pt-2.5">
+          <span className="text-[13px] font-semibold text-ink">{L("ساختن برچسب تازه", "Create a new label")}</span>
+          <Input id="new-label" dir="auto" placeholder={L("اسم برچسب", "Label name")} value={newLabel.name} onChange={(e) => setNewLabel({ ...newLabel, name: e.target.value })} />
+          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={L("رنگ", "Colour")}>
+            {NEW_LABEL_COLORS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={newLabel.color === k}
+                aria-label={k.replace(/^trello_|_dark$/g, "")}
+                onClick={() => setNewLabel({ ...newLabel, color: k })}
+                className="h-7 w-11 cursor-pointer rounded-md border-0 p-0"
+                style={{ background: LABEL_HEX[k], boxShadow: newLabel.color === k ? "0 0 0 2px #fff, 0 0 0 4px var(--brand, #32515d)" : "none" }}
+              />
+            ))}
+          </div>
+          <Button type="submit" disabled={!newLabel.name.trim()}>{L("ساختن و زدن روی کارت", "Create and add to the card")}</Button>
+        </form>
+      )}
       {pop === "members" &&
         users.map((u) => (
           <label key={u.id} className="flex cursor-pointer items-center gap-2.5 text-sm">
@@ -984,6 +1073,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
               <SideBtn pop={pop} setPop={setPop} k="links" Icon={Link2} label={L("لینک‌ها", "Links")} />
               <SideBtn pop={pop} setPop={setPop} k="compose" Icon={Pencil} label={onNetworks(card).length ? L("ویرایش پست", "Edit the post") : L("نوشتن پست", "Write the post")} onClick={() => onCompose(boardId, cardId)} />
               <SideBtn pop={pop} setPop={setPop} k="move" Icon={ArrowRight} label={L("جابه‌جایی", "Move")} />
+              <SideBtn pop={pop} setPop={setPop} k="copy" Icon={Copy} label={L("کپی کارت", "Copy card")} onClick={copy} />
               <SideBtn pop={pop} setPop={setPop} k="archive" Icon={Archive} label={L("بایگانی", "Archive")} tone="text-[#b91c1c]" onClick={() => window.confirm(L("این کارت بایگانی بشه؟", "Archive this card?")) && action("archive")} />
             </div>
             {popover}
@@ -1548,7 +1638,10 @@ function Calendar({ user }) {
   const first = boards[0] && data[boards[0].id];
   const one = market !== "all" && data[market] ? data[market] : null;
   const planBoard = one || first;
-  const allCards = Object.values(data).flatMap((d) => d.board.cards.map((x) => ({ ...x, board_id: d.board.id, board_name: d.board.name })));
+  const allCards = Object.values(data).flatMap((d) => {
+    const hex = new Map((d.board.labels || []).map((l) => [l.id, LABEL_HEX[l.color] || LABEL_HEX.gray]));
+    return d.board.cards.map((x) => ({ ...x, board_id: d.board.id, board_name: d.board.name, label_hex: (x.labels || []).map((id) => hex.get(id)).filter(Boolean) }));
+  });
   const cards = allCards.filter(
     (x) =>
       (market === "all" || x.board_id === market) &&
@@ -1804,7 +1897,7 @@ function Calendar({ user }) {
         {!ready ? (
           <p className={c.muted}>{L("در حال بارگذاری…", "Loading…")}</p>
         ) : view === "month" ? (
-          <MonthView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
+          <MonthView cards={cards} onOpen={openPost} onOpenCard={(card) => setOpen({ bid: card.board_id, id: card.id })} onMove={move} onNew={newPost} />
         ) : view === "week" ? (
           <WeekView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
         ) : view === "board" ? (
@@ -1829,7 +1922,7 @@ function Calendar({ user }) {
       </div>
 
       {open && data[open.bid] && (
-        <CardEditor key={open.id} boardId={open.bid} cardId={open.id} board={data[open.bid].board} users={data[open.bid].users} me={data[open.bid].me} onClose={() => setOpen(null)} onChanged={load} onCompose={(bid, id) => {
+        <CardEditor key={open.id} boardId={open.bid} cardId={open.id} board={data[open.bid].board} users={data[open.bid].users} me={data[open.bid].me} onClose={() => setOpen(null)} onChanged={load} onOpenCard={(id) => setOpen({ bid: open.bid, id })} onCompose={(bid, id) => {
           setOpen(null);
           setCompose({ bid, id });
         }} />

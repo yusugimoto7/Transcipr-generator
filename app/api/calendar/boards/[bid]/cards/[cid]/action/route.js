@@ -1,6 +1,6 @@
 import { Lfor } from "../../../../../../../../lib/i18n";
 import { guard, json } from "../../../../../../../../lib/editing/auth";
-import { approveCard, archiveCard, approvalValid, getBoard, checkId, addEvent, requestReview, rejectCard } from "../../../../../../../../lib/calendar/model";
+import { approveCard, archiveCard, copyCard, approvalValid, getBoard, checkId, addEvent, requestReview, rejectCard } from "../../../../../../../../lib/calendar/model";
 import { publishCard, resetChannel, platformPosting, dryRun, POSTING_OFF } from "../../../../../../../../lib/calendar/publisher";
 
 export const runtime = "nodejs";
@@ -10,7 +10,7 @@ function fail(e) {
   return json({ error: String(e.message || e) }, e.status || 500);
 }
 
-// approve | unapprove | request_review { note } | reject { note } | publish_now | retry { channel } | archive
+// approve | unapprove | request_review { note } | reject { note } | publish_now | retry { channel } | archive | copy { title }
 // Approving and publishing are Hamed's (admin) alone. Publishing runs in the background: the page
 // reads the result from the card.
 export async function POST(request, { params }) {
@@ -30,6 +30,8 @@ export async function POST(request, { params }) {
       case "archive":
         await archiveCard(g.user, params.bid, params.cid);
         return json({ ok: true });
+      case "copy":
+        return json({ card: await copyCard(g.user, params.bid, params.cid, { title: body.title }) });
       case "publish_now": {
         if (!admin) return json({ error: Lfor(request)("فقط حامد منتشر می‌کند", "only Hamed publishes") }, 403);
         if (!platformPosting() && !dryRun()) return json({ error: POSTING_OFF }, 409);
