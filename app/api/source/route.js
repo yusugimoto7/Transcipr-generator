@@ -37,7 +37,7 @@ export async function POST(request) {
     if (whole) {
       const doc = getLexbaseIssueText(issueKey);
       if (!doc || !doc.text) return Response.json({ error: "The newsletter is not loaded yet — try again in a minute." }, { status: 404 });
-      return Response.json({ kind: "lexbase-issue", title: doc.subject, text: doc.text });
+      return Response.json({ kind: "lexbase-issue", title: doc.subject, text: doc.text, issue: { key: doc.key, subject: doc.subject } });
     }
     if (it) {
       return Response.json({
@@ -48,7 +48,7 @@ export async function POST(request) {
       });
     }
     // The item's text as stored on the card, rather than whatever page the link points at.
-    if (String(topic.snippet || "").length >= 200) return Response.json({ kind: "lexbase", title: "Lexbase newsletter — this item (as stored on the card)", text: topic.snippet });
+    if (String(topic.snippet || "").length >= 200) return Response.json({ kind: "lexbase", title: "Lexbase newsletter — this item (as stored on the card)", text: topic.snippet, ...(issueKey ? { issue: { key: issueKey, subject: "" } } : {}) });
   }
 
   let text = "";

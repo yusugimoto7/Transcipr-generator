@@ -18,7 +18,7 @@ import { splitSlideText, parseOwnSlides } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
-import { Archive, Check, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X, Maximize2, Minimize2 } from "lucide-react";
+import { Archive, Check, ChevronDown, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X, Maximize2, Minimize2 } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -2957,11 +2957,17 @@ function OriginalText({ topic }) {
   const [state, setState] = useState({ loading: true });
   const [whole, setWhole] = useState(null); // null | { loading } | { text, title } | { error }
   const [copied, setCopied] = useState("");
+  // each block folds (Hamed, Nov 11 2026: the whole newsletter is pages long under the item)
+  const [openItem, setOpenItem] = useState(true);
+  const [openWhole, setOpenWhole] = useState(true);
+  const wholeRef = useRef(null);
 
   useEffect(() => {
     let stop = false;
     setState({ loading: true });
     setWhole(null);
+    setOpenItem(true);
+    setOpenWhole(true);
     fetch("/api/source", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topic }) })
       .then((r) => r.json())
       .then((j) => !stop && setState(j.error ? { error: j.error } : j))
@@ -2996,6 +3002,16 @@ function OriginalText({ topic }) {
   const isTranscript = /^\[Video transcript\]/.test(String(state.text || ""));
   const label = isTranscript ? L("متن گفته‌شده در ویدیو", "What the video says (transcript)") : L({ lexbase: ["خبرنامهٔ Lexbase — همین مورد", "Lexbase newsletter — this item"], article: ["خبر منبع", "Source article"], snippet: ["بخشی از منبع", "Source excerpt"] }[state.kind] || ["منبع", "Source"]);
   const isLex = state.kind === "lexbase" || topic.newsletter === "lexbase";
+  // The original file when the source is a PDF: a Lexbase issue's own PDF from the email, or a link
+  // that is itself a PDF.
+  const issueKey = (state.issue && state.issue.key) || (whole && whole.issue && whole.issue.key) || topic.issue || "";
+  const pdfUrl = isLex && issueKey ? `/api/lexbase/${encodeURIComponent(issueKey)}/pdf` : /\.pdf($|[?#])/i.test(String(topic.source_url || "")) ? topic.source_url : "";
+  const fold = (open, setOpen) => (
+    <button className="ui-btn" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? L("بستن", "Collapse") : L("باز کردن", "Expand")} title={open ? L("بستن", "Collapse") : L("باز کردن", "Expand")} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 10, width: 34, height: 30, display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "none" }}>
+      <ChevronDown size={16} aria-hidden style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }} />
+    </button>
+  );
+  const headStyle = { fontSize: 12, fontWeight: 700, color: C.text3, textTransform: "uppercase", letterSpacing: 0.5, cursor: "pointer", flex: 1, minWidth: 0 };
   // Each paragraph takes its own direction, so a Persian transcript or article reads right to left.
   const body = { fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 14, lineHeight: 1.8, color: C.text, whiteSpace: "pre-wrap", wordBreak: "break-word", unicodeBidi: "plaintext", textAlign: "start" };
 
@@ -3008,15 +3024,22 @@ function OriginalText({ topic }) {
         <div style={{ fontSize: 13, color: C.reject }}>{state.error}</div>
       ) : (
         <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: openItem ? 10 : 0 }}>
+            <div style={headStyle} onClick={() => setOpenItem(!openItem)}>
               {label}
               {state.title && <div style={{ textTransform: "none", letterSpacing: 0, color: C.text2, fontWeight: 600, marginTop: 2 }}>{state.title}</div>}
             </div>
             {copyBtn("item", state.text)}
+            {fold(openItem, setOpenItem)}
           </div>
-          <div style={body}>{isTranscript ? String(state.text).replace(/^\[Video transcript\]\n?/, "") : state.text}</div>
+          {openItem && <div style={body}>{isTranscript ? String(state.text).replace(/^\[Video transcript\]\n?/, "") : state.text}</div>}
         </>
+      )}
+
+      {pdfUrl && (
+        <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="ui-btn" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 14, padding: "11px", borderRadius: 12, border: `1px solid ${alpha(C.teal, 0.45)}`, background: alpha(C.teal, 0.08), color: C.text, fontWeight: 700, fontSize: 13.5, textDecoration: "none", fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
+          <FileText size={16} aria-hidden /> {isLex ? L("دیدن فایل PDF اصلی خبرنامه", "Open the newsletter's original PDF") : L("دیدن فایل PDF اصلی", "Open the original PDF")} ↗
+        </a>
       )}
 
       {isLex && (
@@ -3030,16 +3053,25 @@ function OriginalText({ topic }) {
           ) : whole.error ? (
             <div style={{ fontSize: 13, color: C.reject }}>{whole.error}</div>
           ) : (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: C.text3, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <div ref={wholeRef} style={{ scrollMarginTop: 90 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: openWhole ? 10 : 0 }}>
+                <div style={headStyle} onClick={() => setOpenWhole(!openWhole)}>
                   {L("کل خبرنامه", "Whole newsletter")}
                   <div style={{ textTransform: "none", letterSpacing: 0, color: C.text2, fontWeight: 600, marginTop: 2 }}>{whole.title}</div>
                 </div>
                 {copyBtn("whole", whole.text)}
+                {fold(openWhole, setOpenWhole)}
               </div>
-              <div style={{ ...body, fontSize: 13.5 }}>{whole.text}</div>
-            </>
+              {openWhole && (
+                <>
+                  <div style={{ ...body, fontSize: 13.5 }}>{whole.text}</div>
+                  {/* the issue is pages long: folding it again from its end brings its header back on screen */}
+                  <button className="ui-btn" onClick={() => { setOpenWhole(false); requestAnimationFrame(() => wholeRef.current && wholeRef.current.scrollIntoView({ block: "start", behavior: "smooth" })); }} style={{ width: "100%", marginTop: 12, padding: "10px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, color: C.text2, fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
+                    <ChevronDown size={15} aria-hidden style={{ transform: "rotate(180deg)" }} /> {L("بستن کل خبرنامه", "Collapse the whole newsletter")}
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
