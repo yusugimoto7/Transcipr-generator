@@ -18,7 +18,7 @@ import { splitSlideText, parseOwnSlides } from "../lib/slide-text";
 import { L, uiDir, isFa } from "../lib/i18n";
 import { lookForBenchmark } from "../lib/video-looks";
 import { STORY_BACKGROUNDS, STORY_BG_ORDER, STORY_BG_NAMES, isHexColour } from "../lib/story/colours";
-import { Archive, Check, ChevronDown, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X, Maximize2, Minimize2 } from "lucide-react";
+import { Archive, Check, ChevronDown, Flag, Clapperboard, FileText, GalleryHorizontal, Images, Lightbulb, Link2, Megaphone, Search, Mail, Newspaper, Pin, PinOff, RefreshCw, Send, Smartphone, Sparkles, Trash2, X, Maximize2, Minimize2 } from "lucide-react";
 
 /* ============================================================
    SUGIMOTO VISA — Video Topic Engine
@@ -802,6 +802,22 @@ export default function App() {
     startJob("script", topic, { topic, picked: true });
   };
 
+  // «To work on» (Farhad, Nov 11 2026: "whenever you see a news item worth working on, tick it or
+  // label it, so I notice and work on it"): a mark the whole team sees, with the people it is for and
+  // a note; they get a notification. Shown at once, saved through the workspace.
+  const flagTopic = useCallback(async (topic, { on = true, to = [], note = "" } = {}) => {
+    patchWs(topic, { flag: on ? { on: true, by_name: L("تو", "you"), to, to_names: [], note, at: Date.now() } : null });
+    try {
+      const res = await fetch("/api/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "flag", topic, on, to, note }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "HTTP " + res.status);
+      patchWs(topic, { flag: d.flag || null });
+    } catch (e) {
+      patchWs(topic, { flag: null });
+      alert(L("علامت ذخیره نشد: ", "The mark was not saved: ") + String(e.message || e));
+    }
+  }, [patchWs]);
+
   // A topic added by its title alone (Studio → research): stored for the team, listed there, opened.
   const addOwnTopic = async (title) => {
     const res = await fetch("/api/workspace", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add", title }) });
@@ -1236,11 +1252,12 @@ export default function App() {
               onRestore={restoreTopic}
               onOpen={openTopic}
               onRetry={(t) => startJob("script", t, { topic: t })}
+              onFlag={flagTopic}
             />
           ) : deckMode === "studio" ? (
             <StudioSection
               topics={studioTopics}
-              listProps={{ decisions, jobs: bg, ws, onApprove: approveTopic, onReject: rejectTopic, onRestore: restoreTopic, onOpen: openTopic, onRetry: (t) => startJob("script", t, { topic: t }) }}
+              listProps={{ decisions, jobs: bg, ws, onApprove: approveTopic, onReject: rejectTopic, onRestore: restoreTopic, onOpen: openTopic, onRetry: (t) => startJob("script", t, { topic: t }), onFlag: flagTopic }}
               research={
                 <ResearchBox
                   defaultOpen
@@ -1270,6 +1287,7 @@ export default function App() {
               onRestore={restoreTopic}
               onOpen={openTopic}
               onRetry={(t) => startJob("script", t, { topic: t })}
+              onFlag={flagTopic}
             />
           ) : (
             <>
@@ -1310,6 +1328,7 @@ export default function App() {
                   onRestore={restoreTopic}
                   onOpen={openTopic}
                   onRetry={(t) => startJob("script", t, { topic: t })}
+              onFlag={flagTopic}
                 />
               )}
             </>
@@ -1321,6 +1340,8 @@ export default function App() {
         <ScriptView
           key={"sv:" + topicKey(scriptTopic)}
           topic={scriptTopic}
+          flag={(ws[topicKey(scriptTopic)] || {}).flag || null}
+          onFlag={flagTopic}
           scripts={viewScripts}
           initialArticle={EN ? savedEn.article || null : initialArticle}
           loading={viewLoading}
@@ -1617,8 +1638,10 @@ function SwipeToArchive({ enabled, onArchive, children }) {
 // left at their news date.
 const PICKS_FROM = Date.parse("2026-10-28T00:34:00Z");
 
-function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, plain = false }) {
-  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive)
+function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, onFlag = null, plain = false }) {
+  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive) | flagged
+  // a mark for the team (Farhad, Nov 11 2026), shared, unlike the pins kept on this device
+  const flagOf = (t) => (ws[topicKey(t)] || {}).flag || null;
   // Pinned topics stay on top while they are being worked on. Kept on this device.
   const [pins, setPins] = useState({});
   useEffect(() => {
@@ -1643,11 +1666,12 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
   const inCat = CATEGORIES.find((c) => c[0] === cat)[2];
   // "All" is everything not archived; the archive has its own filter.
-  const counts = { all: 0, pending: 0, approved: 0, rejected: 0 };
+  const counts = { all: 0, pending: 0, approved: 0, rejected: 0, flagged: 0 };
   for (const t of topics) {
     const st = stateOf(t);
     counts[st]++;
     if (st !== "rejected") counts.all++;
+    if (st !== "rejected" && flagOf(t)) counts.flagged++;
   }
   const catCounts = {};
   for (const [k, , test] of CATEGORIES) catCounts[k] = topics.filter(test).length;
@@ -1655,7 +1679,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   // not by date). The newsletter section keeps its own priority order.
   const rows = topics
     .map((t, i) => ({ t, i }))
-    .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : stateOf(t) === filter) && inCat(t) && (!recent || isRecent(t)));
+    .filter(({ t }) => (filter === "all" ? stateOf(t) !== "rejected" : filter === "flagged" ? stateOf(t) !== "rejected" && !!flagOf(t) : stateOf(t) === filter) && inCat(t) && (!recent || isRecent(t)));
   const recentCount = topics.filter((t) => stateOf(t) !== "rejected" && inCat(t) && isRecent(t)).length;
   // Newest event first (Hamed, Oct 27 2026): a topic picked with ✓ goes to the top at that moment,
   // and anything that arrives after it goes above it. A card's arrival is when the server wrote it
@@ -1680,10 +1704,12 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
   const event = (t) => Math.max(pickedOf(t), arrived(t));
   const touched = (t) => (ws[topicKey(t)] || {}).updatedAt || 0;
   const pinAt = (t) => pins[topicKey(t)] || 0;
-  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || event(b.t) - event(a.t) || touched(b.t) - touched(a.t) || a.i - b.i);
-  // The newsletter keeps its priority order, with the topics picked from it on top, latest pick first.
-  else rows.sort((a, b) => pickedOf(b.t) - pickedOf(a.t) || (pickedOf(a.t) ? touched(b.t) - touched(a.t) : 0) || a.i - b.i);
-  const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject };
+  // marked for the team: above everything but this device's pins, newest mark first
+  const flagAt = (t) => (flagOf(t) && stateOf(t) !== "rejected" ? flagOf(t).at || 1 : 0);
+  if (!plain) rows.sort((a, b) => pinAt(b.t) - pinAt(a.t) || flagAt(b.t) - flagAt(a.t) || event(b.t) - event(a.t) || touched(b.t) - touched(a.t) || a.i - b.i);
+  // The newsletter keeps its priority order, with the marked and picked topics on top.
+  else rows.sort((a, b) => flagAt(b.t) - flagAt(a.t) || pickedOf(b.t) - pickedOf(a.t) || (pickedOf(a.t) ? touched(b.t) - touched(a.t) : 0) || a.i - b.i);
+  const TONE = { all: C.text, pending: C.teal, approved: C.success, rejected: C.reject, flagged: FLAG_RED };
 
   const chip = (k, label) => {
     const on = filter === k;
@@ -1750,6 +1776,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
         {chip("pending", L("جدید", "New"))}
         {chip("approved", L("ساخته‌شده", "Made"))}
         {chip("rejected", L("🗄 بایگانی", "🗄 Archive"))}
+        {onFlag && (counts.flagged > 0 || filter === "flagged") && chip("flagged", L("🚩 برای کار", "🚩 To work on"))}
       </div>
       {!plain && <div dir={uiDir()} style={{ display: "flex", gap: 5, marginBottom: 12, overflowX: "auto", paddingBottom: 2 }}>
         {CATEGORIES.map(([k, label]) => {
@@ -1828,7 +1855,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
                 // opaque, so the archive button behind a dragged card does not show through
                 background: st === "approved" ? `linear-gradient(${alpha(C.success, 0.07)}, ${alpha(C.success, 0.07)}), ${C.surface}` : C.surface,
-                border: `1px solid ${pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
+                border: `1px solid ${flagOf(t) && st !== "rejected" ? alpha(FLAG_RED, 0.65) : pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
                 opacity: st === "rejected" ? 0.45 : 1,
               }}
             >
@@ -1869,6 +1896,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   </div>
                 )}
                 <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
+                  {flagOf(t) && <FlagBadge flag={flagOf(t)} />}
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
                     {f.label}
                   </span>
@@ -1941,6 +1969,18 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                     {pins[topicKey(t)] ? <PinOff size={15} aria-hidden /> : <Pin size={15} aria-hidden />}
                   </button>
                 )}
+                {onFlag && st !== "rejected" && (
+                  <button
+                    className="ui-btn"
+                    onClick={() => onFlag(t, flagOf(t) ? { on: false } : { on: true })}
+                    aria-pressed={!!flagOf(t)}
+                    aria-label={flagOf(t) ? L("برداشتن علامت «برای کار»", "Remove the «to work on» mark") : L("علامت برای کار، تیم خبردار می‌شه", "Mark to work on; the team is notified")}
+                    title={flagOf(t) ? L("برداشتن علامت «برای کار»", "Remove the «to work on» mark") : L("علامت برای کار، تیم خبردار می‌شه", "Mark to work on; the team is notified")}
+                    style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${flagOf(t) ? alpha(FLAG_RED, 0.65) : C.line}`, background: flagOf(t) ? alpha(FLAG_RED, 0.12) : "transparent", color: flagOf(t) ? FLAG_RED : C.text3, display: "grid", placeItems: "center", cursor: "pointer", padding: 0 }}
+                  >
+                    <Flag size={15} aria-hidden fill={flagOf(t) ? "currentColor" : "none"} />
+                  </button>
+                )}
                 {st === "pending" && (
                   <div style={{ display: "flex", gap: 6 }}>
                     {smallBtn(<Check size={16} aria-hidden />, () => onApprove(t), "primary", L("تأیید موضوع", "Approve topic"))}
@@ -1968,6 +2008,89 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// The «to work on» mark (Farhad, Nov 11 2026): who marked it, for whom, and the note.
+const FLAG_RED = "#d92d20";
+function FlagBadge({ flag, large = false }) {
+  const who = (flag.to_names || []).length ? flag.to_names.join("، ") : L("همهٔ تیم", "the whole team");
+  return (
+    <span
+      dir={uiDir()}
+      title={[L("برای کار", "To work on") + " · " + who, flag.by_name ? L("علامت از ", "marked by ") + flag.by_name : "", flag.note || ""].filter(Boolean).join("\n")}
+      style={{ color: FLAG_RED, background: alpha(FLAG_RED, 0.1), borderRadius: 99, padding: large ? "3px 10px" : "0 7px", fontWeight: 700, fontSize: large ? 12.5 : undefined, fontFamily: "'Vazirmatn', 'Geist', sans-serif" }}
+    >
+      🚩 {L("برای کار", "To work on")} · {who}
+      {flag.by_name ? <span style={{ fontWeight: 500, opacity: 0.8 }}> · {L("از ", "by ")}{flag.by_name}</span> : null}
+    </span>
+  );
+}
+
+// On the topic page: mark it for the team, for chosen people, with a note; or take the mark off.
+function FlagBar({ topic, flag, onFlag }) {
+  const [open, setOpen] = useState(false);
+  const [people, setPeople] = useState(null);
+  const [to, setTo] = useState([]);
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    if (!open || people) return;
+    fetch("/api/workspace?team=1", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setPeople(j.people || []))
+      .catch(() => setPeople([]));
+  }, [open, people]);
+  const start = () => {
+    setTo((flag && flag.to) || []);
+    setNote((flag && flag.note) || "");
+    setOpen(true);
+  };
+  const save = () => {
+    onFlag(topic, { on: true, to, note: note.trim() });
+    setOpen(false);
+  };
+  const pill = (on) => ({ padding: "6px 11px", borderRadius: 99, cursor: "pointer", fontSize: 12.5, fontWeight: 700, fontFamily: FONT, border: `1px solid ${on ? FLAG_RED : C.line}`, background: on ? alpha(FLAG_RED, 0.1) : C.surface, color: on ? FLAG_RED : C.text2 });
+  return (
+    <div dir={uiDir()} style={{ marginTop: 12, padding: "10px 12px", borderRadius: 14, border: `1px solid ${flag ? alpha(FLAG_RED, 0.45) : C.line}`, background: flag ? alpha(FLAG_RED, 0.04) : C.surface, fontFamily: FONT }}>
+      {!open && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          {flag ? (
+            <>
+              <FlagBadge flag={flag} large />
+              {flag.note && <span dir="auto" style={{ fontSize: 12.5, color: C.text2, flexBasis: "100%" }}>{flag.note}</span>}
+              <button className="ui-btn" onClick={start} style={pill(false)}>{L("تغییر", "Change")}</button>
+              <button className="ui-btn" onClick={() => onFlag(topic, { on: false })} style={pill(false)}>{L("برداشتن علامت", "Remove the mark")}</button>
+            </>
+          ) : (
+            <button className="ui-btn" onClick={start} style={{ ...pill(false), display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Flag size={14} aria-hidden /> {L("علامت برای کار (تیم خبردار می‌شه)", "Mark to work on (the team is notified)")}
+            </button>
+          )}
+        </div>
+      )}
+      {open && (
+        <div style={{ display: "grid", gap: 9 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.text }}>{L("برای کی؟", "For whom?")}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button className="ui-btn" onClick={() => setTo([])} aria-pressed={!to.length} style={pill(!to.length)}>{L("همهٔ تیم", "The whole team")}</button>
+            {people === null && <span className="ui-pulse" style={{ fontSize: 12, color: C.text3 }}>{L("…", "…")}</span>}
+            {(people || []).map((p) => {
+              const on = to.includes(p.id);
+              return (
+                <button key={p.id} className="ui-btn" aria-pressed={on} onClick={() => setTo((x) => (on ? x.filter((i) => i !== p.id) : [...x, p.id]))} style={pill(on)}>
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+          <textarea dir="auto" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={L("یادداشت (اختیاری)، مثلاً: یه ریلز ازش بسازیم", "Note (optional), e.g. let's make a reel of it")} style={{ width: "100%", boxSizing: "border-box", borderRadius: 11, border: `1px solid ${C.line}`, padding: 9, fontFamily: FA_FONT, fontSize: 13, lineHeight: 1.7, resize: "vertical" }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="ui-btn" onClick={save} style={{ ...pill(true), background: FLAG_RED, color: "#fff", border: "none" }}>🚩 {L("علامت بزن و خبر بده", "Mark and notify")}</button>
+            <button className="ui-btn" onClick={() => setOpen(false)} style={pill(false)}>{L("انصراف", "Cancel")}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3274,7 +3397,7 @@ function ScriptNote({ topic, tab, script, job, onJob }) {
   );
 }
 
-function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, fixJobs = {}, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, carouselReadJob = null, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
+function ScriptView({ topic, flag = null, onFlag = null, scripts, initialArticle, loading, loadingText = "", error, tab, setTab, copied, onCopy, onBack, onWrite, enError = "", enJob, fixJobs = {}, draftJob, tgPost = null, tgJob = null, articleJob, publishJob, docJob, carousel, carouselJob, carouselReadJob = null, sendJob, story, storyJob, storySendJob, videoJob, video, onRefreshVideo, caps = {}, onJob, lang = "fa", setLang = () => {} }) {
   const f = fieldOf(topic);
   const hasScripts = !!(scripts.fa || scripts.en);
   const active = tab === "fa" ? scripts.fa : scripts.en;
@@ -3497,6 +3620,8 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
           </a>
         )}
       </div>
+
+      {onFlag && <FlagBar topic={topic} flag={flag} onFlag={onFlag} />}
 
       {/* Scripts and the original text */}
       <Section title={L("اسکریپت و متن اصلی", "Script and original text")}>
