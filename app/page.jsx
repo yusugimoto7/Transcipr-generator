@@ -4630,6 +4630,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           <div style={{ marginBottom: 12 }}>
             <BgSwatches value={bg} onPick={setBg} />
           </div>
+          <div style={{ fontSize: 12, color: C.text2, background: alpha("#6d5bd0", 0.07), borderRadius: 10, padding: "7px 10px", marginBottom: 10, lineHeight: 1.7 }}>{L("متن استوری عین اسکریپتِ همین موضوعه که بین صفحه‌ها تقسیم می‌شه (جملهٔ کامنت آخرش حذف می‌شه). اگه هنوز اسکریپتی نیست، از روی خبر نوشته می‌شه.", "The story's text is this topic's script word for word, split across the pages (its closing comment line left out). With no script yet, it is written from the news.")}</div>
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
           <textarea
             dir="auto"

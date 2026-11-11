@@ -240,6 +240,8 @@ undefined-identifier eslint check after editing `lib/carousel.js`.
 
 ## 8. Story (Instagram fact story)
 
+- **The story's text is the script, word for word** (Hamed, Nov 11 2026: "the script is very good but the story is unrelated; I want exactly the script"). Split across the pages by rule, the comment-word close left out; only the highlighted source sentences are picked by a model.
+
 Full detail in `instagram-story`. Essentials:
 - 1–4 pages (1 by default). Each page: short Farsi fact in the reference stories' spoken voice,
   a **real screenshot of the original** (Lexbase PDF page or the web page) with the proving

@@ -18,6 +18,9 @@ A topic's **Story** tile makes 1–4 pages (default **1**). Each page is a short
 | Save-image proxy (HCTI images only) | `app/api/story/image/route.js` |
 | UI: tile, form (pages 1–4, colour swatches, notes), preview, save button | `StoryPanel`, `BgSwatches`, `saveStoryImage` in `app/page.jsx` |
 
+## The story's text is the script (Hamed, Nov 11 2026)
+"The script is very good but the story's text is unrelated; I want exactly the script." When the topic has a script in the story's language, the story's text IS that script, word for word: `scriptPages` cuts it by rule (paragraphs joined or split at sentence ends to the number of pages asked for; each page's first sentence is its headline, the rest its body) and leaves out the spoken comment-word close (a story has no comments). No model rewrites it; a model only picks each page's `quote` / `also` from the source for the screenshot (`quotesForPages`, checked by `quoteInSource` like always). The type steps down for long pages. A story revised with a note, a provincial draw told from its own page, or a topic with no script yet is written by `writeStory` as before.
+
 ## Rules that must not be broken
 - **Grounding:** every page returns a `quote` copied from the source text; the page is rejected unless `quoteInSource` finds it. A `ref` (case name) is shown only if the source text contains it. Never let a story state a fact the source does not.
 - **Screenshots are photographs of the original** (PDF page or web page), never an image model's drawing.
