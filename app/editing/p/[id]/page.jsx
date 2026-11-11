@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Sparkles, Subtitles, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Sparkles, Subtitles, Trash2, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -1056,7 +1056,10 @@ function Project({ id }) {
           </div>
         </div>
       </div>
-      <ProjectAccess id={p.id} d={d} reload={load} />
+      <div className={s.row} style={{ alignItems: "flex-start" }}>
+        <div className={s.grow}><ProjectAccess id={p.id} d={d} reload={load} /></div>
+        {d.can_share && <RemoveProject id={p.id} />}
+      </div>
       <ApprovedFiles p={p} files={d.approved || []} />
       <Steps runs={d.runs} project={p} />
       {d.runs.length > 1 && (
@@ -1115,6 +1118,41 @@ function ApprovedFiles({ p, files }) {
           </ul>
         </>
       )}
+    </div>
+  );
+}
+
+// Take the project off the board (owner or Hamed). Asked twice on the page itself, never a browser
+// dialog; the files already in Drive stay there.
+function RemoveProject({ id }) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const go = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/projects/${id}`, { method: "DELETE" });
+      window.location.href = "/editing";
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  };
+  if (!ask)
+    return (
+      <Button variant="ghost" onClick={() => setAsk(true)} aria-label={L("حذف پروژه", "Delete project")}>
+        <Trash2 size={15} aria-hidden /> {L("حذف", "Delete")}
+      </Button>
+    );
+  return (
+    <div className={s.card} style={{ maxWidth: 320, marginBottom: 10 }}>
+      <p style={{ margin: "0 0 8px", fontSize: 14 }}>{L("این پروژه از تابلو حذف بشه؟ فایل‌هایی که تو درایو هستن سر جاشون می‌مونن.", "Remove this project from the board? Files already in Drive stay where they are.")}</p>
+      {error && <div className={s.error}>{error}</div>}
+      <div className={s.row}>
+        <Button variant="destructive" onClick={go} disabled={busy}>{busy ? L("در حال حذف…", "Deleting…") : L("آره، حذف کن", "Yes, delete")}</Button>
+        <Button variant="ghost" onClick={() => setAsk(false)} disabled={busy}>{L("نه", "Cancel")}</Button>
+      </div>
     </div>
   );
 }

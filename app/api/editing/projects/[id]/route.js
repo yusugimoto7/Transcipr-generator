@@ -1,7 +1,7 @@
 import { guard, json, publicUser, allUsers } from "../../../../../lib/editing/auth";
 import { accessOf } from "../../../../../lib/editing/access";
 import { get } from "../../../../../lib/editing/store";
-import { loadProject, runsOf, correctionsOf, canApprove, isAdmin, nextStages, accessOfProject, canShare, approvedFiles } from "../../../../../lib/editing/projects";
+import { loadProject, runsOf, correctionsOf, canApprove, isAdmin, nextStages, accessOfProject, canShare, approvedFiles, removeProject } from "../../../../../lib/editing/projects";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +34,19 @@ export async function GET(request, { params }) {
         ? (await allUsers()).filter((u) => u.id !== project.owner_id && u.role !== "admin" && accessOf(u).includes("editing")).map((u) => ({ id: u.id, name: u.name }))
         : [],
     });
+  } catch (e) {
+    return json({ error: String(e.message || e) }, e.status || 500);
+  }
+}
+
+// Remove the project from the board (owner or admin). Its files in Drive stay where they are.
+export async function DELETE(request, { params }) {
+  const g = await guard(request);
+  if (g.res) return g.res;
+  try {
+    const project = await loadProject(g.user, params.id);
+    await removeProject(g.user, project);
+    return json({ ok: true });
   } catch (e) {
     return json({ error: String(e.message || e) }, e.status || 500);
   }

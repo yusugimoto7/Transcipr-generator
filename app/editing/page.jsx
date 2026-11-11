@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, FileCheck } from "lucide-react";
+import { Clock, FileCheck, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, s, Shell, Pill, when, ACTIVE, Avatar } from "./ui";
@@ -31,6 +31,16 @@ function Projects({ user }) {
   const [error, setError] = useState("");
   const [owner, setOwner] = useState("");
   const [team, setTeam] = useState([]);
+  const [ask, setAsk] = useState(""); // the card whose removal is being asked
+  const remove = async (id) => {
+    try {
+      await api(`/projects/${id}`, { method: "DELETE" });
+      setData((d) => (d || []).filter((p) => p.id !== id));
+    } catch (e) {
+      setError(e.message);
+    }
+    setAsk("");
+  };
   useEffect(() => {
     if (admin) api("/team").then((d) => setTeam(d.users)).catch(() => {});
   }, [admin]);
@@ -128,6 +138,27 @@ function Projects({ user }) {
                         <span className={s.kbBadge}><Clock size={12} aria-hidden /> {when(p.latest?.updated_at || p.created_at)}</span>
                         {ACTIVE.includes(st) && <span className={`${s.kbBadge} ${s.pulse}`}>{L("در حال کار…", "working…")}</span>}
                         <span className={s.grow} />
+                        {(admin || p.owner_id === user.id) && (
+                          // buttons, not links: the card itself is the link
+                          ask === p.id ? (
+                            <span className={s.kbBadge} style={{ gap: 6 }} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+                              {L("حذف بشه؟", "Delete?")}
+                              <button type="button" className={s.kbBadge} style={{ border: 0, cursor: "pointer", color: "#b42318" }} onClick={() => remove(p.id)}>{L("آره", "Yes")}</button>
+                              <button type="button" className={s.kbBadge} style={{ border: 0, cursor: "pointer" }} onClick={() => setAsk("")}>{L("نه", "No")}</button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className={s.kbBadge}
+                              style={{ border: 0, cursor: "pointer" }}
+                              title={L("حذف پروژه", "Delete project")}
+                              aria-label={L("حذف پروژه", "Delete project")}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAsk(p.id); }}
+                            >
+                              <Trash2 size={13} aria-hidden />
+                            </button>
+                          )
+                        )}
                         <Avatar user={owner} size={24} />
                       </span>
                     </Link>
