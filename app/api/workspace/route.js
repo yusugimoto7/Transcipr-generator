@@ -43,7 +43,9 @@ async function add(raw) {
   const title = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 200);
   if (title.length < 4) return Response.json({ error: "write the topic's title" }, { status: 400 });
   const persian = /[\u0600-\u06FF]/.test(title);
-  const topic = { ...(persian ? { title_fa: title } : { title_en: title }), custom: true, researched: true, manual: true, date: new Date().toISOString().slice(0, 10) };
+  // a pasted link is the topic's source, so its words are read rather than its address written about
+  const link = (title.match(/https?:\/\/[^\s<>"']+/) || [])[0] || "";
+  const topic = { ...(persian ? { title_fa: title } : { title_en: title }), custom: true, researched: true, manual: true, date: new Date().toISOString().slice(0, 10), ...(link ? { source_url: link } : {}) };
   const have = await getEntry(keyOf(topic)).catch(() => null);
   if (have) return Response.json({ ok: true, exists: true, topic: have.topic || topic });
   await setStatus(topic, "new");

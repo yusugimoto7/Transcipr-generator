@@ -3000,7 +3000,7 @@ function OriginalText({ topic }) {
   );
   // A video link's text is its transcript (lib/video-transcript.js), shown under its own name.
   const isTranscript = /^\[Video transcript\]/.test(String(state.text || ""));
-  const label = isTranscript ? L("متن گفته‌شده در ویدیو", "What the video says (transcript)") : L({ lexbase: ["خبرنامهٔ Lexbase — همین مورد", "Lexbase newsletter — this item"], article: ["خبر منبع", "Source article"], snippet: ["بخشی از منبع", "Source excerpt"] }[state.kind] || ["منبع", "Source"]);
+  const label = isTranscript ? L("متن گفته‌شده در ویدیو", "What the video says (transcript)") : L({ lexbase: ["خبرنامهٔ Lexbase — همین مورد", "Lexbase newsletter — this item"], article: ["خبر منبع", "Source article"], snippet: ["بخشی از منبع", "Source excerpt"], post: ["پست شبکهٔ اجتماعی", "Social media post"] }[state.kind] || ["منبع", "Source"]);
   const isLex = state.kind === "lexbase" || topic.newsletter === "lexbase";
   // The original file when the source is a PDF: a Lexbase issue's own PDF from the email, or a link
   // that is itself a PDF.

@@ -1,5 +1,6 @@
 import { fetchArticleText } from "../../../lib/news";
 import { getLexbaseItems, findLexbaseItem, getLexbaseIssueText } from "../../../lib/newsletter/lexbase";
+import { topicLink, socialPostText } from "../../../lib/grounding";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,8 +53,16 @@ export async function POST(request) {
   }
 
   let text = "";
-  if (topic.source_url && publicHttpUrl(topic.source_url)) {
-    text = await fetchArticleText(topic.source_url, { timeoutMs: 10000, maxChars: 20000 }).catch(() => "");
+  const link = topicLink(topic);
+  // a post on a social network: its words, its video's transcript and what it links to
+  const held = topic.social && String(topic.snippet || "").length >= 200;
+  const post = link && publicHttpUrl(link) && !held ? await socialPostText(link, 20000) : null;
+  if (post) {
+    if (post.text) return Response.json({ kind: "post", title: post.why.length ? "Not everything could be read: " + post.why.join("; ") : "", text: post.text });
+    if (!topic.snippet) return Response.json({ error: "The post could not be read: " + (post.why.join("; ") || "nothing came back") }, { status: 404 });
+  }
+  if (!post && link && publicHttpUrl(link)) {
+    text = await fetchArticleText(link, { timeoutMs: 10000, maxChars: 20000 }).catch(() => "");
   }
   if (text && text.length > (topic.snippet || "").length) return Response.json({ kind: "article", text });
   if (topic.snippet) return Response.json({ kind: "snippet", text: topic.snippet });
