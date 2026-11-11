@@ -211,6 +211,7 @@ as the change**, in the team's own words where possible, with the date.
 ## 7. Carousel
 
 - **The carousel is the script on slides** (Hamed, Nov 11 2026: "carousels must be based on the script that was written, not a different AI with different concepts"). When the topic has a script in the carousel's language, the slides take its hook, its points in its order, its examples and its close, and the script model writes them. Facts still come only from the source text: a line of the script the source does not hold is left out. With no script yet, the carousel is written from the news.
+- **Word for word, and the same close every time** (Hamed, later on Nov 11 2026: "the script's words read like mine when I pick Hamed, but the carousels and stories came out in another tone; I want the text exactly as the script"). With a script, the slides are the script itself cut by rule, no model: the first sentence is the cover, the rest goes over the middle slides (each slide's first sentence its heading), and the script's spoken comment-word close is left out. The last slide is always «مشاوره با آقای حامد سوگیموتو» / «کلمهٔ «مشاوره» رو کامنت بگذار.», never "Sugimoto Visa's consultants"; a carousel written from the news ends on the same line. English carousels name Hamed but keep the bio link (Oct 24 2026 rule).
 
 Text (`NEWS_RULES` in `lib/carousel.js`, the Wizard's carousel prompt):
 - **Hook = the news itself** (the number, decision, date). Never address the reader: no
@@ -241,6 +242,7 @@ undefined-identifier eslint check after editing `lib/carousel.js`.
 ## 8. Story (Instagram fact story)
 
 - **The story's text is the script, word for word** (Hamed, Nov 11 2026: "the script is very good but the story is unrelated; I want exactly the script"). Split across the pages by rule, the comment-word close left out; only the highlighted source sentences are picked by a model.
+- **Two parts per page, nothing cut** (Hamed, Nov 11 2026, with his own one-page story: the first paragraph above the screenshot, the second under it). The whole script goes over the pages; each page is cut near its middle at a paragraph break, else at a sentence end. The type steps down for long text instead of cutting it; a page's typed text keeps up to 1600 / 2600 characters (it was cut at 140, and the top half came out cut off).
 
 Full detail in `instagram-story`. Essentials:
 - 1–4 pages (1 by default). Each page: short Farsi fact in the reference stories' spoken voice,
