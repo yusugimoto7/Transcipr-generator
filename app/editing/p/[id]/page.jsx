@@ -7,6 +7,7 @@ import Link from "next/link";
 import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar, DriveVideo } from "../../ui";
 import VoiceCorrections from "./VoiceCorrections";
 import SubtitleStyle, { EMPTY_SUB } from "../../SubtitleStyle";
+import GraphicsTemplates from "../../GraphicsTemplates";
 import MicButton from "../../../voice/MicButton";
 import { L, uiDir } from "../../../../lib/i18n";
 
@@ -280,12 +281,13 @@ function SubtitleSettings({ project, reload, remake, open: startOpen = false }) 
 function NextSteps({ project, stages, reload }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [look, setLook] = useState(((project.settings || {}).graphics || {}).template || "canvas");
   if (!stages.length) return null;
   const go = async (stage) => {
     setBusy(stage);
     setError("");
     try {
-      await api(`/projects/${project.id}/stage`, { method: "POST", body: { stage } });
+      await api(`/projects/${project.id}/stage`, { method: "POST", body: { stage, ...(stage === "graphics" ? { template: look } : {}) } });
       await reload();
     } catch (e) {
       setError(e.message);
@@ -315,7 +317,43 @@ function NextSteps({ project, stages, reload }) {
         )}
       </p>
       {error && <div className={s.error}>{error}</div>}
+      {stages.includes("graphics") && <GraphicsTemplates value={look} onChange={setLook} disabled={!!busy} />}
       {stages.includes("subtitles") && <SubtitleSettings project={project} reload={reload} />}
+    </div>
+  );
+}
+
+// The look of a graphics project, changeable while a version waits for review: saved for later versions, and
+// «plan again» makes a fresh plan in the new look to approve (nothing is rendered before that).
+function GraphicsLook({ project, reload }) {
+  const saved = ((project.settings || {}).graphics || {}).template || "canvas";
+  const [look, setLook] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const go = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/projects/${project.id}/graphics-template`, { method: "POST", body: { template: look, remake: true } });
+      await reload();
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className={s.card}>
+      <h2 className={s.h2}>
+        <Sparkles size={18} aria-hidden style={{ verticalAlign: "-3px" }} /> {L("قالب موشن‌گرافیک", "Motion graphics template")}
+      </h2>
+      <GraphicsTemplates value={look} onChange={setLook} disabled={busy} />
+      {error && <div className={s.error}>{error}</div>}
+      {look !== saved && (
+        <Button type="button" onClick={go} disabled={busy}>
+          {busy ? L("در حال شروع…", "Starting…") : L("طرح تازه با این قالب", "New plan in this template")}
+        </Button>
+      )}
+      <p className={s.muted} style={{ fontSize: 13 }}>{L("یک طرح تازه با فریم‌های ثابت در قالب جدید ساخته می‌شه که اول تأییدش می‌کنی؛ اصلاحیه‌های این نسخه رو جداگانه بفرست.", "A fresh plan with still frames is made in the new template for you to approve first; send this version's corrections separately.")}</p>
     </div>
   );
 }
@@ -856,6 +894,7 @@ function RunView({ run, project, isLatest, corrections, canApprove, me, reload }
             )}
 
             {stageOf(run) === "subtitles" && reviewing && <SubtitleSettings project={project} reload={reload} remake />}
+            {stageOf(run) === "graphics" && reviewing && <GraphicsLook project={project} reload={reload} />}
             {stageOf(run) === "subtitles" && ACTIVE.indexOf(run.status) < 0 && run.status !== "failed" && (
               reviewing ? (
                 <div className={s.card}>

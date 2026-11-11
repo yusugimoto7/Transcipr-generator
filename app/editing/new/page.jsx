@@ -6,6 +6,7 @@ import { api, s, Shell, DriveVideo } from "../ui";
 import DrivePicker from "../../DrivePicker";
 import VoicePicker from "./VoicePicker";
 import SubtitleStyle, { EMPTY_SUB } from "../SubtitleStyle";
+import GraphicsTemplates from "../GraphicsTemplates";
 import { L, uiDir } from "../../../lib/i18n";
 import { Sheet, SheetContent } from "../../../components/ui/sheet";
 import { Button } from "../../../components/ui/button";
@@ -110,11 +111,6 @@ function NewProject() {
   const [dubBrief, setDubBrief] = useState("");
   const [cast, setCast] = useState([]);
   const [voices, setVoices] = useState(null);
-  const [looks, setLooks] = useState(null);
-  useEffect(() => {
-    if (tab !== "graphics" || looks) return;
-    api("/graphics-templates").then((d) => setLooks(d.templates || [])).catch(() => setLooks([]));
-  }, [tab, looks]);
   const [people, setPeople] = useState(null);
   useEffect(() => {
     if (tab !== "dub" || voices) return;
@@ -406,25 +402,7 @@ function NewProject() {
 
       {tab === "graphics" && (
         <>
-          {looks && looks.length > 1 && (
-            <div className={s.field}>
-              <span>{L("قالب موشن‌گرافیک", "Motion graphics template")}</span>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 10 }}>
-                {looks.map((t) => {
-                  const on = gfx.template === t.id;
-                  return (
-                    <button key={t.id} type="button" onClick={() => setGfx({ ...gfx, template: t.id })} aria-pressed={on} title={t.source}
-                      style={{ textAlign: "start", padding: 10, borderRadius: 12, cursor: "pointer", font: "inherit", fontSize: 13.5, fontWeight: 600, background: "var(--surface)", color: "var(--text)", border: on ? "2px solid var(--orange, #e8702a)" : "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
-                      <span style={{ display: "flex", height: 34, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}>
-                        {(t.swatch || []).map((c, i) => <i key={i} style={{ flex: i === 0 ? 2 : 1, background: c }} />)}
-                      </span>
-                      <span>{L(t.fa, t.en)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <GraphicsTemplates value={gfx.template} onChange={(id) => setGfx({ ...gfx, template: id })} />
           <label className={s.field}>
             <span>{L("چقدر گرافیک", "How much graphics")}</span>
             <select id="gfx_amount" className={s.select} value={gfx.amount} onChange={(e) => setGfx({ ...gfx, amount: e.target.value })}>
