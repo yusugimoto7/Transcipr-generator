@@ -310,7 +310,7 @@ export default function App() {
   const [scripts, setScripts] = useState({ fa: "", en: "" });
   const [scriptTopic, setScriptTopic] = useState(null);
   const [scriptError, setScriptError] = useState(null);
-  const [scriptTab, setScriptTab] = useState("fa");
+  const [scriptTab, setScriptTab] = useState("src");
   const [copied, setCopied] = useState("");
   const [initialArticle, setInitialArticle] = useState(null);
   const [savedCarousel, setSavedCarousel] = useState(null);
@@ -882,7 +882,8 @@ export default function App() {
     setSavedEn({});
     setSavedVideo(null);
     setScriptError(null);
-    setScriptTab("fa");
+    // the original text first; scripts are written only when asked (Hamed, Nov 11 2026)
+    setScriptTab("src");
     setView("script");
     try {
       window.scrollTo(0, 0);
@@ -1035,22 +1036,16 @@ export default function App() {
     }
   }
   const viewLoading = (!!sj && sj.status === "running" && !sjResult) || (loadingSaved && !viewScripts.fa && !viewScripts.en);
-  // Any topic opened with no script and no job for it: the Persian and English scripts start by
-  // themselves, once (Hamed, Oct 27 2026: "when I open a topic, write both scripts right away";
-  // before, only topics picked with ✓ did). Saved scripts are read first and never written over.
   // Opening a topic not picked yet picks it (Hamed, Oct 28 2026: "green, that is, opened"): it goes
-  // to the top of the list like a ✓.
+  // to the top of the list like a ✓. Its scripts are no longer written by themselves (Hamed, Nov 11
+  // 2026: "first I need to see the original text, then if I want I click to generate the script");
+  // the original opens first and «نوشتن اسکریپت» writes them.
   useEffect(() => {
     if (view !== "script" || !scriptTopic || !svKey || savedOkKey !== svKey || loadingSaved) return;
-    if (viewScripts.fa || viewScripts.en || sj) return;
-    // a topic added by its title alone has nothing to write from: its scripts start only by hand
-    if (scriptTopic.manual) return;
     if (autoWroteRef.current.has(svKey)) return;
     autoWroteRef.current.add(svKey);
-    const pick = decisions[svKey] !== "approved";
-    if (pick) patchWs(scriptTopic, { status: "active", pickedAt: Date.now() });
-    startJob("script", scriptTopic, { topic: scriptTopic, ...(pick ? { picked: true } : {}) });
-  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, viewScripts.fa, viewScripts.en, sj, startJob, decisions, patchWs]);
+    if (decisions[svKey] !== "approved" && !scriptTopic.manual) patchWs(scriptTopic, { status: "active", pickedAt: Date.now() });
+  }, [view, scriptTopic, svKey, savedOkKey, loadingSaved, decisions, patchWs]);
   const viewError =
     sj && sj.status === "error" && !(scripts.fa || scripts.en) && !loadingSaved
       ? L("نوشتن سناریو با خطا مواجه شد (", "Writing the script failed (") + (sj.error || "") + ")"
@@ -1340,7 +1335,7 @@ export default function App() {
           copied={copied}
           onCopy={copy}
           onBack={backToList}
-          onWrite={decisions[svKey] === "rejected" ? null : () => approveTopic(scriptTopic)}
+          onWrite={decisions[svKey] === "rejected" ? null : () => (setScriptTab("fa"), approveTopic(scriptTopic))}
           enError={(sjResult && sjResult.enError) || ""}
           enJob={enRewrite}
           fixJobs={fixJobs}
@@ -3484,7 +3479,7 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
         <div className="ui-fade" style={{ ...card, padding: 14, minHeight: 260 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <Segmented value={tab} onChange={setTab} items={[["fa", "فارسی", FA_FONT], ["en", "English"], ["src", L("متن اصلی", "Original"), FA_FONT]]} />
+              <Segmented value={tab} onChange={setTab} items={[["src", L("متن اصلی", "Original"), FA_FONT], ["fa", "فارسی", FA_FONT], ["en", "English"]]} />
             </div>
             {tab !== "src" && active && !loading && !(tab === "en" && (enInFarsi || enRunning)) && (
               <button className="ui-btn" onClick={() => onCopy(tab)} style={{ ...smallBtn(copied === tab ? C.success : C.orange), flexShrink: 0 }}>
@@ -3494,7 +3489,18 @@ function ScriptView({ topic, scripts, initialArticle, loading, loadingText = "",
           </div>
 
           {tab === "src" ? (
-            <OriginalText topic={topic} />
+            <>
+              <OriginalText topic={topic} />
+              {/* read first, then write (Hamed, Nov 11 2026): the scripts start only from here or ✓ */}
+              {!hasScripts && !loading && onWrite && (
+                <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
+                  <button className="ui-btn ui-glow-orange" onClick={onWrite} style={{ background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: FA_FONT }}>
+                    ✍️ {L("نوشتن اسکریپت (فارسی و انگلیسی)", "Write the scripts (Persian and English)")}
+                  </button>
+                </div>
+              )}
+              {loading && <div className="ui-pulse" dir={uiDir()} style={{ marginTop: 14, fontFamily: FA_FONT, fontSize: 13, color: C.text2, textAlign: "center" }}>{loadingText || L("در حال نوشتن اسکریپت فارسی و انگلیسی…", "Writing the Persian and English scripts…")}</div>}
+            </>
           ) : loading ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 220, gap: 14 }}>
               <div className="ui-spin" style={{ width: 30, height: 30, border: `3px solid ${alpha(C.text, 0.15)}`, borderTopColor: C.orange, borderRightColor: C.teal, borderRadius: "50%" }} />
@@ -3943,6 +3949,9 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
               </button>
             ))}
           </div>
+          <div style={{ fontSize: 12, color: C.text2, background: alpha("#6d5bd0", 0.07), borderRadius: 10, padding: "7px 10px", marginBottom: 10, lineHeight: 1.7 }}>
+            {L("اسلایدها از روی اسکریپتی که برای این موضوع نوشته شده ساخته می‌شن: همون قلاب، همون ترتیب، همون نتیجه. اگه هنوز اسکریپتی نیست، از روی خبر.", "The slides are built from the script written for this topic: the same hook, order and conclusion. With no script yet, from the news.")}
+          </div>
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
           <textarea
             dir="auto"
@@ -4146,7 +4155,7 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
               <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
               <textarea dir="auto" value={rdNotes} onChange={(e) => setRdNotes(e.target.value)} rows={3} placeholder={L("مثلاً: لحن رسمی‌تر، روی دانشجوها تمرکز کن، اسلاید مقایسه نذار…", "e.g. a more formal tone, focus on students, no comparison slide…")} style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: fa, fontSize: 13, lineHeight: 1.7, resize: "vertical", marginBottom: 10 }} />
               <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-                {[[false, L("از روی نسخهٔ فعلی", "From the current version"), L("متن فعلی پایه می‌مونه و فقط چیزهایی که عوض کردی (لحن، نوع، تعداد، یادداشت) اعمال می‌شه", "The current text stays the base; only what you changed (tone, type, count, notes) applies")], [true, L("از نو از روی خبر", "From the news again"), L("متن از اول و فقط از روی خبر نوشته می‌شه", "The text is written again from the news alone")]].map(([v, label, note]) => (
+                {[[false, L("از روی نسخهٔ فعلی", "From the current version"), L("متن فعلی پایه می‌مونه و فقط چیزهایی که عوض کردی (لحن، نوع، تعداد، یادداشت) اعمال می‌شه", "The current text stays the base; only what you changed (tone, type, count, notes) applies")], [true, L("از نو از روی اسکریپت", "Again from the script"), L("متن از اول از روی اسکریپت این موضوع نوشته می‌شه (اگه اسکریپت نیست، از روی خبر)", "Written again from this topic's script (from the news when there is no script)")]].map(([v, label, note]) => (
                   <button key={String(v)} type="button" className="ui-btn" onClick={() => setRdFresh(v)} aria-pressed={rdFresh === v} style={{ flex: 1, minWidth: 150, textAlign: "start", padding: "8px 10px", borderRadius: 12, cursor: "pointer", fontFamily: fa, fontWeight: 700, fontSize: 12.5, border: `${rdFresh === v ? 2 : 1}px solid ${rdFresh === v ? "#6d5bd0" : C.line}`, background: rdFresh === v ? alpha("#6d5bd0", 0.1) : C.surface, color: rdFresh === v ? "#6d5bd0" : C.text }}>
                     {label}<span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: C.text3 }}>{note}</span>
                   </button>

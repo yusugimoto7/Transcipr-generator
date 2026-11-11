@@ -155,6 +155,8 @@ as the change**, in the team's own words where possible, with the date.
 
 ## 5. Scripts (Farsi + English)
 
+- **Scripts are never written by themselves** (Hamed, Nov 11 2026: "when I open a topic I first need to see the original text; then, if I want, I click to generate the script"). A topic opens on its Original text; scripts start only from ✓ or the «نوشتن اسکریپت» button there.
+
 - Farsi script: spoken, specific, the fact first; English terms in parentheses; glossary names
   (`glossaryBlock`, also on the English script, the hook options and the note rewrites).
 - **Hamed's voice (Nov 1 2026; skill `sugimoto-voice`, code `lib/sugimoto-voice.js`).** The script
@@ -207,6 +209,8 @@ as the change**, in the team's own words where possible, with the date.
   now shown right under the button. `telegram_send` needs the "publishing" access.
 
 ## 7. Carousel
+
+- **The carousel is the script on slides** (Hamed, Nov 11 2026: "carousels must be based on the script that was written, not a different AI with different concepts"). When the topic has a script in the carousel's language, the slides take its hook, its points in its order, its examples and its close, and the script model writes them. Facts still come only from the source text: a line of the script the source does not hold is left out. With no script yet, the carousel is written from the news.
 
 Text (`NEWS_RULES` in `lib/carousel.js`, the Wizard's carousel prompt):
 - **Hook = the news itself** (the number, decision, date). Never address the reader: no
