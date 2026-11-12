@@ -4912,6 +4912,12 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
             </div>
           )}
           {uploadErr && <div style={{ fontSize: 12, color: C.reject, marginTop: 8, direction: "ltr" }}>⚠️ {uploadErr}</div>}
+          {/* what the last page edit could not do from its box (lib/story-page.js) */}
+          {!running && story.notice && (
+            <div dir="auto" style={{ fontSize: 12.5, lineHeight: 1.7, color: C.text, background: alpha(C.orange, 0.1), border: `1px solid ${alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "8px 10px", marginTop: 8, fontFamily: fa }}>
+              ℹ️ {story.notice}
+            </div>
+          )}
           {!running && missing > 0 && (
             <button className="ui-btn" onClick={() => onJob("story_draw", {})} style={{ ...btn(alpha(C.orange, 0.1), C.text, `1px solid ${alpha(C.orange, 0.4)}`), width: "100%", marginTop: 10 }}>
               {L(`طراحی ${missing} صفحهٔ باقی‌مانده`, `Design the ${missing} remaining pages`)}
@@ -5426,11 +5432,11 @@ function StoryPageSheet({ page, total, onClose, onSubmit }) {
           </div>
         </div>
         <label style={{ display: "block", fontSize: 12.5, color: C.text2, marginTop: 10 }}>
-          {L("یا بنویس چه چیزی عوض بشه (از روی متن منبع بازنویسی می‌شه)", "Or write what should change (rewritten from the source text)")}
+          {L("یا بنویس چه چیزی عوض بشه (متن یا هایلایت‌های اسکرین‌شات)", "Or write what should change (the words, or the screenshot's highlights)")}
           <textarea dir="auto" value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder={L("مثلاً: عدد اصلی رو بیار توی تیتر، متن کوتاه‌تر…", "e.g. put the main number in the headline, shorter text…")} style={{ ...field, marginTop: 4 }} />
         </label>
         {ask.trim() && <LearnToggle on={learn} setOn={setLearn} />}
-        <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("اسکرین‌شات همون عکس واقعی منبع می‌مونه و جملهٔ هایلایت‌شده عوض نمی‌شه؛ فقط متن همین صفحه تغییر می‌کنه و همین صفحه دوباره ساخته می‌شه.", "The screenshot stays the real photo of the source and the highlighted sentence does not change; only this page's text changes and only this page is made again.")}</div>
+        <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("هر چی توی دو کادر بالا تایپ کنی عیناً همون می‌مونه. توی این کادر می‌تونی بخوای متن عوض بشه یا جمله‌های دیگه‌ای هایلایت بشن؛ اسکرین‌شات همیشه عکس واقعی منبعه و فقط همون مورد مرتبط رو نشون می‌ده. فقط همین صفحه دوباره ساخته می‌شه.", "What you type in the two boxes above stays exactly as typed. In this box you can ask for the words to change or for other sentences to be highlighted; the screenshot is always a real photograph of the source and shows only the item the story is about. Only this page is made again.")}</div>
         <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
           <button
             className="ui-btn ui-glow-orange"
