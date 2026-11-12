@@ -72,6 +72,12 @@ saved to the device. «خودکار» clears `manual`. The screenshot is still t
 source, never redrawn: only where and how big it sits changes. The same panel serves the stories
 of every topic (News, Lexbase, Ideas, Studio).
 
+**Nov 12 2026 (Hamed: "like the visa story's design: make the picture and the type bigger or smaller, and let me ask for the whole design to be done again; the automatic button does not work"):**
+- The designer starts from the layout the server really draws: its type sizes come from `lib/story/type.js` (`headlineSize` / `bodySize`, shared with `storyPageHtml`) and its CSS mirrors `STORY_CSS`. It had its own old copy of both and opened on text several sizes too big once pages carried the whole script.
+- − / + for the picture as well as the type; «مرتب کن» stacks the parts again, centred, inside the free area (`SAFE_TOP` 260 / `SAFE_BOTTOM` 1640, drawn as dashed guides); a warning shows when a part sits under Instagram's buttons.
+- «طراحی خودکار از اول» drops the hand layout: shown at once and drawn by the server (`manual: null`). It used to wait for the picture to load a second time, which never happens, and left the designer dead.
+- A design request in words («طراحی دوباره با این درخواست»): `story_page` with `design` + the shown `layout` + each part's measured height (`sizes`) → `designStoryPage` in `lib/story-page.js`. A model answers only in intents (order of parts, a scale per part, the gap, a background); `layoutFrom` works the positions out by rule so nothing leaves the free area, saves them as the page's `manual` and draws. The designer then shows that layout for more hand changes. Words are never changed here (that is the ✏️ box); what cannot be done is said in `story.notice`.
+
 ## Templates (Hamed, Oct 23 2026)
 Ten home-made "trending" looks were built first and **rejected** ("I only like the simple one; use
 ready-made templates"). From a gallery of 27 ready-made Canva/Freepik story designs Hamed **kept 15

@@ -4894,6 +4894,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                 busy={running}
                 onMake={(manual) => onJob("story_page", { num: designing, manual })}
                 onReset={() => onJob("story_page", { num: designing, manual: null })}
+                onRequest={(design, layout, sizes) => onJob("story_page", { num: designing, design, layout, sizes })}
                 onSave={(url) => saveStoryImage(url, `sugimoto-story-${designing}.png`)}
               />
               )}
