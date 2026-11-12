@@ -1271,7 +1271,7 @@ export default function App() {
                 <CustomNewsBox
                   defaultOpen
                   job={(bg[CUSTOM_NEWS_KEY] || {}).custom_news || null}
-                  onStart={(links, note, images) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })) })}
+                  onStart={(links, note, images, videos) => startJob("custom_news", { title_fa: CUSTOM_NEWS_KEY }, { links, note, images: (images || []).map((i) => ({ name: i.name, data: i.data })), videos: videos || [] })}
                   onOpen={openTopic}
                 />
               }
@@ -2481,14 +2481,35 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
   const [links, setLinks] = useState("");
   const [note, setNote] = useState("");
   const [images, setImages] = useState([]);
+  // uploaded videos, each read on the server as what is said in it ({ name, text } or { name, busy } / { name, error })
+  const [videos, setVideos] = useState([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef(null);
+  const addVideo = async (f) => {
+    const id = Date.now() + Math.random();
+    setVideos((prev) => [...prev, { id, name: f.name || "video", busy: true }].slice(-3));
+    try {
+      const form = new FormData();
+      form.append("file", f, f.name || "video.mp4");
+      const res = await fetch("/api/custom-news/video", { method: "POST", body: form });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.text) throw new Error(d.error || "HTTP " + res.status);
+      setVideos((prev) => prev.map((v) => (v.id === id ? { id, name: d.name || v.name, text: d.text } : v)));
+    } catch (e) {
+      setVideos((prev) => prev.map((v) => (v.id === id ? { id, name: v.name, error: String(e.message || e) } : v)));
+    }
+  };
   const addFiles = async (files) => {
-    const list = [...(files || [])].filter((f) => /^image\//.test(f.type));
+    const all = [...(files || [])];
+    // a video saved from TikTok / Instagram (Nov 12 2026: a shared TikTok could not be read by link)
+    for (const f of all.filter((f) => /^(video|audio)\//.test(f.type))) addVideo(f);
+    const list = all.filter((f) => /^image\//.test(f.type));
     if (!list.length) return;
     const shrunk = (await Promise.all(list.map(shrinkImage))).filter(Boolean);
     setImages((prev) => [...prev, ...shrunk].slice(0, 5));
   };
+  const readVideos = videos.filter((v) => v.text);
+  const videoBusy = videos.some((v) => v.busy);
   const running = !!job && job.status === "running";
   const failed = !!job && job.status === "error" ? job.error : "";
   const done = !!job && job.status === "done" && job.result && job.result.topic;
@@ -2502,9 +2523,10 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
       setLinks("");
       setNote("");
       setImages([]);
+      setVideos([]);
     }
   }, [done, job]);
-  const ready = count > 0 || images.length > 0;
+  const ready = (count > 0 || images.length > 0 || readVideos.length > 0) && !videoBusy;
   const field = { width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontSize: 13, lineHeight: 1.7, resize: "vertical", background: C.surface };
 
   return (
@@ -2564,20 +2586,38 @@ function CustomNewsBox({ job, onStart, onOpen, defaultOpen = false }) {
                 ) : (
                   <>🖼 {L("عکس‌ها رو اینجا بکش و رها کن، بزن تا انتخاب کنی، یا Ctrl+V", "Drop pictures here, tap to choose, or Ctrl+V")}</>
                 )}
-                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+                <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" multiple hidden onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
               </div>
+              {videos.length > 0 && (
+                <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+                  {videos.map((v) => (
+                    <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderRadius: 10, border: `1px solid ${v.error ? alpha(C.reject, 0.4) : C.line}`, background: C.surface, fontSize: 12.5 }}>
+                      <span aria-hidden>🎬</span>
+                      <span dir="auto" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.name}</span>
+                      <span className={v.busy ? "ui-pulse" : ""} style={{ color: v.error ? C.reject : v.busy ? C.text3 : C.success, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        {v.busy ? L("در حال گوش دادن…", "Listening…") : v.error ? L("خونده نشد", "Not read") : L(`✓ ${v.text.split(/\s+/).length} کلمه`, `✓ ${v.text.split(/\s+/).length} words`)}
+                      </span>
+                      {!v.busy && (
+                        <button aria-label={L("حذف ویدیو", "Remove video")} onClick={() => setVideos((prev) => prev.filter((x) => x.id !== v.id))} style={{ border: "none", background: "transparent", cursor: "pointer", color: C.text3, fontSize: 13 }}>✕</button>
+                      )}
+                      {v.error && <span dir="ltr" style={{ flexBasis: "100%", fontSize: 11, color: C.reject }}>{v.error}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: C.text3, marginTop: 4, lineHeight: 1.7 }}>{L("ویدیوی تیک‌تاک یا اینستاگرام رو هم می‌تونی ذخیره کنی و همین‌جا بذاری: حرف‌هاش نوشته می‌شه و خبر از همون ساخته می‌شه.", "You can also save a TikTok or Instagram video and drop it here: what is said in it is written down and the news is made from that.")}</div>
               <div style={{ fontSize: 11, color: C.text3, marginTop: 4 }}>{L("متن داخل عکس‌ها کلمه‌به‌کلمه خوانده می‌شود و خبر فقط از همان نوشته می‌شود.", "The text in the pictures is read word for word, and the news is written only from it.")}</div>
               <div style={{ fontSize: 12, color: C.text2, margin: "8px 0 6px" }}>{L("یادداشت (اختیاری) — زاویه و تأکید؛ فکت‌ها فقط از خود لینک‌ها می‌آیند", "Note (optional) — angle and emphasis; facts come only from the links themselves")}</div>
               <textarea dir="auto" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={L("مثلاً: روی اثرش برای دانشجوهای ایرانی تمرکز کن، تاریخ اجرا را برجسته کن…", "e.g. focus on what it means for Iranian students, highlight the start date…")} style={{ ...field, fontFamily: fa }} />
               <button
                 className="ui-btn ui-glow-orange"
                 disabled={!ready}
-                onClick={() => onStart(links, note.trim(), images)}
+                onClick={() => onStart(links, note.trim(), images, readVideos.map((v) => ({ name: v.name, text: v.text })))}
                 style={{ marginTop: 10, width: "100%", background: ready ? C.teal : alpha(C.teal, 0.4), color: "#fff", border: "none", borderRadius: 12, padding: "11px", fontWeight: 700, fontSize: 14, cursor: ready ? "pointer" : "default", fontFamily: fa }}
               >
                 {L(
-                  "ساخت خبر از " + ([count ? `${count} لینک` : "", images.length ? `${images.length} عکس` : ""].filter(Boolean).join(" و ") || "لینک یا عکس"),
-                  "Make news from " + ([count ? `${count} link${count > 1 ? "s" : ""}` : "", images.length ? `${images.length} picture${images.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ") || "links or pictures")
+                  videoBusy ? "صبر کن تا ویدیو خونده بشه…" : "ساخت خبر از " + ([count ? `${count} لینک` : "", images.length ? `${images.length} عکس` : "", readVideos.length ? `${readVideos.length} ویدیو` : ""].filter(Boolean).join(" و ") || "لینک، عکس یا ویدیو"),
+                  videoBusy ? "Wait while the video is read…" : "Make news from " + ([count ? `${count} link${count > 1 ? "s" : ""}` : "", images.length ? `${images.length} picture${images.length > 1 ? "s" : ""}` : "", readVideos.length ? `${readVideos.length} video${readVideos.length > 1 ? "s" : ""}` : ""].filter(Boolean).join(" and ") || "links, pictures or videos")
                 )}
               </button>
             </>
