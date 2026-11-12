@@ -3398,6 +3398,66 @@ function ExtraSources({ sources = [], supplement = null }) {
   );
 }
 
+// The script typed over by hand (Hamed, Nov 12 2026: "an editor in the script, so we can edit what
+// comes by hand; the Telegram post, carousel, story and English video all go on from the final
+// script"). Saved exactly as typed through `script_fix` with `set` (no model touches it), and every
+// piece made afterwards reads this saved version.
+function EditableScript({ tab, text, job, onJob }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text || "");
+  const isSet = !!job && job.extra && typeof job.extra.set === "string";
+  const saving = isSet && job.status === "running";
+  const failed = isSet && job.status === "error" ? job.error : "";
+  const start = () => {
+    setDraft(text || "");
+    setEditing(true);
+  };
+  const save = () => {
+    const t = draft.trim();
+    if (!t || t === String(text || "").trim()) return setEditing(false);
+    onJob(tab === "en" ? "script_fix@en" : "script_fix", { lang: tab, set: t });
+    setEditing(false);
+  };
+  const font = tab === "fa" ? "'Vazirmatn', sans-serif" : "'Geist', 'Vazirmatn', sans-serif";
+  if (editing) {
+    return (
+      <div dir={uiDir()} style={{ fontFamily: FA_FONT }}>
+        <textarea
+          dir={tab === "fa" ? "rtl" : "ltr"}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={Math.min(24, Math.max(8, draft.split("\n").length + 4))}
+          style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${alpha(C.orange, 0.5)}`, padding: 12, fontFamily: font, fontSize: 14, lineHeight: 2, resize: "vertical", background: C.surface, color: C.text }}
+          autoFocus
+        />
+        <div style={{ fontSize: 11.5, color: C.text3, margin: "4px 0 8px", lineHeight: 1.7 }}>
+          {L("همین متن عیناً ذخیره می‌شه و پست تلگرام، کاروسل، استوری و ویدیوی انگلیسی از روی همین نسخه ساخته می‌شن.", "This text is saved exactly as typed, and the Telegram post, carousel, story and English video are made from this version.")}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="ui-btn ui-glow-orange" onClick={save} disabled={!draft.trim()} style={{ flex: 1, background: C.orange, color: "#fff", border: "none", borderRadius: 12, padding: "10px 14px", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: FA_FONT }}>
+            ✓ {L("ذخیرهٔ اسکریپت", "Save the script")}
+          </button>
+          <button className="ui-btn" onClick={() => setEditing(false)} style={{ background: "transparent", color: C.text2, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 14px", fontWeight: 600, cursor: "pointer", fontFamily: FA_FONT }}>
+            {L("انصراف", "Cancel")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div dir={uiDir()} style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+        <button className="ui-btn" onClick={start} disabled={saving} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: alpha(C.orange, 0.08), color: C.text, border: `1px solid ${alpha(C.orange, 0.4)}`, borderRadius: 10, padding: "6px 12px", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: FA_FONT }}>
+          ✏️ {L("ویرایش دستی اسکریپت", "Edit the script by hand")}
+        </button>
+      </div>
+      {saving && <div className="ui-pulse" style={{ fontSize: 12.5, color: C.text2, marginBottom: 6, fontFamily: FA_FONT }}>⏳ {L("در حال ذخیرهٔ اسکریپت…", "Saving the script…")}</div>}
+      {failed && !saving && <div style={{ fontSize: 12.5, color: C.reject, marginBottom: 6, fontFamily: FA_FONT }}>⚠️ {L("ذخیره نشد: ", "Not saved: ")}{failed}</div>}
+      <ScriptBody text={text} tab={tab} />
+    </div>
+  );
+}
+
 // A note under the script, like the ones under the post, carousel and story: the script in this
 // tab is rewritten by it from the same source (job script_fix, script_fix@en for English), and the
 // note can teach a rule for every later script.
@@ -3754,7 +3814,7 @@ function ScriptView({ topic, flag = null, onFlag = null, scripts, initialArticle
             <>
               {tab === "fa" && <VoicePicker voice={scripts.voice || "hamed"} versions={scripts.versions || {}} onPick={(v, again) => onJob("script", { voice: v, ...(again ? { again: true } : {}) })} />}
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
-              <ScriptBody text={active} tab={tab} />
+              <EditableScript key={"ed:" + tab} tab={tab} text={active} job={fixJobs[tab]} onJob={onJob} />
               {tab === "fa" && <CommentWord cta={scripts.cta_fa} />}
               <ExtraSources sources={scripts.sources} supplement={scripts.supplement} />
               {scripts.before_check && onWrite && (
