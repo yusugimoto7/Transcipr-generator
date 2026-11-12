@@ -62,10 +62,16 @@ export async function POST(request) {
   // what came with the link (a caption, a few words typed in the Shortcut) frames the card, never its facts
   const rest = String(text).replace(/https?:\/\/[^\s<>"'،]+/gi, " ").replace(/\s+/g, " ").trim();
   const note = [String(b.note || "").trim(), rest].filter(Boolean).join(" · ").slice(0, 1500);
+  // The second Shortcut ("twin video", ?video=1): the post is rephrased into Hamed's script and rendered by
+  // his HeyGen twin, with no stop on the way (jobs.js share_video).
+  const video = q.get("video") === "1" || b.video === true || b.video === "1";
   try {
-    startJob("custom_news", "share:" + resolved[0], { links: resolved, note, images: [], by_uid: user.id, shared_by: user.name || user.id });
+    if (video) startJob("share_video", "share-video:" + resolved[0], { links: resolved, note, shared_by: user.name || user.id, by_uid: user.id });
+    else startJob("custom_news", "share:" + resolved[0], { links: resolved, note, images: [], by_uid: user.id, shared_by: user.name || user.id });
   } catch (e) {
     return reply((fa ? "الان نشد: " : "Not now: ") + String(e.message || e), 503);
   }
+  if (video)
+    return reply(fa ? "رسید ✓ متنش خونده می‌شه، با لحن خودت بازنویسی می‌شه و ویدیوی دیجیتال‌توینت ساخته می‌شه. وقتی آماده شد خبرت می‌کنیم." : "Got it ✓ It will be read, rewritten in your words and made into a video with your twin. You'll be notified when it is ready.");
   return reply(fa ? "رسید ✓ موضوعش تا یکی دو دقیقهٔ دیگه در استودیو ← منابع خودم آماده می‌شه." : "Got it ✓ The topic will be ready in Studio → My sources in a minute or two.");
 }

@@ -54,6 +54,7 @@ function SettingsPage({ user }) {
 function ShareShortcut() {
   const [key, setKey] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copied2, setCopied2] = useState(false);
   useEffect(() => {
     fetch("/api/voice/key", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setKey(d.key || "")).catch(() => {});
   }, []);
@@ -88,6 +89,19 @@ function ShareShortcut() {
         </button>
       </div>
       <p className={s.muted} style={{ marginTop: 6 }}>{L("این آدرس کلید شخصی خودت رو داره؛ به کسی نده. با عوض کردن رمز عبور باطل می‌شه و باید دوباره کپی‌اش کنی.", "This address carries your personal key; do not share it. Changing your password ends it, and you copy it again.")}</p>
+      <h3 className={s.h2} style={{ fontSize: 15, marginTop: 16 }}>{L("میان‌بر دوم: ویدیوی دیجیتال‌توین", "Second Shortcut: twin video")}</h3>
+      <p className={s.muted}>
+        {L(
+          "همون مراحل بالا رو با اسم «Twin video» تکرار کن و این آدرس رو بذار. پستی که با این میان‌بر بفرستی خونده می‌شه، با لحن خودت به انگلیسی بازنویسی می‌شه و دیجیتال‌توینت (کت‌وشلوار طوسی، پشت میز) ویدیوش رو می‌سازه؛ بدون توقف برای تأیید متن. هر بار اعتبار API هِی‌جن مصرف می‌شه. وقتی ویدیو آماده شد خبرت می‌کنیم؛ چیزی جایی منتشر نمی‌شه.",
+          "Repeat the steps above with the name Twin video and this address. A post sent with it is read, rewritten in English in your words, and your twin (grey suit, at the desk) makes the video, with no stop to approve the script. Each one spends HeyGen API credits. You are notified when the video is ready; nothing is posted anywhere."
+        )}
+      </p>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input readOnly value={url ? url + "&video=1" : "…"} data-no-voice data-no-copy dir="ltr" onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, fontFamily: "monospace", fontSize: 12, padding: 8, border: "1px solid var(--line, #d0d5dd)", borderRadius: 8 }} aria-label={L("آدرس میان‌بر ویدیو", "Twin video Shortcut address")} />
+        <button className={s.menuItem} style={{ width: "auto" }} onClick={() => navigator.clipboard.writeText(url + "&video=1").then(() => { setCopied2(true); setTimeout(() => setCopied2(false), 2000); }).catch(() => {})} disabled={!url}>
+          {copied2 ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />} {copied2 ? L("کپی شد", "Copied") : L("کپی", "Copy")}
+        </button>
+      </div>
     </section>
   );
 }
