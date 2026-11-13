@@ -92,8 +92,8 @@ function ShareShortcut() {
       <h3 className={s.h2} style={{ fontSize: 15, marginTop: 16 }}>{L("میان‌بر دوم: ویدیوی دیجیتال‌توین", "Second Shortcut: twin video")}</h3>
       <p className={s.muted}>
         {L(
-          "همون مراحل بالا رو با اسم «Twin video» تکرار کن و این آدرس رو بذار. پستی که با این میان‌بر بفرستی خونده می‌شه، با لحن خودت به انگلیسی بازنویسی می‌شه و دیجیتال‌توینت (کت‌وشلوار طوسی، پشت میز) ویدیوش رو می‌سازه؛ بدون توقف برای تأیید متن. هر بار اعتبار API هِی‌جن مصرف می‌شه. وقتی ویدیو آماده شد خبرت می‌کنیم؛ چیزی جایی منتشر نمی‌شه.",
-          "Repeat the steps above with the name Twin video and this address. A post sent with it is read, rewritten in English in your words, and your twin (grey suit, at the desk) makes the video, with no stop to approve the script. Each one spends HeyGen API credits. You are notified when the video is ready; nothing is posted anywhere."
+          "همون مراحل بالا رو با اسم «Twin video» تکرار کن و این آدرس رو بذار. پستی که با این میان‌بر بفرستی خونده می‌شه و با لحن خودت اسکریپت می‌شه. اعلانش صفحهٔ ویدیوی انگلیسی رو باز می‌کنه: متن رو تأیید یا ویرایش کن، ویدیوی نمونه رو انتخاب کن و «ساخت ویدیو» رو بزن؛ قبل از اون هیچ اعتبار هِی‌جنی خرج نمی‌شه. چیزی جایی منتشر نمی‌شه.",
+          "Repeat the steps above with the name Twin video and this address. A post sent with it is read and written as your script. Its notification opens the English video sheet: check or edit the script, pick the sample video and tap Make video; no HeyGen credits are spent before that. Nothing is posted anywhere."
         )}
       </p>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

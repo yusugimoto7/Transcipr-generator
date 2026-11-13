@@ -987,9 +987,12 @@ export default function App() {
     if (pendingOpenRef.current === undefined) {
       pendingOpenRef.current = null;
       try {
-        const key = new URLSearchParams(window.location.search).get("t");
+        const q = new URLSearchParams(window.location.search);
+        const key = q.get("t");
         if (key) {
           pendingOpenRef.current = key;
+          // a twin-video notification (jobs.js share_video) opens the English video sheet on the written script
+          if (q.get("video") === "1") window.__openVideoFor = key;
           window.history.replaceState(null, "", "/");
           window.history.pushState({ t: key }, "", "/?t=" + encodeURIComponent(key));
           // Not found by then (an idea that has expired): stay on the list.
@@ -3598,6 +3601,13 @@ function ScriptView({ topic, flag = null, onFlag = null, scripts, initialArticle
   const [carouselOpen, setCarouselOpen] = useState(0); // bumped to open the carousel form
   const [storyOpen, setStoryOpen] = useState(0);
   const [composer, setComposer] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined" && hasScripts && window.__openVideoFor && window.__openVideoFor === topicKey(topic)) {
+      window.__openVideoFor = "";
+      setComposer(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasScripts, topic]);
   const [draft, setDraft] = useState(null); // the video editor's state, kept while the topic is open
 
   const telegramRef = useRef(null);
