@@ -1638,6 +1638,13 @@ function SwipeToArchive({ enabled, onArchive, children }) {
 // left at their news date.
 const PICKS_FROM = Date.parse("2026-10-28T00:34:00Z");
 
+// The story's own headline, as published (a social post's first line), else the
+// English title written with the card. Lists and the topic page lead with it.
+function headlineOf(t) {
+  const h = String((t && (t.source_title || t.title_en)) || "").replace(/\s+/g, " ").trim();
+  return h.length > 220 ? h.slice(0, 217).trimEnd() + "…" : h;
+}
+
 function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, onFlag = null, plain = false }) {
   const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive) | flagged
   // a mark for the team (Farhad, Nov 11 2026), shared, unlike the pins kept on this device
@@ -1869,20 +1876,21 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 <a
                   href={topicHref(t)}
                   {...openLinkProps(t, onOpen)}
-                  title={(t.title_en ? t.title_en + " — " : "") + L("باز کن (راست‌کلیک: تب جدید)", "open (right-click: new tab)")}
+                  title={(t.title_fa ? t.title_fa + " — " : "") + L("باز کن (راست‌کلیک: تب جدید)", "open (right-click: new tab)")}
+                  dir="auto"
                   style={{
-                    fontFamily: "'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
-                    color: C.text, cursor: "pointer",
+                    fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
+                    color: C.text, cursor: "pointer", textAlign: "right", unicodeBidi: "plaintext",
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                     textDecoration: st === "rejected" ? "line-through" : "none",
                   }}
                 >
-                  {t.title_fa || t.title_en}
+                  {headlineOf(t) || t.title_fa}
                 </a>
-                {/* The headline as published, so the editor can judge the story before opening it. */}
-                {t.title_fa && (t.source_title || t.title_en) && (
-                  <div dir="auto" style={{ fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: C.text2, marginTop: 2, textAlign: "right", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {t.source_title || t.title_en}
+                {/* Hamed (Nov 13 2026): the headline as published leads; the Farsi title follows. */}
+                {t.title_fa && headlineOf(t) && (
+                  <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 600, lineHeight: 1.6, color: C.text2, marginTop: 2, textAlign: "right", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    {t.title_fa}
                   </div>
                 )}
                 {plain && t.why_now && (
@@ -3696,11 +3704,11 @@ function ScriptView({ topic, flag = null, onFlag = null, scripts, initialArticle
           <SourceBadge t={topic} header />
           {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 {L("توضیحی", "Explainer")}</span>}
         </div>
-        <div dir="rtl" style={{ fontFamily: FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "right", lineHeight: 1.65, unicodeBidi: "plaintext" }}>
-          {topic.title_fa || topic.title_en}
+        <div dir="auto" style={{ fontFamily: "'Geist', " + FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "right", lineHeight: 1.5, unicodeBidi: "plaintext" }}>
+          {headlineOf(topic) || topic.title_fa}
         </div>
-        {topic.title_en && topic.title_fa && (
-          <div dir="ltr" style={{ marginTop: 4, fontSize: 13.5, fontWeight: 600, color: C.text2, lineHeight: 1.5 }}>{topic.title_en}</div>
+        {headlineOf(topic) && topic.title_fa && (
+          <div dir="rtl" style={{ marginTop: 4, fontFamily: FA_FONT, fontSize: 14, fontWeight: 600, color: C.text2, textAlign: "right", lineHeight: 1.7, unicodeBidi: "plaintext" }}>{topic.title_fa}</div>
         )}
         {topic.why_now && (
           <div dir="rtl" style={{ marginTop: 12, padding: "9px 12px", borderRadius: 12, background: alpha(C.surfaceHi, 0.8), borderRight: `3px solid ${f.color}`, fontFamily: FA_FONT, fontSize: 12.5, lineHeight: 1.85, color: C.text2, textAlign: "right", unicodeBidi: "plaintext" }}>
