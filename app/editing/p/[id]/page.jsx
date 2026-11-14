@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Sparkles, Subtitles, Trash2, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Share2, Sparkles, Subtitles, Trash2, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -1097,6 +1097,7 @@ function Project({ id }) {
       </div>
       <div className={s.row} style={{ alignItems: "flex-start" }}>
         <div className={s.grow}><ProjectAccess id={p.id} d={d} reload={load} /></div>
+        <ShareProject id={p.id} title={p.title} />
         {d.can_share && <RemoveProject id={p.id} />}
       </div>
       <ApprovedFiles p={p} files={d.approved || []} />
@@ -1156,6 +1157,87 @@ function ApprovedFiles({ p, files }) {
             ))}
           </ul>
         </>
+      )}
+    </div>
+  );
+}
+
+// Share the project (Hamed, Nov 14 2026: "a share button, to send it to team mates or copy the link"): the
+// phone's own share sheet or a copied link, and teammates picked here get a notification that opens it. Who may
+// see or edit the project is not changed by it.
+function ShareProject({ id, title }) {
+  const [open, setOpen] = useState(false);
+  const [people, setPeople] = useState(null);
+  const [to, setTo] = useState([]);
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const url = typeof window !== "undefined" ? `${window.location.origin}/editing/p/${id}` : "";
+  const toggle = () => {
+    setOpen(!open);
+    setMsg("");
+    if (!people) api(`/projects/${id}/share`).then((d) => setPeople(d.people || [])).catch(() => setPeople([]));
+  };
+  const copy = async () => {
+    try {
+      if (navigator.share) await navigator.share({ title, url });
+      else {
+        await navigator.clipboard.writeText(url);
+        setMsg(L("لینک کپی شد", "Link copied"));
+      }
+    } catch (_) {
+      try {
+        await navigator.clipboard.writeText(url);
+        setMsg(L("لینک کپی شد", "Link copied"));
+      } catch (__) {}
+    }
+  };
+  const send = async () => {
+    setBusy(true);
+    setMsg("");
+    try {
+      const r = await api(`/projects/${id}/share`, { method: "POST", body: { to, note } });
+      setMsg(L(`برای ${r.sent} نفر فرستاده شد`, `Sent to ${r.sent}`));
+      setTo([]);
+      setNote("");
+    } catch (e) {
+      setMsg(e.message);
+    }
+    setBusy(false);
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <Button variant="ghost" onClick={toggle} aria-expanded={open}>
+        <Share2 size={15} aria-hidden /> {L("اشتراک", "Share")}
+      </Button>
+      {open && (
+        <div className={s.card} style={{ position: "absolute", insetInlineEnd: 0, top: "100%", zIndex: 20, width: 300, marginTop: 6 }}>
+          <Button type="button" onClick={copy} style={{ width: "100%" }}>
+            <Copy size={14} aria-hidden /> {L("کپی یا فرستادن لینک", "Copy or send the link")}
+          </Button>
+          <p className={s.muted} style={{ fontSize: 13, margin: "10px 0 4px" }}>{L("یا برای هم‌تیمی‌ها بفرست (اعلان می‌گیرن):", "Or send it to teammates (they get a notification):")}</p>
+          {!people ? (
+            <p className={s.muted}>{L("در حال بارگذاری…", "Loading…")}</p>
+          ) : !people.length ? (
+            <p className={s.muted}>{L("کس دیگه‌ای به این پروژه دسترسی نداره.", "No one else can see this project.")}</p>
+          ) : (
+            people.map((u) => (
+              <label key={u.id} className={s.row} style={{ fontSize: 14 }}>
+                <input type="checkbox" checked={to.includes(u.id)} onChange={(e) => setTo(e.target.checked ? [...to, u.id] : to.filter((x) => x !== u.id))} />
+                <span>{u.name}</span>
+              </label>
+            ))
+          )}
+          {people && people.length > 0 && (
+            <>
+              <textarea className={s.input} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={L("یادداشت (اختیاری)", "Note (optional)")} style={{ marginTop: 6 }} />
+              <Button type="button" onClick={send} disabled={busy || !to.length} style={{ marginTop: 6 }}>
+                {busy ? L("در حال فرستادن…", "Sending…") : L("بفرست", "Send")}
+              </Button>
+            </>
+          )}
+          {msg && <p className={s.muted} style={{ marginTop: 6 }}>{msg}</p>}
+        </div>
       )}
     </div>
   );
