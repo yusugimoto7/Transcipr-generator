@@ -182,6 +182,15 @@ as the change**, in the team's own words where possible, with the date.
   fact still comes from the source only (a note asking for something the source lacks is left
   out). The other language's script is kept; opening-line options are made again. "Learn from
   this note" stores a `script` rule for every later script.
+- **Write the scripts again in a chosen tone** (Hamed, Nov 15 2026: "a button to regenerate the
+  scripts and choose the لحن", asked from the carousel's slide text). «↻ نوشتن دوباره اسکریپت‌ها ·
+  انتخاب لحن» over the scripts and over a carousel: pick the voice (حامد / تیم / کلاس درس) and, if
+  wanted, the tone in words (quick picks: خودمونی‌تر، رسمی‌تر، کوتاه‌تر، پرانرژی‌تر، آرام و مطمئن،
+  ساده برای تازه‌کارها). Both scripts are written anew in that voice, replacing only that voice's
+  version. The tone shapes only how it is said (rhythm, sentence and total length); the chain of
+  thought stays and facts come only from the source. Over a carousel the slide text is then cut
+  again from the new script (text only, so it is checked before design; the earlier drawn version
+  stays behind «نسخهٔ قبلی»).
 
 ## 6. Telegram news post
 

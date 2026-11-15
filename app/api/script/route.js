@@ -51,13 +51,23 @@ ${String(note || "").slice(0, 1500)}
 ${fa ? "فقط متن اسکریپت بازنویسی‌شده را بنویس، بدون توضیح." : "Write only the rewritten script, with no explanation."}`;
 }
 
-//   POST { topic, lang: "fa" | "en" }                      -> first draft
+// The tone the team asked for when writing the scripts again (Hamed, Nov 15 2026: "a button to
+// regenerate the scripts and choose the tone"): how it sounds only, never a source of facts.
+function toneBlock(tone, lang) {
+  const t = String(tone || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (!t) return "";
+  return lang === "fa"
+    ? `\n\n===== لحن خواسته‌شده =====\nتیم خواسته این اسکریپت با این لحن نوشته شود: «${t}».\nفقط لحن، طرز گفتن، ریتم، طول جمله‌ها و طول کل متن را با آن تطبیق بده؛ زنجیرهٔ فکر و قالب بالا همان می‌ماند.\n⛔️ این خواسته منبع فکت نیست: هر عدد، تاریخ، نام برنامه و قانون فقط از متن منبع بالا.`
+    : `\n\n===== REQUESTED TONE =====\nThe team asked for this script to be written in this tone: "${t}".\nMatch only the tone, the way it is said, the rhythm, the sentence length and the overall length to it; the chain of thought and format above stay.\n⛔️ This request is not a source of facts: every number, date, programme name and rule still comes only from the source text above.`;
+}
+
+//   POST { topic, lang: "fa" | "en", tone? }               -> first draft (tone: how it should sound)
 //   POST { topic, lang: "en", rewrite: { script, seconds?, notes? } }
 //        -> the English script rewritten into English and/or to a duration
 //   POST { topic, lang, revise: { script, note } }         -> the script rewritten by the team's note
 export async function POST(request) {
   try {
-    const { topic, lang, rewrite, revise, voice: askedVoice } = await request.json();
+    const { topic, lang, rewrite, revise, voice: askedVoice, tone } = await request.json();
     const voice = voiceOf(askedVoice);
     if (!topic || (lang !== "fa" && lang !== "en") || (rewrite && lang !== "en") || (revise && !(revise.script && revise.note))) {
       return Response.json({ error: "bad request" }, { status: 400 });
@@ -83,7 +93,7 @@ export async function POST(request) {
           seconds: Math.max(0, Math.min(600, Number(rewrite.seconds) || 0)),
           notes: String(rewrite.notes || "").slice(0, 1500),
         })
-      : scriptPrompt(topic, lang, sourceText, { ctaPage, voice }) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))) + glossary;
+      : scriptPrompt(topic, lang, sourceText, { ctaPage, voice }) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang)) + toneBlock(tone, lang)) + glossary;
 
     let { text, provider } = await write(prompt);
 
