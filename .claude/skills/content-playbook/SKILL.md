@@ -190,7 +190,10 @@ as the change**, in the team's own words where possible, with the date.
   version. The tone shapes only how it is said (rhythm, sentence and total length); the chain of
   thought stays and facts come only from the source. Over a carousel the slide text is then cut
   again from the new script (text only, so it is checked before design; the earlier drawn version
-  stays behind «نسخهٔ قبلی»).
+  stays behind «نسخهٔ قبلی»). The carousel has its own button too («برای کروسل دکمه بذار», same day):
+  «↻ نوشتن دوباره متن کاروسل · انتخاب لحن» rewrites only the slides from the carousel on screen in
+  the chosen voice, tone and slide count (scripts untouched), or the scripts too, with the slides cut
+  again from them.
 
 ## 6. Telegram news post
 

@@ -3143,6 +3143,74 @@ function ScriptRedo({ voice = "hamed", onRun, busy = false, withCarousel = false
   );
 }
 
+// The carousel's own «write again in a tone» (Hamed, Nov 15 2026: «برای کروسل دکمه بذار»): only the
+// slide text, rewritten from the carousel on screen in the chosen voice and tone (the scripts stay),
+// or the scripts first and the slides cut from them again. Text only either way, checked before design.
+function CarouselRedo({ voice = "hamed", count = 7, busy = false, onCarousel, onScripts }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState(voice);
+  const [tone, setTone] = useState("");
+  const [n, setN] = useState(count);
+  const [what, setWhat] = useState("carousel"); // "carousel": the slides only; "scripts": scripts, then slides
+  useEffect(() => { if (!open) { setV(voice); setN(count); } }, [voice, count, open]);
+  const addHint = (h) => setTone((t) => (t.trim() ? t.trim().replace(/[،,]\s*$/, "") + "، " : "") + h);
+  const purple = "#6d5bd0";
+  if (!open) {
+    return (
+      <button type="button" className="ui-btn" disabled={busy} onClick={() => setOpen(true)} style={{ width: "100%", padding: "10px 14px", borderRadius: 12, cursor: busy ? "default" : "pointer", border: `1px solid ${alpha(purple, 0.45)}`, background: alpha(purple, 0.08), color: purple, fontWeight: 800, fontSize: 13.5, fontFamily: FONT, opacity: busy ? 0.6 : 1 }}>
+        ↻ {L("نوشتن دوباره متن کاروسل · انتخاب لحن", "Write the carousel text again · choose the tone")}
+      </button>
+    );
+  }
+  const run = () => {
+    setOpen(false);
+    if (what === "scripts") onScripts({ voice: v, tone: tone.trim(), count: n });
+    else onCarousel({ voice: v, tone: tone.trim(), count: n });
+  };
+  return (
+    <div dir={uiDir()} className="ui-fade" style={{ background: C.surface, border: `1px solid ${alpha(purple, 0.35)}`, borderRadius: 16, padding: 14, fontFamily: FONT }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <b style={{ fontSize: 14 }}>↻ {L("نوشتن دوباره متن کاروسل", "Write the carousel text again")}</b>
+        <button type="button" className="ui-btn" onClick={() => setOpen(false)} style={{ background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12.5, fontFamily: FONT }}>{L("بستن", "Close")}</button>
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+        {[["carousel", L("فقط متن کاروسل", "The carousel text only"), L("اسلایدها با این لحن بازنویسی می‌شن؛ اسکریپت‌ها دست نمی‌خورن", "The slides are rewritten in this tone; the scripts stay")], ["scripts", L("اسکریپت‌ها هم", "The scripts too"), L("اول اسکریپت‌ها با این لحن نوشته می‌شن، بعد اسلایدها عیناً از اسکریپت تازه", "The scripts are written in this tone first, then the slides are cut word for word from the new script")]].map(([k, label, note]) => (
+          <button key={k} type="button" className="ui-btn" onClick={() => setWhat(k)} aria-pressed={what === k} style={{ flex: 1, minWidth: 150, textAlign: "start", padding: "8px 10px", borderRadius: 12, cursor: "pointer", fontFamily: FONT, fontWeight: 700, fontSize: 12.5, border: `${what === k ? 2 : 1}px solid ${what === k ? purple : C.line}`, background: what === k ? alpha(purple, 0.1) : C.surface, color: what === k ? purple : C.text }}>
+            {label}<span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: C.text3 }}>{note}</span>
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("صدا", "Voice")}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {VOICES.filter((x) => what === "scripts" || x.id !== "classroom").map((x) => (
+          <button key={x.id} type="button" className="ui-btn" title={L(x.note_fa, x.note_en)} onClick={() => setV(x.id)} aria-pressed={v === x.id} style={{ padding: "5px 14px", borderRadius: 999, cursor: "pointer", fontWeight: 700, fontFamily: FONT, border: `1px solid ${v === x.id ? purple : C.line}`, background: v === x.id ? alpha(purple, 0.14) : C.surface, color: v === x.id ? purple : C.text }}>
+            {v === x.id ? "✓ " : ""}{L(x.fa, x.en)}
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("لحن (اختیاری)", "Tone (optional)")}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+        {TONE_HINTS.map(([f, e]) => (
+          <button key={f} type="button" className="ui-btn" onClick={() => addHint(L(f, e))} style={{ padding: "3px 10px", borderRadius: 999, cursor: "pointer", fontSize: 12, fontFamily: FONT, border: `1px dashed ${C.line}`, background: "transparent", color: C.text2 }}>+ {L(f, e)}</button>
+        ))}
+      </div>
+      <textarea dir="auto" value={tone} onChange={(e) => setTone(e.target.value.slice(0, 300))} rows={2} placeholder={L("مثلاً: خودمونی‌تر و کوتاه‌تر", "e.g. more casual and shorter")} style={{ width: "100%", boxSizing: "border-box", borderRadius: 12, border: `1px solid ${C.line}`, padding: 10, fontFamily: FONT, fontSize: 13, lineHeight: 1.7, resize: "vertical", marginBottom: 8 }} />
+      <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("تعداد اسلاید", "Number of slides")}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {[3, 4, 5, 6, 7, 8, 9, 10].map((k) => (
+          <button key={k} type="button" className="ui-btn" onClick={() => setN(k)} style={{ minWidth: 36, height: 32, borderRadius: 10, cursor: "pointer", border: `1px solid ${n === k ? purple : C.line}`, background: n === k ? alpha(purple, 0.14) : C.surface, color: n === k ? purple : C.text, fontWeight: 700, fontFamily: FONT }}>{k}</button>
+        ))}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.text3, marginBottom: 10, lineHeight: 1.7 }}>
+        {L("فقط متن نوشته می‌شه تا اول ببینی‌ش؛ طراحی با «طراحی اسلایدها». نسخهٔ فعلی با «↩ نسخهٔ قبلی» برمی‌گرده. لحن فقط طرز گفتن رو عوض می‌کنه؛ فکت‌ها همچنان فقط از متن خبر.", "Only the text is written, so you see it first; design it with “Design slides”. The current version comes back with “↩ Earlier version”. The tone changes only how it is said; the facts still come only from the news text.")}
+      </div>
+      <button type="button" className="ui-btn ui-glow-orange" disabled={busy} onClick={run} style={{ width: "100%", padding: "10px 14px", borderRadius: 12, border: "none", background: purple, color: "#fff", fontWeight: 800, fontSize: 13.5, fontFamily: FONT, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+        ✍️ {L("نوشتن دوباره", "Write again")}
+      </button>
+    </div>
+  );
+}
+
 function CommentWord({ cta }) {
   if (!cta || !cta.word) return null;
   return (
@@ -4203,9 +4271,9 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
   // done. Kept on the device: the whole panel is hidden while the scripts are written.
   const recutKey = "recut:" + topicKey(topic) + ":" + lang;
   const readRecut = () => { try { return JSON.parse(localStorage.getItem(recutKey) || "null"); } catch (_) { return null; } };
-  const redoScripts = ({ voice: v, tone, recut }) => {
+  const redoScripts = ({ voice: v, tone, recut, count: n }) => {
     if (recut) {
-      const plan = { at: Date.now(), count: slides.length || 7, template: (carousel && carousel.template) || 1, kind: carousel && carousel.kind && carousel.kind !== "own" ? carousel.kind : "news", voice: v };
+      const plan = { at: Date.now(), count: n || slides.length || 7, template: (carousel && carousel.template) || 1, kind: carousel && carousel.kind && carousel.kind !== "own" ? carousel.kind : "news", voice: v };
       try { localStorage.setItem(recutKey, JSON.stringify(plan)); } catch (_) {}
     }
     onJob("script", { voice: v, again: true, ...(tone ? { tone } : {}) });
@@ -4435,7 +4503,13 @@ function CarouselPanel({ topic, carousel, job, readJob: readJobAll = null, sendJ
       )}
       {slides.length > 0 && !running && (
         <div style={{ marginBottom: 10 }}>
-          <ScriptRedo withCarousel voice={(carousel && carousel.voice && carousel.voice !== "own" && carousel.voice) || scriptVoice} busy={!!scriptJob && scriptJob.status === "running"} onRun={redoScripts} />
+          <CarouselRedo
+            voice={(carousel && carousel.voice && carousel.voice !== "own" && carousel.voice) || scriptVoice}
+            count={slides.length || 7}
+            busy={!!scriptJob && scriptJob.status === "running"}
+            onCarousel={({ voice: v, tone, count: n }) => onJob("carousel", { count: n, template: (carousel && carousel.template) || 1, carousel_kind: carousel && carousel.kind && carousel.kind !== "own" ? carousel.kind : "news", voice: v, revise: true, mode: "text", notes: tone ? L("لحن: ", "Tone: ") + tone : "" })}
+            onScripts={({ voice: v, tone, count: n }) => redoScripts({ voice: v, tone, recut: true, count: n })}
+          />
         </div>
       )}
       {slides.length > 0 && !running && (isDraft || textOpen) && (
