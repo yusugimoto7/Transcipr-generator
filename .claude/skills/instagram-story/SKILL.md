@@ -30,6 +30,16 @@ Taught through "learn from this note" (rule stored Nov 12 2026) and built into t
 ## A story from a social post (Nov 12 2026)
 A topic whose source is an X or Instagram post failed with "the quoted sentence was not found on the source page": the post's own page is a login wall. `socialPostShot` (`lib/story/webshot.js`) photographs the network's official public embed instead (X: `platform.twitter.com/embed/Tweet.html?id=…`, Instagram: `/embed/captioned/`), opened with its scripts in our own Chromium (`photographAreas` with `url` + `ready`), and marks the quoted sentences inside it in the page (`measurePost`). A quote the post does not hold (from the video's transcript, or from a page the post links to) is looked for on the pages an X post links to; failing that the post is shown unmarked: it is still the real source. An embed cuts a long post at «Show more», so a quote from its end can stay unmarked. Verified on a real X post; the Instagram embed is wired the same way but was not tried on a live post.
 
+## When the sentence is not on the source page (Nov 16 2026)
+A canada.ca story ("A work extension does not renew the entry visa") failed with "no screenshot could be
+taken: the quoted sentence was not found on the source page", and then every later step said "no story
+saved". The script's facts had come partly from the trusted pages added to the source text
+(`supplement:<key>`), so the highlighted sentence was on one of those pages, not on the topic's own.
+Now `captureShots` tries, in order: the source page with the sentences marked, the supplement pages
+(up to 3) with them marked, the source page again, and last the source page itself from its headline
+down with nothing marked (`webArticleShot(..., { plain: true })`, `measurePlain`). It is still a
+photograph of the real source, never a drawing; a story is no longer lost for want of a highlight.
+
 ## Rules that must not be broken
 - **Grounding:** every page returns a `quote` copied from the source text; the page is rejected unless `quoteInSource` finds it. A `ref` (case name) is shown only if the source text contains it. Never let a story state a fact the source does not.
 - **Screenshots are photographs of the original** (PDF page or web page), never an image model's drawing.
