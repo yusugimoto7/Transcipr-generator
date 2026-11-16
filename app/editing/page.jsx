@@ -1,9 +1,10 @@
 "use client";
 
-import { Clock, FileCheck, Trash2 } from "lucide-react";
+import { Clock, FileCheck, Languages, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, s, Shell, Pill, when, ACTIVE, Avatar } from "./ui";
+import { useRouter } from "next/navigation";
+import { api, s, Shell, Pill, when, ACTIVE, Avatar, dubHref } from "./ui";
 import { L, uiDir } from "../../lib/i18n";
 
 // Display names as pairs (lib/i18n.js), read with L() when drawn.
@@ -32,6 +33,7 @@ function Projects({ user }) {
   const [owner, setOwner] = useState("");
   const [team, setTeam] = useState([]);
   const [ask, setAsk] = useState(""); // the card whose removal is being asked
+  const router = useRouter();
   const remove = async (id) => {
     try {
       await api(`/projects/${id}`, { method: "DELETE" });
@@ -138,6 +140,16 @@ function Projects({ user }) {
                         <span className={s.kbBadge}><Clock size={12} aria-hidden /> {when(p.latest?.updated_at || p.created_at)}</span>
                         {ACTIVE.includes(st) && <span className={`${s.kbBadge} ${s.pulse}`}>{L("در حال کار…", "working…")}</span>}
                         <span className={s.grow} />
+                        {/* a button, not a link: the card itself is the link */}
+                        <button
+                          type="button"
+                          className={s.kbBadge}
+                          style={{ border: 0, cursor: "pointer", gap: 4 }}
+                          title={L("دوبله در یک کارت تازه (اول تنظیماتش)", "Dub it in a new card (its settings first)")}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); router.push(dubHref(p, p.approved || [])); }}
+                        >
+                          <Languages size={13} aria-hidden /> {L("دوبله", "Dub")}
+                        </button>
                         {(admin || p.owner_id === user.id) && (
                           // buttons, not links: the card itself is the link
                           ask === p.id ? (

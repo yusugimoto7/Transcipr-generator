@@ -1,10 +1,10 @@
 "use client";
 
-import { Check, ChevronDown, Clapperboard, Copy, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Share2, Sparkles, Subtitles, Trash2, Users, X } from "lucide-react";
+import { Check, ChevronDown, Clapperboard, Copy, Languages, FileCheck, Film, FolderOpen, ImagePlus, Lock, Mic, Scissors, Share2, Sparkles, Subtitles, Trash2, Users, X } from "lucide-react";
 import { Button } from "../../../../components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar, DriveVideo } from "../../ui";
+import { api, s, Shell, Pill, Mixed, fmt, when, ACTIVE, Avatar, DriveVideo, dubHref } from "../../ui";
 import VoiceCorrections from "./VoiceCorrections";
 import SubtitleStyle, { EMPTY_SUB } from "../../SubtitleStyle";
 import GraphicsTemplates from "../../GraphicsTemplates";
@@ -1097,6 +1097,9 @@ function Project({ id }) {
       </div>
       <div className={s.row} style={{ alignItems: "flex-start" }}>
         <div className={s.grow}><ProjectAccess id={p.id} d={d} reload={load} /></div>
+        <Link className={`${s.btn}`} href={dubHref(p, d.approved || [])} title={L("دوبله در یک پروژهٔ تازه؛ اول تنظیماتش", "Dub it in a new project; its settings first")} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <Languages size={15} aria-hidden /> {L("دوبله", "Dub")}
+        </Link>
         <ShareProject id={p.id} title={p.title} />
         {d.can_share && <RemoveProject id={p.id} />}
       </div>

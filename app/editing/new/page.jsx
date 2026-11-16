@@ -95,12 +95,13 @@ function NewProject() {
     if (!files.some((x) => x.run_id === from.run_id)) setFrom((x) => ({ ...x, run_id: files[files.length - 1].run_id }));
     setF((x) => ({ ...x, title: x.title || origin.title, kind: origin.kind || x.kind }));
   }, [origin, from.run_id]);
-  const [f, setF] = useState({ title: "", source_url: "", kind: "reel", language: "fa", topic: "" });
+  // «دوبله» on a card brings its title, kind, the language to dub into and, with no approved file, its video link
+  const [f, setF] = useState({ title: q.get("title") || "", source_url: q.get("src") || "", kind: ["reel", "youtube", "course"].includes(q.get("kind")) ? q.get("kind") : "reel", language: "fa", topic: "" });
   const [sub, setSub] = useState(EMPTY_SUB);
   const [gfx, setGfx] = useState({ amount: "normal", template: "canvas", brief: "", with_subtitles: false });
   // Motion graphics on a voice alone (mode "voice"): a recording or file kept on editing-data, or a Drive link
   const [voice, setVoice] = useState(null);
-  const [dubTo, setDubTo] = useState("en");
+  const [dubTo, setDubTo] = useState(q.get("to") === "fa" ? "fa" : "en");
   // Who speaks in a dub (Hamed, 27 Oct 2026: the border-officer series): one voice, or a cast in the order
   // they first speak. Speaker 1 is Hamed with the approved voice; the others pick a HeyGen public voice
   // from the worker's catalogue (/api/editing/voices reads config/video_process.json on main).

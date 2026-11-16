@@ -286,3 +286,21 @@ export function Shell({ children, wide }) {
     </div>
   );
 }
+
+// «دوبله» on every card (Hamed, Nov 16 2026: "a button in every card to start dubbing it; a duplicate card
+// is made and the dub starts after its settings are set"): New project on its Dub tab, filled in from this
+// card. The new project continues the card's approved file (the cut first: a dub draws its own subtitles,
+// so a file without burned-in ones is best), else its own video link; the language goes the other way.
+// Nothing starts until «Start the dub» there, and this project is left as it is.
+export function dubHref(p, files = []) {
+  const ok = files.filter((x) => x.stage !== "dub");
+  const file = ok.find((x) => x.stage === "cut") || ok[ok.length - 1] || null;
+  const said = file || !(p.settings && p.settings.dub && p.settings.dub.to) ? p.language : p.settings.dub.to;
+  const to = said === "en" ? "fa" : "en";
+  const q = new URLSearchParams({ tab: "dub", to, title: `${p.title || ""} · ${to === "en" ? "English" : "فارسی"}`, kind: p.kind || "reel" });
+  if (file) {
+    q.set("from", p.id);
+    q.set("run", file.run_id);
+  } else if (p.source_url) q.set("src", p.source_url);
+  return "/editing/new?" + q.toString();
+}
