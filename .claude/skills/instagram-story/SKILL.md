@@ -40,6 +40,15 @@ Now `captureShots` tries, in order: the source page with the sentences marked, t
 down with nothing marked (`webArticleShot(..., { plain: true })`, `measurePlain`). It is still a
 photograph of the real source, never a drawing; a story is no longer lost for want of a highlight.
 
+## A different screenshot on every page (Hamed, Nov 18 2026)
+«وقتی بیش از یک استوری درست میکنی دیگه درهر صفحه اسکرین مشابه نذار»: a two-page story from an IRCC post on
+X showed the same post on both pages. Each page's shot now has a key (`shot_key`): a post's embed is one
+key whatever is marked in it (it looks the same), a web page is one key per marked sentence and one
+unmarked. A page takes the first source whose key no earlier page used: the source page marked, the post
+(only if marked), the pages the post links to and the supplement pages marked, then unmarked the post, then
+pages no other page shows, then another look at one that does. Only when nothing distinct exists does a
+page fall back to another page's shot. A single-page retake (`story_page`) counts the other pages' keys too.
+
 ## Rules that must not be broken
 - **Grounding:** every page returns a `quote` copied from the source text; the page is rejected unless `quoteInSource` finds it. A `ref` (case name) is shown only if the source text contains it. Never let a story state a fact the source does not.
 - **Screenshots are photographs of the original** (PDF page or web page), never an image model's drawing.
