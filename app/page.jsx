@@ -5051,8 +5051,8 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           />
           <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px", lineHeight: 1.7 }}>
             {L(
-              `هر صفحه یک واقعیت از متن منبع + اسکرین‌شات واقعی از ${isLex ? "PDF اصلی لکس‌بیس" : "صفحهٔ منبع"} که جمله‌اش هایلایت شده. اسکرین‌شات فقط برای همین موضوع گرفته می‌شه.`,
-              `Each page is one fact from the source text + a real screenshot of ${isLex ? "the original Lexbase PDF" : "the source page"} with its sentence highlighted. Screenshots are taken only for this topic.`
+              `صفحهٔ اول یک اسکرین‌شات واقعی از ${isLex ? "PDF اصلی لکس‌بیس" : "صفحهٔ منبع"} داره که جمله‌هاش هایلایت شده؛ صفحه‌های بعدی فقط متن هستن، برای توضیح بیشتر. اسکرین‌شات فقط برای همین موضوع گرفته می‌شه.`,
+              `The first page has a real screenshot of ${isLex ? "the original Lexbase PDF" : "the source page"} with its sentences highlighted; the pages after it are text only, for more explanation. Screenshots are taken only for this topic.`
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -5122,7 +5122,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                       )}
                     </div>
                   )}
-                  {hasPhoto && !running && pg.image_url && (
+                  {hasPhoto && !running && pg.image_url && pg.shot_url && (
                     <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
                       <button className="ui-btn" onClick={() => { setPhotoFor(photoFor === pg.num ? 0 : pg.num); setPhotoNote(""); }} title={L("دوباره ساختن عکس این صفحه", "Make this page's photo again")} style={{ background: photoFor === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: photoFor === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
                         🖼 {L("عکس جدید", "New photo")}

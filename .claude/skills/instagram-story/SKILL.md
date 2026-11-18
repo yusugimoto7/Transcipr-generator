@@ -40,7 +40,16 @@ Now `captureShots` tries, in order: the source page with the sentences marked, t
 down with nothing marked (`webArticleShot(..., { plain: true })`, `measurePlain`). It is still a
 photograph of the real source, never a drawing; a story is no longer lost for want of a highlight.
 
-## A different screenshot on every page (Hamed, Nov 18 2026)
+## Only the first page has a screenshot (Hamed, Nov 18 2026, later the same day)
+«لازم نیستش که در هر استوری یک اسکرین شات داشته باشیم. همون در صفحه اول یه اسکرین شات داشته باشیم. اگر
+توضیحات اضافه تر میخواستیم بدیم در استوری دوم بذاریم بدون داشتن اسکرین شات یا عکس». `captureShots` shoots
+page 1 only and clears `shot_url` / `photo_url` on the pages after it; `storyPageHtml` and the templates'
+`shot()` / `ph()` draw a page without `shot_url` as text only (type 15% larger in "simple"); photo templates
+make a picture for page 1 only (`fillStoryPhotos`); only page 1's quote must be found in the source for a
+story from the script; a screenshot request on a later page is answered in `story.notice`. This replaces the
+rule below for new stories; the keys still keep page 1 off a source used before.
+
+## A different screenshot on every page (Hamed, Nov 18 2026; replaced by the rule above)
 «وقتی بیش از یک استوری درست میکنی دیگه درهر صفحه اسکرین مشابه نذار»: a two-page story from an IRCC post on
 X showed the same post on both pages. Each page's shot now has a key (`shot_key`): a post's embed is one
 key whatever is marked in it (it looks the same), a web page is one key per marked sentence and one
