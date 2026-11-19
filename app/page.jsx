@@ -2386,7 +2386,7 @@ function RemakesPanel({ job, onStart, onOpen }) {
   const posts = ((data && data.posts) || []).filter((p) => kind === "all" || p.kind === kind);
   const shown = more ? posts : posts.slice(0, 8);
   const top = new Set(((data && data.posts) || []).slice(0, 3).map((p) => p.id));
-  const num = (n) => (n == null ? "" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n));
+  const num = (n) => (n == null ? "" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n));
   const tint = "#0f766e";
   return (
     <div dir={uiDir()} className="ui-glass" style={{ fontFamily: fa, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha(tint, 0.35)}`, background: alpha(tint, 0.05), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
@@ -2418,26 +2418,32 @@ function RemakesPanel({ job, onStart, onOpen }) {
                   </button>
                 ))}
               </div>
-              <div style={{ display: "grid", gap: 5 }}>
+              {/* minmax(0, 1fr): a grid column grows to its widest line, and a long cover pushed the
+                  button off the screen on a phone */}
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 6 }}>
                 {shown.map((p) => (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10, background: C.surface, border: `1px solid ${top.has(p.id) ? alpha(tint, 0.5) : C.line}` }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div dir="auto" style={{ fontWeight: 700, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", unicodeBidi: "plaintext" }}>
-                        {top.has(p.id) && <span style={{ color: tint }}>⭐ </span>}
-                        {p.cover}
-                      </div>
-                      <div dir="ltr" style={{ fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}>
-                        {p.kind === "video" ? "🎬" : "🖼"} {p.date} · ❤️ {num(p.likes)} · 💬 {num(p.comments)}{p.views ? ` · 👁 ${num(p.views)}` : ""}
+                  <div key={p.id} style={{ minWidth: 0, padding: "8px 10px", borderRadius: 10, background: C.surface, border: `1px solid ${top.has(p.id) ? alpha(tint, 0.5) : C.line}` }}>
+                    <div dir="auto" style={{ fontWeight: 700, fontSize: 13, lineHeight: 1.7, textAlign: "start", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}>
+                      {top.has(p.id) && <span style={{ color: tint }}>⭐ </span>}
+                      {p.cover || <span style={{ color: C.text3, fontWeight: 400 }}>{p.kind === "video" ? L("ویدیو بدون متن", "Video with no words") : L("کاروسل بدون متن", "Carousel with no words")}</span>}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+                      <div dir="ltr" style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}>
+                        {p.kind === "video" ? "🎬" : "🖼"} {p.date} · ❤️ {num(p.likes)} · 💬 {num(p.comments)}
+                        {p.views ? ` · 👁 ${num(p.views)}` : ""}
                         {p.permalink && (
-                          <a href={p.permalink} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none", marginLeft: 6 }}>
-                            {L("پست ↗", "post ↗")}
-                          </a>
+                          <>
+                            {" · "}
+                            <a href={p.permalink} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none" }}>
+                              {L("پست ↗", "post ↗")}
+                            </a>
+                          </>
                         )}
                       </div>
+                      <button className="ui-btn" disabled={running} onClick={() => onStart(p.id)} title={L("یک کارت موضوع با همین موضوع و زاویه برای امروز", "A topic card on the same subject and angle, for today")} style={{ flexShrink: 0, whiteSpace: "nowrap", padding: "5px 10px", borderRadius: 9, cursor: running ? "default" : "pointer", fontSize: 11.5, fontWeight: 700, fontFamily: fa, border: "none", background: runningId === p.id ? alpha(tint, 0.2) : tint, color: runningId === p.id ? tint : "#fff", opacity: running && runningId !== p.id ? 0.5 : 1 }}>
+                        {runningId === p.id ? "⏳" : L("♻️ نسخهٔ امروزی", "♻️ Today's version")}
+                      </button>
                     </div>
-                    <button className="ui-btn" disabled={running} onClick={() => onStart(p.id)} title={L("یک کارت موضوع با همین موضوع و زاویه برای امروز", "A topic card on the same subject and angle, for today")} style={{ flexShrink: 0, padding: "5px 10px", borderRadius: 9, cursor: running ? "default" : "pointer", fontSize: 11.5, fontWeight: 700, fontFamily: fa, border: "none", background: runningId === p.id ? alpha(tint, 0.2) : tint, color: runningId === p.id ? tint : "#fff", opacity: running && runningId !== p.id ? 0.5 : 1 }}>
-                      {runningId === p.id ? "⏳" : L("♻️ نسخهٔ امروزی", "♻️ Today's version")}
-                    </button>
                   </div>
                 ))}
               </div>
