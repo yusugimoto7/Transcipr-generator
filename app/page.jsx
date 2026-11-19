@@ -1863,7 +1863,10 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
               style={{
                 cursor: "pointer",
                 position: "relative", overflow: "hidden", animationDelay: `${Math.min(n, 14) * 28}ms`,
-                display: "flex", gap: 10, alignItems: "center", padding: "10px 14px 10px 10px", borderRadius: 14,
+                // the lists read left to right (Hamed, Nov 19 2026: «لیست خبرها و موضوعات رو چپ چین کن»): the
+                // headline as published leads, so the text sits on the left and the buttons on the right
+                direction: "ltr",
+                display: "flex", gap: 10, alignItems: "center", padding: "10px 10px 10px 14px", borderRadius: 14,
                 // opaque, so the archive button behind a dragged card does not show through
                 background: st === "approved" ? `linear-gradient(${alpha(C.success, 0.07)}, ${alpha(C.success, 0.07)}), ${C.surface}` : C.surface,
                 border: `1px solid ${flagOf(t) && st !== "rejected" ? alpha(FLAG_RED, 0.65) : pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
@@ -1875,7 +1878,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   globals.css (.topic-card) lifts above it. A plain click still opens in the app. */}
               <a href={topicHref(t)} {...openLinkProps(t, onOpen)} className="topic-card-link" aria-hidden tabIndex={-1} draggable={false} />
               {/* topic-type color stripe on the reading-start edge */}
-              <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, right: 0, width: 3, borderRadius: "3px 0 0 3px", background: f.color }} />
+              <div aria-hidden style={{ position: "absolute", top: 8, bottom: 8, left: 0, width: 3, borderRadius: "0 3px 3px 0", background: f.color }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <a
                   href={topicHref(t)}
@@ -1884,7 +1887,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   dir="auto"
                   style={{
                     fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
-                    color: C.text, cursor: "pointer", textAlign: "right", unicodeBidi: "plaintext",
+                    color: C.text, cursor: "pointer", textAlign: "left", unicodeBidi: "plaintext",
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
                     textDecoration: st === "rejected" ? "line-through" : "none",
                   }}
@@ -1893,21 +1896,21 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 </a>
                 {/* Hamed (Nov 13 2026): the headline as published leads; the Farsi title follows. */}
                 {t.title_fa && headlineOf(t) && (
-                  <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 600, lineHeight: 1.6, color: C.text2, marginTop: 2, textAlign: "right", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 600, lineHeight: 1.6, color: C.text2, marginTop: 2, textAlign: "left", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {t.title_fa}
                   </div>
                 )}
                 {plain && t.why_now && (
-                  <div style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginTop: 3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div dir="auto" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginTop: 3, textAlign: "left", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     {t.why_now}
                   </div>
                 )}
                 {plain && t.evergreen && t.signals && t.signals.length > 0 && (
-                  <div dir="ltr" style={{ fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 11, lineHeight: 1.6, color: C.text3, marginTop: 2, textAlign: "right", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div dir="ltr" style={{ fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 11, lineHeight: 1.6, color: C.text3, marginTop: 2, textAlign: "left", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     🔍 {t.signals.join(" · ")}
                   </div>
                 )}
-                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
+                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-start", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
                   {flagOf(t) && <FlagBadge flag={flagOf(t)} />}
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
                     {f.label}
@@ -2162,6 +2165,7 @@ function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
   const [err, setErr] = useState("");
   const [group, setGroup] = useState("policy");
   const [onlyFocus, setOnlyFocus] = useState(false); // priority items only (Iran, study, Start-up Visa)
+  const [onlyWon, setOnlyWon] = useState(false); // court decisions the applicant won (outcome "allowed")
 
   useEffect(() => {
     setArchive(loadLexArchive());
@@ -2222,7 +2226,8 @@ function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
   const isArchived = (t) => decisions[topicKey(t)] === "rejected";
   const visible = cards.filter((t) => !isArchived(t));
   const inGroup = (LEX_SECTIONS.find((g) => g[0] === group) || LEX_SECTIONS[0])[2] || (() => true);
-  const rows = cards.filter((t) => inGroup(t) && (!onlyFocus || (t.focus || []).length > 0));
+  const won = (t) => t.kind === "court" && t.outcome === "allowed";
+  const rows = cards.filter((t) => inGroup(t) && (!onlyFocus || (t.focus || []).length > 0) && (!(onlyWon && group === "court") || won(t)));
   const sectionCount = (k, test) => (k === "other" ? otherCourts.filter((t) => !isArchived(t)).length : visible.filter(test).length);
   const font = { fontFamily: "'Vazirmatn', sans-serif" };
 
@@ -2299,6 +2304,13 @@ function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
             {L("⭐ فقط اولویت‌ها", "⭐ Priorities only")}
             <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: onlyFocus ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{visible.filter((t) => inGroup(t) && (t.focus || []).length > 0).length}</span>
           </button>
+          {/* Hamed, Nov 19 2026: «در lexbase فیلتر کورتهای موفق اضافه کن»: the decisions the Court allowed */}
+          {group === "court" && (
+            <button className="ui-btn" onClick={() => setOnlyWon((v) => !v)} aria-pressed={onlyWon} style={{ ...font, padding: "5px 10px", borderRadius: 99, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, border: `1px solid ${onlyWon ? "#12945e" : C.line}`, background: onlyWon ? "#12945e" : C.surface, color: onlyWon ? "#fff" : "#0f7b4b", fontSize: 11.5, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+              {L("✓ فقط پرونده‌های موفق", "✓ Allowed only")}
+              <span style={{ minWidth: 16, padding: "0 4px", borderRadius: 99, background: onlyWon ? "rgba(255,255,255,0.22)" : C.surfaceHi, fontSize: 10.5, fontFamily: "'Geist', sans-serif" }}>{visible.filter(won).length}</span>
+            </button>
+          )}
         </div>
       )}
 
