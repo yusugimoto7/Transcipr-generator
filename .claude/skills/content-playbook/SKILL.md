@@ -152,6 +152,17 @@ as the change**, in the team's own words where possible, with the date.
   (EN+FA), IRCC Help Centre questions, Reddit, site titles.
 - Weekly batch, cached on the device and stale-while-revalidate on the server: the tab must open
   instantly (it once took 30 s after every restart — fixed with caching).
+- Remakes of our own best posts (Hamed, Nov 19 2026: asked "how can we have better ideas", chose
+  option 3, «گزینه سوم رو فعلا فعال کن»): «♻️ بازسازی بهترین‌های خودم» at the top of the Ideas tab
+  lists the voice study's carousels (2021 on) and last hundred videos by likes + 3 × comments, the
+  top three not yet remade marked ⭐ as the week's picks. «♻️ نسخهٔ امروزی» makes one card on the
+  same subject and angle (`lib/remakes.js`, job `remake`). The old post is our own words, so subject,
+  angle and examples may be reused, but its rules, numbers and dates may be stale: when it rests on
+  rules, 2-4 current trusted pages are found and read, and every fact comes from them (the editor's
+  note says so to every later step); with no page found, no card. A post about the migrant's mind
+  needs no page. Remade posts are kept in `remakes/made.json` on `editing-data` and leave the list;
+  the card carries `remake` (date, likes, link to the original, a ♻️ tag on the list) and sits in
+  Studio → Research.
 
 ## 5. Scripts (Farsi + English)
 

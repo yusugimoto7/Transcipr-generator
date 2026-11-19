@@ -1248,6 +1248,7 @@ export default function App() {
           {deckMode === "ideas" ? (
             <IdeasSection
               decisions={decisions}
+              remake={<RemakesPanel job={(bg[REMAKE_KEY] || {}).remake || null} onStart={(id) => startJob("remake", { title_fa: REMAKE_KEY }, { post: id })} onOpen={openTopic} />}
               jobs={bg}
               ws={ws}
               onApprove={approveTopic}
@@ -1948,6 +1949,11 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                       {k === "story" && m && m.count > 1 ? " " + m.count : ""}
                     </span>
                   ))}
+                  {t.remake && (
+                    <a href={t.remake.permalink || undefined} target="_blank" rel="noopener noreferrer" title={L("نسخهٔ امروزیِ پست خودمون از ", "Today's version of our own post from ") + (t.remake.date || "")} style={{ color: "#0f766e", background: alpha("#0f766e", 0.12), borderRadius: 99, padding: "0 7px", fontWeight: 700, textDecoration: "none" }}>
+                      ♻️ {String(t.remake.date || "").slice(0, 4)}{t.remake.likes != null ? ` · ❤️ ${t.remake.likes}` : ""}
+                    </a>
+                  )}
                   {t.evergreen && (
                     <span title={L("ایدهٔ همیشگی", "Evergreen idea") + (t.signals && t.signals.length ? " — " + t.signals.join(" · ") : "")} style={{ color: "#8a5a00", background: alpha("#f5a623", 0.16), borderRadius: 99, padding: "0 7px", fontWeight: 700 }}>💡 {t.format || L("ایده", "idea")}</span>
                   )}
@@ -2340,7 +2346,120 @@ function loadIdeasCache() {
   }
 }
 
-function IdeasSection({ decisions, ...actions }) {
+// The page's own best posts, made again for today (Hamed, Nov 19 2026, «گزینه سوم رو فعلا فعال کن»;
+// lib/remakes.js): the carousels and videos the voice study read, best liked first, the top three not
+// yet remade marked as this week's. One tap makes a topic card on the same subject and angle, with
+// today's rules and figures from current pages; it opens when it is ready and is listed in Studio → Research.
+const REMAKE_KEY = "remake-own-posts";
+const REMAKE_KINDS = [["all", ["همه", "All"]], ["carousel", ["کاروسل", "Carousels"]], ["video", ["ویدیو", "Videos"]]];
+function RemakesPanel({ job, onStart, onOpen }) {
+  const [open, setOpen] = useState(true);
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [kind, setKind] = useState("all");
+  const [more, setMore] = useState(false);
+  const running = !!job && job.status === "running";
+  const failed = !!job && job.status === "error" ? job.error : "";
+  const runningId = running ? (job.extra && job.extra.post) || "" : "";
+  const lastId = useRef(null);
+  const load = () =>
+    fetch("/api/remakes", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.error) setErr(j.error);
+        setData(j);
+      })
+      .catch((e) => setErr(String(e?.message || e)));
+  useEffect(() => {
+    if (open && !data) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  // a finished remake opens its topic, once, and leaves the list
+  useEffect(() => {
+    if (!job || job.status !== "done" || !job.result || !(job.result.topics || []).length || job.id === lastId.current) return;
+    lastId.current = job.id;
+    load();
+    onOpen(job.result.topics[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job && job.status, job && job.id]);
+  const fa = "'Vazirmatn', sans-serif";
+  const posts = ((data && data.posts) || []).filter((p) => kind === "all" || p.kind === kind);
+  const shown = more ? posts : posts.slice(0, 8);
+  const top = new Set(((data && data.posts) || []).slice(0, 3).map((p) => p.id));
+  const num = (n) => (n == null ? "" : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : String(n));
+  const tint = "#0f766e";
+  return (
+    <div dir={uiDir()} className="ui-glass" style={{ fontFamily: fa, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha(tint, 0.35)}`, background: alpha(tint, 0.05), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
+      <button className="ui-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open} style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+        <b style={{ flex: 1 }}>♻️ {L("بازسازی بهترین‌های خودم", "Remake my best posts")}</b>
+        <span style={{ color: C.text3, fontSize: 12 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <>
+          <div style={{ color: C.text2, fontSize: 12 }}>
+            {L(
+              "پست‌هایی که بیشترین لایک و کامنت رو گرفتن، از کاروسل‌های ۲۰۲۱ به بعد و صد ویدیوی آخر. «نسخهٔ امروزی» همون موضوع و زاویه رو با قانون‌ها و عددهای امروز (از صفحه‌های معتبرِ تازه) کارت می‌کنه. سه تای اول پیشنهاد این هفته‌ست.",
+              "The posts with the most likes and comments, from the 2021 carousels on and the last hundred videos. «Today's version» makes a card on the same subject and angle with today's rules and figures (from current trusted pages). The first three are this week's picks."
+            )}
+          </div>
+          {running && <div className="ui-pulse" style={{ color: tint, fontWeight: 700 }}>⏳ {L("در حال ساختن نسخهٔ امروزی… (یکی دو دقیقه)", "Making today's version… (a minute or two)")}</div>}
+          {failed && !running && <div style={{ color: C.reject, fontSize: 12 }}>⚠️ {failed}</div>}
+          {err && <div dir="ltr" style={{ color: C.reject, fontSize: 11, textAlign: "left" }}>{err}</div>}
+          {!data ? (
+            <div className="ui-pulse" style={{ color: C.text3 }}>⏳ {L("در حال خواندن پست‌ها…", "Reading the posts…")}</div>
+          ) : !(data.posts || []).length ? (
+            <div style={{ color: C.text3 }}>{L("هنوز پستی از مطالعهٔ صدا نیست.", "No posts from the voice study yet.")}</div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 5, margin: "6px 0", flexWrap: "wrap" }}>
+                {REMAKE_KINDS.map(([k, label]) => (
+                  <button key={k} className="ui-btn" onClick={() => setKind(k)} aria-pressed={kind === k} style={{ padding: "3px 10px", borderRadius: 99, cursor: "pointer", fontSize: 11.5, fontWeight: 700, fontFamily: fa, border: `1px solid ${kind === k ? C.text : C.line}`, background: kind === k ? C.text : C.surface, color: kind === k ? "#fff" : C.text2 }}>
+                    {L(label)}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "grid", gap: 5 }}>
+                {shown.map((p) => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10, background: C.surface, border: `1px solid ${top.has(p.id) ? alpha(tint, 0.5) : C.line}` }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div dir="auto" style={{ fontWeight: 700, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", unicodeBidi: "plaintext" }}>
+                        {top.has(p.id) && <span style={{ color: tint }}>⭐ </span>}
+                        {p.cover}
+                      </div>
+                      <div dir="ltr" style={{ fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}>
+                        {p.kind === "video" ? "🎬" : "🖼"} {p.date} · ❤️ {num(p.likes)} · 💬 {num(p.comments)}{p.views ? ` · 👁 ${num(p.views)}` : ""}
+                        {p.permalink && (
+                          <a href={p.permalink} target="_blank" rel="noopener noreferrer" style={{ color: C.teal, textDecoration: "none", marginLeft: 6 }}>
+                            {L("پست ↗", "post ↗")}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                    <button className="ui-btn" disabled={running} onClick={() => onStart(p.id)} title={L("یک کارت موضوع با همین موضوع و زاویه برای امروز", "A topic card on the same subject and angle, for today")} style={{ flexShrink: 0, padding: "5px 10px", borderRadius: 9, cursor: running ? "default" : "pointer", fontSize: 11.5, fontWeight: 700, fontFamily: fa, border: "none", background: runningId === p.id ? alpha(tint, 0.2) : tint, color: runningId === p.id ? tint : "#fff", opacity: running && runningId !== p.id ? 0.5 : 1 }}>
+                      {runningId === p.id ? "⏳" : L("♻️ نسخهٔ امروزی", "♻️ Today's version")}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {posts.length > 8 && (
+                <button className="ui-btn" onClick={() => setMore((v) => !v)} style={{ marginTop: 6, background: "transparent", border: "none", color: C.text2, cursor: "pointer", fontSize: 12, fontFamily: fa }}>
+                  {more ? L("کمتر", "Fewer") : L(`همه (${posts.length})`, `All (${posts.length})`)}
+                </button>
+              )}
+              {(data.made || []).length > 0 && (
+                <div style={{ marginTop: 6, fontSize: 11.5, color: C.text3 }}>
+                  {L(`${data.made.length} پست قبلاً بازسازی شده؛ کارت‌هاشون در استودیو → تحقیق هستن.`, `${data.made.length} posts already remade; their cards are in Studio → Research.`)}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function IdeasSection({ decisions, remake = null, ...actions }) {
   const [data, setData] = useState(null);
   useEffect(() => {
     const c = loadIdeasCache();
@@ -2402,6 +2521,7 @@ function IdeasSection({ decisions, ...actions }) {
 
   return (
     <div>
+      {remake}
       <div dir={uiDir()} className="ui-glass" style={{ ...font, marginBottom: 12, padding: "11px 13px", borderRadius: 14, border: `1px solid ${alpha("#f5a623", 0.45)}`, background: alpha("#f5a623", 0.07), fontSize: 12.5, lineHeight: 1.8, color: C.text }}>
         <b>💡 {L("ایده‌های همیشگی", "Evergreen ideas")}</b> — {L("سؤال‌هایی که مردم همیشه می‌پرسند، نه خبر.", "Questions people keep asking, not news.")}
         {sig ? (
