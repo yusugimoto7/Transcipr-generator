@@ -1751,7 +1751,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
       title={aria}
       className={"ui-btn" + (kind === "primary" ? " ui-glow-orange" : kind === "danger" ? " ui-glow-danger" : "")}
       style={{
-        minWidth: 36, height: 36, padding: "0 11px", borderRadius: 8, cursor: "pointer",
+        minWidth: 30, height: 30, padding: "0 7px", borderRadius: 8, cursor: "pointer",
         border: kind === "primary" ? "none" : `1px solid ${kind === "danger" ? alpha(C.reject, 0.5) : C.line}`,
         background: kind === "primary" ? C.orange : kind === "success" ? alpha(C.success, 0.16) : "transparent",
         color: kind === "primary" ? "#fff" : kind === "danger" ? C.reject : kind === "success" ? C.success : C.text,
@@ -1770,8 +1770,8 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
       aria-label={L("باز کردن موضوع", "Open topic")}
       className="ui-btn"
       style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 36, height: 36, padding: "0 11px",
-        borderRadius: 11, boxSizing: "border-box", textDecoration: "none", border: "none",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 30, height: 30, padding: "0 7px",
+        borderRadius: 8, boxSizing: "border-box", textDecoration: "none", border: "none",
         background: alpha(C.success, 0.16), color: C.success, fontWeight: 700, fontSize: 13,
         fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap",
       }}
@@ -1866,7 +1866,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 // the lists read left to right (Hamed, Nov 19 2026: «لیست خبرها و موضوعات رو چپ چین کن»): the
                 // headline as published leads, so the text sits on the left and the buttons on the right
                 direction: "ltr",
-                display: "flex", gap: 10, alignItems: "center", padding: "10px 10px 10px 14px", borderRadius: 14,
+                display: "flex", gap: 8, alignItems: "center", padding: "7px 8px 7px 12px", borderRadius: 12,
                 // opaque, so the archive button behind a dragged card does not show through
                 background: st === "approved" ? `linear-gradient(${alpha(C.success, 0.07)}, ${alpha(C.success, 0.07)}), ${C.surface}` : C.surface,
                 border: `1px solid ${flagOf(t) && st !== "rejected" ? alpha(FLAG_RED, 0.65) : pins[topicKey(t)] ? alpha(C.orange, 0.6) : st === "approved" ? alpha(C.success, 0.35) : C.line}`,
@@ -1887,8 +1887,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   dir="auto"
                   style={{
                     fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontWeight: 800, fontSize: 14, lineHeight: 1.5,
-                    color: C.text, cursor: "pointer", textAlign: "left", unicodeBidi: "plaintext",
-                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                    color: C.text, cursor: "pointer", textAlign: "left", unicodeBidi: "plaintext", display: "block",
                     textDecoration: st === "rejected" ? "line-through" : "none",
                   }}
                 >
@@ -1896,21 +1895,13 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 </a>
                 {/* Hamed (Nov 13 2026): the headline as published leads; the Farsi title follows. */}
                 {t.title_fa && headlineOf(t) && (
-                  <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 600, lineHeight: 1.6, color: C.text2, marginTop: 2, textAlign: "left", unicodeBidi: "plaintext", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div dir="rtl" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, fontWeight: 600, lineHeight: 1.6, color: C.text2, marginTop: 1, textAlign: "left", unicodeBidi: "plaintext", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {t.title_fa}
                   </div>
                 )}
-                {plain && t.why_now && (
-                  <div dir="auto" style={{ fontFamily: "'Vazirmatn', sans-serif", fontSize: 12.5, lineHeight: 1.6, color: C.text2, marginTop: 3, textAlign: "left", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    {t.why_now}
-                  </div>
-                )}
-                {plain && t.evergreen && t.signals && t.signals.length > 0 && (
-                  <div dir="ltr" style={{ fontFamily: "'Geist', 'Vazirmatn', sans-serif", fontSize: 11, lineHeight: 1.6, color: C.text3, marginTop: 2, textAlign: "left", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                    🔍 {t.signals.join(" · ")}
-                  </div>
-                )}
-                <div dir="ltr" style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-start", alignItems: "center", gap: "3px 8px", marginTop: 5, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
+                {/* the summary and the search words left the list (Hamed, Nov 19 2026: «جمله دوم فارسی رو حذف
+                    کن … میخوام تعداد بیشتری تایتل در یک اسکرول بتونم ببینم»); they are on the topic page */}
+                <div dir="ltr" className="no-scrollbar" style={{ display: "flex", flexWrap: "nowrap", overflow: "hidden", whiteSpace: "nowrap", justifyContent: "flex-start", alignItems: "center", gap: 6, marginTop: 4, fontSize: 11, color: C.text2, fontFamily: "'Geist', 'Vazirmatn', sans-serif" }}>
                   {flagOf(t) && <FlagBadge flag={flagOf(t)} />}
                   <span style={{ color: f.color, background: alpha(f.color, 0.13), borderRadius: 99, padding: "1px 8px", fontWeight: 600 }}>
                     {f.label}
@@ -1972,7 +1963,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                 </div>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                 {!plain && (
                   <button
                     className="ui-btn"
@@ -1997,7 +1988,7 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   </button>
                 )}
                 {st === "pending" && (
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {smallBtn(<Check size={16} aria-hidden />, () => onApprove(t), "primary", L("تأیید موضوع", "Approve topic"))}
                     {smallBtn(<X size={16} aria-hidden />, () => onReject(t), "danger", L("رد موضوع", "Reject topic"))}
                   </div>
@@ -2006,13 +1997,10 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                     {/* archive next to Open (Hamed, Oct 27 2026): on a computer there is no swipe, so a
                         made card had no way out of the list; same as the swipe and ✕ */}
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {smallBtn(<Archive size={16} aria-hidden />, () => onReject(t), "danger", L("بایگانی موضوع", "Archive topic"))}
-                      {openBtn(t, job && job.status === "running" ? L("باز کن ⏳", "Open ⏳") : L("باز کن ✓", "Open ✓"))}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {openBtn(t, job && job.status === "running" ? "⏳" : <Check size={16} aria-hidden />)}
+                      {smallBtn(<Archive size={15} aria-hidden />, () => onReject(t), "danger", L("بایگانی موضوع", "Archive topic"))}
                     </div>
-                    {job && job.status === "running" && (
-                      <span className="ui-pulse" style={{ fontSize: 11, color: C.orange, fontWeight: 700, fontFamily: "'Vazirmatn', sans-serif", whiteSpace: "nowrap" }}>{L("در حال نوشتن…", "Writing…")}</span>
-                    )}
                     {job && job.status === "error" && smallBtn(L("⚠ دوباره", "⚠ Retry"), () => onRetry(t), "danger", L("دوباره", "Retry"))}
                   </div>
                 )}

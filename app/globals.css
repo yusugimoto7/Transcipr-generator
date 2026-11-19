@@ -285,3 +285,7 @@ header.ui-glass {
 .topic-card-link { position: absolute; inset: 0; z-index: 0; border-radius: inherit; }
 .topic-card :is(a, button, input, select, textarea, label):not(.topic-card-link) { position: relative; z-index: 1; }
 
+
+/* a row that scrolls sideways without showing a bar (the topic cards' tags, Nov 19 2026) */
+.no-scrollbar{scrollbar-width:none;-ms-overflow-style:none}
+.no-scrollbar::-webkit-scrollbar{display:none}
