@@ -5083,6 +5083,8 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
     if (openSignal) setForm(true);
   }, [openSignal]);
   const [count, setCount] = useState(1);
+  // which pages carry a screenshot (Hamed, Nov 19 2026); [] = none at all
+  const [shots, setShots] = useState([1]);
   const [bg, setBg] = useState("purple");
   const [template, setTemplate] = useState("simple");
   const [notes, setNotes] = useState("");
@@ -5135,7 +5137,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
   const start = () => {
     if (pages.length && !window.confirm(L("استوری جدید جای استوری فعلی رو می‌گیره. ادامه بدیم؟", "A new story replaces the current one. Continue?"))) return;
     setForm(false);
-    onJob("story", { count, notes: notes.trim(), bg, template });
+    onJob("story", { count, notes: notes.trim(), bg, template, shots: shots.filter((n) => n <= count) });
   };
   const btn = (bg, color, border) => ({ background: bg, color, border, borderRadius: 12, padding: "11px 12px", fontWeight: 700, fontSize: 13.5, cursor: "pointer", fontFamily: font });
 
@@ -5152,6 +5154,20 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                 {n}
               </button>
             ))}
+          </div>
+          <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("اسکرین‌شات منبع روی کدوم صفحه‌ها باشه؟", "Which pages carry the source screenshot?")}</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            {Array.from({ length: count }, (_, i) => i + 1).map((n) => {
+              const on = shots.includes(n);
+              return (
+                <button key={n} className="ui-btn" aria-pressed={on} onClick={() => setShots(on ? shots.filter((x) => x !== n) : [...shots, n].sort((a, b) => a - b))} style={{ height: 34, padding: "0 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${on ? STORY_TONE : C.line}`, background: on ? alpha(STORY_TONE, 0.12) : C.surface, color: on ? STORY_TONE : C.text2, fontWeight: 700, fontFamily: fa, fontSize: 12.5 }}>
+                  {on ? "📷 " : ""}{L(`صفحهٔ ${n}`, `Page ${n}`)}
+                </button>
+              );
+            })}
+            <button className="ui-btn" aria-pressed={!shots.some((n) => n <= count)} onClick={() => setShots([])} style={{ height: 34, padding: "0 12px", borderRadius: 10, cursor: "pointer", border: `1px solid ${!shots.some((n) => n <= count) ? STORY_TONE : C.line}`, background: !shots.some((n) => n <= count) ? alpha(STORY_TONE, 0.12) : C.surface, color: !shots.some((n) => n <= count) ? STORY_TONE : C.text2, fontWeight: 700, fontFamily: fa, fontSize: 12.5 }}>
+              {L("بدون اسکرین‌شات", "No screenshot")}
+            </button>
           </div>
           {STORY_TEMPLATES.length > 1 && (
             <>
@@ -5177,8 +5193,8 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           />
           <div style={{ fontSize: 11.5, color: C.text3, margin: "6px 0 12px", lineHeight: 1.7 }}>
             {L(
-              `صفحهٔ اول یک اسکرین‌شات واقعی از ${isLex ? "PDF اصلی لکس‌بیس" : "صفحهٔ منبع"} داره که جمله‌هاش هایلایت شده؛ صفحه‌های بعدی فقط متن هستن، برای توضیح بیشتر. اسکرین‌شات فقط برای همین موضوع گرفته می‌شه.`,
-              `The first page has a real screenshot of ${isLex ? "the original Lexbase PDF" : "the source page"} with its sentences highlighted; the pages after it are text only, for more explanation. Screenshots are taken only for this topic.`
+              `صفحه‌هایی که 📷 دارن یک اسکرین‌شات واقعی از ${isLex ? "PDF اصلی لکس‌بیس" : "صفحهٔ منبع"} می‌گیرن که جمله‌هاش هایلایت شده؛ بقیه فقط متن هستن. بعد از ساخت هم زیر هر صفحه می‌شه اسکرین‌شات رو گذاشت یا برداشت، و با «طراحی» اندازه و جای متن و اسکرین‌شات رو عوض کرد.`,
+              `Pages marked 📷 get a real screenshot of ${isLex ? "the original Lexbase PDF" : "the source page"} with its sentences highlighted; the rest are text only. After it is made, each page can have its screenshot added or removed, and «Design» changes the size and place of the text and the screenshot.`
             )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -5228,7 +5244,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   {busyPage === pg.num ? (
                     <div className="ui-pulse" style={{ marginBottom: 6, fontSize: 11.5, color: C.orangeDeep }}>⏳ {L("در حال تغییر…", "Changing…")}</div>
                   ) : pg.image_url && (
-                    <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                    <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
                       <button
                         className="ui-btn"
                         onClick={() => saveStoryImage(pg.image_url, `sugimoto-story-${pg.num}.png`)}
@@ -5241,12 +5257,26 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                           ✏️
                         </button>
                       )}
-                      {!running && pg.shot_url && (
+                      {!running && (
                         <button className="ui-btn" onClick={() => setDesigning(designing === pg.num ? 0 : pg.num)} title={L("چیدن این صفحه با دست", "Lay this page out by hand")} aria-label={L("طراحی صفحهٔ ", "Design page ") + pg.num} style={{ background: designing === pg.num ? STORY_TONE : alpha(STORY_TONE, 0.1), color: designing === pg.num ? "#fff" : STORY_TONE, border: `1px solid ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}>
                           {L("طراحی", "Design")}
                         </button>
                       )}
                     </div>
+                  )}
+                  {/* the page's screenshot on or off (Hamed, Nov 19 2026) */}
+                  {!running && busyPage !== pg.num && (
+                    <button
+                      className="ui-btn"
+                      onClick={() => {
+                        if (pg.shot_url && pg.manual && !window.confirm(L("طراحی دستی این صفحه به حالت خودکار برمی‌گرده. ادامه بدیم؟", "This page's hand design goes back to automatic. Continue?"))) return;
+                        onJob("story_page", { num: pg.num, shot: !pg.shot_url });
+                      }}
+                      title={pg.shot_url ? L("این صفحه فقط متن بشه", "Make this page text only") : L("اسکرین‌شات منبع روی این صفحه هم باشه", "Put the source screenshot on this page too")}
+                      style={{ display: "block", width: "100%", marginBottom: 6, background: pg.shot_url ? "transparent" : alpha(STORY_TONE, 0.1), color: STORY_TONE, border: `1px ${pg.shot_url ? "dashed" : "solid"} ${alpha(STORY_TONE, 0.35)}`, borderRadius: 8, padding: "3px 8px", fontSize: 11.5, cursor: "pointer", fontFamily: fa }}
+                    >
+                      📷 {pg.shot_url ? L("برداشتن اسکرین‌شات", "Remove screenshot") : L("گذاشتن اسکرین‌شات", "Add screenshot")}
+                    </button>
                   )}
                   {hasPhoto && !running && pg.image_url && pg.shot_url && (
                     <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
@@ -5276,7 +5306,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                   )}
                   {pg.photo_error && hasPhoto && <div style={{ color: C.orangeDeep, marginBottom: 4 }}>⚠️ {L("عکس ساخته نشد؛ «عکس جدید» رو بزن.", "The photo was not made; press “New photo”.")}</div>}
                   <b dir="auto" style={{ color: C.text, display: "block" }}>{pg.headline}</b>
-                  {pg.shot_error && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ {L("اسکرین‌شات این جمله پیدا نشد؛ اسکرین‌شات صفحهٔ دیگه استفاده شد.", "No screenshot of this sentence was found; another page's screenshot was used.")}</div>}
+                  {pg.shot_error && !pg.shot_url && (story.shots || [1]).includes(pg.num) && <div style={{ color: C.orangeDeep, marginTop: 4 }}>⚠️ {L("اسکرین‌شات این صفحه گرفته نشد.", "This page's screenshot could not be taken.")}</div>}
                 </div>
               </div>
             ))}
@@ -5298,7 +5328,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
               />
               ) : (
               <StoryDesigner
-                key={designing}
+                key={designing + ":" + (pages.find((x) => x.num === designing).shot_url ? "shot" : "text")}
                 page={pages.find((x) => x.num === designing)}
                 bg={story.bg || "purple"}
                 busy={running}
@@ -5350,7 +5380,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
                 className="ui-btn ui-glow-orange"
                 disabled={!revNotes.trim()}
                 onClick={() => {
-                  onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "purple" });
+                  onJob("story", { count: pages.length, notes: revNotes.trim(), revise: true, bg: story.bg || "purple", shots: pages.filter((x) => x.shot_url).map((x) => x.num) });
                   if (learnRev) teach({ topic, scope: "story", note: revNotes.trim(), context: pages.map((x) => `${x.headline || ""}\n${x.body || ""}`).join("\n---\n") });
                 }}
                 style={{ ...btn(STORY_TONE, "#fff", "none"), width: "100%", marginTop: 8, opacity: revNotes.trim() ? 1 : 0.5, cursor: revNotes.trim() ? "pointer" : "default" }}

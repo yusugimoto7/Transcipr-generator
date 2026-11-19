@@ -32,14 +32,18 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
   const img = useRef(null);
   const [width, setWidth] = useState(360);
   const [m, setM] = useState(page.manual || null);
-  const [loaded, setLoaded] = useState(false);
-  const [sel, setSel] = useState("shot");
+  // a text-only page (no screenshot, Nov 19 2026) has nothing to wait for and its type is larger,
+  // as the server draws it
+  const hasShot = !!page.shot_url;
+  const [loaded, setLoaded] = useState(!hasShot);
+  const [sel, setSel] = useState(hasShot ? "shot" : "headline");
   const [asked, setAsked] = useState(false);
   const drag = useRef(null);
   const scale = width / SW;
   // the same type sizes the server draws the automatic layout with
-  const h = headlineSize(page.headline);
-  const b = bodySize(page.body || "");
+  const roomy = hasShot ? 1 : 1.15;
+  const h = Math.round(headlineSize(page.headline) * roomy);
+  const b = Math.round(bodySize(page.body || "") * roomy);
   const [ask, setAsk] = useState("");
   // a layout the server worked out from a request (or another device's) replaces the one shown
   const manualKey = JSON.stringify(page.manual || null);
@@ -76,7 +80,7 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
     // The automatic layout gives a tall screenshot only the room the text leaves (it is shown
     // narrower, centred); hand mode starts it at that same visible size, so nothing jumps when the
     // parts become movable.
-    const shot = pos(img.current) || pos(refs.shot.current);
+    const shot = hasShot ? pos(img.current) || pos(refs.shot.current) : null;
     setM({ headline: pos(refs.headline.current, h), shot, body: page.body ? pos(refs.body.current, b) : null, ref: page.ref ? pos(refs.ref.current, 30) : null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, m]);
@@ -168,7 +172,7 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
         <span style={{ color: "#52605b" }}>{L("هر بخش رو بکش تا جابه‌جا بشه؛ گوشهٔ بنفش رو بکش تا بزرگ یا کوچک بشه.", "Drag a part to move it; drag the purple corner to resize it.")}</span>
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8, fontSize: 12.5 }}>
-        {PARTS.filter(([k]) => k === "headline" || k === "shot" || (k === "body" && page.body) || (k === "ref" && page.ref)).map(([k, l]) => (
+        {PARTS.filter(([k]) => k === "headline" || (k === "shot" && hasShot) || (k === "body" && page.body) || (k === "ref" && page.ref)).map(([k, l]) => (
           <button key={k} type="button" onClick={() => setSel(k)} style={{ padding: "5px 10px", borderRadius: 999, border: `1px solid ${sel === k ? "#6d5bd0" : "#e5e0d5"}`, background: sel === k ? "rgba(109,91,208,0.1)" : "#fff", color: sel === k ? "#6d5bd0" : "#52605b", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: FA }}>
             {L(l)}
           </button>
@@ -214,10 +218,12 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
               {faDigits(page.headline)}
               {m && sel === "headline" && handle("headline")}
             </h1>
-            <div ref={refs.shot} {...grab("shot")} style={{ width: 940, marginTop: 40, ...(m ? {} : { display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0, flex: "0 1 auto" }), ...placed("shot") }}>
-              <img ref={img} src={page.shot_url} alt="" draggable={false} onLoad={() => setLoaded(true)} style={{ display: "block", height: "auto", borderRadius: 18, background: "#fff", border: `2px solid ${c.edge || "transparent"}`, ...(m ? { width: "100%" } : { width: "auto", maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }) }} />
-              {m && sel === "shot" && handle("shot")}
-            </div>
+            {hasShot && (
+              <div ref={refs.shot} {...grab("shot")} style={{ width: 940, marginTop: 40, ...(m ? {} : { display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0, flex: "0 1 auto" }), ...placed("shot") }}>
+                <img ref={img} src={page.shot_url} alt="" draggable={false} onLoad={() => setLoaded(true)} style={{ display: "block", height: "auto", borderRadius: 18, background: "#fff", border: `2px solid ${c.edge || "transparent"}`, ...(m ? { width: "100%" } : { width: "auto", maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }) }} />
+                {m && sel === "shot" && handle("shot")}
+              </div>
+            )}
             {page.body && (
               <div ref={refs.body} {...grab("body")} style={{ flex: "none", marginTop: 40, fontWeight: 800, fontSize: b, lineHeight: 1.5, maxWidth: 940, ...placed("body") }}>
                 <span style={{ background: c.box, color: c.boxText, padding: "12px 26px", borderRadius: 16, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>{faDigits(page.body)}</span>

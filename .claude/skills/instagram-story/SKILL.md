@@ -40,7 +40,26 @@ Now `captureShots` tries, in order: the source page with the sentences marked, t
 down with nothing marked (`webArticleShot(..., { plain: true })`, `measurePlain`). It is still a
 photograph of the real source, never a drawing; a story is no longer lost for want of a highlight.
 
-## Only the first page has a screenshot (Hamed, Nov 18 2026, later the same day)
+## The team chooses which pages have a screenshot (Hamed, Nov 19 2026)
+«در درست کردن استوری ها به من این آپشن رو بده که انتخاب کنم در کدوم صفحه اسکرین شات بذاری و یا نذاری.
+میخوام این آپشن رو داشته باشم که گاهن اسکرین شات اساسا نذارم… ادیتور استوری رو هم اضافه کن، من بتونم اندازه
+تکست و اندازه اسکرین شات رو تغییر بدم و همینجور بتونم حرکت بدم هر کدام از قسمت ها رو.»
+- The story form asks «اسکرین‌شات منبع روی کدوم صفحه‌ها باشه؟»: one chip per page plus «بدون اسکرین‌شات»;
+  default page 1. Sent as `shots` to the `story` job and kept on the story (`story.shots`, page numbers,
+  `[]` = none; `cleanShots` / `shotPages` in `lib/story/index.js`). A story saved before has no `shots`
+  and keeps page 1. A revision with a note keeps the pages that have one now.
+- `captureShots` photographs only those pages (different shots per page by `shot_key`, as before), clears
+  the rest, and with none chosen takes nothing and never fails. `quotesForPages` checks the sentence of
+  every chosen page against the source and blanks any other page's sentence the source lacks.
+- Under each drawn page «📷 گذاشتن / برداشتن اسکرین‌شات» (`story_page` with `shot: true|false` →
+  `setPageShot` in `lib/story-page.js`): on, that page is photographed (its sentence marked if the source
+  has it, else the source page unmarked), a template's picture made; off, it is text only. That page's hand
+  layout goes back to automatic (the page asks first) and only it is drawn again.
+- «طراحی» (the hand designer, `app/StoryDesigner.jsx`) is under every page now, text-only pages too: move
+  every part, − / + for the text of the selected part and for the screenshot, the corner handle to widen.
+  A text-only page opens at the larger type the server draws it with (×1.15).
+
+## Only the first page has a screenshot (Hamed, Nov 18 2026, later the same day) (replaced by the rule above)
 «لازم نیستش که در هر استوری یک اسکرین شات داشته باشیم. همون در صفحه اول یه اسکرین شات داشته باشیم. اگر
 توضیحات اضافه تر میخواستیم بدیم در استوری دوم بذاریم بدون داشتن اسکرین شات یا عکس». `captureShots` shoots
 page 1 only and clears `shot_url` / `photo_url` on the pages after it; `storyPageHtml` and the templates'
