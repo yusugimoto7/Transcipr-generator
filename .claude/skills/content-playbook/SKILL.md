@@ -163,6 +163,12 @@ as the change**, in the team's own words where possible, with the date.
   needs no page. Remade posts are kept in `remakes/made.json` on `editing-data` and leave the list;
   the card carries `remake` (date, likes, link to the original, a ♻️ tag on the list) and sits in
   Studio → Research.
+- Nov 20 2026 («یه سریاش بسیار بیربطن»): the list had led with the page's own «کلمه مشاوره رو کامنت
+  کنید» posts, «راه‌های ارتباط ما» and a client's story, because likes alone ranked them. Now a model reads
+  the best 120 once each and keeps only posts that teach something about immigration (a rule, programme,
+  process, mistake, refusal reason, number, a migrant's real choice); calls to comment or DM, contact
+  details, testimonials, greetings, announcements and draw results are left out. Each kept post is listed
+  by its subject in one Persian line, and a video is judged by what it says, not its caption.
 
 ## 5. Scripts (Farsi + English)
 
