@@ -3970,7 +3970,8 @@ function ScriptView({ topic, flag = null, onFlag = null, scriptJob = null, scrip
           <SourceBadge t={topic} header />
           {topic.evergreen && <span style={pill(alpha("#6d5bd0", 0.12), "#6d5bd0")}>💡 {L("توضیحی", "Explainer")}</span>}
         </div>
-        <div dir="auto" style={{ fontFamily: "'Geist', " + FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "right", lineHeight: 1.5, unicodeBidi: "plaintext" }}>
+        {/* "start": an English headline reads from the left, a Persian one from the right (Hamed, Nov 20 2026) */}
+        <div dir="auto" style={{ fontFamily: "'Geist', " + FA_FONT, fontWeight: 800, fontSize: 20, color: C.ink, textAlign: "start", lineHeight: 1.5, unicodeBidi: "plaintext" }}>
           {headlineOf(topic) || topic.title_fa}
         </div>
         {headlineOf(topic) && topic.title_fa && (
