@@ -156,3 +156,5 @@ Nov 22 2026, later: Hamed does not want the person's post as the screenshot at a
 
 Nov 22 2026, memory: making a story restarted the server (512 MB) because OCR (added the same day for shared documents) stayed in memory beside Chromium. Now OCR is its own short process, the browser is the headless shell, and both go through `lib/heavy.js` one at a time (CLAUDE.md, "Memory: one heavy thing at a time"). An X post is drawn by `xPostCard` first; the embed (the network's whole script) is only for Instagram or when X's data gives nothing.
 
+Nov 22 2026: **no call to action on a story, ever, unless Hamed asks for one** («CTA رو حذف کن برای همیشه از روی استوریها مگر اینکه بهت بگم»). A story made from the script drops every sentence that asks for a comment or a word, promises to send a link, or points to DM, the bio link or a consultation (`CTA_RE` in `lib/script-split.js`; it only looked for «کامنت» and «کلمهٔ «اداره» رو این پایین بنویسید، لینکش رو براتون می‌فرستیم» got through). A story written from the news is told the same in its prompt; only the editor's own note can ask for one.
+
