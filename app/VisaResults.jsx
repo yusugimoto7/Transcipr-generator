@@ -15,6 +15,7 @@ import { Textarea } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import VisaDesigner, { defaultManual } from "./VisaDesigner";
 import { L, uiDir, isFa } from "../lib/i18n";
+import { keepOnDevice, dropFromDevice, fromDevice, deviceCases, restoreToServer, ensureHeld } from "./visa-device";
 
 const MAX = 10;
 const FA = "'Vazirmatn', sans-serif";
@@ -232,6 +233,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
     const opts = over.opts || c.opts;
     update({ busy: true, error: "", progress: "" });
     try {
+      await ensureHeld(c); // the server may have restarted since the pictures were read
       const r = await runJob(
         "visa_story",
         {
@@ -244,6 +246,13 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
         (p) => p && update({ progress: L(`${p.done || 0} از ${p.total || nums.length}`, `${p.done || 0} of ${p.total || nums.length}`) })
       );
       // From now on the case is the saved one: covered pictures only, the originals let go.
+      // Not saved (the Sheet refused it): the case stays as it was, originals and all, on the server and
+      // on this device, and the page says so instead of showing a case that would vanish later.
+      if (!r.saved) {
+        update({ stories: r.stories || [], error: L("استوری ساخته شد ولی پرونده برای تیم ذخیره نشد. دوباره «ساخت» رو بزن؛ تا اون موقع فقط روی همین دستگاه می‌مونه.", "The stories were made but the case was not saved for the team. Press Make again; until then it is kept on this device only.") });
+        return r.stories || [];
+      }
+      dropFromDevice(c.id);
       update({ stories: r.stories || [], images: (r.covered || []).map((url, i) => (url ? { url } : c.images[i])), marks: r.marks || [], scans: null, checked: false, calendar: "", saved: !!r.saved, status: "saved" });
       return r.stories || [];
     } catch (e) {
@@ -259,6 +268,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
     setFixing((f) => ({ ...f, [i]: true }));
     if (learnOn[i]) teachFrom(note, `picture ${i + 1} of a visa-result case (${(c.scans && c.scans[i] && c.scans[i].kind) || "picture"})`);
     try {
+      await ensureHeld(c);
       const r = await runJob("visa_fix", { caseId: c.id, index: i, note }, () => {});
       update((x) => ({ scans: (x.scans || []).map((s, j) => (j === i ? r.scan : s)), checked: false }));
       setNotes((n) => ({ ...n, [i]: "" }));
@@ -614,8 +624,23 @@ export default function VisaResults({ C, learn }) {
     fetch("/api/visa-cases", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
-        setSaved(Array.isArray(j.cases) ? j.cases : []);
-        setPending(Array.isArray(j.pending) ? j.pending : []);
+        const cases = Array.isArray(j.cases) ? j.cases : [];
+        const held = Array.isArray(j.pending) ? j.pending : [];
+        // Cases this device still holds that the server lost (a restart) are listed and put back when
+        // opened; a case the server has read that this device does not hold yet is copied here now, so
+        // it survives a restart even if it was never opened.
+        return deviceCases().then((mine) => {
+          for (const d of mine) if (cases.some((c) => c.id === d.id)) dropFromDevice(d.id);
+          const lost = mine.filter((d) => !held.some((p) => p.id === d.id) && !cases.some((c) => c.id === d.id));
+          setSaved(cases);
+          setPending([...held, ...lost]);
+          for (const p of held.filter((p) => p.status === "ready" && !mine.some((d) => d.id === p.id)).slice(0, 3)) {
+            fetch("/api/visa-cases?id=" + encodeURIComponent(p.id), { cache: "no-store" })
+              .then((r) => r.json())
+              .then((j) => j.case && keepOnDevice(j.case))
+              .catch(() => {});
+          }
+        });
       })
       .catch(() => {});
   // The list comes from the server, so a case started before the page was left or closed is here;
@@ -671,8 +696,14 @@ export default function VisaResults({ C, learn }) {
     setOpening(row.id);
     try {
       const r = await fetch("/api/visa-cases?id=" + encodeURIComponent(row.id), { cache: "no-store" });
-      const j = await r.json();
-      if (!r.ok || !j.case) throw new Error(j.error || L("باز نشد", "could not open"));
+      let j = await r.json();
+      // gone from the server: this device's copy puts it back
+      if (!r.ok || !j.case) {
+        const mine = await fromDevice(row.id);
+        if (mine) j = { case: await restoreToServer(mine) };
+      }
+      if (!j.case) throw new Error(j.error || L("باز نشد", "could not open"));
+      keepOnDevice(j.case);
       setCur({ ...j.case, opts: { ...OPTS, ...(j.case.opts || {}), layout: { ...LAYOUT, ...((j.case.opts || {}).layout || {}) } } });
     } catch (e) {
       setError(String(e.message || e));
@@ -696,6 +727,7 @@ export default function VisaResults({ C, learn }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: next.id, edit: { scans: next.scans, groups: next.groups, texts: next.texts, opts: next.opts, checked: !!next.checked } }),
           }).catch(() => {});
+          keepOnDevice(next);
         }, 900);
       }
       return next;
@@ -715,6 +747,7 @@ export default function VisaResults({ C, learn }) {
           }}
           onArchive={async () => {
             await fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: cur.id, archive: true }) }).catch(() => {});
+            dropFromDevice(cur.id);
             setCur(null);
             load();
           }}
@@ -807,7 +840,8 @@ export default function VisaResults({ C, learn }) {
                       aria-label={L("حذف", "Remove")}
                       onClick={(e) => {
                         e.stopPropagation();
-                        fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id, archive: true }) }).then(load);
+                        dropFromDevice(c.id);
+                        fetch("/api/visa-cases", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: c.id, archive: true }) }).then(load, load);
                       }}
                     >
                       <X size={14} aria-hidden />
