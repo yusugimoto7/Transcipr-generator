@@ -1,4 +1,4 @@
-import { memoryNow } from "../../../lib/heavy";
+import { memoryNow, memoryHigh } from "../../../lib/heavy";
 import { browserInUse } from "../../../lib/story/hcti";
 import { glossaryStatus } from "../../../lib/glossary";
 import { loadSources, sourcesStatus, unplacedRows } from "../../../lib/sources";
@@ -258,7 +258,7 @@ export async function GET() {
   // what the server process holds right now (the browser and OCR are their own processes and only live
   // while a story is made): the server has 512 MB for all of it
   const mem = memoryNow();
-  sections["Server"] = [{ name: "Memory", ok: mem.rss_mb < 380, detail: `server process ${mem.rss_mb} MB (heap ${mem.heap_mb} MB, buffers ${mem.external_mb} MB) · browser: ${browserInUse().includes("headless") ? "headless shell" : browserInUse() ? "Chromium" : "none"}` }];
+  sections["Server"] = [{ name: "Memory", ok: mem.rss_mb < 380, detail: `server process ${mem.rss_mb} MB (heap ${mem.heap_mb} MB, buffers ${mem.external_mb} MB)${memoryHigh().rss_mb ? ` · highest after a heavy job since start: ${memoryHigh().rss_mb} MB (${memoryHigh().kind})` : ""} · browser: ${browserInUse().includes("headless") ? "headless shell" : browserInUse() ? "Chromium" : "none"}` }];
   await loadSources({ fresh: true });
   const src = sourcesStatus();
   const per = Object.entries(src.counts).filter(([k]) => k !== "built-in").map(([k, c]) => `${k} ${c.active}/${c.rows}`).join(" · ");
