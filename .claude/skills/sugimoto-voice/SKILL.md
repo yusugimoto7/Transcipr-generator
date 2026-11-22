@@ -46,9 +46,11 @@ saved as `cta_fa` with the script) for the team's DM tool; without one, «مشا
 on the bio link and never ask for a comment (english-sugimotovisa `config/video_process.json` `cta`).
 
 **A similar case of ours**: about one reel in five uses a real case from the office. The model never
-writes one; a Persian script about a kind of file carries the line «[پروندهٔ مشابه ما، اگر داریم: یک
-جمله]» before the decision sentence for the team to fill or delete. The English prompts drop any
-bracketed line.
+writes one, and no longer leaves a slot for it either: the bracketed line «[پروندهٔ مشابه ما، اگر داریم: یک
+جمله]» reached a published-ready story and Hamed asked more than once to remove it (Nov 22 2026). No
+prompt asks for a placeholder or a note to the team, and `cleanText` / `lib/script-split.js` strip any
+such bracketed line from texts written before (`PLACEHOLDER_RE`). The team adds its own case by hand
+in the script editor.
 
 **Samples** (`SCRIPT_SAMPLES`): whole explainers of his, corrected for the transcriber's spelling only
 (Inland vs Overseas, the officer's two questions in spousal sponsorship, the new CRS points, TRP after

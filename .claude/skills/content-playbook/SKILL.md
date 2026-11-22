@@ -184,8 +184,9 @@ as the change**, in the team's own words where possible, with the date.
   one comment word), 250–400 Persian words when the source holds that much, with two of his whole
   explainers as voice samples (Persian prompt only). The Persian script ends with a comment word for
   the one sugimotovisa.com page that fits the topic (else «مشاوره»), shown with that page under the
-  script for the DM tool; English closes on the bio link. A script about a kind of file carries
-  «[پروندهٔ مشابه ما، اگر داریم: یک جمله]» for the team; the model never invents a case.
+  script for the DM tool; English closes on the bio link. The model never invents a case of ours and leaves no
+  bracketed slot or note to the team in any text (Hamed, Nov 22 2026: the «[پروندهٔ مشابه ما…]» line reached a
+  story; `PLACEHOLDER_RE` in `lib/clean-text.js` also strips it from older texts).
 - English script: must really be English (a Persian "English" script is detected and rewritten).
 - "Change the script" note + Regenerate (e.g. "more details", "shorter") rewrites from the same
   source text, keeping what the note does not ask to change.
