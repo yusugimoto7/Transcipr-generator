@@ -129,11 +129,20 @@ function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
 function normalCase(c) {
   const images = Array.isArray(c.images) ? c.images.filter(Boolean) : [];
   const g = Array.isArray(c.groups) ? c.groups : [];
+  // Stories are numbered from 0, so 0 is a story like any other (Nov 23 2026: it was read as "no story"
+  // and turned into 1, the text stayed under 0, and every story came out with no text).
+  const groups = images.map((_, i) => (Number.isInteger(Number(g[i])) && g[i] != null && g[i] !== "" ? Number(g[i]) : 0));
+  const texts = { ...(c.texts && typeof c.texts === "object" ? c.texts : {}) };
+  // A case hurt by that: its lines sit under a number no story has; they go back to the story without any.
+  const has = (k) => String(texts[k] || "").trim();
+  const used = [...new Set(groups)].sort((a, b) => a - b);
+  const lost = Object.keys(texts).filter((k) => has(k) && !used.includes(Number(k))).sort((a, b) => a - b);
+  for (const n of used) if (!has(n) && lost.length) texts[n] = texts[lost.shift()];
   return {
     ...c,
     images,
-    groups: images.map((_, i) => Number(g[i]) || 1),
-    texts: c.texts && typeof c.texts === "object" ? c.texts : {},
+    groups,
+    texts,
     kinds: Array.isArray(c.kinds) ? c.kinds : [],
     scans: Array.isArray(c.scans) ? images.map((_, i) => c.scans[i] || { boxes: [] }).map((s) => ({ ...s, boxes: Array.isArray(s.boxes) ? s.boxes : [] })) : c.scans || null,
     opts: { ...OPTS, ...(c.opts || {}), layout: { ...LAYOUT, ...((c.opts || {}).layout || {}) } },
@@ -453,6 +462,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                     {nums.length > 1 ? L(`استوری ${k + 1} · `, `Story ${k + 1} · `) : ""}{L(`عکس ${inStory.join(" و ")}`, `Picture${inStory.length > 1 ? "s" : ""} ${inStory.join(" and ")}`)}{inStory.length > 2 ? L(" — هر استوری حداکثر ۲ عکس", " — at most 2 pictures per story") : ""}
                   </div>
                   <Textarea rows={7} value={(c.texts || {})[n] || ""} onChange={(e) => update((x) => ({ texts: { ...x.texts, [n]: e.target.value } }))} dir="rtl" style={{ fontFamily: FA, lineHeight: 1.8 }} />
+                  {!storyLines(n).length && <div style={{ fontSize: 12.5, color: C.reject, marginTop: 4 }}>{L("این استوری متن نداره؛ بدون متن ساخته می‌شه. خط‌ها رو همین‌جا بنویس.", "This story has no text and will be made without any. Write its lines here.")}</div>}
                 </div>
               );
             })
