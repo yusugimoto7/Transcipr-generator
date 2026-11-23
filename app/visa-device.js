@@ -38,7 +38,8 @@ async function tx(mode, fn) {
 // only what the server needs to hold the case again, and only while it still has uncovered pictures
 const FIELDS = ["id", "created", "status", "notes", "images", "scans", "groups", "texts", "kinds", "opts", "checked", "title"];
 export async function keepOnDevice(c) {
-  if (!c || !c.id || !(c.images || []).some((im) => im && im.data)) return;
+  // only a case that has been read: a copy of one still being read held no stories to put its pictures in
+  if (!c || !c.id || !(c.images || []).some((im) => im && im.data) || !Array.isArray(c.groups) || !c.groups.length) return;
   const row = Object.fromEntries(FIELDS.filter((k) => c[k] !== undefined).map((k) => [k, c[k]]));
   await tx("readwrite", (s) => s.put({ ...row, status: "ready", kept_at: Date.now() })).catch(() => {});
 }

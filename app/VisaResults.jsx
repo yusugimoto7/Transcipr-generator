@@ -123,6 +123,23 @@ function Picture({ image, scan, tool, mark = "marker", onToggle, onAdd }) {
   );
 }
 
+// A case as the page needs it, whatever was kept of it (Nov 23 2026: a case with no `groups`, put back
+// from a device copy made while it was still being read, crashed the whole page when it was opened):
+// every picture belongs to a story, and the text, kinds and look are there even when empty.
+function normalCase(c) {
+  const images = Array.isArray(c.images) ? c.images.filter(Boolean) : [];
+  const g = Array.isArray(c.groups) ? c.groups : [];
+  return {
+    ...c,
+    images,
+    groups: images.map((_, i) => Number(g[i]) || 1),
+    texts: c.texts && typeof c.texts === "object" ? c.texts : {},
+    kinds: Array.isArray(c.kinds) ? c.kinds : [],
+    scans: Array.isArray(c.scans) ? images.map((_, i) => c.scans[i] || { boxes: [] }).map((s) => ({ ...s, boxes: Array.isArray(s.boxes) ? s.boxes : [] })) : c.scans || null,
+    opts: { ...OPTS, ...(c.opts || {}), layout: { ...LAYOUT, ...((c.opts || {}).layout || {}) } },
+  };
+}
+
 const newId = () => "vc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const LAYOUT = { big: "letter", first: "letter", text: "over", size: "normal" };
 const OPTS = { mark: "marker", background: "light", watermark: true, layout: LAYOUT };
@@ -690,7 +707,7 @@ export default function VisaResults({ C, learn }) {
   const openCase = async (row, isSaved) => {
     setError("");
     if (isSaved) {
-      setCur({ ...row, images: (row.covered || []).map((url) => ({ url })), opts: { ...OPTS, ...(row.opts || {}), layout: { ...LAYOUT, ...((row.opts || {}).layout || {}) } }, saved: true });
+      setCur(normalCase({ ...row, images: (row.covered || []).map((url) => ({ url })), saved: true }));
       return;
     }
     setOpening(row.id);
@@ -703,8 +720,11 @@ export default function VisaResults({ C, learn }) {
         if (mine) j = { case: await restoreToServer(mine) };
       }
       if (!j.case) throw new Error(j.error || L("باز نشد", "could not open"));
-      keepOnDevice(j.case);
-      setCur({ ...j.case, opts: { ...OPTS, ...(j.case.opts || {}), layout: { ...LAYOUT, ...((j.case.opts || {}).layout || {}) } } });
+      // still being read, or its reading failed: nothing to open yet
+      if (j.case.status === "reading") throw new Error(L("هنوز در حال خواندن عکس‌هاست؛ چند لحظه دیگه بازش کن", "The pictures are still being read; open it in a moment"));
+      const c = normalCase(j.case);
+      if (c.status === "ready") keepOnDevice(c);
+      setCur(c);
     } catch (e) {
       setError(String(e.message || e));
       load();
