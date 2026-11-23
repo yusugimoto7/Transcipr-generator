@@ -548,9 +548,7 @@ function VisaCase({ c, C, update, onBack, onArchive, learn }) {
                   </div>
                 </div>
               ))}
-              <label style={{ fontSize: 12.5 }}>
-                <input type="checkbox" checked={c.opts.watermark} onChange={(e) => update((x) => ({ opts: { ...x.opts, watermark: e.target.checked } }))} /> {L("لوگوی بزرگ روی عکس‌ها", "Large logo on the pictures")}
-              </label>
+              <div style={{ fontSize: 12.5, opacity: 0.75 }}>{L("لوگوی سوگیموتو ویزا روی همهٔ استوری‌ها می‌آید.", "The Sugimoto Visa logo goes on every story.")}</div>
             </>
           )}
 
