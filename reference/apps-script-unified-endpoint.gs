@@ -91,7 +91,15 @@ function wanted_(e) {
   return any ? want : null;
 }
 
+// n8n polls every 5 minutes with ?refresh=1 and is the ONLY caller that scrapes.
+// Without it, the 30-minute fresh cache below meant a 5-minute poll still saw
+// data up to half an hour old — the faster schedule would have changed nothing.
+// Everything else (the website page, the browser widgets) reads the cache that
+// those polls keep warm, so visitors never pay for a scrape.
+var FORCE_REFRESH = false;
+
 function doGet(e) {
+  try { FORCE_REFRESH = !!(e && e.parameter && e.parameter.refresh === '1'); } catch (err) { FORCE_REFRESH = false; }
   var want = wanted_(e);
   var sources = pnpSources_();
   var pnpDraws = {};
@@ -139,7 +147,7 @@ function province_(sourceName, url, fn) {
   var freshKey = cacheKey_('p-fresh', sourceName);
   var goodKey = cacheKey_('p-good', sourceName);
 
-  var fresh = cache.get(freshKey);
+  var fresh = FORCE_REFRESH ? null : cache.get(freshKey);
   if (fresh) { try { return JSON.parse(fresh); } catch (e) {} }
 
   var draws = [];
@@ -180,7 +188,7 @@ var EE_KEEP = 40;
 
 function cachedRounds_() {
   var cache = CacheService.getScriptCache();
-  var fresh = cache.get('ee-fresh');
+  var fresh = FORCE_REFRESH ? null : cache.get('ee-fresh');
   if (fresh) { try { return JSON.parse(fresh); } catch (e) {} }
 
   var rounds = safe_(getExpressEntryRounds_, []).slice(0, EE_KEEP);
@@ -216,7 +224,18 @@ function safe_(fn, fallback) {
   catch (err) { Logger.log(String(fn) .slice(0, 40) + ' failed: ' + err); return fallback; }
 }
 
+// Within one request, each URL is fetched once. BC Skills and BC Entrepreneur
+// parse the same page and used to download it twice, twelve times an hour at a
+// five-minute poll.
+var FETCH_MEMO = {};
+
 function fetchText_(url) {
+  if (FETCH_MEMO[url] !== undefined) return FETCH_MEMO[url];
+  FETCH_MEMO[url] = fetchTextUncached_(url);
+  return FETCH_MEMO[url];
+}
+
+function fetchTextUncached_(url) {
   var res = UrlFetchApp.fetch(url, {
     muteHttpExceptions: true, followRedirects: true,
     headers: { 'User-Agent': 'Mozilla/5.0 (DrawsBot)' }
@@ -594,7 +613,7 @@ function getMPNP_() {
   for (var i = 0; i < links.length; i++) {
     // One unreadable draw must not lose the others.
     try {
-      var row = mbParseDraw_(links[i]);
+      var row = mbCachedDraw_(links[i]);
       if (row) out.push(row);
     } catch (err) {
       Logger.log('MB draw ' + links[i].number + ' failed: ' + err);
@@ -602,6 +621,26 @@ function getMPNP_() {
   }
   out.sort(function (a, b) { return String(b.dateISO).localeCompare(String(a.dateISO)); });
   return dedupe_(out);
+}
+
+// A published draw post does not change, but the archive lists the newest six
+// and a five-minute poll would re-open all six every time — about 1,700 page
+// loads a day on Manitoba's site for nothing new. A parsed draw is kept for an
+// hour, so a new draw still appears on the next poll (it is not in the cache
+// yet) while an old one costs one fetch an hour. Only a successful parse is
+// kept; a draw that failed or had no stated total is retried every poll.
+var MB_DRAW_SECONDS = 3600;
+
+function mbCachedDraw_(link) {
+  var cache = CacheService.getScriptCache();
+  var key = 'mb-draw:' + link.number;
+  var hit = cache.get(key);
+  if (hit) { try { return JSON.parse(hit); } catch (e) {} }
+  var row = mbParseDraw_(link);
+  if (row && row.dateISO && row.invitations) {
+    try { cache.put(key, JSON.stringify(row), MB_DRAW_SECONDS); } catch (e) {}
+  }
+  return row;
 }
 
 function mbParseDraw_(link) {

@@ -463,3 +463,34 @@ How the main workflow was edited without hand-transcribing 37KB: SDK code was
 generated mechanically from the live JSON, written as a draft, and every node
 diffed against live before publishing — 17/17 untouched nodes identical apart
 from canvas position, the three Code nodes byte-identical.
+
+
+## Five-minute polling (Nov 2026)
+
+The posting workflow now runs **every 5 minutes** (was hourly at :07).
+
+Changing the n8n schedule alone would have done nothing: the endpoint keeps
+each parsed result for 30 minutes, so a 5-minute poll would have seen the same
+half-hour-old data six times. So n8n now calls the endpoint with `?refresh=1`,
+which skips the fresh cache, scrapes, and refills it. n8n is the only caller
+that scrapes; the website page and the browser widgets read the cache those
+polls keep warm, so visitors never wait on a scrape.
+
+Load kept low on purpose, since the scrape now runs 12x as often:
+
+- Each URL is fetched once per request — BC Skills and BC Entrepreneur share
+  one page and used to download it twice.
+- Manitoba's draw posts never change once published, so each parsed draw is
+  cached for an hour. A new draw is still read on the next poll (it is not in
+  the cache yet).
+
+Measured with stubs: a refresh poll costs 5 fetches, a cached read 0. At 288
+polls a day that is ~1,440 UrlFetch calls against Google's 20,000/day limit.
+
+Five minutes is the floor that makes sense: a cold scrape can take 2-3 minutes,
+so a shorter interval would start overlapping runs and multiply load on the
+provinces' sites without making posts meaningfully faster.
+
+Found while doing this: the 2 Oct script (Alberta parser, Ontario table source)
+had never been deployed — `?only=AB` still showed the 404 URL. One redeploy
+ships all of it.
