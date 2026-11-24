@@ -48,21 +48,68 @@ export function Tile({ card, onOpen, drag = true }) {
           <NetChip key={n.key} k={n.key} state={publishStateOf((card.publish || {})[n.key])} />
         ))}
       </b>
-      <LabelBars hex={card.label_hex} />
+      <LabelBars hex={card.label_hex} names={card.label_names} />
       <span dir="auto">{card.title || captionOf(card) || L("پست بی‌عنوان", "Untitled post")}</span>
     </div>
   );
 }
 
 // The card's labels as Trello's small colour bars (Yegane, Nov 10 2026: the calendar showed no label
-// colours to organise cards by). `hex` is filled from the board's labels by the calendar page.
-export function LabelBars({ hex }) {
+// colours to organise cards by). `hex` is filled from the board's labels by the calendar page, `names`
+// beside it. A tap on the bars shows the labels' names on every card, as in Trello, and again hides
+// them (Hamed, Nov 24 2026); the choice is kept on the device.
+const LABEL_TEXT_KEY = "cal:labelText";
+function useLabelText() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const read = () => {
+      try {
+        setOn(localStorage.getItem(LABEL_TEXT_KEY) === "1");
+      } catch (_) {}
+    };
+    read();
+    window.addEventListener("cal-label-text", read);
+    return () => window.removeEventListener("cal-label-text", read);
+  }, []);
+  const toggle = () => {
+    try {
+      localStorage.setItem(LABEL_TEXT_KEY, on ? "0" : "1");
+    } catch (_) {}
+    setOn(!on);
+    window.dispatchEvent(new Event("cal-label-text"));
+  };
+  return [on, toggle];
+}
+const darkText = (h) => {
+  const m = String(h || "").replace("#", "");
+  if (m.length < 6) return false;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 170;
+};
+export function LabelBars({ hex, names = [] }) {
+  const [text, toggle] = useLabelText();
   if (!hex || !hex.length) return null;
+  const click = (e) => {
+    e.stopPropagation();
+    toggle();
+  };
   return (
-    <span style={{ display: "flex", gap: 3, flexWrap: "wrap", margin: "2px 0" }} aria-hidden>
-      {hex.slice(0, 6).map((h, i) => (
-        <i key={i} style={{ display: "block", width: 22, height: 6, borderRadius: 3, background: h }} />
-      ))}
+    <span
+      onClick={click}
+      onPointerDown={(e) => e.stopPropagation()}
+      role="button"
+      title={text ? L("پنهان کردن نام برچسب‌ها", "Hide label names") : L("نمایش نام برچسب‌ها", "Show label names")}
+      style={{ display: "flex", gap: 3, flexWrap: "wrap", margin: "2px 0", cursor: "pointer" }}
+    >
+      {hex.slice(0, 6).map((h, i) =>
+        text && names[i] ? (
+          <i key={i} dir="auto" style={{ fontStyle: "normal", fontSize: 11, fontWeight: 700, lineHeight: "16px", padding: "0 6px", borderRadius: 4, background: h, color: darkText(h) ? "#1d2125" : "#fff", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {names[i]}
+          </i>
+        ) : (
+          <i key={i} style={{ display: "block", width: 22, height: 6, borderRadius: 3, background: h }} />
+        )
+      )}
     </span>
   );
 }
@@ -81,20 +128,25 @@ const sensorsCfg = [
   [TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }],
 ];
 
-export function WeekView({ cards, onOpen, onMove, onNew }) {
+export function WeekView({ cards, dueCards = null, onOpen, onOpenCard = null, onMove, onNew, span = 7 }) {
   const sensors = useSensors(useSensor(sensorsCfg[0][0], sensorsCfg[0][1]), useSensor(sensorsCfg[1][0], sensorsCfg[1][1]));
-  const [anchor, setAnchor] = useState(() => {
-    const d = new Date();
+  // a week starts on Monday; the day view (span 1, Hamed Nov 24 2026) starts today
+  const startOf = (d0) => {
+    const d = new Date(d0);
     d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    if (span === 7) d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
     return d;
-  });
+  };
+  const [anchor, setAnchor] = useState(() => startOf(new Date()));
   const [active, setActive] = useState(null);
   const scroller = useRef(null);
   useEffect(() => {
     if (scroller.current) scroller.current.scrollTop = 52 * 8; // start the day at 8:00
   }, []);
-  const days = Array.from({ length: 7 }, (_, i) => new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + i));
+  const days = Array.from({ length: span }, (_, i) => new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + i));
+  // cards with a due date (planning cards too) sit in a row above the hours, as on the month grid
+  const dues = {};
+  for (const card of dueCards || cards) if (card.due_at) (dues[dayKey(new Date(card.due_at))] ||= []).push(card);
   const slots = {};
   for (const card of cards) {
     if (!card.publish_at) continue;
@@ -110,35 +162,47 @@ export function WeekView({ cards, onOpen, onMove, onNew }) {
     const when = new Date(y, m - 1, d, h, old ? old.getMinutes() : 0);
     if (!old || when.getTime() !== old.getTime()) onMove(card, { publish_at: when.toISOString() });
   };
-  const label = `${days[0].toLocaleDateString(dateLocale(), { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" })}`;
+  const label = span === 1
+    ? days[0].toLocaleDateString(dateLocale(), { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+    : `${days[0].toLocaleDateString(dateLocale(), { month: "short", day: "numeric" })} – ${days[span - 1].toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" })}`;
   return (
     <DndContext sensors={sensors} onDragStart={(e) => setActive(e.active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActive(null)}>
       <div className={c.row}>
-        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - 7))} aria-label={L("هفتهٔ قبل", "Previous week")}>
+        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() - span))} aria-label={span === 1 ? L("روز قبل", "Previous day") : L("هفتهٔ قبل", "Previous week")}>
           ‹
         </button>
-        <button className={c.btn} onClick={() => {
-          const d = new Date();
-          d.setHours(0, 0, 0, 0);
-          d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-          setAnchor(d);
-        }}>
-          {L("این هفته", "This week")}
+        <button className={c.btn} onClick={() => setAnchor(startOf(new Date()))}>
+          {span === 1 ? L("امروز", "Today") : L("این هفته", "This week")}
         </button>
-        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + 7))} aria-label={L("هفتهٔ بعد", "Next week")}>
+        <button className={c.btn} onClick={() => setAnchor(new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + span))} aria-label={span === 1 ? L("روز بعد", "Next day") : L("هفتهٔ بعد", "Next week")}>
           ›
         </button>
         <strong>{label}</strong>
         <span className={c.muted} dir={uiDir()}>{L("روی یک ساعت دوبار کلیک کن تا برای همان ساعت پست بنویسی. پست‌ها را بکش تا جابه‌جا بشن.", "Double-click an hour to write a post for that time. Drag posts to move them.")}</span>
       </div>
       <div className={c.weekScroll} ref={scroller}>
-        <div className={c.week}>
+        <div className={c.week} style={span === 1 ? { gridTemplateColumns: "56px minmax(0, 1fr)", minWidth: 0 } : undefined}>
           <div className={c.wHead} />
           {days.map((d) => (
             <div key={dayKey(d)} className={`${c.wHead} ${dayKey(d) === dayKey(new Date()) ? c.today : ""}`}>
               {d.toLocaleDateString(dateLocale(), { weekday: "short", day: "numeric" })}
             </div>
           ))}
+          {days.some((d) => (dues[dayKey(d)] || []).length) && (
+            <>
+              <div className={c.hour}>{L("موعد", "Due")}</div>
+              {days.map((d) => (
+                <div key={"due" + dayKey(d)} style={{ display: "flex", flexDirection: "column", gap: 3, padding: 3 }}>
+                  {(dues[dayKey(d)] || []).map((card) => (
+                    <span key={card.id} className={c.due} onClick={() => (onOpenCard || onOpen)(card)} dir="auto" style={{ cursor: "pointer" }}>
+                      <LabelBars hex={card.label_hex} names={card.label_names} />
+                      {card.title}
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </>
+          )}
           {Array.from({ length: 24 }, (_, h) => (
             <Hour key={h} h={h} days={days} slots={slots} onOpen={onOpen} onNew={onNew} />
           ))}

@@ -495,6 +495,21 @@ function PhoneMonth({ days, month, byDay, dues, onOpen, onOpenCard, onNew }) {
   );
 }
 
+// Links in a card's text open at once in a new tab (Hamed, Nov 24 2026: a Google Drive folder in the
+// description had to be copied and pasted); a tap elsewhere still opens the box for editing.
+function Linked({ text }) {
+  const parts = String(text || "").split(/(https?:\/\/[^\s<>"']+)/g);
+  return parts.map((t, i) =>
+    i % 2 ? (
+      <a key={i} href={t.replace(/[).,]+$/, "")} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: "#0c66e4", textDecoration: "underline", wordBreak: "break-all" }}>
+        {t}
+      </a>
+    ) : (
+      <React.Fragment key={i}>{t}</React.Fragment>
+    )
+  );
+}
+
 // ---- month view ---------------------------------------------------------------------------------
 
 // A card's due date on the month grid, dragged to another day to move it (Yegane, Nov 10 2026: cards
@@ -503,7 +518,7 @@ function DueChip({ card, onOpen }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: "due:" + card.id });
   return (
     <span ref={setNodeRef} {...attributes} {...listeners} className={c.due} onClick={() => onOpen(card)} dir="auto" style={{ opacity: isDragging ? 0.4 : 1, touchAction: "none", cursor: "grab" }}>
-      <LabelBars hex={card.label_hex} />
+      <LabelBars hex={card.label_hex} names={card.label_names} />
       {L("موعد: ", "Due: ")}{card.title}
     </span>
   );
@@ -1136,7 +1151,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                   role="button"
                   tabIndex={0}
                 >
-                  {card.description || L("توضیح کامل‌تری اضافه کن: یادداشت، اسکریپت، بریف…", "Add a more detailed description: notes, script, brief…")}
+                  {card.description ? <Linked text={card.description} /> : L("توضیح کامل‌تری اضافه کن: یادداشت، اسکریپت، بریف…", "Add a more detailed description: notes, script, brief…")}
                 </div>
               ) : (
                 <>
@@ -1299,7 +1314,7 @@ function CardEditor({ boardId, cardId, board, users, me, onClose, onChanged, onC
                         <b className="text-ink">{person(m.by).name}</b> · {shortWhen(new Date(m.at).toISOString())}
                       </div>
                       <div className="mt-1 whitespace-pre-wrap break-words rounded-lg border border-solid border-border bg-surface px-3 py-2 text-sm" dir="auto">
-                        {m.text}
+                        <Linked text={m.text} />
                       </div>
                     </div>
                   </div>
@@ -1574,6 +1589,7 @@ function BoardSettings({ board, onSave, onClose }) {
 const VIEWS = [
   ["month", ["ماه", "Month"]],
   ["week", ["هفته", "Week"]],
+  ["day", ["روز", "Day"]],
 ];
 
 function Calendar({ user }) {
@@ -1639,8 +1655,11 @@ function Calendar({ user }) {
   const one = market !== "all" && data[market] ? data[market] : null;
   const planBoard = one || first;
   const allCards = Object.values(data).flatMap((d) => {
-    const hex = new Map((d.board.labels || []).map((l) => [l.id, LABEL_HEX[l.color] || LABEL_HEX.gray]));
-    return d.board.cards.map((x) => ({ ...x, board_id: d.board.id, board_name: d.board.name, label_hex: (x.labels || []).map((id) => hex.get(id)).filter(Boolean) }));
+    const byId = new Map((d.board.labels || []).map((l) => [l.id, l]));
+    return d.board.cards.map((x) => {
+      const ls = (x.labels || []).map((id) => byId.get(id)).filter(Boolean);
+      return { ...x, board_id: d.board.id, board_name: d.board.name, label_hex: ls.map((l) => LABEL_HEX[l.color] || LABEL_HEX.gray), label_names: ls.map((l) => l.name || "") };
+    });
   });
   const cards = allCards.filter(
     (x) =>
@@ -1712,7 +1731,7 @@ function Calendar({ user }) {
   );
   const ready = boards.length > 0 && boards.every((b) => data[b.id]);
 
-  const NAV_ICON = { month: CalendarDays, week: CalendarCheck, "list-draft": FilePen, "list-pending": Hourglass, "list-scheduled": CalendarCheck, "list-published": CheckCircle2, "list-failed": AlertCircle, board: Columns3 };
+  const NAV_ICON = { month: CalendarDays, week: CalendarCheck, day: CalendarCheck, "list-draft": FilePen, "list-pending": Hourglass, "list-scheduled": CalendarCheck, "list-published": CheckCircle2, "list-failed": AlertCircle, board: Columns3 };
   const NavItem = ({ v, label, n }) => (
     <button className={`${p.nav} ${view === v ? p.on : ""}`} onClick={() => setView(v)}>
       {NAV_ICON[v] && React.createElement(NAV_ICON[v], { size: 16, className: p.navIcon, "aria-hidden": true })}
@@ -1726,7 +1745,6 @@ function Calendar({ user }) {
   const phoneSheetItems = sheet === "posts"
     ? LIST_TABS.map(([k, label]) => ({ key: "list-" + k, label: L(label), n: counts[k], onClick: () => setView("list-" + k) }))
     : [
-        { key: "week", label: L("هفته", "Week"), onClick: () => setView("week") },
         { key: "source", label: L("از یک موضوع یا ویدیو", "From a topic or video"), onClick: () => setPanel("source") },
         { key: "channels", label: L("کانال‌ها", "Channels"), onClick: () => setPanel("channels") },
         { key: "archive", label: L("کارت‌های بایگانی‌شده", "Archived cards"), onClick: () => setPanel("archive") },
@@ -1744,7 +1762,7 @@ function Calendar({ user }) {
       {phone && (
         <>
           <nav className={p.tabBar} aria-label={L("تقویم محتوا", "Content calendar")}>
-            {tab("month", <CalendarDays size={22} />, L("ماه", "Month"), view === "month" || view === "week", () => setView("month"))}
+            {tab("month", <CalendarDays size={22} />, L("ماه", "Month"), view === "month" || view === "week" || view === "day", () => setView("month"))}
             {tab("posts", <ListIcon size={22} />, L("پست‌ها", "Posts"), view.startsWith("list-"), () => setSheet(sheet === "posts" ? "" : "posts"))}
             <button className={p.tabNew} onClick={() => setSheet("start")} disabled={!ready} aria-label={L("پست جدید", "New post")}>
               <Plus size={26} aria-hidden />
@@ -1892,14 +1910,24 @@ function Calendar({ user }) {
             </div>
           )
         )}
+        {/* Month, week or day, one tap away on every screen (Hamed, Nov 24 2026) */}
+        {(view === "month" || view === "week" || view === "day") && (
+          <div role="tablist" aria-label={L("نمای تقویم", "Calendar view")} style={{ display: "inline-flex", gap: 2, padding: 3, borderRadius: 10, background: "#ebe7df", margin: "0 0 8px" }}>
+            {VIEWS.map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} style={{ border: "none", cursor: "pointer", padding: "6px 14px", borderRadius: 8, fontWeight: 700, fontSize: 13, background: view === k ? "#fff" : "transparent", color: view === k ? "#1d2125" : "#5e6c84", boxShadow: view === k ? "0 1px 2px rgba(0,0,0,.12)" : "none", fontFamily: "inherit" }}>
+                {L(label)}
+              </button>
+            ))}
+          </div>
+        )}
         {view !== "board" && <ZoneBanner />}
         {error && <div className={c.error}>{error}</div>}
         {!ready ? (
           <p className={c.muted}>{L("در حال بارگذاری…", "Loading…")}</p>
         ) : view === "month" ? (
           <MonthView cards={cards} onOpen={openPost} onOpenCard={(card) => setOpen({ bid: card.board_id, id: card.id })} onMove={move} onNew={newPost} />
-        ) : view === "week" ? (
-          <WeekView cards={cards} onOpen={openPost} onMove={move} onNew={newPost} />
+        ) : view === "week" || view === "day" ? (
+          <WeekView key={view} span={view === "day" ? 1 : 7} cards={cards} onOpen={openPost} onOpenCard={(card) => setOpen({ bid: card.board_id, id: card.id })} onMove={move} onNew={newPost} />
         ) : view === "board" ? (
           <div className={c.boardWrap}>
           <BoardView
