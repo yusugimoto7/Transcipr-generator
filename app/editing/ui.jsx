@@ -35,6 +35,15 @@ export function api(path, opts) {
   return apiAt("/api/editing", path, opts);
 }
 
+// The team's data (accounts, projects, the calendar) is kept on GitHub. When GitHub itself is in
+// trouble the server's words are «GitHub write 500», which told Hamed nothing when he added a member
+// (Nov 25 2026): said as what it means and what to do.
+const STORE_DOWN = /^GitHub (write|read|tree|blob) 5\d\d$/;
+const STORE_DOWN_TEXT = ["سرویس GitHub، جایی که اطلاعات تیم و پروژه‌ها نگه داشته می‌شه، الان جواب نمی‌ده. مشکل از طرف خود GitHubه و چیزی ذخیره نشد؛ چند دقیقهٔ دیگه دوباره امتحان کن.", "GitHub, where the team's data is kept, is not answering right now. The trouble is on GitHub's side and nothing was saved; try again in a few minutes."];
+export function plainError(text) {
+  return STORE_DOWN.test(String(text || "").trim()) ? L(STORE_DOWN_TEXT) : text;
+}
+
 export async function apiAt(base, path, { method = "GET", body } = {}) {
   const res = await fetch(base + path, {
     method,
@@ -47,7 +56,7 @@ export async function apiAt(base, path, { method = "GET", body } = {}) {
     window.location.href = "/editing/login?next=" + encodeURIComponent(window.location.pathname);
   }
   if (!res.ok || data.error) {
-    const e = new Error(data.error || L("مشکلی پیش آمد", "something went wrong") + " (" + res.status + ")");
+    const e = new Error(plainError(data.error) || L("مشکلی پیش آمد", "something went wrong") + " (" + res.status + ")");
     e.status = res.status;
     throw e;
   }
