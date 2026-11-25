@@ -19,10 +19,11 @@ import { L, uiDir } from "../lib/i18n";
 const SW = 1080, SH = 1920;
 const FA = "'Vazirmatn', sans-serif";
 import { storyColours } from "../lib/story/colours";
-import { headlineSize, bodySize, SAFE_TOP, SAFE_BOTTOM } from "../lib/story/type";
+import { partsSize, SAFE_TOP, SAFE_BOTTOM } from "../lib/story/type";
 const faDigits = (s) => String(s || "").replace(/[0-9]/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[d]);
 // Labels are [fa, en] pairs, read with L() when drawn.
-const PARTS = [["headline", ["تیتر", "Headline"]], ["shot", ["اسکرین‌شات", "Screenshot"]], ["body", ["متن", "Text"]], ["ref", ["منبع", "Source"]]];
+// the page's text is one text in two parts (Nov 25 2026): above the screenshot and under it
+const PARTS = [["headline", ["متن بالا", "Top text"]], ["shot", ["اسکرین‌شات", "Screenshot"]], ["body", ["متن پایین", "Bottom text"]], ["ref", ["منبع", "Source"]]];
 
 export default function StoryDesigner({ page, bg = "purple", busy, onMake, onReset, onSave, onRequest = null }) {
   const c = storyColours(bg);
@@ -42,8 +43,8 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
   const scale = width / SW;
   // the same type sizes the server draws the automatic layout with
   const roomy = hasShot ? 1 : 1.15;
-  const h = Math.round(headlineSize(page.headline) * roomy);
-  const b = Math.round(bodySize(page.body || "") * roomy);
+  const b = Math.round(partsSize(page.headline, page.body || "") * roomy);
+  const h = b; // both parts of the text are set in one size, as the server draws them
   const [ask, setAsk] = useState("");
   // a layout the server worked out from a request (or another device's) replaces the one shown
   const manualKey = JSON.stringify(page.manual || null);
@@ -214,10 +215,10 @@ export default function StoryDesigner({ page, bg = "purple", busy, onMake, onRes
                 <div aria-hidden style={{ position: "absolute", left: 0, right: 0, top: SAFE_BOTTOM, bottom: 0, background: "rgba(0,0,0,0.16)", borderTop: "3px dashed rgba(255,255,255,0.55)", pointerEvents: "none" }} />
               </>
             )}
-            <h1 ref={refs.headline} {...grab("headline")} style={{ flex: "none", fontWeight: 800, lineHeight: 1.45, fontSize: h, color: c.text, textShadow: "0 1px 3px rgba(0,0,0,.25)", maxWidth: 940, margin: 0, ...placed("headline") }}>
-              {faDigits(page.headline)}
+            <div ref={refs.headline} {...grab("headline")} style={{ flex: "none", fontWeight: 800, fontSize: h, lineHeight: 1.5, maxWidth: 940, margin: 0, ...placed("headline") }}>
+              <span style={{ background: c.box, color: c.boxText, padding: "12px 26px", borderRadius: 16, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" }}>{faDigits(page.headline)}</span>
               {m && sel === "headline" && handle("headline")}
-            </h1>
+            </div>
             {hasShot && (
               <div ref={refs.shot} {...grab("shot")} style={{ width: 940, marginTop: 40, ...(m ? {} : { display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0, flex: "0 1 auto" }), ...placed("shot") }}>
                 <img ref={img} src={page.shot_url} alt="" draggable={false} onLoad={() => setLoaded(true)} style={{ display: "block", height: "auto", borderRadius: 18, background: "#fff", border: `2px solid ${c.edge || "transparent"}`, ...(m ? { width: "100%" } : { width: "auto", maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }) }} />

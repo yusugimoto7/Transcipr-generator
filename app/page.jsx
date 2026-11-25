@@ -921,7 +921,7 @@ export default function App() {
         if (!entry) return;
         const m = entry.materials || {};
         if (!only) {
-          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, cta_fa: m.script.cta_fa || null, voice: m.script.voice || "hamed", versions: m.script.versions || {}, before_check: !("sources" in m.script) });
+          if (m.script) setScripts({ fa: m.script.script_fa || "", en: m.script.script_en || "", hooks_fa: m.script.hooks_fa || [], hooks_en: m.script.hooks_en || [], sources: m.script.sources || [], supplement: m.script.supplement || null, brief: m.script.brief || null, cta_fa: m.script.cta_fa || null, voice: m.script.voice || "hamed", versions: m.script.versions || {}, before_check: !("sources" in m.script) });
           if (m.article) setInitialArticle(m.article.article || null);
           if (m.carousel) setSavedCarousel(m.carousel);
           if (m.story) setSavedStory(m.story);
@@ -1036,7 +1036,7 @@ export default function App() {
   const svJobs = bg[svKey] || {};
   const sj = svJobs.script;
   const sjResult = sj && sj.result && (sj.result.fa || sj.result.en) ? sj.result : null;
-  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, cta_fa: sjResult.cta_fa || null, voice: sjResult.voice || "hamed", versions: sjResult.versions || {} } : { ...scripts };
+  const viewScripts = sjResult ? { fa: sjResult.fa || "", en: sjResult.en || "", hooks_fa: sjResult.hooks_fa || [], hooks_en: sjResult.hooks_en || [], sources: sjResult.sources || [], supplement: sjResult.supplement || null, brief: sjResult.brief || null, cta_fa: sjResult.cta_fa || null, voice: sjResult.voice || "hamed", versions: sjResult.versions || {} } : { ...scripts };
   // A rewritten English script (into English, or to a length) replaces the
   // one on screen, unless it was a draft for the video editor only.
   const enJob = svJobs.script_en;
@@ -3660,6 +3660,32 @@ function Segmented({ value, onChange, items }) {
 
 // The trusted pages added because the topic's own page did not answer what the card promises
 // (lib/supplement.js). Every piece made from the topic was written from them too.
+// What the scripts were built around (lib/brief.js, Hamed Nov 25 2026): the source's main point as the
+// app read it, shown over the script so a wrong reading is seen at once, and a warning when the
+// source text itself lacks what its heading promises (a table that is only a picture).
+function MainPoint({ brief = null, lang = "fa" }) {
+  if (!brief || !brief.point_fa) return null;
+  const en = lang === "en";
+  const point = en ? brief.point_en || brief.point_fa : brief.point_fa;
+  const shows = en ? brief.shows_en || "" : brief.shows_fa || "";
+  const notes = (en ? brief.read_with_en : brief.read_with_fa) || [];
+  const tint = "#0f766e";
+  return (
+    <div dir={en ? "ltr" : "rtl"} style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 12, background: alpha(tint, 0.06), border: `1px solid ${alpha(tint, 0.3)}`, fontFamily: en ? "'Geist', " + FA_FONT : FA_FONT, fontSize: 12.5, lineHeight: 1.85, color: C.text, textAlign: "start" }}>
+      <div dir={uiDir()} style={{ fontWeight: 800, color: tint, marginBottom: 2, fontFamily: FA_FONT }}>🎯 {L("حرف اصلی این مطلب", "The point of this piece")}</div>
+      <div dir="auto" style={{ fontWeight: 700 }}>{point}</div>
+      {shows && <div dir="auto" style={{ color: C.text2 }}>{shows}</div>}
+      {notes.length > 0 && <div dir="auto" style={{ color: C.text2 }}>{notes.join(" · ")}</div>}
+      {brief.missing && (
+        <div dir={uiDir()} style={{ marginTop: 4, color: C.orangeDeep, fontFamily: FA_FONT }}>
+          ⚠️ {L("متن منبع کامل نیست: ", "The source text is incomplete: ")}
+          <span dir="ltr" style={{ unicodeBidi: "plaintext" }}>{brief.missing}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExtraSources({ sources = [], supplement = null }) {
   if (!sources.length && !(supplement && !supplement.enough)) return null;
   return (
@@ -4111,6 +4137,7 @@ function ScriptView({ topic, flag = null, onFlag = null, scriptJob = null, scrip
               <div style={{ marginBottom: 12 }}>
                 <ScriptRedo voice={scripts.voice || "hamed"} onRun={({ voice, tone }) => onJob("script", { voice, again: true, ...(tone ? { tone } : {}) })} />
               </div>
+              <MainPoint brief={scripts.brief} lang={tab} />
               <HookOptions hooks={scripts["hooks_" + tab] || []} lang={tab} />
               <EditableScript key={"ed:" + tab} tab={tab} text={active} job={fixJobs[tab]} onJob={onJob} />
               {tab === "fa" && <CommentWord cta={scripts.cta_fa} />}
@@ -5202,7 +5229,7 @@ function StoryPanel({ topic, story, job, sendJob, caps = {}, onJob, openSignal =
           <div style={{ marginBottom: 12 }}>
             <BgSwatches value={bg} onPick={setBg} />
           </div>
-          <div style={{ fontSize: 12, color: C.text2, background: alpha("#6d5bd0", 0.07), borderRadius: 10, padding: "7px 10px", marginBottom: 10, lineHeight: 1.7 }}>{L("متن استوری عین اسکریپتِ همین موضوعه که بین صفحه‌ها تقسیم می‌شه (جملهٔ کامنت آخرش حذف می‌شه). اگه هنوز اسکریپتی نیست، از روی خبر نوشته می‌شه.", "The story's text is this topic's script word for word, split across the pages (its closing comment line left out). With no script yet, it is written from the news.")}</div>
+          <div style={{ fontSize: 12, color: C.text2, background: alpha("#6d5bd0", 0.07), borderRadius: 10, padding: "7px 10px", marginBottom: 10, lineHeight: 1.7 }}>{L("هر صفحه یک متن کوتاهه در دو بخش: بخش اول بالای اسکرین‌شات، ادامه‌اش زیر اون؛ به سبک استوری‌های خود حامد و بدون تیتر. اگه اسکریپت نوشته شده باشه، استوری همون حرف و همون فکت‌های اسکریپت رو می‌گه؛ اگه نه، از روی خود خبر نوشته می‌شه.", "Each page is one short text in two parts: the first above the screenshot, the rest under it, in the style of Hamed's own stories, with no headline. With a script written, the story tells the script's point and facts; with none, it is written from the news itself.")}</div>
           <div style={{ fontSize: 12.5, color: C.text2, marginBottom: 6 }}>{L("یادداشت‌ها (اختیاری)", "Notes (optional)")}</div>
           <textarea
             dir="auto"
@@ -5884,18 +5911,18 @@ function StoryPageSheet({ page, total, onClose, onSubmit }) {
           <img src={page.image_url} alt="" style={{ width: 120, aspectRatio: "9 / 16", objectFit: "cover", borderRadius: 10, border: `1px solid ${C.line}`, flexShrink: 0 }} />
           <div style={{ flex: "1 1 220px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
             <label style={{ fontSize: 12.5, color: C.text2 }}>
-              {L("تیتر", "Headline")}
+              {L("متن بالای اسکرین‌شات (بخش اول)", "Text above the screenshot (part 1)")}
               <textarea dir="auto" value={headline} onChange={(e) => setHeadline(e.target.value)} rows={2} style={{ ...field, marginTop: 4 }} />
             </label>
             <label style={{ fontSize: 12.5, color: C.text2 }}>
-              {L("متن زیر اسکرین‌شات", "Text under the screenshot")}
+              {L("متن زیر اسکرین‌شات (ادامهٔ همان متن)", "Text under the screenshot (the same text, continued)")}
               <textarea dir="auto" value={body} onChange={(e) => setBody(e.target.value)} rows={3} style={{ ...field, marginTop: 4 }} />
             </label>
           </div>
         </div>
         <label style={{ display: "block", fontSize: 12.5, color: C.text2, marginTop: 10 }}>
           {L("یا بنویس چه چیزی عوض بشه (متن یا هایلایت‌های اسکرین‌شات)", "Or write what should change (the words, or the screenshot's highlights)")}
-          <textarea dir="auto" value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder={L("مثلاً: عدد اصلی رو بیار توی تیتر، متن کوتاه‌تر…", "e.g. put the main number in the headline, shorter text…")} style={{ ...field, marginTop: 4 }} />
+          <textarea dir="auto" value={ask} onChange={(e) => setAsk(e.target.value)} rows={2} placeholder={L("مثلاً: عدد اصلی رو بیار توی بخش اول، متن کوتاه‌تر…", "e.g. put the main number in part 1, shorter text…")} style={{ ...field, marginTop: 4 }} />
         </label>
         {ask.trim() && <LearnToggle on={learn} setOn={setLearn} />}
         <div style={{ fontSize: 11.5, color: C.text3, marginTop: 6, lineHeight: 1.7 }}>{L("هر چی توی دو کادر بالا تایپ کنی عیناً همون می‌مونه. توی این کادر می‌تونی بخوای متن عوض بشه یا جمله‌های دیگه‌ای هایلایت بشن؛ اسکرین‌شات همیشه عکس واقعی منبعه و فقط همون مورد مرتبط رو نشون می‌ده. فقط همین صفحه دوباره ساخته می‌شه.", "What you type in the two boxes above stays exactly as typed. In this box you can ask for the words to change or for other sentences to be highlighted; the screenshot is always a real photograph of the source and shows only the item the story is about. Only this page is made again.")}</div>

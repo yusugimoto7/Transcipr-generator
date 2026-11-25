@@ -4,6 +4,7 @@ import { glossaryBlock } from "../../../lib/glossary";
 import { openaiEnabled, openaiArticle } from "../../../lib/openai";
 import { getArticleLinks } from "../../../lib/wordpress";
 import { sourceTextFor } from "../../../lib/grounding";
+import { briefFor, briefBlock } from "../../../lib/brief";
 import { editorNoteBlock } from "../../../lib/custom-news";
 import { englishBlock, langOf } from "../../../lib/lang";
 import { cleanText, cleanHtml } from "../../../lib/clean-text";
@@ -41,7 +42,9 @@ export async function POST(request) {
     const today = new Date().toLocaleDateString("en-CA");
     // Ground the article in the REAL source article text (never fabricate).
     const sourceText = await sourceTextFor(topic, { maxChars: 5000 });
-    const prompt = articlePrompt(topic, links, today, sourceText) + editorNoteBlock(topic, "en") + (await lessonsBlock("article")) + (await glossaryBlock(lang === "en" ? "en" : "fa")) + (lang === "en" ? englishBlock("article") : "");
+    // the article is built around the topic's main point, like the script (lib/brief.js)
+    const brief = await briefFor(topic, sourceText);
+    const prompt = articlePrompt(topic, links, today, sourceText) + briefBlock(brief, "en") + editorNoteBlock(topic, "en") + (await lessonsBlock("article")) + (await glossaryBlock(lang === "en" ? "en" : "fa")) + (lang === "en" ? englishBlock("article") : "");
 
     async function generate(p) {
       if (openaiEnabled()) {

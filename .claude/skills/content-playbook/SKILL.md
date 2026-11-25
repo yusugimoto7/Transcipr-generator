@@ -28,6 +28,23 @@ as the change**, in the team's own words where possible, with the date.
    approval of that exact content (`contentHash`). Never weaken this.
 5. **Slow work runs as server jobs** (`lib/jobs.js`, `startJob` in `app/page.jsx`), never awaited
    in a click handler: phones freeze pages when you switch apps.
+6. **The main point first** (Hamed, Nov 25 2026, after a script and a story on «Forecast – 14,702,000
+   Temporary Residents in 2027» listed the table's footnotes and never said the number: "what you made
+   is entirely different from what this item is about; review the writing process fundamentally").
+   Three things had gone wrong, and each has its own fix:
+   - the item's table was a picture in the PDF, so its figures were not in the source text at all:
+     `lib/newsletter/figures.js` now finds every picture on a Lexbase page (ink outside the lines of
+     text), a vision model copies what is written in it, and the words go into the item's text where
+     the picture is printed, marked «TABLE OR FIGURE … read from the picture»;
+   - the item's own heading, which held the number, was not part of its text: an item's text now starts
+     at its heading (`withFullTexts`);
+   - no writer was told which part of the source is the point, so a source with long notes was retold
+     as its notes: `lib/brief.js` decides the point once per topic (the source's headline claim with its
+     figures, what it shows, at most two notes on how to read it; every figure checked against the
+     source) and `briefBlock` goes into the script, story, Telegram, carousel and article prompts.
+     The topic page shows it over the script («🎯 حرف اصلی این مطلب») and warns when the source text
+     lacks what its heading promises. Notes and caveats take one or two sentences after the main point,
+     never the whole piece. The brief is never a source of facts.
 
 ## 1. Farsi language — every Persian output
 

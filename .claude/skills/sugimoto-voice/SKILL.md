@@ -113,6 +113,20 @@ carousel, a voice check before a script is shown, a suggested format per topic a
 episode idea come next. Hamed's own experience is never written by the model: the Hamed carousel
 leaves a marked gap for it.
 
+## 3b. Hamed's own Instagram stories (read again Nov 25 2026)
+His 14 stories in the Drive folder «Story templates instagram» (April–Sept 2024) are one short text typed
+around a screenshot of the original document, in two parts, with no headline. Nine of them are in
+`STORY_SAMPLES_FA` (`lib/sugimoto-voice.js`) and are the story writer's model.
+- Part 1, above the screenshot: what this is and the main fact at once. «یه آمار تکان‌دهنده از تعداد
+  دانشجویان بین‌المللی … که … اعلام پناهندگی کردند», «تعداد پرونده‌های قضایی … از ۱۱۶ مورد به ۷۳۰ مورد
+  رسیده», «یک ایمیل داخلی خیلی جذاب، مورخ مارچ ۲۰۲۳ …», «یه سؤال جالب از اداره مهاجرت کانادا: …»,
+  «نوامبر ۲۰۲۳: ۴۵ نفر با ویزای توریستی کانادا می‌خواستند وارد تورنتو بشن …».
+- Part 2, under it: what it shows or what follows. «این نشون میده …», «یعنی اینکه شما اگه …», «پاسخ: خیر …»,
+  the next figures; it may end on what is not known («اینکه این تأثیر به چه شکل اعمال میشه، مشخص نیست!»)
+  or on an open question («دلیل گذاشتن ظرفیت … همین آمار میتونه باشه؟؟»).
+- Figures as «از … به …»; spoken Persian; «!» where surprising; the English term once after the Persian.
+- Never a list of what a document does not cover; a reading note is one short sentence at most.
+
 ## 4. Choosing the voice and the kind (Nov 4 2026)
 
 Hamed asked to see which voice wrote a piece and to choose it. `VOICES` in `lib/sugimoto-voice.js`:

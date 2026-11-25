@@ -9,6 +9,7 @@ import { lessonsBlock } from "../../../lib/learning";
 import { glossaryBlock } from "../../../lib/glossary";
 import { voiceSamplesBlock, voiceOf, ctaWordOf } from "../../../lib/sugimoto-voice";
 import { pickRelatedLink } from "../../../lib/telegram-post";
+import { briefFor, briefBlock } from "../../../lib/brief";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,9 +35,9 @@ const notEnglish = (text) => persianShare(text) > 0.2;
 // The team's note on a written script (the note box under it): the same script prompt, so every
 // rule on format, voice and length still holds, with the current script and the note after it.
 // The note changes the wording, order, emphasis or length; facts still come only from the source.
-function revisePrompt(topic, lang, sourceText, script, note, ctaPage, voice) {
+function revisePrompt(topic, lang, sourceText, script, note, ctaPage, voice, brief = null) {
   const fa = lang === "fa";
-  return `${scriptPrompt(topic, lang, sourceText, { ctaPage, voice })}
+  return `${scriptPrompt(topic, lang, sourceText, { ctaPage, voice })}${briefBlock(brief, lang)}
 
 ===== REVISION =====
 ${fa ? "این اسکریپت قبلاً نوشته شده. تیم یک یادداشت روی آن گذاشته. اسکریپت را طبق یادداشت بازنویسی کن و هرچه یادداشت نخواسته، همان‌طور که هست نگه دار." : "This script was already written and the team left a note on it. Rewrite the script as the note asks, and keep everything the note does not ask to change."}
@@ -81,19 +82,22 @@ export async function POST(request) {
     // The comment word at the end of a Persian script names something the viewer gets, from the one
     // sugimotovisa.com page that really fits the topic (the Telegram post's related-link step); with
     // no such page it is «مشاوره». English scripts close on the bio link instead.
+    // What the piece is about, decided from the source before it is written (lib/brief.js): the
+    // script opens with it and is built around it. An English rewrite keeps the script it is given.
+    const brief = rewrite ? null : await briefFor(topic, sourceText);
     const ctaPage = lang === "fa" && !rewrite ? await pickRelatedLink(topic).catch(() => null) : null;
     // Whole videos of Hamed to hear the rhythm by (Persian only), then the lessons, then the
     // glossary last: one Persian name per term in every script.
     const samples = rewrite ? "" : voiceSamplesBlock(voice, topic, sourceText, lang);
     const glossary = await glossaryBlock(lang === "en" ? "en" : "fa");
     const prompt = (revise
-      ? revisePrompt(topic, lang, sourceText, revise.script, revise.note, ctaPage, voice) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))
+      ? revisePrompt(topic, lang, sourceText, revise.script, revise.note, ctaPage, voice, brief) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang))
       : rewrite
       ? englishScriptRewritePrompt(topic, rewrite.script, sourceText, {
           seconds: Math.max(0, Math.min(600, Number(rewrite.seconds) || 0)),
           notes: String(rewrite.notes || "").slice(0, 1500),
         })
-      : scriptPrompt(topic, lang, sourceText, { ctaPage, voice }) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang)) + toneBlock(tone, lang)) + glossary;
+      : scriptPrompt(topic, lang, sourceText, { ctaPage, voice }) + briefBlock(brief, lang) + samples + editorNoteBlock(topic, lang) + (await lessonsBlock("script", lang)) + toneBlock(tone, lang)) + glossary;
 
     let { text, provider } = await write(prompt);
 
@@ -111,7 +115,7 @@ export async function POST(request) {
     // What the team's comment tool must answer with: the word the script asks for and the page behind it.
     const word = lang === "fa" ? ctaWordOf(clean) : "";
     const cta = word ? { word, url: (ctaPage && ctaPage.url) || "", title: (ctaPage && ctaPage.title) || "" } : null;
-    return Response.json({ text: clean, provider, hooks, cta, voice });
+    return Response.json({ text: clean, provider, hooks, cta, voice, brief });
   } catch (e) {
     return Response.json({ error: String(e?.message || e) }, { status: 500 });
   }

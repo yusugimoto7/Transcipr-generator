@@ -18,7 +18,33 @@ A topic's **Story** tile makes 1–4 pages (default **1**). Each page is a short
 | Save-image proxy (HCTI images only) | `app/api/story/image/route.js` |
 | UI: tile, form (pages 1–4, colour swatches, notes), preview, save button | `StoryPanel`, `BgSwatches`, `saveStoryImage` in `app/page.jsx` |
 
-## The story's text is the script (Hamed, Nov 11 2026)
+## One text in two parts, in Hamed's own story voice (Hamed, Nov 25 2026)
+On a Lexbase item headed «Forecast – 14,702,000 Temporary Residents in 2027» the story said «این پیش‌بینی،
+آمار ورود به کانادا نیست!» and «این پیش‌بینی در ژانویه ۲۰۲۳ تهیه شده!» and never the number. Hamed:
+«نوشته‌های استوری که خنده‌داره! … ببین چطور میتونیم به اون سبک نوشتاری حامد در استوری‌ها برسیم. در
+استوری‌ها حالت تایتل و متن رو نداشته باشیم. یک متن در دو قسمت داشته باشیم.»
+- **Form:** a page's text is ONE short text in two parts, the first above the screenshot, the second
+  under it, no headline. Both parts are drawn the same way: the white rounded text boxes, one type size
+  for both (`partsSize` in `lib/story/type.js`, by how much the two hold together). They are still kept
+  as `headline` (top part) and `body` (bottom part) on the page, the names every saved story uses; the ✏️
+  sheet and the hand designer call them «متن بالا» / «متن پایین».
+- **Voice:** his own 14 stories in Drive («Story templates instagram», April–Sept 2024) were read again
+  and nine of them are the writer's model (`STORY_SAMPLES_FA` in `lib/sugimoto-voice.js`). What they do:
+  part 1 says what this is and gives the main fact at once (the figure as «از … به …», the decision, the
+  question; often after naming the document: «یه آمار تکان‌دهنده از …», «یک ایمیل داخلی خیلی جذاب …»,
+  «یه سؤال جالب از اداره مهاجرت کانادا»); part 2 says what it shows or what follows («این نشون میده …»,
+  «یعنی اینکه …», «پاسخ: …»), and may end on what is not known or on an open question. A note on how to
+  read a figure is one short sentence of part 2 at most; a story is never a list of what a document does
+  not cover.
+- **Where the words come from:** `writeStory` always writes the story (the script is no longer cut into
+  it word for word: that gave pages of spoken script, not a story). With a script saved for the topic,
+  the story tells the script's point with its facts and wording where it fits (the script stays the
+  master text); with none it is built on the topic's brief (`lib/brief.js`, the source's main point).
+- **A fact inside a picture of the page** (a table pasted into the Lexbase PDF as an image) is read into
+  the item's text by `lib/newsletter/figures.js`; a page quoting it is photographed from the item's
+  heading down, unmarked, which shows the table (`pdfQuoteShot(..., { plain: true })`).
+
+## The story's text is the script (Hamed, Nov 11 2026; replaced by the section above on Nov 25 2026)
 "The script is very good but the story's text is unrelated; I want exactly the script." When the topic has a script in the story's language, the story's text IS that script, word for word: `scriptPages` cuts it by rule (paragraphs joined or split at sentence ends to the number of pages asked for; each page's first sentence is its headline, the rest its body) and leaves out the spoken comment-word close (a story has no comments). No model rewrites it; a model only picks each page's `quote` / `also` from the source for the screenshot (`quotesForPages`, checked by `quoteInSource` like always). The type steps down for long pages. A story revised with a note, a provincial draw told from its own page, or a topic with no script yet is written by `writeStory` as before.
 
 ## Court stories: only that decision, with its citation (Hamed, Nov 12 2026)
@@ -89,7 +115,7 @@ page fall back to another page's shot. A single-page retake (`story_page`) count
 - Raw Instagram look: **one flat background colour**, no logo, no frames, no pill labels, no page numbers.
 - Colours (`STORY_BACKGROUNDS`, mirrored in `STORY_BGS` in page.jsx): **purple `#8a3893` is the default** (taken from the team's reference story), then black, blue, red, green, white. To add a colour, change both lists.
 - Font: **Vazirmatn ExtraBold (800)** for Persian, Inter for Latin — the closest public match to Instagram's bold story text. Loaded through HCTI `google_fonts: "Vazirmatn|Inter"`.
-- Layout top to bottom: headline as plain bold text → screenshot → body in **white rounded text boxes (Instagram text-background style) BELOW the screenshot, never over it** → optional case name (`ref`) in English. Content stays inside 260px top / 280px bottom (Instagram's own controls cover those).
+- Layout top to bottom: the first part of the text → screenshot → the second part, both in **white rounded text boxes (Instagram text-background style), never over the screenshot** (until Nov 25 2026 the top part was a plain bold headline) → optional case name (`ref`) in English. Content stays inside 260px top / 280px bottom (Instagram's own controls cover those).
 - Screenshot = **the article itself, not one or two sentences** (Hamed, Nov 11 2026: "I need the full screenshot of the related news with highlights on the important sentences"). Web source: the page photographed at phone width (540 px, `webArticleShot`, our own Chromium) from its headline down, floating bars and cookie banners hidden, as tall as the story has room for (`SHOT_RATIO` 0.95 of the width); when the highlights sit too far below the headline, the shot is the headline piece (with byline and date) and the highlights' piece one above the other, a dotted band between them (`lib/story/window.js`). PDF (Lexbase): the page's full text width, the highlights a third of the way down (`pageWindow` in `pdfshot.js`). No cut goes through a line of text. Each page's `quote` plus up to two `also` sentences (other key numbers or dates near it, checked against the source like the quote) are highlighted. Without our own Chromium the old one-paragraph shot (HCTI) is the fallback. If the crop logic changes, bump `SHOT_VERSION` (3 since this change) so rewrites don't reuse old crops.
 - **No masthead / site header on any story** (Oct 17 2026, Hamed: "it should not put header of the news website! It's weird"). `webQuoteShot` no longer takes a header shot and `storyPageHtml` never draws one, even for stories saved with `masthead_url`.
 - **Provincial draws**: the story is written and photographed from the province's official results page when `lib/provinces.js` confirms it holds that draw. A quote that is a table line (`header: value | …`) is photographed as the table with its header row and that row highlighted (`rowShotHtml` in `lib/story/webshot.js`).
