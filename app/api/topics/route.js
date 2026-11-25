@@ -9,7 +9,7 @@ import {
   articleKey,
   isGoogleNews,
 } from "../../../lib/news";
-import { loadHarvest, mergeCandidates, relevance, isDrawResult, sourceTier, focusOf } from "../../../lib/candidates";
+import { loadHarvest, mergeCandidates, relevance, isDrawResult, isOtherProvinceDraw, sourceTier, focusOf } from "../../../lib/candidates";
 import { resolveGoogleNewsUrl } from "../../../lib/gnews";
 import { getInstagramItems } from "../../../lib/social/instagram";
 import { laneCards, laneReady, pollSocialLane, laneStatus } from "../../../lib/social/lane";
@@ -116,6 +116,8 @@ let lastStats = null;
 function isExpressEntry(t) {
   const field = String(t.field || "").toLowerCase();
   if (field.includes("express")) return true;
+  // a draw of a province other than Ontario, BC or Alberta (Hamed, Nov 25 2026)
+  if (isOtherProvinceDraw(`${t.title_fa || ""} ${t.title_en || ""} ${t.source_title || ""}`)) return true;
   // Only drop items that are actually ABOUT a draw. The old rule killed any
   // topic that merely mentioned Express Entry or CRS in passing — which is a
   // large share of Canadian immigration coverage, including PNP and policy
@@ -717,6 +719,8 @@ function withLane(topics) {
   for (const t of [...laneCards(), ...(topics || [])]) {
     const k = String(t.title_fa || t.title_en || "").trim().toLowerCase();
     if (k && seen.has(k)) continue;
+    // cards written before the rule are taken off the deck too
+    if (isOtherProvinceDraw(`${t.title_fa || ""} ${t.title_en || ""} ${t.source_title || ""}`)) continue;
     if (k) seen.add(k);
     out.push(t);
   }
