@@ -1323,6 +1323,7 @@ export default function App() {
                 </div>
               ) : (
                 <IdeasList
+                  memo="news"
                   topics={newsTopics}
                   decisions={decisions}
                   jobs={bg}
@@ -1408,8 +1409,9 @@ const STUDIO_TABS = [
   ["visa", Megaphone, ["خبر ویزا", "Visa news"], ["نتایج ویزای مشتری‌ها", "Clients' visa results"]],
 ];
 function StudioSection({ topics, listProps, research, own }) {
-  const [tab, setTabState] = useState("research");
+  const [tab, setTabState] = useKept("studio:tab", "research");
   useEffect(() => {
+    if (KEPT.has("studio:tab")) return;
     try {
       const t = localStorage.getItem("sugimoto_studio_tab_v1");
       if (STUDIO_TABS.some((x) => x[0] === t)) setTabState(t);
@@ -1460,7 +1462,7 @@ function StudioSection({ topics, listProps, research, own }) {
             <div dir={uiDir()} style={{ fontSize: 13, fontWeight: 800, margin: "6px 0 8px", fontFamily: fa }}>
               {tab === "research" ? L("موضوع‌هایی که از تحقیق ساخته شدن", "Topics made from research") : L("خبرهایی که از منابع خودت ساخته شدن", "News made from your own sources")}
             </div>
-            <IdeasList topics={listed} {...listProps} />
+            <IdeasList memo={"studio-" + tab} topics={listed} {...listProps} />
           </>
         )}
       </div>
@@ -1638,6 +1640,24 @@ function SwipeToArchive({ enabled, onArchive, children }) {
   );
 }
 
+// A list's filters kept while the app is open (Hamed, Nov 25 2026: open a topic and come back, and the
+// filters were gone and the list started from the top). Kept in this module, so the list remembers
+// them when it is drawn again after a topic page, with the same rows, and the scroll lands where it was.
+const KEPT = new Map();
+function useKept(key, init) {
+  const [v, setV] = useState(() => (KEPT.has(key) ? KEPT.get(key) : init));
+  const set = useCallback(
+    (x) =>
+      setV((prev) => {
+        const next = typeof x === "function" ? x(prev) : x;
+        KEPT.set(key, next);
+        return next;
+      }),
+    [key]
+  );
+  return [v, set];
+}
+
 // Picks count from this moment (Hamed, Oct 28 2026: the list by date, whatever is green; from now
 // on a topic picked or opened goes to the top, and later topics go above it). Earlier picks are
 // left at their news date.
@@ -1650,8 +1670,8 @@ function headlineOf(t) {
   return h.length > 220 ? h.slice(0, 217).trimEnd() + "…" : h;
 }
 
-function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, onFlag = null, plain = false }) {
-  const [filter, setFilter] = useState("all"); // all | pending | approved | rejected (archive) | flagged
+function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRestore, onOpen, onRetry, onFlag = null, plain = false, memo = "list" }) {
+  const [filter, setFilter] = useKept(memo + ":filter", "all"); // all | pending | approved | rejected (archive) | flagged
   // a mark for the team (Farhad, Nov 11 2026), shared, unlike the pins kept on this device
   const flagOf = (t) => (ws[topicKey(t)] || {}).flag || null;
   // Pinned topics stay on top while they are being worked on. Kept on this device.
@@ -1673,8 +1693,8 @@ function IdeasList({ topics, decisions, jobs, ws = {}, onApprove, onReject, onRe
       return next;
     });
   };
-  const [cat, setCat] = useState("all"); // see CATEGORIES
-  const [recent, setRecent] = useState(false); // only the last 48 hours
+  const [cat, setCat] = useKept(memo + ":cat", "all"); // see CATEGORIES
+  const [recent, setRecent] = useKept(memo + ":recent", false); // only the last 48 hours
   const stateOf = (t) => decisions[topicKey(t)] || "pending";
   const inCat = CATEGORIES.find((c) => c[0] === cat)[2];
   // "All" is everything not archived; the archive has its own filter.
@@ -2157,9 +2177,9 @@ function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
   const [archive, setArchive] = useState({ issues: {}, known: [] });
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
-  const [group, setGroup] = useState("policy");
-  const [onlyFocus, setOnlyFocus] = useState(false); // priority items only (Iran, study, Start-up Visa)
-  const [onlyWon, setOnlyWon] = useState(false); // court decisions the applicant won (outcome "allowed")
+  const [group, setGroup] = useKept("lexbase:group", "policy");
+  const [onlyFocus, setOnlyFocus] = useKept("lexbase:focus", false); // priority items only (Iran, study, Start-up Visa)
+  const [onlyWon, setOnlyWon] = useKept("lexbase:won", false); // court decisions the applicant won (outcome "allowed")
 
   useEffect(() => {
     setArchive(loadLexArchive());
@@ -2245,7 +2265,7 @@ function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
         <div dir={uiDir()} style={{ ...font, fontSize: 12, color: C.text3, marginBottom: 10, lineHeight: 1.8 }}>
           {L("خبرهای دادگاهی که از منبع‌های دیگر (نه خبرنامهٔ Lexbase) می‌آد.", "Court stories from the other sources (not the Lexbase newsletter).")}
         </div>
-        <IdeasList topics={otherCourts} decisions={decisions} {...actions} />
+        <IdeasList memo="courts" topics={otherCourts} decisions={decisions} {...actions} />
       </div>
     );
   }
@@ -2315,7 +2335,7 @@ function LexbaseSection({ decisions, otherCourts = [], ...actions }) {
           ))}
         </div>
       ) : (
-        cards.length > 0 && <IdeasList topics={rows} decisions={decisions} plain {...actions} />
+        cards.length > 0 && <IdeasList memo={"lexbase-" + group} topics={rows} decisions={decisions} plain {...actions} />
       )}
     </div>
   );
@@ -2353,11 +2373,11 @@ function loadIdeasCache() {
 const REMAKE_KEY = "remake-own-posts";
 const REMAKE_KINDS = [["all", ["همه", "All"]], ["carousel", ["کاروسل", "Carousels"]], ["video", ["ویدیو", "Videos"]]];
 function RemakesPanel({ job, onStart, onOpen }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useKept("remakes:open", true);
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
-  const [kind, setKind] = useState("all");
-  const [more, setMore] = useState(false);
+  const [kind, setKind] = useKept("remakes:kind", "all");
+  const [more, setMore] = useKept("remakes:more", false);
   const running = !!job && job.status === "running";
   const failed = !!job && job.status === "error" ? job.error : "";
   const runningId = running ? (job.extra && job.extra.post) || "" : "";
@@ -2472,7 +2492,7 @@ function IdeasSection({ decisions, remake = null, ...actions }) {
     if (c) setData((d) => d || c);
   }, []);
   const [err, setErr] = useState("");
-  const [group, setGroup] = useState("all");
+  const [group, setGroup] = useKept("ideas:group", "all");
   const [asking, setAsking] = useState(false);
   const font = { fontFamily: "'Vazirmatn', sans-serif" };
 
@@ -2573,7 +2593,7 @@ function IdeasSection({ decisions, remake = null, ...actions }) {
           ))}
         </div>
       ) : ideas.length ? (
-        <IdeasList topics={rows} decisions={decisions} plain {...actions} />
+        <IdeasList memo="ideas" topics={rows} decisions={decisions} plain {...actions} />
       ) : (
         <div dir={uiDir()} className="ui-glass" style={{ ...font, textAlign: "center", padding: "30px 0", borderRadius: 16, border: `1px dashed ${C.line}`, color: C.text2, fontSize: 13 }}>
           {L("هنوز ایده‌ای ساخته نشده.", "No ideas made yet.")}
