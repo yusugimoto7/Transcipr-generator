@@ -111,7 +111,7 @@ export async function POST(request) {
 
     const clean = cleanText(text, { lang });
     // Three other opening lines to choose from (lib/hooks.js); a failure there never costs the script.
-    const hooks = rewrite ? [] : await hookOptions(topic, clean, lang, sourceText).catch(() => []);
+    const hooks = rewrite ? [] : await hookOptions(topic, clean, lang, sourceText, brief).catch(() => []);
     // What the team's comment tool must answer with: the word the script asks for and the page behind it.
     const word = lang === "fa" ? ctaWordOf(clean) : "";
     const cta = word ? { word, url: (ctaPage && ctaPage.url) || "", title: (ctaPage && ctaPage.title) || "" } : null;
